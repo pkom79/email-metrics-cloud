@@ -10,22 +10,25 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
+        "@supabase/auth-helpers-nextjs": "^0.10.0",
+        "@supabase/supabase-js": "^2.45.3",
+        "clsx": "^2.1.1",
+        "dayjs": "^1.11.12",
         "next": "14.2.5",
+        "papaparse": "^5.5.3",
         "react": "18.3.1",
         "react-dom": "18.3.1",
-        "@supabase/supabase-js": "^2.45.3",
-        "@supabase/auth-helpers-nextjs": "^0.10.0",
-        "zod": "^3.23.8",
-        "papaparse": "^5.5.3",
-        "dayjs": "^1.11.12",
-        "clsx": "^2.1.1"
+        "zod": "^3.23.8"
     },
     "devDependencies": {
-        "typescript": "^5.5.3",
+        "@types/node": "^24.3.0",
+        "@types/react": "^19.1.10",
+        "@types/react-dom": "^19.1.7",
+        "autoprefixer": "^10.4.19",
         "eslint": "^8.57.0",
         "eslint-config-next": "^14.2.5",
-        "tailwindcss": "^3.4.7",
         "postcss": "^8.4.38",
-        "autoprefixer": "^10.4.19"
+        "tailwindcss": "^3.4.7",
+        "typescript": "^5.5.3"
     }
 }
