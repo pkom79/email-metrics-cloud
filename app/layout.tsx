@@ -1,7 +1,8 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import ThemeToggle from '../components/ThemeToggle';
-import { BarChart3 } from 'lucide-react';
+import Link from 'next/link';
+import { cookies } from 'next/headers';
 
 export const metadata: Metadata = {
     title: 'Email Metrics Cloud',
@@ -13,6 +14,8 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+    const cookieStore = cookies();
+    const hasSession = !!cookieStore.get('sb:token') || !!cookieStore.get('sb-access-token') || !!cookieStore.get('sb:access-token');
     return (
         <html lang="en">
             <head>
@@ -26,13 +29,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </head>
             <body className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-lg font-semibold">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center">
-                            <BarChart3 className="w-4 h-4 text-white" />
-                        </div>
-                        <span>Email Metrics</span>
+                    <Link href="/" className="flex items-center gap-2 text-lg font-semibold hover:opacity-90 transition-opacity">
+                        <img src="/brand/logo-email.png" alt="Email Metrics" className="h-6 w-auto" />
+                        <span className="hidden sm:inline">Email Metrics</span>
+                    </Link>
+                    <div className="flex items-center gap-3">
+                        <Link href={hasSession ? '/dashboard' : '/signup?mode=signin'} className="text-sm text-purple-600 dark:text-purple-400">
+                            {hasSession ? 'Dashboard' : 'Sign in'}
+                        </Link>
+                        <ThemeToggle />
                     </div>
-                    <ThemeToggle />
                 </div>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">{children}</div>
             </body>

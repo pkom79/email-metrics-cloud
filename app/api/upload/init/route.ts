@@ -13,7 +13,7 @@ export async function POST() {
         // Create uploads row (preauth)
         const { error: insertErr } = await supabase
             .from('uploads')
-            .insert({ id: uploadId, status: 'preauth', expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() });
+            .insert({ id: uploadId, status: 'preauth', expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(), updated_at: new Date().toISOString() });
         if (insertErr) throw insertErr;
 
         const paths = {
@@ -25,7 +25,6 @@ export async function POST() {
         const makeSigned = async (path: string) => {
             const { data, error } = await supabase.storage.from(bucket).createSignedUploadUrl(path);
             if (error) throw error;
-            // Supabase returns a token to be used with uploadToSignedUrl
             return { path, token: (data as any).token };
         };
 

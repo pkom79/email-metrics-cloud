@@ -15,7 +15,7 @@ function formatCurrency(value: number) {
 function formatPercent(value: number) { return `${value.toFixed(2)}%`; }
 function formatNumber(value: number) { return Math.round(value).toLocaleString('en-US'); }
 
-export default function DashboardClient() {
+export default function DashboardClient({ businessName }: { businessName?: string }) {
     const dm = useMemo(() => DataManager.getInstance(), []);
 
     // Date range and granularity state
@@ -28,6 +28,7 @@ export default function DashboardClient() {
     const [selectedCampaignMetric, setSelectedCampaignMetric] = useState<string>('revenue');
     const [displayedCampaigns, setDisplayedCampaigns] = useState<number>(5);
     const [stickyBar, setStickyBar] = useState(false);
+    const [reportMenuOpen, setReportMenuOpen] = useState(false);
     useEffect(() => {
         const onScroll = () => setStickyBar(window.scrollY > 100);
         window.addEventListener('scroll', onScroll, { passive: true });
@@ -281,11 +282,34 @@ export default function DashboardClient() {
                         <div className="flex items-start justify-between gap-4">
                             <div>
                                 <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>
+                                {businessName && (
+                                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>
+                                )}
                             </div>
-                            <a href="/" className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">
-                                <UploadIcon className="h-4 w-4" />
-                                Upload New Reports
-                            </a>
+                            <div className="flex items-center gap-2 relative">
+                                <button
+                                    type="button"
+                                    onClick={() => setReportMenuOpen(v => !v)}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                >
+                                    Report
+                                    <ChevronDown className="h-4 w-4" />
+                                </button>
+                                <a href="/" className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <UploadIcon className="h-4 w-4" />
+                                    Upload New Reports
+                                </a>
+                                {reportMenuOpen && (
+                                    <div className="absolute right-28 top-full mt-2 w-64 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg p-3 z-50">
+                                        <div className="text-sm text-gray-700 dark:text-gray-200">
+                                            <div className="flex items-center gap-2">
+                                                <Calendar className="w-4 h-4 text-purple-600" />
+                                                <span className="font-medium">Latest report — {lastUpdated.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

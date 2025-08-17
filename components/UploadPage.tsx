@@ -1,15 +1,14 @@
 "use client";
 import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, CheckCircle, FileText, Zap, Send, BarChart3, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
-import { DataManager, LoadProgress } from '../lib/data/dataManager';
+import { Upload, CheckCircle, FileText, Zap, Send, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
+import { DataManager } from '../lib/data/dataManager';
 import { supabase } from '../lib/supabase/client';
 
 export default function UploadPage() {
     const router = useRouter();
     const [hoveredZone, setHoveredZone] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [processingProgress, setProcessingProgress] = useState<LoadProgress | null>(null);
     const [errors, setErrors] = useState<string[]>([]);
 
     // Files selected
@@ -89,7 +88,14 @@ export default function UploadPage() {
             const v = await vRes.json();
             if (!vRes.ok || !v.ok) throw new Error(`Validation failed${v?.missing ? `: missing ${v.missing.join(', ')}` : ''}`);
 
-            // 4) also process locally for instant dashboard
+            // 4) Best-effort: if logged in, link upload to account and create snapshot
+            try {
+                await fetch('/api/auth/link-upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uploadId }) });
+            } catch {
+                // ignore
+            }
+
+            // 5) also process locally for instant dashboard
             const dm = DataManager.getInstance();
             const result = await dm.loadCSVFiles(files, () => { });
             if (!result.success) {
@@ -104,16 +110,9 @@ export default function UploadPage() {
         }
     };
 
-    const getProgressPercentage = (): number => {
-        if (!processingProgress) return 0;
-        const { campaigns, flows, subscribers } = processingProgress;
-        return Math.round((campaigns.progress + flows.progress + subscribers.progress) / 3);
-    };
-
     const UploadZone = ({ zone }: { zone: typeof uploadZones[number] }) => {
         const Icon = zone.icon;
         const isHovered = hoveredZone === zone.id;
-        const file = fileRefs.current[zone.id as keyof typeof fileRefs.current];
         const meta = fileInfo[zone.id as 'subscribers' | 'flows' | 'campaigns'];
         return (
             <div
@@ -123,7 +122,7 @@ export default function UploadPage() {
                 className={`
           group relative overflow-hidden cursor-pointer transition-all duration-300 ease-out
           bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border rounded-2xl p-8
-          ${zone.uploaded ? 'border-green-400/50 bg-green-50/80 dark:bg-green-950/20 dark:border-green-700/50' : 'border-gray-200/50 dark:border-gray-700/50 hover:border-purple-400/50'}
+          ${uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? 'border-green-400/50 bg-green-50/80 dark:bg-green-950/20 dark:border-green-700/50' : 'border-gray-200/50 dark:border-gray-700/50 hover:border-purple-400/50'}
           hover:shadow-2xl hover:-translate-y-2 transform
           ${isHovered && !isProcessing ? 'scale-105' : ''}
           ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}
@@ -132,12 +131,12 @@ export default function UploadPage() {
                 <div className={`absolute inset-0 bg-gradient-to-br ${zone.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
                 <div className={`absolute inset-0 rounded-2xl bg-gradient-to-r ${zone.gradient} opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-300`} />
                 <div className="relative z-10">
-                    <div className={`inline-flex items-center justify-center w-16 h-16 rounded-xl mb-6 transition-all duration-300 ${zone.uploaded ? 'bg-green-100 dark:bg-green-900/30' : `bg-gradient-to-br ${zone.gradient} group-hover:scale-110`}`}>
-                        {zone.uploaded ? <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" /> : <Icon className="w-8 h-8 text-white" />}
+                    <div className={`inline-flex items-center justify-center w-16 h-16 rounded-xl mb-6 transition-all duration-300 ${uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? 'bg-green-100 dark:bg-green-900/30' : `bg-gradient-to-br ${zone.gradient} group-hover:scale-110`}`}>
+                        {uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" /> : <Icon className="w-8 h-8 text-white" />}
                     </div>
                     <h3 className={`text-xl font-semibold mb-3 transition-colors duration-200 text-gray-900 dark:text-gray-100 ${isHovered && !isProcessing ? 'text-purple-600 dark:text-purple-400' : ''}`}>{zone.title}</h3>
                     <p className="text-sm leading-relaxed mb-4 text-gray-600 dark:text-gray-300">{zone.description}</p>
-                    {zone.uploaded ? (
+                    {uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? (
                         <div>
                             <div className="flex items-center text-sm font-medium text-green-600 dark:text-green-400 mb-2">
                                 <div className="w-2 h-2 bg-green-500 dark:bg-green-400 rounded-full mr-2 animate-pulse" />
@@ -159,14 +158,12 @@ export default function UploadPage() {
                     <div className={`absolute top-6 right-6 transition-all duration-300 ${isHovered && !isProcessing ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2'}`}>
                         <ArrowRight className="w-5 h-5 text-purple-500" />
                     </div>
-                    {/* Removed per-zone progress bar */}
                 </div>
             </div>
         );
     };
 
     return (
-        // Unify background with RootLayout: remove page-specific light gradient and rely on body bg
         <div className="min-h-screen relative overflow-hidden">
             <div className="absolute inset-0 overflow-hidden">
                 <div className="absolute -top-1/2 -right-1/2 w-96 h-96 bg-purple-500/10 dark:bg-purple-400/10 rounded-full blur-3xl animate-pulse" />
@@ -176,7 +173,6 @@ export default function UploadPage() {
                 <div className="px-8 pt-8 md:pt-10 pb-12">
                     <div className="max-w-6xl mx-auto w-full">
                         <div className="text-center mb-8">
-                            {/* Removed large hero icon above headline */}
                             <h1 className="text-4xl md:text-5xl font-bold mb-3 tracking-tight text-gray-900 dark:text-gray-100">
                                 Klaviyo Metrics
                                 <span className="block bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Made Simple</span>
@@ -208,7 +204,6 @@ export default function UploadPage() {
                         <div className="grid md:grid-cols-3 gap-8 mb-12">
                             {uploadZones.map((zone) => (<UploadZone key={zone.id} zone={zone as any} />))}
                         </div>
-                        {/* Removed detailed processing bar; keep button animation as progress indicator */}
                         <div className="text-center">
                             <button
                                 onClick={() => (allUploaded && !isProcessing ? processFiles() : null)}
@@ -224,7 +219,6 @@ export default function UploadPage() {
                         </div>
                     </div>
                 </div>
-                {/* Removed bottom progress section */}
             </div>
         </div>
     );
