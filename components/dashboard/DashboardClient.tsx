@@ -360,11 +360,12 @@ export default function DashboardClient() {
 
             <div className={`${stickyBar ? 'mt-0' : ''} p-6`}>
                 <div className="max-w-7xl mx-auto space-y-8">
-                    {/* Overview metrics */}
+                    {/* Email Performance Overview */}
                     {overviewMetrics && (
                         <section>
-                            <div className="mb-3">
-                                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Overview</h2>
+                            <div className="flex items-center gap-2 mb-3">
+                                <Mail className="w-5 h-5 text-purple-600" />
+                                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Email Performance Overview</h2>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                 <MetricCard
@@ -379,7 +380,7 @@ export default function DashboardClient() {
                                     sparklineData={overviewSeries.totalRevenue}
                                 />
                                 <MetricCard
-                                    title="Avg Order Value"
+                                    title="Average Order Value"
                                     value={formatCurrency(overviewMetrics.averageOrderValue.value)}
                                     change={overviewMetrics.averageOrderValue.change}
                                     isPositive={overviewMetrics.averageOrderValue.isPositive}
@@ -506,15 +507,16 @@ export default function DashboardClient() {
                         </section>
                     )}
 
-                    {/* Campaign-only metrics */}
+                    {/* Campaign Performance */}
                     {campaignMetrics && (
                         <section>
-                            <div className="mb-3">
-                                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Campaigns</h2>
+                            <div className="flex items-center gap-2 mb-3">
+                                <Send className="w-5 h-5 text-purple-600" />
+                                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Campaign Performance</h2>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                 <MetricCard
-                                    title="Revenue (Campaigns)"
+                                    title="Total Revenue"
                                     value={formatCurrency(campaignMetrics.totalRevenue.value)}
                                     change={campaignMetrics.totalRevenue.change}
                                     isPositive={campaignMetrics.totalRevenue.isPositive}
@@ -525,7 +527,7 @@ export default function DashboardClient() {
                                     sparklineData={campaignSeries.totalRevenue}
                                 />
                                 <MetricCard
-                                    title="Avg Order Value"
+                                    title="Average Order Value"
                                     value={formatCurrency(campaignMetrics.averageOrderValue.value)}
                                     change={campaignMetrics.averageOrderValue.change}
                                     isPositive={campaignMetrics.averageOrderValue.isPositive}
@@ -652,15 +654,76 @@ export default function DashboardClient() {
                         </section>
                     )}
 
-                    {/* Flow-only metrics */}
+                    {/* Campaign Performance by Day/Hour */}
+                    <div className="space-y-6">
+                        <DayOfWeekPerformance filteredCampaigns={filteredCampaigns} dateRange={dateRange} />
+                        <HourOfDayPerformance filteredCampaigns={filteredCampaigns} dateRange={dateRange} />
+                    </div>
+
+                    {/* Top Campaigns */}
+                    {campaignMetrics && (
+                        <section>
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-2">
+                                    <Star className="w-5 h-5 text-purple-600" />
+                                    <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Top Campaigns ({getSortedCampaigns().length})</h3>
+                                </div>
+                                <div className="relative">
+                                    <select
+                                        value={selectedCampaignMetric}
+                                        onChange={(e) => setSelectedCampaignMetric(e.target.value)}
+                                        className="appearance-none px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+                                    >
+                                        {campaignMetricOptions.map(metric => (
+                                            <option key={metric.value} value={metric.value}>{metric.label}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
+                                </div>
+                            </div>
+
+                            <div className="border rounded-lg overflow-hidden border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+                                {getSortedCampaigns().slice(0, displayedCampaigns).map((campaign, index) => (
+                                    <div key={campaign.id} className={`p-4 ${index !== 0 ? 'border-t border-gray-200 dark:border-gray-800' : ''}`}>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-3 mb-1.5">
+                                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium bg-purple-100 text-purple-900">{index + 1}</span>
+                                                    <h4 className="font-medium text-gray-900 dark:text-gray-100">{campaign.subject}</h4>
+                                                </div>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">Sent on {campaign.sentDate.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{formatMetricValue((campaign as any)[selectedCampaignMetric] as number, selectedCampaignMetric)}</p>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">{campaignMetricOptions.find(m => m.value === selectedCampaignMetric)?.label}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {(() => {
+                                    const sorted = getSortedCampaigns();
+                                    return displayedCampaigns < sorted.length && (
+                                        <div className="p-4 border-t border-gray-200 dark:border-gray-800 text-center bg-gray-50 dark:bg-gray-900/50">
+                                            <button onClick={() => setDisplayedCampaigns(n => n + 5)} className="px-4 py-2 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white transition-colors">
+                                                Load More ({Math.min(5, sorted.length - displayedCampaigns)} more)
+                                            </button>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Flow Performance */}
                     {flowMetrics && (
                         <section>
-                            <div className="mb-3">
-                                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Flows</h2>
+                            <div className="flex items-center gap-2 mb-3">
+                                <Zap className="w-5 h-5 text-purple-600" />
+                                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Flow Performance</h2>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                 <MetricCard
-                                    title="Revenue (Flows)"
+                                    title="Total Revenue"
                                     value={formatCurrency(flowMetrics.totalRevenue.value)}
                                     change={flowMetrics.totalRevenue.change}
                                     isPositive={flowMetrics.totalRevenue.isPositive}
@@ -671,7 +734,7 @@ export default function DashboardClient() {
                                     sparklineData={flowSeries.totalRevenue}
                                 />
                                 <MetricCard
-                                    title="Avg Order Value"
+                                    title="Average Order Value"
                                     value={formatCurrency(flowMetrics.averageOrderValue.value)}
                                     change={flowMetrics.averageOrderValue.change}
                                     isPositive={flowMetrics.averageOrderValue.isPositive}
@@ -798,19 +861,13 @@ export default function DashboardClient() {
                         </section>
                     )}
 
-                    {/* Charts: stack one below the other */}
-                    <div className="space-y-6">
-                        <DayOfWeekPerformance filteredCampaigns={filteredCampaigns} dateRange={dateRange} />
-                        <HourOfDayPerformance filteredCampaigns={filteredCampaigns} dateRange={dateRange} />
-                    </div>
+                    {/* Flow Step Analysis */}
+                    <FlowStepAnalysis dateRange={dateRange} granularity={granularity} />
 
                     {/* Audience Overview */}
                     <AudienceCharts />
 
-                    {/* Flow Step Analysis */}
-                    <FlowStepAnalysis dateRange={dateRange} granularity={granularity} />
-
-                    {/* Custom Segment Ideas */}
+                    {/* Analyze Custom Segment */}
                     <CustomSegmentBlock />
                 </div>
             </div>
