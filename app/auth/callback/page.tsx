@@ -1,7 +1,6 @@
 "use client";
 import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '../../../lib/supabase/client';
 
 export default function AuthCallback() {
     const router = useRouter();
@@ -9,51 +8,34 @@ export default function AuthCallback() {
 
     useEffect(() => {
         const run = async () => {
-            const error = search.get('error_description') || search.get('error');
-            if (error) {
-                console.error('Auth error:', error);
-                router.replace(`/signup?mode=signin&error=${encodeURIComponent(error)}`);
+            const err = search.get('error_description') || search.get('error');
+            if (err) {
+                router.replace(`/signup?mode=signin&error=${encodeURIComponent(err)}`);
                 return;
             }
-
             const code = search.get('code');
             const token_hash = search.get('token_hash');
             const type = search.get('type');
 
-            if (code) {
-                const { error } = await supabase.auth.exchangeCodeForSession({ code });
-                if (error) {
-                    console.error('Exchange code error:', error);
-                    router.replace(`/signup?mode=signin&error=${encodeURIComponent(error.message)}`);
+            if (code || (token_hash && type)) {
+                const qs = new URLSearchParams();
+                if (code) qs.set('code', code);
+                if (token_hash) qs.set('token_hash', token_hash);
+                if (type) qs.set('type', type);
+                const res = await fetch(`/api/auth/callback?${qs.toString()}`, { method: 'GET' });
+                if (!res.ok) {
+                    const { error } = await res.json().catch(() => ({ error: 'Auth failed' }));
+                    router.replace(`/signup?mode=signin&error=${encodeURIComponent(error || 'Auth failed')}`);
                     return;
                 }
+                // Give server a tick to write cookies then go to dashboard
+                await new Promise(r => setTimeout(r, 200));
                 router.replace('/dashboard');
                 return;
             }
-
-            if (token_hash && type) {
-                const { error } = await supabase.auth.verifyOtp({ token_hash, type: type as any });
-                if (error) {
-                    console.error('Verify OTP error:', error);
-                    router.replace(`/signup?mode=signin&error=${encodeURIComponent(error.message)}`);
-                    return;
-                }
-                router.replace('/dashboard');
-                return;
-            }
-
-            // Fallback: if already authenticated
-            try {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (session) {
-                    router.replace('/dashboard');
-                    return;
-                }
-            } catch { /* ignore */ }
 
             router.replace('/signup?mode=signin');
         };
-
         run();
     }, [router, search]);
 
@@ -63,3 +45,5 @@ export default function AuthCallback() {
         </div>
     );
 }
+
+

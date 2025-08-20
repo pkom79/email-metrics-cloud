@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../../lib/supabase/client';
 import { ChevronDown, AlertCircle } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 const COUNTRIES = ['United States', 'Canada', 'United Kingdom', 'Australia', 'Germany', 'France', 'Netherlands', 'Spain', 'Italy', 'Sweden', 'Norway', 'Denmark', 'Ireland', 'New Zealand', 'Mexico', 'Brazil', 'Japan', 'Singapore', 'India'];
 const ISO_TO_NAME: Record<string, string> = {
@@ -13,7 +13,10 @@ const GDPR_COUNTRIES = new Set(['United Kingdom', 'Germany', 'France', 'Netherla
 
 export default function Signup() {
     const search = useSearchParams();
-    const qpMode = (search.get('mode') as 'signin' | 'signup') || 'signup';
+    const router = useRouter();
+    const qpModeParam = search.get('mode');
+    const qpErrorParam = search.get('error');
+    const qpMode = (qpModeParam as 'signin' | 'signup') || 'signup';
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -23,11 +26,38 @@ export default function Signup() {
     const [mode, setMode] = useState<'signin' | 'signup'>(qpMode);
     const [error, setError] = useState<string | null>(null);
     const [ok, setOk] = useState<string | null>(null);
+    const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
         setMode(qpMode);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [qpMode]);
+        if (qpErrorParam) setError(qpErrorParam);
+        // dependency array must be stable in size: include only primitive values
+    }, [qpMode, qpErrorParam]);
+
+    // Handle hash token redirects like: /signup#access_token=...&refresh_token=...
+    useEffect(() => {
+        const urlHash = typeof window !== 'undefined' ? window.location.hash : '';
+        if (!urlHash || !urlHash.includes('access_token')) return;
+        const params = new URLSearchParams(urlHash.replace(/^#/, ''));
+        const access_token = params.get('access_token');
+        const refresh_token = params.get('refresh_token');
+        const type = params.get('type');
+        (async () => {
+            try {
+                if (access_token && refresh_token) {
+                    const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+                    if (error) throw error;
+                    // cleanup hash to avoid re-processing
+                    history.replaceState(null, '', window.location.pathname + window.location.search);
+                    await new Promise(r => setTimeout(r, 200));
+                    router.replace(type === 'signup' ? '/dashboard' : '/dashboard');
+                    router.refresh();
+                }
+            } catch (e) {
+                // fall back to signin
+            }
+        })();
+    }, [router]);
 
     useEffect(() => {
         let mounted = true;
@@ -48,21 +78,15 @@ export default function Signup() {
     const normalizeStoreUrl = (value: string) => {
         if (!value) return '';
         let v = value.trim();
-        if (!/^https?:\/\//i.test(v)) {
-            v = `https://${v}`;
-        }
-        try {
-            const url = new URL(v);
-            // If user entered just domain, keep as https://domain
-            return `${url.protocol}//${url.hostname}${url.pathname !== '/' ? url.pathname : ''}`;
-        } catch {
-            return v; // let backend validation handle truly invalid URLs
-        }
+        // Strip protocol, www, and trailing slashes; store bare domain
+        v = v.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, '');
+        return v.toLowerCase();
     };
 
     const onSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null); setOk(null);
+        setSubmitting(true);
         try {
             if (mode === 'signup') {
                 if (isGdprCountry) return; // guard in UI layer
@@ -78,12 +102,21 @@ export default function Signup() {
                 if (error) throw error;
                 setOk('Check your email to confirm your account.');
             } else {
-                const { error } = await supabase.auth.signInWithPassword({ email, password });
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
-                window.location.href = '/dashboard';
+                if (!data?.session) {
+                    setError('Sign in failed. Please verify your credentials or confirm your email.');
+                } else {
+                    // give cookies a moment to persist before navigating to SSR-protected route
+                    await new Promise(r => setTimeout(r, 300));
+                    router.replace('/dashboard');
+                    router.refresh();
+                }
             }
         } catch (e: any) {
             setError(e?.message || 'Failed');
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -105,7 +138,7 @@ export default function Signup() {
                         {/* Business Name */}
                         <input type="text" placeholder="Business Name" value={businessName} onChange={e => setBusinessName(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
                         {/* Store URL */}
-                        <input type="url" placeholder="Store URL" value={storeUrl} onChange={e => setStoreUrl(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
+                        <input type="text" inputMode="url" placeholder="Store URL (e.g. yourstore.com)" value={storeUrl} onChange={e => setStoreUrl(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
                         {/* Country dropdown styled like other selects */}
                         <div className="relative">
                             <select
@@ -139,10 +172,10 @@ export default function Signup() {
 
                 <button
                     type="submit"
-                    disabled={mode === 'signup' && isGdprCountry}
-                    className={`w-full py-2 rounded ${mode === 'signup' && isGdprCountry ? 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
+                    disabled={(mode === 'signup' && isGdprCountry) || submitting}
+                    className={`w-full py-2 rounded ${mode === 'signup' && isGdprCountry ? 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'} ${submitting ? 'opacity-70 cursor-wait' : ''}`}
                 >
-                    {mode === 'signup' ? 'Sign up' : 'Sign in'}
+                    {submitting ? 'Please wait…' : (mode === 'signup' ? 'Sign up' : 'Sign in')}
                 </button>
             </form>
             {error && <p className="text-sm text-red-500">{error}</p>}
