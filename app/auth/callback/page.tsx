@@ -13,6 +13,7 @@ export default function AuthCallback() {
                 router.replace(`/signup?mode=signin&error=${encodeURIComponent(err)}`);
                 return;
             }
+
             const code = search.get('code');
             const token_hash = search.get('token_hash');
             const type = search.get('type');
@@ -22,16 +23,24 @@ export default function AuthCallback() {
                 if (code) qs.set('code', code);
                 if (token_hash) qs.set('token_hash', token_hash);
                 if (type) qs.set('type', type);
-                const res = await fetch(`/api/auth/callback?${qs.toString()}`, { method: 'GET' });
-                if (!res.ok) {
-                    const { error } = await res.json().catch(() => ({ error: 'Auth failed' }));
-                    router.replace(`/signup?mode=signin&error=${encodeURIComponent(error || 'Auth failed')}`);
+                try {
+                    const res = await fetch(`/api/auth/callback?${qs.toString()}`, {
+                        method: 'GET',
+                        headers: { 'cache-control': 'no-store' },
+                    });
+                    if (!res.ok) {
+                        const { error } = await res.json().catch(() => ({ error: 'Auth failed' }));
+                        router.replace(`/signup?mode=signin&error=${encodeURIComponent(error || 'Auth failed')}`);
+                        return;
+                    }
+                    // Give server a tick to write cookies then go to dashboard
+                    await new Promise((r) => setTimeout(r, 200));
+                    router.replace('/dashboard');
+                    return;
+                } catch {
+                    router.replace(`/signup?mode=signin&error=${encodeURIComponent('Auth failed')}`);
                     return;
                 }
-                // Give server a tick to write cookies then go to dashboard
-                await new Promise(r => setTimeout(r, 200));
-                router.replace('/dashboard');
-                return;
             }
 
             router.replace('/signup?mode=signin');
