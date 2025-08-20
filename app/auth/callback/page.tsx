@@ -13,7 +13,6 @@ export default function AuthCallback() {
                 router.replace(`/signup?mode=signin&error=${encodeURIComponent(err)}`);
                 return;
             }
-
             const code = search.get('code');
             const token_hash = search.get('token_hash');
             const type = search.get('type');
