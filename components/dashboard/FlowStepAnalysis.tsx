@@ -6,6 +6,8 @@ import { DataManager } from '../../lib/data/dataManager';
 interface FlowStepAnalysisProps {
     dateRange: string;
     granularity: 'daily' | 'weekly' | 'monthly';
+    customFrom?: string;
+    customTo?: string;
 }
 
 interface FlowStepMetrics {
@@ -27,7 +29,7 @@ interface FlowStepMetrics {
     totalClicks: number;
 }
 
-export default function FlowStepAnalysis({ dateRange, granularity }: FlowStepAnalysisProps) {
+export default function FlowStepAnalysis({ dateRange, granularity, customFrom, customTo }: FlowStepAnalysisProps) {
     const [tooltip] = useState<{
         chartIndex: number;
         x: number;
@@ -226,8 +228,8 @@ export default function FlowStepAnalysis({ dateRange, granularity }: FlowStepAna
     const getStepSparklineData = React.useCallback((sequencePosition: number, metric: string) => {
         if (!selectedFlow) return [] as { value: number; date: string }[];
         const chartEmails = currentFlowEmails;
-        return dataManager.getFlowStepTimeSeries(chartEmails, selectedFlow, sequencePosition, metric, dateRange, granularity);
-    }, [selectedFlow, currentFlowEmails, dataManager, dateRange, granularity]);
+        return dataManager.getFlowStepTimeSeries(chartEmails, selectedFlow, sequencePosition, metric, dateRange, granularity, customFrom, customTo);
+    }, [selectedFlow, currentFlowEmails, dataManager, dateRange, granularity, customFrom, customTo]);
 
     const sharedYAxisRange = useMemo(() => {
         if (!selectedFlow) return { min: 0, max: 10 };

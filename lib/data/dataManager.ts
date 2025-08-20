@@ -190,100 +190,121 @@ export class DataManager {
         metricKey: string,
         dateRange: string,
         granularity: 'daily' | 'weekly' | 'monthly',
+        customFrom?: string,
+        customTo?: string
     ): { value: number; date: string }[] {
         const allEmails = [...campaigns, ...flows];
         if (allEmails.length === 0) return [];
-        // Helpers for local-date-safe bucketing/labels
-        const cloneAtMidnight = (d: Date) => { const n = new Date(d); n.setHours(0, 0, 0, 0); return n; };
-        const dateKeyLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        const mondayOfLocal = (dt: Date) => { const d = cloneAtMidnight(dt); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); d.setDate(diff); return d; };
-        const endTs = Math.max(...allEmails.map(e => e.sentDate.getTime()));
-        const endDate = new Date(isFinite(endTs) ? endTs : Date.now());
-        endDate.setHours(23, 59, 59, 999);
-        let startDate = new Date(endDate);
-        if (dateRange === 'all') {
-            const oldestTs = Math.min(...allEmails.map(e => e.sentDate.getTime()));
-            startDate = new Date(isFinite(oldestTs) ? oldestTs : endDate.getTime());
-        } else {
-            const days = parseInt(dateRange.replace('d', ''));
-            startDate.setDate(startDate.getDate() - days + 1); // inclusive window
-        }
-        // Clamp start to 00:00 and end to 23:59 to ensure inclusive full-day filter
-        startDate.setHours(0, 0, 0, 0);
-        // endDate already clamped above
-        const filteredEmails = allEmails.filter(e => e.sentDate >= startDate && e.sentDate <= endDate);
-
-        // Build buckets
-        const buckets = new Map<string, { emails: typeof allEmails; label: string }>();
-        const start = cloneAtMidnight(startDate); const end = cloneAtMidnight(endDate);
-        if (granularity === 'daily') {
-            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-                const key = dateKeyLocal(d); const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                if (!buckets.has(key)) buckets.set(key, { emails: [], label });
-            }
-        } else if (granularity === 'weekly') {
-            for (let d = mondayOfLocal(start); d <= end; d.setDate(d.getDate() + 7)) {
-                const key = dateKeyLocal(d);
-                const weekEnd = new Date(d); weekEnd.setDate(weekEnd.getDate() + 6);
-                const cappedEnd = weekEnd > end ? end : weekEnd;
-                const label = cappedEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                if (!buckets.has(key)) buckets.set(key, { emails: [], label });
-            }
-        } else {
-            for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
-                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-                if (!buckets.has(key)) buckets.set(key, { emails: [], label });
-            }
-        }
-
-        filteredEmails.forEach(email => {
-            const date = new Date(email.sentDate);
-            let key: string; let label: string;
-            if (granularity === 'daily') { key = dateKeyLocal(date); label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
-            else if (granularity === 'weekly') { const monday = mondayOfLocal(date); key = dateKeyLocal(monday); const weekEnd = new Date(monday); weekEnd.setDate(weekEnd.getDate() + 6); const cappedEnd = weekEnd > end ? end : weekEnd; label = cappedEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
-            else { key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; label = new Date(date.getFullYear(), date.getMonth(), 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }); }
-            if (!buckets.has(key)) buckets.set(key, { emails: [], label });
-            buckets.get(key)!.emails.push(email);
-        });
-
-        const sortedKeys = Array.from(buckets.keys()).sort();
-        const timeSeriesData: { value: number; date: string }[] = [];
-
-        sortedKeys.forEach(key => {
-            const bucket = buckets.get(key)!;
-            const emailsInBucket = bucket.emails as typeof allEmails;
-            let value = 0;
-            if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metricKey)) {
-                if (metricKey === 'revenue') value = emailsInBucket.reduce((s, e) => s + e.revenue, 0);
-                else if (metricKey === 'avgOrderValue') {
-                    const totalRevenue = emailsInBucket.reduce((s, e) => s + e.revenue, 0);
-                    const totalOrders = emailsInBucket.reduce((s, e) => s + e.totalOrders, 0);
-                    value = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-                } else {
-                    const totalRevenue = emailsInBucket.reduce((s, e) => s + e.revenue, 0);
-                    const totalEmailsSent = emailsInBucket.reduce((s, e) => s + e.emailsSent, 0);
-                    value = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0;
-                }
-            } else if (['emailsSent', 'totalOrders'].includes(metricKey)) {
-                value = emailsInBucket.reduce((s, e) => s + (e as any)[metricKey] || 0, 0);
+        
+        try {
+            // Helpers for local-date-safe bucketing/labels
+            const cloneAtMidnight = (d: Date) => { const n = new Date(d); n.setHours(0, 0, 0, 0); return n; };
+            const dateKeyLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            const mondayOfLocal = (dt: Date) => { const d = cloneAtMidnight(dt); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); d.setDate(diff); return d; };
+            
+            let endDate: Date;
+            let startDate: Date;
+            
+            // Handle custom date ranges
+            if (dateRange === 'custom' && customFrom && customTo) {
+                startDate = new Date(customFrom);
+                endDate = new Date(customTo);
+                startDate.setHours(0, 0, 0, 0);
+                endDate.setHours(23, 59, 59, 999); // Include full end day
+            } else if (dateRange === 'all') {
+                const endTs = Math.max(...allEmails.map(e => e.sentDate.getTime()));
+                endDate = new Date(isFinite(endTs) ? endTs : Date.now());
+                endDate.setHours(23, 59, 59, 999);
+                const oldestTs = Math.min(...allEmails.map(e => e.sentDate.getTime()));
+                startDate = new Date(isFinite(oldestTs) ? oldestTs : endDate.getTime());
+                startDate.setHours(0, 0, 0, 0);
             } else {
-                const totalEmailsSent = emailsInBucket.reduce((s, e) => s + e.emailsSent, 0);
-                if (totalEmailsSent === 0) value = 0; else {
-                    if (metricKey === 'openRate') { const totalOpens = emailsInBucket.reduce((s, e) => s + e.uniqueOpens, 0); value = (totalOpens / totalEmailsSent) * 100; }
-                    else if (metricKey === 'clickRate') { const totalClicks = emailsInBucket.reduce((s, e) => s + e.uniqueClicks, 0); value = (totalClicks / totalEmailsSent) * 100; }
-                    else if (metricKey === 'clickToOpenRate') { const totalOpens = emailsInBucket.reduce((s, e) => s + e.uniqueOpens, 0); const totalClicks = emailsInBucket.reduce((s, e) => s + e.uniqueClicks, 0); value = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0; }
-                    else if (metricKey === 'conversionRate') { const totalClicks = emailsInBucket.reduce((s, e) => s + e.uniqueClicks, 0); const totalOrders = emailsInBucket.reduce((s, e) => s + e.totalOrders, 0); value = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0; }
-                    else if (metricKey === 'unsubscribeRate') { const totalUnsubs = emailsInBucket.reduce((s, e) => s + e.unsubscribesCount, 0); value = (totalUnsubs / totalEmailsSent) * 100; }
-                    else if (metricKey === 'spamRate') { const totalSpam = emailsInBucket.reduce((s, e) => s + e.spamComplaintsCount, 0); value = (totalSpam / totalEmailsSent) * 100; }
-                    else if (metricKey === 'bounceRate') { const totalBounces = emailsInBucket.reduce((s, e) => s + e.bouncesCount, 0); value = (totalBounces / totalEmailsSent) * 100; }
-                    else value = 0;
+                const endTs = Math.max(...allEmails.map(e => e.sentDate.getTime()));
+                endDate = new Date(isFinite(endTs) ? endTs : Date.now());
+                endDate.setHours(23, 59, 59, 999);
+                startDate = new Date(endDate);
+                const days = parseInt(dateRange.replace('d', ''));
+                startDate.setDate(startDate.getDate() - days + 1); // inclusive window
+                startDate.setHours(0, 0, 0, 0);
+            }
+            
+            const filteredEmails = allEmails.filter(e => e.sentDate >= startDate && e.sentDate <= endDate);
+
+            // Build buckets
+            const buckets = new Map<string, { emails: typeof allEmails; label: string }>();
+            const start = cloneAtMidnight(startDate); const end = cloneAtMidnight(endDate);
+            if (granularity === 'daily') {
+                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                    const key = dateKeyLocal(d); const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    if (!buckets.has(key)) buckets.set(key, { emails: [], label });
+                }
+            } else if (granularity === 'weekly') {
+                for (let d = mondayOfLocal(start); d <= end; d.setDate(d.getDate() + 7)) {
+                    const key = dateKeyLocal(d);
+                    const weekEnd = new Date(d); weekEnd.setDate(weekEnd.getDate() + 6);
+                    const cappedEnd = weekEnd > end ? end : weekEnd;
+                    const label = cappedEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    if (!buckets.has(key)) buckets.set(key, { emails: [], label });
+                }
+            } else {
+                for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+                    if (!buckets.has(key)) buckets.set(key, { emails: [], label });
                 }
             }
 
-            timeSeriesData.push({ value, date: bucket.label });
-        });
+            filteredEmails.forEach(email => {
+                const date = new Date(email.sentDate);
+                let key: string; let label: string;
+                if (granularity === 'daily') { key = dateKeyLocal(date); label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+                else if (granularity === 'weekly') { const monday = mondayOfLocal(date); key = dateKeyLocal(monday); const weekEnd = new Date(monday); weekEnd.setDate(weekEnd.getDate() + 6); const cappedEnd = weekEnd > end ? end : weekEnd; label = cappedEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+                else { key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; label = new Date(date.getFullYear(), date.getMonth(), 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }); }
+                if (!buckets.has(key)) buckets.set(key, { emails: [], label });
+                buckets.get(key)!.emails.push(email);
+            });
 
-        return timeSeriesData;
+            const sortedKeys = Array.from(buckets.keys()).sort();
+            const timeSeriesData: { value: number; date: string }[] = [];
+
+            sortedKeys.forEach(key => {
+                const bucket = buckets.get(key)!;
+                const emailsInBucket = bucket.emails as typeof allEmails;
+                let value = 0;
+                if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metricKey)) {
+                    if (metricKey === 'revenue') value = emailsInBucket.reduce((s, e) => s + e.revenue, 0);
+                    else if (metricKey === 'avgOrderValue') {
+                        const totalRevenue = emailsInBucket.reduce((s, e) => s + e.revenue, 0);
+                        const totalOrders = emailsInBucket.reduce((s, e) => s + e.totalOrders, 0);
+                        value = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+                    } else {
+                        const totalRevenue = emailsInBucket.reduce((s, e) => s + e.revenue, 0);
+                        const totalEmailsSent = emailsInBucket.reduce((s, e) => s + e.emailsSent, 0);
+                        value = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0;
+                    }
+                } else if (['emailsSent', 'totalOrders'].includes(metricKey)) {
+                    value = emailsInBucket.reduce((s, e) => s + (e as any)[metricKey] || 0, 0);
+                } else {
+                    const totalEmailsSent = emailsInBucket.reduce((s, e) => s + e.emailsSent, 0);
+                    if (totalEmailsSent === 0) value = 0; else {
+                        if (metricKey === 'openRate') { const totalOpens = emailsInBucket.reduce((s, e) => s + e.uniqueOpens, 0); value = (totalOpens / totalEmailsSent) * 100; }
+                        else if (metricKey === 'clickRate') { const totalClicks = emailsInBucket.reduce((s, e) => s + e.uniqueClicks, 0); value = (totalClicks / totalEmailsSent) * 100; }
+                        else if (metricKey === 'clickToOpenRate') { const totalOpens = emailsInBucket.reduce((s, e) => s + e.uniqueOpens, 0); const totalClicks = emailsInBucket.reduce((s, e) => s + e.uniqueClicks, 0); value = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0; }
+                        else if (metricKey === 'conversionRate') { const totalClicks = emailsInBucket.reduce((s, e) => s + e.uniqueClicks, 0); const totalOrders = emailsInBucket.reduce((s, e) => s + e.totalOrders, 0); value = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0; }
+                        else if (metricKey === 'unsubscribeRate') { const totalUnsubs = emailsInBucket.reduce((s, e) => s + e.unsubscribesCount, 0); value = (totalUnsubs / totalEmailsSent) * 100; }
+                        else if (metricKey === 'spamRate') { const totalSpam = emailsInBucket.reduce((s, e) => s + e.spamComplaintsCount, 0); value = (totalSpam / totalEmailsSent) * 100; }
+                        else if (metricKey === 'bounceRate') { const totalBounces = emailsInBucket.reduce((s, e) => s + e.bouncesCount, 0); value = (totalBounces / totalEmailsSent) * 100; }
+                        else value = 0;
+                    }
+                }
+
+                timeSeriesData.push({ value, date: bucket.label });
+            });
+
+            return timeSeriesData;
+        } catch (error) {
+            console.error('Error in getMetricTimeSeries:', error);
+            return [];
+        }
     }
 
     getFlowStepTimeSeries(
@@ -293,7 +314,11 @@ export class DataManager {
         metricKey: string,
         dateRange: string,
         granularity: 'daily' | 'weekly' | 'monthly',
-    ) { return this.getMetricTimeSeries([], flowEmails.filter(e => e.flowName === flowName && e.sequencePosition === sequencePosition), metricKey, dateRange, granularity); }
+        customFrom?: string,
+        customTo?: string
+    ) { 
+        return this.getMetricTimeSeries([], flowEmails.filter(e => e.flowName === flowName && e.sequencePosition === sequencePosition), metricKey, dateRange, granularity, customFrom, customTo); 
+    }
 
     getFlowSequenceInfo(flowName: string): FlowSequenceInfo { return this.flowTransformer.getFlowSequenceInfo(flowName, this.flowEmails); }
 
