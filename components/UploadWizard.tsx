@@ -103,7 +103,15 @@ export default function UploadWizard() {
                 body: JSON.stringify({ uploadId }),
             });
             const linkJson = await linkRes.json().catch(() => ({}));
-            if (!linkRes.ok || !linkJson?.ok) throw new Error(linkJson?.error || 'Failed to finalize upload');
+
+            // If user is not authenticated, store uploadId for later linking
+            if (!linkRes.ok && linkRes.status === 401) {
+                localStorage.setItem('pending-upload-id', uploadId);
+                // Continue with local data loading for immediate preview
+            } else if (!linkRes.ok || !linkJson?.ok) {
+                throw new Error(linkJson?.error || 'Failed to finalize upload');
+            }
+
             const snapshotId: string | undefined = linkJson?.snapshotId;
 
             // Optimistically load data locally so charts populate immediately

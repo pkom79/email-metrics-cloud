@@ -18,6 +18,10 @@ function formatNumber(value: number) { return Math.round(value).toLocaleString('
 
 export default function DashboardClient({ businessName }: { businessName?: string }) {
     const dm = useMemo(() => DataManager.getInstance(), []);
+
+    // Error handling state
+    const [dashboardError, setDashboardError] = useState<string | null>(null);
+
     // Lightweight data refresh when uploads complete (no saved reports UI)
     const [dataVersion, setDataVersion] = useState(0);
     useEffect(() => {
@@ -81,16 +85,31 @@ export default function DashboardClient({ businessName }: { businessName?: strin
         const diff = Math.floor((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1; // inclusive
         return Math.max(diff, 1);
     }, [customActive, customFrom, customTo]);
-    const [granularity, setGranularity] = useState<'daily' | 'weekly' | 'monthly'>(dm.getGranularityForDateRange('30d'));
-    useEffect(() => {
-        if (customActive && customDays > 0) {
-            setGranularity(dm.getGranularityForDateRange(`${customDays}d`));
-        } else if (dateRange === 'all') {
-            setGranularity(dm.getGranularityForDateRange('all'));
-        } else {
-            setGranularity(dm.getGranularityForDateRange(dateRange === 'custom' ? '30d' : dateRange));
+    const [granularity, setGranularity] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+
+    // Safe granularity calculation with error handling
+    const safeGranularity = useMemo(() => {
+        try {
+            if (customActive && customDays > 0) {
+                return dm.getGranularityForDateRange(`${customDays}d`);
+            } else if (dateRange === 'all') {
+                return dm.getGranularityForDateRange('all');
+            } else {
+                return dm.getGranularityForDateRange(dateRange === 'custom' ? '30d' : dateRange);
+            }
+        } catch (error: any) {
+            console.error('Error calculating granularity:', error);
+            setDashboardError(`Granularity calculation error: ${error?.message || 'Unknown error'}`);
+            return 'daily'; // Safe fallback
         }
     }, [dateRange, customActive, customDays, dm]);
+
+    // Update granularity safely
+    useEffect(() => {
+        if (!dashboardError) {
+            setGranularity(safeGranularity);
+        }
+    }, [safeGranularity, dashboardError]);
 
     // Keep date inputs in sync with selected preset; default to Last 30 days
     // moved below after dependent variables are declared
@@ -463,6 +482,35 @@ export default function DashboardClient({ businessName }: { businessName?: strin
             return bv - av;
         });
     };
+
+    // Error boundary for dashboard
+    if (dashboardError) {
+        return (
+            <div className="min-h-screen flex items-center justify-center p-6">
+                <div className="max-w-md mx-auto text-center">
+                    <h2 className="text-lg font-semibold text-red-600 mb-4">Dashboard Error</h2>
+                    <p className="text-gray-600 dark:text-gray-300 mb-6">{dashboardError}</p>
+                    <div className="space-x-4">
+                        <button
+                            onClick={() => {
+                                setDashboardError(null);
+                                setDataVersion(v => v + 1);
+                            }}
+                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                        >
+                            Retry
+                        </button>
+                        <button
+                            onClick={() => window.location.reload()}
+                            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                        >
+                            Reload Page
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     // Export PDF feature removed per request
 

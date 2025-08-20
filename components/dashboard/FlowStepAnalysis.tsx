@@ -116,14 +116,61 @@ export default function FlowStepAnalysis({ dateRange, granularity }: FlowStepAna
     const hasDuplicateNames = useMemo(() => Object.values(duplicateNameCounts).some(c => c > 1), [duplicateNameCounts]);
 
     const flowStepMetrics = useMemo((): FlowStepMetrics[] => {
-        if (!selectedFlow || !flowSequenceInfo) return [];
+        if (!selectedFlow || !flowSequenceInfo) {
+            console.log('No selected flow or sequence info');
+            return [];
+        }
+
         const flowEmails = currentFlowEmails.filter(email => email.flowName === selectedFlow);
+        console.log(`Flow emails for ${selectedFlow}:`, flowEmails.length);
+
+        if (flowEmails.length === 0) {
+            console.warn(`No emails found for flow: ${selectedFlow}`);
+            return [];
+        }
+
         const stepMetrics: FlowStepMetrics[] = [];
         let previousEmailsSent = 0;
+
         flowSequenceInfo.messageIds.forEach((messageId, idx) => {
-            const stepEmails = flowEmails.filter(email => email.flowMessageId === messageId);
+            let stepEmails = flowEmails.filter(email => email.flowMessageId === messageId);
+
+            // Fallback: if no emails match messageId, try sequence position
+            if (stepEmails.length === 0) {
+                console.warn(`No emails for messageId ${messageId}, trying sequence position ${idx + 1}`);
+                stepEmails = flowEmails.filter(email => email.sequencePosition === idx + 1);
+            }
+
+            // If still no emails, create empty step
+            if (stepEmails.length === 0) {
+                console.warn(`No emails found for step ${idx + 1} in flow ${selectedFlow}`);
+                const emailName = flowSequenceInfo.emailNames[idx] || `Step ${idx + 1}`;
+                stepMetrics.push({
+                    sequencePosition: idx + 1,
+                    emailName,
+                    emailsSent: 0,
+                    revenue: 0,
+                    openRate: 0,
+                    clickRate: 0,
+                    clickToOpenRate: 0,
+                    conversionRate: 0,
+                    unsubscribeRate: 0,
+                    avgOrderValue: 0,
+                    dropOffRate: 0,
+                    bounceRate: 0,
+                    spamRate: 0,
+                    revenuePerEmail: 0,
+                    totalOrders: 0,
+                    totalClicks: 0
+                });
+                return;
+            }
+
             const sortedStepEmails = [...stepEmails].sort((a, b) => a.sentDate.getTime() - b.sentDate.getTime());
-            const emailName = flowSequenceInfo.emailNames[idx] || (sortedStepEmails.length > 0 ? sortedStepEmails[sortedStepEmails.length - 1].emailName : `Email ${idx + 1}`);
+            const emailName = flowSequenceInfo.emailNames[idx] ||
+                (sortedStepEmails.length > 0 ? sortedStepEmails[sortedStepEmails.length - 1].emailName : `Step ${idx + 1}`);
+
+            // Calculate aggregated metrics for this step
             const totalEmailsSent = sortedStepEmails.reduce((sum, email) => sum + email.emailsSent, 0);
             const totalRevenue = sortedStepEmails.reduce((sum, email) => sum + email.revenue, 0);
             const totalOrders = sortedStepEmails.reduce((sum, email) => sum + email.totalOrders, 0);
@@ -132,6 +179,8 @@ export default function FlowStepAnalysis({ dateRange, granularity }: FlowStepAna
             const totalUnsubscribes = sortedStepEmails.reduce((sum, email) => sum + email.unsubscribesCount, 0);
             const totalBounces = sortedStepEmails.reduce((sum, email) => sum + email.bouncesCount, 0);
             const totalSpam = sortedStepEmails.reduce((sum, email) => sum + email.spamComplaintsCount, 0);
+
+            // Calculate rates
             const openRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0;
             const clickRate = totalEmailsSent > 0 ? (totalClicks / totalEmailsSent) * 100 : 0;
             const clickToOpenRate = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0;
@@ -141,11 +190,36 @@ export default function FlowStepAnalysis({ dateRange, granularity }: FlowStepAna
             const spamRate = totalEmailsSent > 0 ? (totalSpam / totalEmailsSent) * 100 : 0;
             const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
             const revenuePerEmail = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0;
+
+            // Calculate drop-off rate
             let dropOffRate = 0;
-            if (idx > 0 && previousEmailsSent > 0) dropOffRate = ((previousEmailsSent - totalEmailsSent) / previousEmailsSent) * 100;
-            stepMetrics.push({ sequencePosition: idx + 1, emailName, emailsSent: totalEmailsSent, revenue: totalRevenue, openRate, clickRate, clickToOpenRate, conversionRate, unsubscribeRate, avgOrderValue, dropOffRate, bounceRate, spamRate, revenuePerEmail, totalOrders, totalClicks });
+            if (idx > 0 && previousEmailsSent > 0) {
+                dropOffRate = ((previousEmailsSent - totalEmailsSent) / previousEmailsSent) * 100;
+            }
+
+            stepMetrics.push({
+                sequencePosition: idx + 1,
+                emailName,
+                emailsSent: totalEmailsSent,
+                revenue: totalRevenue,
+                openRate,
+                clickRate,
+                clickToOpenRate,
+                conversionRate,
+                unsubscribeRate,
+                avgOrderValue,
+                dropOffRate,
+                bounceRate,
+                spamRate,
+                revenuePerEmail,
+                totalOrders,
+                totalClicks
+            });
+
             previousEmailsSent = totalEmailsSent;
         });
+
+        console.log(`Generated ${stepMetrics.length} step metrics for ${selectedFlow}`);
         return stepMetrics;
     }, [selectedFlow, currentFlowEmails, flowSequenceInfo]);
 

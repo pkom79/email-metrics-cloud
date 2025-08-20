@@ -100,6 +100,27 @@ export default function Signup() {
                     }
                 });
                 if (error) throw error;
+
+                // Link any pending uploads from before account creation
+                const pendingUploadId = localStorage.getItem('pending-upload-id');
+                if (pendingUploadId) {
+                    try {
+                        const linkRes = await fetch('/api/auth/link-upload', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                uploadId: pendingUploadId,
+                                label: businessName || 'My Reports'
+                            })
+                        });
+                        if (linkRes.ok) {
+                            localStorage.removeItem('pending-upload-id');
+                        }
+                    } catch (linkError) {
+                        console.warn('Failed to link upload after signup:', linkError);
+                    }
+                }
+
                 setOk('Check your email to confirm your account.');
             } else {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password });

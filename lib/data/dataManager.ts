@@ -434,41 +434,144 @@ export class DataManager {
         dateRange: string,
         dataType: 'all' | 'campaigns' | 'flows' = 'all',
         options?: { flowName?: string }
-    ) {
-        const endDate = this.getLastEmailDate();
-        const startDate = new Date(endDate);
-        if (dateRange === 'all') return { currentValue: 0, previousValue: 0, changePercent: 0, isPositive: true, currentPeriod: undefined, previousPeriod: undefined };
-        const periodDays = parseInt(dateRange.replace('d', ''));
-        startDate.setDate(startDate.getDate() - periodDays);
-        const prevEndDate = new Date(startDate); prevEndDate.setDate(prevEndDate.getDate() - 1);
-        const prevStartDate = new Date(prevEndDate); prevStartDate.setDate(prevStartDate.getDate() - periodDays + 1);
+    ): { currentValue: number; previousValue: number; changePercent: number; isPositive: boolean; currentPeriod?: { startDate: Date; endDate: Date }; previousPeriod?: { startDate: Date; endDate: Date } } {
+        let endDate: Date;
+        let startDate: Date;
+        let periodDays: number;
 
-        let campaignsToUse = this.campaigns; let flowsToUse = this.flowEmails;
-        if (dataType === 'campaigns') flowsToUse = []; else if (dataType === 'flows') campaignsToUse = [];
-        if (options?.flowName && options.flowName !== 'all') flowsToUse = flowsToUse.filter(f => f.flowName === options.flowName);
-
-        const current = this.getAggregatedMetricsForPeriod(campaignsToUse, flowsToUse, startDate, endDate);
-        const previous = this.getAggregatedMetricsForPeriod(campaignsToUse, flowsToUse, prevStartDate, prevEndDate);
-
-        let currentValue = 0; let previousValue = 0;
-        switch (metricKey) {
-            case 'totalRevenue': currentValue = current.totalRevenue; previousValue = previous.totalRevenue; break;
-            case 'averageOrderValue':
-            case 'avgOrderValue': currentValue = current.avgOrderValue; previousValue = previous.avgOrderValue; break;
-            case 'revenuePerEmail': currentValue = current.revenuePerEmail; previousValue = previous.revenuePerEmail; break;
-            case 'openRate': currentValue = current.openRate; previousValue = previous.openRate; break;
-            case 'clickRate': currentValue = current.clickRate; previousValue = previous.clickRate; break;
-            case 'clickToOpenRate': currentValue = current.clickToOpenRate; previousValue = previous.clickToOpenRate; break;
-            case 'emailsSent': currentValue = current.emailsSent; previousValue = previous.emailsSent; break;
-            case 'totalOrders': currentValue = current.totalOrders; previousValue = previous.totalOrders; break;
-            case 'conversionRate': currentValue = current.conversionRate; previousValue = previous.conversionRate; break;
-            case 'unsubscribeRate': currentValue = current.unsubscribeRate; previousValue = previous.unsubscribeRate; break;
-            case 'spamRate': currentValue = current.spamRate; previousValue = previous.spamRate; break;
-            case 'bounceRate': currentValue = current.bounceRate; previousValue = previous.bounceRate; break;
+        // Handle custom date ranges
+        if (dateRange.includes('custom:')) {
+            const parts = dateRange.split(':');
+            startDate = new Date(parts[1]);
+            endDate = new Date(parts[2]);
+            endDate.setHours(23, 59, 59, 999); // Include full end day
+            startDate.setHours(0, 0, 0, 0);
+            periodDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        } else if (dateRange === 'all') {
+            return { currentValue: 0, previousValue: 0, changePercent: 0, isPositive: true, currentPeriod: undefined, previousPeriod: undefined };
+        } else {
+            // Standard preset ranges
+            endDate = this.getLastEmailDate();
+            endDate.setHours(23, 59, 59, 999);
+            periodDays = parseInt(dateRange.replace('d', ''));
+            startDate = new Date(endDate);
+            startDate.setDate(startDate.getDate() - periodDays + 1);
+            startDate.setHours(0, 0, 0, 0);
         }
-        let changePercent = 0; if (previousValue !== 0) changePercent = ((currentValue - previousValue) / previousValue) * 100; else if (currentValue > 0) changePercent = 100;
+
+        // Calculate previous period - go back exactly the same number of days
+        const prevEndDate = new Date(startDate);
+        prevEndDate.setDate(prevEndDate.getDate() - 1);
+        prevEndDate.setHours(23, 59, 59, 999);
+        const prevStartDate = new Date(prevEndDate);
+        prevStartDate.setDate(prevStartDate.getDate() - periodDays + 1);
+        prevStartDate.setHours(0, 0, 0, 0);
+
+        // Get data based on type
+        let campaignsToUse = this.campaigns;
+        let flowsToUse = this.flowEmails;
+
+        if (dataType === 'campaigns') {
+            flowsToUse = [];
+        } else if (dataType === 'flows') {
+            campaignsToUse = [];
+        }
+
+        // Optional filter by flow name when analyzing flows
+        if (options?.flowName && options.flowName !== 'all') {
+            flowsToUse = flowsToUse.filter(f => f.flowName === options.flowName);
+        }
+
+        // Get metrics for both periods
+        const currentMetrics = this.getAggregatedMetricsForPeriod(
+            campaignsToUse,
+            flowsToUse,
+            startDate,
+            endDate
+        );
+
+        const previousMetrics = this.getAggregatedMetricsForPeriod(
+            campaignsToUse,
+            flowsToUse,
+            prevStartDate,
+            prevEndDate
+        );
+
+        // Extract the specific metric value
+        let currentValue = 0;
+        let previousValue = 0;
+
+        switch (metricKey) {
+            case 'totalRevenue':
+                currentValue = currentMetrics.totalRevenue;
+                previousValue = previousMetrics.totalRevenue;
+                break;
+            case 'averageOrderValue':
+            case 'avgOrderValue':
+                currentValue = currentMetrics.avgOrderValue;
+                previousValue = previousMetrics.avgOrderValue;
+                break;
+            case 'revenuePerEmail':
+                currentValue = currentMetrics.revenuePerEmail;
+                previousValue = previousMetrics.revenuePerEmail;
+                break;
+            case 'openRate':
+                currentValue = currentMetrics.openRate;
+                previousValue = previousMetrics.openRate;
+                break;
+            case 'clickRate':
+                currentValue = currentMetrics.clickRate;
+                previousValue = previousMetrics.clickRate;
+                break;
+            case 'clickToOpenRate':
+                currentValue = currentMetrics.clickToOpenRate;
+                previousValue = previousMetrics.clickToOpenRate;
+                break;
+            case 'emailsSent':
+                currentValue = currentMetrics.emailsSent;
+                previousValue = previousMetrics.emailsSent;
+                break;
+            case 'totalOrders':
+                currentValue = currentMetrics.totalOrders;
+                previousValue = previousMetrics.totalOrders;
+                break;
+            case 'conversionRate':
+                currentValue = currentMetrics.conversionRate;
+                previousValue = previousMetrics.conversionRate;
+                break;
+            case 'unsubscribeRate':
+                currentValue = currentMetrics.unsubscribeRate;
+                previousValue = previousMetrics.unsubscribeRate;
+                break;
+            case 'spamRate':
+                currentValue = currentMetrics.spamRate;
+                previousValue = previousMetrics.spamRate;
+                break;
+            case 'bounceRate':
+                currentValue = currentMetrics.bounceRate;
+                previousValue = previousMetrics.bounceRate;
+                break;
+        }
+
+        // Calculate percentage change
+        let changePercent = 0;
+        if (previousValue !== 0) {
+            changePercent = ((currentValue - previousValue) / previousValue) * 100;
+        } else if (currentValue > 0) {
+            changePercent = 100;
+        }
+
+        // Determine if change is positive (good) based on metric type
         const negativeMetrics = ['unsubscribeRate', 'spamRate', 'bounceRate'];
-        const isPositive = negativeMetrics.includes(metricKey) ? changePercent < 0 : changePercent > 0;
-        return { currentValue, previousValue, changePercent, isPositive, currentPeriod: { startDate, endDate }, previousPeriod: { startDate: prevStartDate, endDate: prevEndDate } };
+        const isPositive = negativeMetrics.includes(metricKey) ? changePercent <= 0 : changePercent >= 0;
+
+        return {
+            currentValue,
+            previousValue,
+            changePercent,
+            isPositive,
+            currentPeriod: { startDate, endDate },
+            previousPeriod: { startDate: prevStartDate, endDate: prevEndDate }
+        };
     }
 }
