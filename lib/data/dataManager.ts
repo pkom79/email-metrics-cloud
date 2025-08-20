@@ -13,6 +13,7 @@ import { CSVParser } from './csvParser';
 import { CampaignTransformer } from './transformers/campaignTransformer';
 import { FlowTransformer } from './transformers/flowTransformer';
 import { SubscriberTransformer } from './transformers/subscriberTransformer';
+import { idbGet, idbSet } from '../utils/persist';
 
 export interface LoadProgress {
     campaigns: { loaded: boolean; progress: number; error?: string };
@@ -39,9 +40,88 @@ export class DataManager {
     private flowTransformer = new FlowTransformer();
     private subscriberTransformer = new SubscriberTransformer();
 
+    // Lightweight client-side persistence so uploads survive auth redirects/refresh
+    private storageKey = 'em:last-dataset:v1';
+    private idbKey = 'dataset:v1';
+
+    constructor() {
+        // Hydrate from storage on client if available
+        if (typeof window !== 'undefined') {
+            try {
+                const raw = localStorage.getItem(this.storageKey);
+                if (raw) {
+                    const parsed = JSON.parse(raw) as {
+                        campaigns?: any[];
+                        flowEmails?: any[];
+                        subscribers?: any[];
+                    };
+                    const revive = (d: any) => (d instanceof Date ? d : new Date(d));
+                    this.campaigns = (parsed.campaigns || []).map((c: any) => ({ ...c, sentDate: revive(c.sentDate) }));
+                    this.flowEmails = (parsed.flowEmails || []).map((f: any) => ({ ...f, sentDate: revive(f.sentDate) }));
+                    this.subscribers = (parsed.subscribers || []);
+                    this.isRealDataLoaded = this.campaigns.length > 0 || this.flowEmails.length > 0 || this.subscribers.length > 0;
+                    try { window.dispatchEvent(new CustomEvent('em:dataset-hydrated')); } catch { /* ignore */ }
+                }
+            } catch {
+                // ignore storage issues
+            }
+            // Fire-and-forget hydrate from IndexedDB (larger capacity)
+            // If IDB has data and local arrays are empty, hydrate and mark loaded.
+            (async () => {
+                try {
+                    if (this.campaigns.length || this.flowEmails.length || this.subscribers.length) return;
+                    const fromIdb = await idbGet<any>(this.idbKey);
+                    if (fromIdb) {
+                        const revive = (d: any) => (d instanceof Date ? d : new Date(d));
+                        this.campaigns = (fromIdb.campaigns || []).map((c: any) => ({ ...c, sentDate: revive(c.sentDate) }));
+                        this.flowEmails = (fromIdb.flowEmails || []).map((f: any) => ({ ...f, sentDate: revive(f.sentDate) }));
+                        this.subscribers = (fromIdb.subscribers || []);
+                        this.isRealDataLoaded = this.campaigns.length > 0 || this.flowEmails.length > 0 || this.subscribers.length > 0;
+                        try { window.dispatchEvent(new CustomEvent('em:dataset-hydrated')); } catch { /* ignore */ }
+                    }
+                } catch { /* ignore */ }
+            })();
+        }
+    }
+
     static getInstance(): DataManager {
         if (!DataManager.instance) DataManager.instance = new DataManager();
         return DataManager.instance;
+    }
+
+    // Public method for consumers to ensure hydration from durable storage.
+    async ensureHydrated(): Promise<boolean> {
+        if (this.campaigns.length || this.flowEmails.length || this.subscribers.length) return true;
+        try {
+            const fromIdb = await idbGet<any>(this.idbKey);
+            if (fromIdb) {
+                const revive = (d: any) => (d instanceof Date ? d : new Date(d));
+                this.campaigns = (fromIdb.campaigns || []).map((c: any) => ({ ...c, sentDate: revive(c.sentDate) }));
+                this.flowEmails = (fromIdb.flowEmails || []).map((f: any) => ({ ...f, sentDate: revive(f.sentDate) }));
+                this.subscribers = (fromIdb.subscribers || []);
+                this.isRealDataLoaded = this.campaigns.length > 0 || this.flowEmails.length > 0 || this.subscribers.length > 0;
+                try { window.dispatchEvent(new CustomEvent('em:dataset-hydrated')); } catch { }
+                return this.isRealDataLoaded;
+            }
+        } catch { }
+        return false;
+    }
+
+    private persistToStorage(): void {
+        if (typeof window === 'undefined') return;
+        const serialize = (arr: any[]) => arr.map((o: any) => ({ ...o, sentDate: (o.sentDate instanceof Date ? o.sentDate : new Date(o.sentDate)).toISOString() }));
+        const obj = {
+            campaigns: serialize(this.campaigns),
+            flowEmails: serialize(this.flowEmails),
+            subscribers: this.subscribers,
+        };
+        // Try localStorage but don't block IDB if it fails
+        try {
+            localStorage.setItem(this.storageKey, JSON.stringify(obj));
+        } catch { /* quota or private mode */ }
+        // IDB is our durable store
+        (async () => { try { await idbSet(this.idbKey, obj); } catch { /* ignore */ } })();
+        try { window.dispatchEvent(new CustomEvent('em:dataset-persisted')); } catch { /* ignore */ }
     }
 
     async loadCSVFiles(
@@ -76,6 +156,7 @@ export class DataManager {
             }
             this.isRealDataLoaded = this.campaigns.length > 0 || this.flowEmails.length > 0 || this.subscribers.length > 0;
             onProgress?.(this.loadProgress);
+            if (this.isRealDataLoaded) this.persistToStorage();
             return { success: errors.length === 0, errors };
         } catch (e: any) {
             errors.push(e?.message || 'Unknown error');
@@ -112,54 +193,65 @@ export class DataManager {
     ): { value: number; date: string }[] {
         const allEmails = [...campaigns, ...flows];
         if (allEmails.length === 0) return [];
-
-        let endTs = Math.max(...allEmails.map(e => e.sentDate.getTime()));
+        // Helpers for local-date-safe bucketing/labels
+        const cloneAtMidnight = (d: Date) => { const n = new Date(d); n.setHours(0, 0, 0, 0); return n; };
+        const dateKeyLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const mondayOfLocal = (dt: Date) => { const d = cloneAtMidnight(dt); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); d.setDate(diff); return d; };
+        const endTs = Math.max(...allEmails.map(e => e.sentDate.getTime()));
         const endDate = new Date(isFinite(endTs) ? endTs : Date.now());
+        endDate.setHours(23, 59, 59, 999);
         let startDate = new Date(endDate);
         if (dateRange === 'all') {
             const oldestTs = Math.min(...allEmails.map(e => e.sentDate.getTime()));
             startDate = new Date(isFinite(oldestTs) ? oldestTs : endDate.getTime());
         } else {
             const days = parseInt(dateRange.replace('d', ''));
-            startDate.setDate(startDate.getDate() - days);
+            startDate.setDate(startDate.getDate() - days + 1); // inclusive window
         }
-
+        // Clamp start to 00:00 and end to 23:59 to ensure inclusive full-day filter
+        startDate.setHours(0, 0, 0, 0);
+        // endDate already clamped above
         const filteredEmails = allEmails.filter(e => e.sentDate >= startDate && e.sentDate <= endDate);
 
-        const buckets = new Map<string, typeof allEmails>();
-        const start = new Date(startDate); const end = new Date(endDate); start.setHours(0, 0, 0, 0); end.setHours(0, 0, 0, 0);
+        // Build buckets
+        const buckets = new Map<string, { emails: typeof allEmails; label: string }>();
+        const start = cloneAtMidnight(startDate); const end = cloneAtMidnight(endDate);
         if (granularity === 'daily') {
             for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-                const key = d.toISOString().split('T')[0]; if (!buckets.has(key)) buckets.set(key, []);
+                const key = dateKeyLocal(d); const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                if (!buckets.has(key)) buckets.set(key, { emails: [], label });
             }
         } else if (granularity === 'weekly') {
-            const mondayOf = (dt: Date) => { const d = new Date(dt); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); d.setDate(diff); d.setHours(0, 0, 0, 0); return d; };
-            for (let d = mondayOf(start); d <= end; d.setDate(d.getDate() + 7)) { const key = d.toISOString().split('T')[0]; if (!buckets.has(key)) buckets.set(key, []); }
+            for (let d = mondayOfLocal(start); d <= end; d.setDate(d.getDate() + 7)) {
+                const key = dateKeyLocal(d);
+                const weekEnd = new Date(d); weekEnd.setDate(weekEnd.getDate() + 6);
+                const cappedEnd = weekEnd > end ? end : weekEnd;
+                const label = cappedEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                if (!buckets.has(key)) buckets.set(key, { emails: [], label });
+            }
         } else {
             for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
-                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; if (!buckets.has(key)) buckets.set(key, []);
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+                if (!buckets.has(key)) buckets.set(key, { emails: [], label });
             }
         }
 
         filteredEmails.forEach(email => {
-            let bucketKey: string;
             const date = new Date(email.sentDate);
-            switch (granularity) {
-                case 'daily': bucketKey = date.toISOString().split('T')[0]; break;
-                case 'weekly': {
-                    const monday = new Date(date); const day = monday.getDay(); const diff = monday.getDate() - day + (day === 0 ? -6 : 1); monday.setDate(diff); bucketKey = monday.toISOString().split('T')[0]; break;
-                }
-                case 'monthly': bucketKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; break;
-            }
-            if (!buckets.has(bucketKey)) buckets.set(bucketKey, []);
-            buckets.get(bucketKey)!.push(email);
+            let key: string; let label: string;
+            if (granularity === 'daily') { key = dateKeyLocal(date); label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+            else if (granularity === 'weekly') { const monday = mondayOfLocal(date); key = dateKeyLocal(monday); const weekEnd = new Date(monday); weekEnd.setDate(weekEnd.getDate() + 6); const cappedEnd = weekEnd > end ? end : weekEnd; label = cappedEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+            else { key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; label = new Date(date.getFullYear(), date.getMonth(), 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }); }
+            if (!buckets.has(key)) buckets.set(key, { emails: [], label });
+            buckets.get(key)!.emails.push(email);
         });
 
         const sortedKeys = Array.from(buckets.keys()).sort();
         const timeSeriesData: { value: number; date: string }[] = [];
 
         sortedKeys.forEach(key => {
-            const emailsInBucket = buckets.get(key)!;
+            const bucket = buckets.get(key)!;
+            const emailsInBucket = bucket.emails as typeof allEmails;
             let value = 0;
             if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metricKey)) {
                 if (metricKey === 'revenue') value = emailsInBucket.reduce((s, e) => s + e.revenue, 0);
@@ -188,10 +280,7 @@ export class DataManager {
                 }
             }
 
-            let displayDate = '';
-            if (granularity === 'daily' || granularity === 'weekly') displayDate = new Date(key).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            else { const [year, month] = key.split('-'); displayDate = new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }); }
-            timeSeriesData.push({ value, date: displayDate });
+            timeSeriesData.push({ value, date: bucket.label });
         });
 
         return timeSeriesData;

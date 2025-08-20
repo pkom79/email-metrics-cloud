@@ -66,18 +66,24 @@ const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, is
     const padding = 4;
 
     const createSmoothPath = (points: typeof normalizedData) => {
-        if (points.length < 2) return '' as any;
-
         const coords = points.map((point, index) => ({
-            x: padding + (index / (points.length - 1)) * (width - padding * 2),
+            x: padding + (points.length > 1 ? (index / (points.length - 1)) : 0) * (width - padding * 2),
             y: padding + ((100 - point.normalizedValue) / 100) * (height - padding * 2),
             value: point.normalizedValue,
             originalValue: point.value,
             date: point.date
         }));
 
-        let path = `M ${coords[0].x} ${coords[0].y}`;
+        if (coords.length === 0) {
+            return { path: '', coords } as const;
+        }
+        if (coords.length === 1) {
+            // Single point: draw a move-only path to avoid undefined access
+            const path = `M ${coords[0].x} ${coords[0].y}`;
+            return { path, coords } as const;
+        }
 
+        let path = `M ${coords[0].x} ${coords[0].y}`;
         for (let i = 1; i < coords.length; i++) {
             const prev = coords[i - 1];
             const curr = coords[i];
@@ -87,16 +93,15 @@ const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, is
             const cp2y = curr.y;
             path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${curr.x} ${curr.y}`;
         }
-
-        return { path, coords } as any;
+        return { path, coords } as const;
     };
 
-    const { path: curvePath, coords } = createSmoothPath(normalizedData) as unknown as { path: string; coords: Array<{ x: number; y: number; originalValue: number; date: string }>; };
-    const areaPath = curvePath + ` L ${width - padding} ${height - padding} L ${padding} ${height - padding} Z`;
+    const { path: curvePath, coords } = createSmoothPath(normalizedData) as { path: string; coords: Array<{ x: number; y: number; originalValue: number; date: string }>; };
+    const areaPath = curvePath ? (curvePath + ` L ${width - padding} ${height - padding} L ${padding} ${height - padding} Z`) : '';
     const gradientId = `sparkline-gradient-${Math.random().toString(36).substr(2, 9)}`;
 
     const handleMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {
-        if (!svgRef.current) return;
+        if (!svgRef.current || !coords || coords.length === 0) return;
         const rect = svgRef.current.getBoundingClientRect();
         const mouseX = event.clientX - rect.left;
         let closestPoint = coords[0] as any;
@@ -131,8 +136,8 @@ const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, is
                         <stop offset="100%" stopColor={colorScheme.gradientEnd} stopOpacity={0.05} />
                     </linearGradient>
                 </defs>
-                <path d={areaPath} fill={`url(#${gradientId})`} />
-                <path d={curvePath} stroke={colorScheme.stroke} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
+                {areaPath && <path d={areaPath} fill={`url(#${gradientId})`} />}
+                {curvePath && <path d={curvePath} stroke={colorScheme.stroke} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />}
                 {hoveredPoint && (
                     <circle cx={hoveredPoint.x} cy={hoveredPoint.y} r="4" fill={colorScheme.stroke} stroke="white" strokeWidth="2" className="drop-shadow-sm" />
                 )}
