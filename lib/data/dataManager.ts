@@ -195,16 +195,16 @@ export class DataManager {
     ): { value: number; date: string }[] {
         const allEmails = [...campaigns, ...flows];
         if (allEmails.length === 0) return [];
-        
+
         try {
             // Helpers for local-date-safe bucketing/labels
             const cloneAtMidnight = (d: Date) => { const n = new Date(d); n.setHours(0, 0, 0, 0); return n; };
             const dateKeyLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
             const mondayOfLocal = (dt: Date) => { const d = cloneAtMidnight(dt); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); d.setDate(diff); return d; };
-            
+
             let endDate: Date;
             let startDate: Date;
-            
+
             // Handle custom date ranges
             if (dateRange === 'custom' && customFrom && customTo) {
                 startDate = new Date(customFrom);
@@ -227,7 +227,7 @@ export class DataManager {
                 startDate.setDate(startDate.getDate() - days + 1); // inclusive window
                 startDate.setHours(0, 0, 0, 0);
             }
-            
+
             const filteredEmails = allEmails.filter(e => e.sentDate >= startDate && e.sentDate <= endDate);
 
             // Build buckets
@@ -316,8 +316,8 @@ export class DataManager {
         granularity: 'daily' | 'weekly' | 'monthly',
         customFrom?: string,
         customTo?: string
-    ) { 
-        return this.getMetricTimeSeries([], flowEmails.filter(e => e.flowName === flowName && e.sequencePosition === sequencePosition), metricKey, dateRange, granularity, customFrom, customTo); 
+    ) {
+        return this.getMetricTimeSeries([], flowEmails.filter(e => e.flowName === flowName && e.sequencePosition === sequencePosition), metricKey, dateRange, granularity, customFrom, customTo);
     }
 
     getFlowSequenceInfo(flowName: string): FlowSequenceInfo { return this.flowTransformer.getFlowSequenceInfo(flowName, this.flowEmails); }

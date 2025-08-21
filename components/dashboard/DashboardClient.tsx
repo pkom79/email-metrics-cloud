@@ -49,26 +49,79 @@ export default function DashboardClient({ businessName }: { businessName?: strin
         };
     }, []);
 
-    // On first mount, if no data locally, try to hydrate latest server snapshot for the account
+    // Download and process CSV files from server if no local data exists
     useEffect(() => {
         let cancelled = false;
         (async () => {
             try {
                 // If we already have data (from IDB/localStorage), skip
                 if (dm.getCampaigns().length || dm.getFlowEmails().length || dm.getSubscribers().length) return;
+                
+                console.log('No local data found, downloading from server...');
+                
+                // Check if we have any snapshots
                 const list = await fetch('/api/snapshots/list', { cache: 'no-store' });
-                if (!list.ok) return;
+                if (!list.ok) {
+                    console.log('Failed to fetch snapshots list:', list.status);
+                    return;
+                }
                 const j = await list.json().catch(() => ({}));
                 const latest = (j.snapshots || []).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-                if (!latest?.id) return;
-                const res = await fetch(`/api/snapshots/get?id=${encodeURIComponent(latest.id)}`, { cache: 'no-store' });
-                if (!res.ok) return;
-                const data = await res.json().catch(() => ({}));
-                // Minimal hydrator: If series/totals are present, just trigger a refresh; full server->client dataset hydration is TODO.
-                // For now, this is a signal to reload if UploadWizard already populated dm via localStorage/IDB.
-                if (cancelled) return;
-                setDataVersion(v => v + 1);
-            } catch { /* ignore */ }
+                if (!latest?.id) {
+                    console.log('No snapshots found for user');
+                    return;
+                }
+
+                console.log('Found latest snapshot:', latest.id);
+
+                // Download CSV files and process them
+                const csvTypes = ['campaigns', 'flows', 'subscribers'];
+                const csvFiles: { [key: string]: File } = {};
+                
+                for (const type of csvTypes) {
+                    try {
+                        const response = await fetch(`/api/snapshots/download-csv?type=${type}`, { cache: 'no-store' });
+                        if (response.ok) {
+                            const csvText = await response.text();
+                            if (csvText.trim()) {
+                                const blob = new Blob([csvText], { type: 'text/csv' });
+                                csvFiles[type] = new File([blob], `${type}.csv`, { type: 'text/csv' });
+                                console.log(`Downloaded ${type}.csv (${csvText.length} chars)`);
+                            }
+                        } else {
+                            console.warn(`Failed to download ${type}.csv: ${response.status}`);
+                        }
+                    } catch (err) {
+                        console.warn(`Error downloading ${type}.csv:`, err);
+                    }
+                }
+
+                // If we have at least one CSV file, process them
+                if (Object.keys(csvFiles).length > 0) {
+                    console.log('Processing downloaded CSV files...');
+                    const result = await dm.loadCSVFiles({
+                        campaigns: csvFiles.campaigns,
+                        flows: csvFiles.flows,
+                        subscribers: csvFiles.subscribers,
+                    });
+                    
+                    if (result.success) {
+                        console.log('Successfully loaded data from server CSV files');
+                        if (cancelled) return;
+                        setDataVersion(v => v + 1);
+                        // Dispatch event to notify other components
+                        window.dispatchEvent(new CustomEvent('em:dataset-hydrated'));
+                    } else {
+                        console.error('Failed to process CSV files:', result.errors);
+                        setDashboardError(`Failed to process server data: ${result.errors.join(', ')}`);
+                    }
+                } else {
+                    console.log('No CSV files downloaded');
+                }
+            } catch (err) {
+                console.error('Error loading data from server:', err);
+                setDashboardError(`Failed to load data from server: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            }
         })();
         return () => { cancelled = true; };
     }, [dm]);
@@ -1218,8 +1271,8 @@ export default function DashboardClient({ businessName }: { businessName?: strin
 
                         {/* Flow Step Analysis (wrapper heading removed; component renders its own title) */}
                         <section>
-                            <FlowStepAnalysis 
-                                dateRange={dateRange} 
+                            <FlowStepAnalysis
+                                dateRange={dateRange}
                                 granularity={granularity}
                                 customFrom={customFrom}
                                 customTo={customTo}
