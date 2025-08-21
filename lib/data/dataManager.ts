@@ -23,6 +23,7 @@ export interface LoadProgress {
 
 export class DataManager {
     private static instance: DataManager;
+    private static currentUserId: string | null = null;
 
     private campaigns: ProcessedCampaign[] = [];
     private flowEmails: ProcessedFlowEmail[] = [];
@@ -40,9 +41,43 @@ export class DataManager {
     private flowTransformer = new FlowTransformer();
     private subscriberTransformer = new SubscriberTransformer();
 
-    // Lightweight client-side persistence so uploads survive auth redirects/refresh
-    private storageKey = 'em:last-dataset:v1';
-    private idbKey = 'dataset:v1';
+    // Dynamic storage keys based on user
+    private get storageKey() {
+        const userId = DataManager.currentUserId || 'anonymous';
+        return `em:dataset:${userId}:v1`;
+    }
+
+    private get idbKey() {
+        const userId = DataManager.currentUserId || 'anonymous';
+        return `dataset:${userId}:v1`;
+    }
+
+    static setUserId(userId: string | null) {
+        if (DataManager.currentUserId !== userId) {
+            DataManager.currentUserId = userId;
+            // Clear current instance to force reload with new user data
+            if (DataManager.instance) {
+                DataManager.instance.clearData();
+            }
+        }
+    }
+
+    static getInstance(): DataManager {
+        if (!DataManager.instance) DataManager.instance = new DataManager();
+        return DataManager.instance;
+    }
+
+    private clearData() {
+        this.campaigns = [];
+        this.flowEmails = [];
+        this.subscribers = [];
+        this.isRealDataLoaded = false;
+        this.loadProgress = {
+            campaigns: { loaded: false, progress: 0 },
+            flows: { loaded: false, progress: 0 },
+            subscribers: { loaded: false, progress: 0 },
+        };
+    }
 
     constructor() {
         // Hydrate from storage on client if available
@@ -82,11 +117,6 @@ export class DataManager {
                 } catch { /* ignore */ }
             })();
         }
-    }
-
-    static getInstance(): DataManager {
-        if (!DataManager.instance) DataManager.instance = new DataManager();
-        return DataManager.instance;
     }
 
     // Public method for consumers to ensure hydration from durable storage.
@@ -379,16 +409,47 @@ export class DataManager {
     private formatHourLabel(hour: number): string { if (hour === 0) return '12 AM'; if (hour < 12) return `${hour} AM`; if (hour === 12) return '12 PM'; return `${hour - 12} PM`; }
 
     getGranularityForDateRange(dateRange: string): 'daily' | 'weekly' | 'monthly' {
-        if (dateRange === 'all') {
-            const oldestCampaignTs = this.campaigns.length ? Math.min(...this.campaigns.map(c => c.sentDate.getTime())) : Date.now();
-            const oldestFlowTs = this.flowEmails.length ? Math.min(...this.flowEmails.map(f => f.sentDate.getTime())) : Date.now();
-            const oldestDate = new Date(Math.min(oldestCampaignTs, oldestFlowTs));
-            const lastEmailDate = this.getLastEmailDate();
-            const daysDiff = Math.floor((lastEmailDate.getTime() - oldestDate.getTime()) / (1000 * 60 * 60 * 24));
-            if (daysDiff <= 60) return 'daily'; if (daysDiff <= 365) return 'weekly'; return 'monthly';
+        try {
+            if (dateRange === 'all') {
+                // Safely handle case where no data exists yet
+                if (this.campaigns.length === 0 && this.flowEmails.length === 0) {
+                    return 'daily'; // Safe fallback
+                }
+
+                const campaignDates = this.campaigns.length ? this.campaigns.map(c => c.sentDate.getTime()).filter(t => !isNaN(t)) : [];
+                const flowDates = this.flowEmails.length ? this.flowEmails.map(f => f.sentDate.getTime()).filter(t => !isNaN(t)) : [];
+                const allDates = [...campaignDates, ...flowDates];
+
+                if (allDates.length === 0) {
+                    return 'daily'; // Safe fallback
+                }
+
+                const oldestDate = new Date(Math.min(...allDates));
+                const lastEmailDate = this.getLastEmailDate();
+
+                // Validate dates
+                if (isNaN(oldestDate.getTime()) || isNaN(lastEmailDate.getTime())) {
+                    return 'daily'; // Safe fallback
+                }
+
+                const daysDiff = Math.floor((lastEmailDate.getTime() - oldestDate.getTime()) / (1000 * 60 * 60 * 24));
+                if (daysDiff <= 60) return 'daily';
+                if (daysDiff <= 365) return 'weekly';
+                return 'monthly';
+            }
+
+            const days = parseInt(dateRange.replace('d', ''));
+            if (isNaN(days) || days <= 0) {
+                return 'daily'; // Safe fallback
+            }
+
+            if (days <= 60) return 'daily';
+            if (days <= 365) return 'weekly';
+            return 'monthly';
+        } catch (error) {
+            console.error('Error in getGranularityForDateRange:', error);
+            return 'daily'; // Safe fallback
         }
-        const days = parseInt(dateRange.replace('d', ''));
-        if (days <= 60) return 'daily'; if (days <= 365) return 'weekly'; return 'monthly';
     }
 
     getAggregatedMetricsForPeriod(

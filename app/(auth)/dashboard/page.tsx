@@ -11,7 +11,7 @@ export default async function Dashboard() {
     const businessName = (user?.user_metadata as any)?.businessName as string | undefined;
     return (
         <AuthGate>
-            <DashboardClient businessName={businessName} />
+            <DashboardClient businessName={businessName} userId={user.id} />
         </AuthGate>
     );
 }

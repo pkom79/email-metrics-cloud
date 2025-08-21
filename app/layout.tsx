@@ -35,7 +35,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
                     <Link href="/" className="flex items-center gap-2 text-lg font-semibold hover:opacity-90 transition-opacity">
                         <img src="/brand/logo-email.png" alt="Email Metrics" className="h-6 w-auto" />
-                        <span className="hidden sm:inline">Email Metrics</span>
+                        <span className="text-sm sm:text-base">Email Metrics</span>
                     </Link>
                     <div className="flex items-center gap-3">
                         <HeaderLinks isAuthed={isAuthed} />

@@ -13,8 +13,19 @@ export default function ChangeEmailPage() {
     useEffect(() => {
         const init = async () => {
             try {
-                const token_hash = search.get('token_hash');
-                const type = search.get('type');
+                // Check for URL hash parameters (Supabase default format)
+                const hash = typeof window !== 'undefined' ? window.location.hash : '';
+                let token_hash = search.get('token_hash');
+                let type = search.get('type');
+
+                // Parse hash parameters if query parameters are not present
+                if (!token_hash && hash) {
+                    const hashParams = new URLSearchParams(hash.replace(/^#/, ''));
+                    token_hash = hashParams.get('token_hash') || hashParams.get('access_token');
+                    type = hashParams.get('type') || 'email_change';
+                }
+
+                console.log('Email change verification:', { token_hash: !!token_hash, type });
 
                 if (token_hash && type === 'email_change') {
                     const { data, error } = await supabase.auth.verifyOtp({
@@ -26,16 +37,22 @@ export default function ChangeEmailPage() {
                         console.error('Email change verification error:', error);
                         setError(`Failed to verify email change: ${error.message}`);
                     } else if (data?.user) {
+                        console.log('Email change successful:', data.user.email);
+
                         // Refresh the session to get updated user data
                         const { error: refreshError } = await supabase.auth.refreshSession();
                         if (refreshError) {
                             console.warn('Session refresh warning:', refreshError);
                         }
+
                         setSuccess(true);
                         setTimeout(() => router.replace('/account'), 2000);
                     } else {
                         setError('Email verification succeeded but user data is missing');
                     }
+                } else if (hash.includes('message=Confirmation+link+accepted')) {
+                    // Handle Supabase confirmation message
+                    setError('Email change confirmation received. Please check your new email for the verification link.');
                 } else {
                     setError('Invalid or missing verification parameters');
                 }

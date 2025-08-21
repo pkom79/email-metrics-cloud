@@ -16,7 +16,14 @@ function formatCurrency(value: number) {
 function formatPercent(value: number) { return `${value.toFixed(2)}%`; }
 function formatNumber(value: number) { return Math.round(value).toLocaleString('en-US'); }
 
-export default function DashboardClient({ businessName }: { businessName?: string }) {
+export default function DashboardClient({ businessName, userId }: { businessName?: string; userId?: string }) {
+    // Set user ID for data isolation
+    useEffect(() => {
+        if (userId) {
+            DataManager.setUserId(userId);
+        }
+    }, [userId]);
+
     const dm = useMemo(() => DataManager.getInstance(), []);
 
     // Error handling state
@@ -56,9 +63,9 @@ export default function DashboardClient({ businessName }: { businessName?: strin
             try {
                 // If we already have data (from IDB/localStorage), skip
                 if (dm.getCampaigns().length || dm.getFlowEmails().length || dm.getSubscribers().length) return;
-                
+
                 console.log('No local data found, downloading from server...');
-                
+
                 // Check if we have any snapshots
                 const list = await fetch('/api/snapshots/list', { cache: 'no-store' });
                 if (!list.ok) {
@@ -77,7 +84,7 @@ export default function DashboardClient({ businessName }: { businessName?: strin
                 // Download CSV files and process them
                 const csvTypes = ['campaigns', 'flows', 'subscribers'];
                 const csvFiles: { [key: string]: File } = {};
-                
+
                 for (const type of csvTypes) {
                     try {
                         const response = await fetch(`/api/snapshots/download-csv?type=${type}`, { cache: 'no-store' });
@@ -104,7 +111,7 @@ export default function DashboardClient({ businessName }: { businessName?: strin
                         flows: csvFiles.flows,
                         subscribers: csvFiles.subscribers,
                     });
-                    
+
                     if (result.success) {
                         console.log('Successfully loaded data from server CSV files');
                         if (cancelled) return;
@@ -143,6 +150,11 @@ export default function DashboardClient({ businessName }: { businessName?: strin
     // Safe granularity calculation with error handling
     const safeGranularity = useMemo(() => {
         try {
+            // Ensure we have data before calculating granularity
+            if (dm.getCampaigns().length === 0 && dm.getFlowEmails().length === 0) {
+                return 'daily'; // Safe fallback when no data
+            }
+
             if (customActive && customDays > 0) {
                 return dm.getGranularityForDateRange(`${customDays}d`);
             } else if (dateRange === 'all') {
@@ -155,7 +167,7 @@ export default function DashboardClient({ businessName }: { businessName?: strin
             setDashboardError(`Granularity calculation error: ${error?.message || 'Unknown error'}`);
             return 'daily'; // Safe fallback
         }
-    }, [dateRange, customActive, customDays, dm]);
+    }, [dateRange, customActive, customDays, dm, dataVersion]); // Add dataVersion to dependencies
 
     // Update granularity safely
     useEffect(() => {
