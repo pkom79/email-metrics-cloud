@@ -253,20 +253,50 @@ export class DataManager {
     // Safe date formatting function to prevent DateTimeFormat errors
     private safeToLocaleDateString(date: Date, options: Intl.DateTimeFormatOptions): string {
         try {
-            if (!date || isNaN(date.getTime())) {
+            // Extra defensive validation
+            if (!date || typeof date !== 'object' || !(date instanceof Date)) {
+                console.warn('safeToLocaleDateString: Invalid date object type:', typeof date, date);
                 return 'Invalid Date';
             }
+            
+            const timestamp = date.getTime();
+            if (isNaN(timestamp) || !isFinite(timestamp)) {
+                console.warn('safeToLocaleDateString: Invalid timestamp:', timestamp, 'for date:', date);
+                return 'Invalid Date';
+            }
+
+            // Additional validation: check if date is reasonable (not too far in past/future)
+            const year = date.getFullYear();
+            if (year < 1900 || year > 2100) {
+                console.warn('safeToLocaleDateString: Date year out of reasonable range:', year);
+                return 'Invalid Date';
+            }
+
             return date.toLocaleDateString('en-US', options);
         } catch (error) {
-            console.warn('Date formatting error:', error, 'for date:', date);
-            // Fallback to manual formatting
-            if (date && !isNaN(date.getTime())) {
-                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                if (options.year) {
-                    return `${monthNames[date.getMonth()]} ${String(date.getFullYear()).slice(-2)}`;
-                } else {
-                    return `${monthNames[date.getMonth()]} ${date.getDate()}`;
+            console.warn('safeToLocaleDateString error:', error, 'for date:', date);
+            // Enhanced fallback to manual formatting
+            try {
+                if (date && !isNaN(date.getTime())) {
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const year = date.getFullYear();
+                    const month = date.getMonth();
+                    const day = date.getDate();
+                    
+                    // Validate individual components
+                    if (month < 0 || month > 11 || day < 1 || day > 31 || year < 1900 || year > 2100) {
+                        console.warn('safeToLocaleDateString: Invalid date components:', { year, month, day });
+                        return 'Invalid Date';
+                    }
+                    
+                    if (options.year) {
+                        return `${monthNames[month]} ${String(year).slice(-2)}`;
+                    } else {
+                        return `${monthNames[month]} ${day}`;
+                    }
                 }
+            } catch (fallbackError) {
+                console.error('safeToLocaleDateString: Even fallback failed:', fallbackError);
             }
             return 'Invalid Date';
         }
@@ -288,12 +318,33 @@ export class DataManager {
             // Filter out emails with invalid dates before any processing
             const validEmails = allEmails.filter(email => {
                 try {
-                    return email.sentDate &&
-                        email.sentDate instanceof Date &&
-                        !isNaN(email.sentDate.getTime()) &&
-                        email.sentDate.getTime() > 0;
+                    // Enhanced validation
+                    if (!email || !email.sentDate) {
+                        console.warn('validEmails filter: Email missing sentDate:', email);
+                        return false;
+                    }
+                    
+                    if (!(email.sentDate instanceof Date)) {
+                        console.warn('validEmails filter: sentDate not a Date object:', typeof email.sentDate, email.sentDate);
+                        return false;
+                    }
+                    
+                    const timestamp = email.sentDate.getTime();
+                    if (isNaN(timestamp) || !isFinite(timestamp)) {
+                        console.warn('validEmails filter: Invalid timestamp:', timestamp);
+                        return false;
+                    }
+                    
+                    // Check for reasonable date range (email marketing didn't exist before 1990)
+                    const year = email.sentDate.getFullYear();
+                    if (year < 1990 || year > 2030) {
+                        console.warn('validEmails filter: Date year out of range:', year);
+                        return false;
+                    }
+                    
+                    return timestamp > 0;
                 } catch (e) {
-                    console.warn('Invalid email date detected and filtered out:', email);
+                    console.warn('validEmails filter: Exception during validation:', e, 'for email:', email);
                     return false;
                 }
             });
@@ -397,13 +448,43 @@ export class DataManager {
             }
 
             filteredEmails.forEach(email => {
-                const date = new Date(email.sentDate);
-                let key: string; let label: string;
-                if (granularity === 'daily') { key = dateKeyLocal(date); label = this.safeToLocaleDateString(date, { month: 'short', day: 'numeric' }); }
-                else if (granularity === 'weekly') { const monday = mondayOfLocal(date); key = dateKeyLocal(monday); const weekEnd = new Date(monday); weekEnd.setDate(weekEnd.getDate() + 6); const cappedEnd = weekEnd > end ? end : weekEnd; label = this.safeToLocaleDateString(cappedEnd, { month: 'short', day: 'numeric' }); }
-                else { key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; label = this.safeToLocaleDateString(new Date(date.getFullYear(), date.getMonth(), 1), { month: 'short', year: '2-digit' }); }
-                if (!buckets.has(key)) buckets.set(key, { emails: [], label });
-                buckets.get(key)!.emails.push(email);
+                try {
+                    // Additional validation before processing each email
+                    if (!email.sentDate || !(email.sentDate instanceof Date) || isNaN(email.sentDate.getTime())) {
+                        console.warn('Skipping email with invalid sentDate in forEach:', email);
+                        return;
+                    }
+                    
+                    const date = new Date(email.sentDate);
+                    
+                    // Validate the cloned date
+                    if (isNaN(date.getTime())) {
+                        console.warn('Skipping email with invalid cloned date:', date);
+                        return;
+                    }
+                    
+                    let key: string; let label: string;
+                    if (granularity === 'daily') { 
+                        key = dateKeyLocal(date); 
+                        label = this.safeToLocaleDateString(date, { month: 'short', day: 'numeric' }); 
+                    }
+                    else if (granularity === 'weekly') { 
+                        const monday = mondayOfLocal(date); 
+                        key = dateKeyLocal(monday); 
+                        const weekEnd = new Date(monday); 
+                        weekEnd.setDate(weekEnd.getDate() + 6); 
+                        const cappedEnd = weekEnd > end ? end : weekEnd; 
+                        label = this.safeToLocaleDateString(cappedEnd, { month: 'short', day: 'numeric' }); 
+                    }
+                    else { 
+                        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; 
+                        label = this.safeToLocaleDateString(new Date(date.getFullYear(), date.getMonth(), 1), { month: 'short', year: '2-digit' }); 
+                    }
+                    if (!buckets.has(key)) buckets.set(key, { emails: [], label });
+                    buckets.get(key)!.emails.push(email);
+                } catch (emailError) {
+                    console.warn('Error processing email in forEach:', emailError, 'for email:', email);
+                }
             });
 
             const sortedKeys = Array.from(buckets.keys()).sort();
