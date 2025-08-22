@@ -215,9 +215,8 @@ export default function DashboardClient({ businessName, userId }: { businessName
     const [isCalculating, setIsCalculating] = useState(false);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [showCustomDateModal, setShowCustomDateModal] = useState(false);
-    const [audienceOverviewRef, setAudienceOverviewRef] = useState<HTMLElement | null>(null);
 
-    // Mobile detection
+    // Mobile detection (must be declared before usage)
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
@@ -231,6 +230,30 @@ export default function DashboardClient({ businessName, userId }: { businessName
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
+    // Audience overview reference for sticky logic (after mobile detection)
+    const [audienceOverviewRef, setAudienceOverviewRef] = useState<HTMLElement | null>(null);
+    const [audienceOverviewTop, setAudienceOverviewTop] = useState<number | null>(null);
+
+    // Calculate audience overview absolute position when ref changes
+    useEffect(() => {
+        if (audienceOverviewRef && !isMobile) {
+            const updateAudiencePosition = () => {
+                const rect = audienceOverviewRef.getBoundingClientRect();
+                const absoluteTop = window.scrollY + rect.top;
+                setAudienceOverviewTop(absoluteTop);
+            };
+
+            // Calculate initial position
+            updateAudiencePosition();
+
+            // Recalculate on window resize
+            window.addEventListener('resize', updateAudiencePosition);
+            return () => window.removeEventListener('resize', updateAudiencePosition);
+        } else {
+            setAudienceOverviewTop(null);
+        }
+    }, [audienceOverviewRef, isMobile]);
+
     useEffect(() => {
         const onScroll = () => {
             // Only apply sticky behavior on desktop
@@ -241,20 +264,11 @@ export default function DashboardClient({ businessName, userId }: { businessName
 
             const shouldStick = window.scrollY > 100;
 
-            // Stop stickiness when reaching Audience Overview
-            if (audienceOverviewRef && shouldStick) {
-                const rect = audienceOverviewRef.getBoundingClientRect();
-                // Debug logging
-                console.log('Sticky debug:', {
-                    scrollY: window.scrollY,
-                    rectTop: rect.top,
-                    rectBottom: rect.bottom,
-                    viewportHeight: window.innerHeight
-                });
-
-                // More aggressive threshold - when any part of Audience Overview is visible
-                const isAudienceVisible = rect.top <= 300; // Increased threshold to 300px
-                setStickyBar(shouldStick && !isAudienceVisible);
+            // Stop stickiness when reaching Audience Overview using absolute position
+            if (audienceOverviewTop !== null && shouldStick) {
+                // Use absolute position with buffer - unsticky when within 150px of the section
+                const scrolledNearAudience = window.scrollY >= (audienceOverviewTop - 150);
+                setStickyBar(shouldStick && !scrolledNearAudience);
             } else {
                 setStickyBar(shouldStick);
             }
@@ -265,7 +279,7 @@ export default function DashboardClient({ businessName, userId }: { businessName
 
         window.addEventListener('scroll', onScroll, { passive: true });
         return () => window.removeEventListener('scroll', onScroll);
-    }, [audienceOverviewRef, isMobile]);    // Data
+    }, [audienceOverviewTop, isMobile]);    // Data
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const ALL_CAMPAIGNS = useMemo(() => dm.getCampaigns(), [dm, dataVersion]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -681,716 +695,736 @@ export default function DashboardClient({ businessName, userId }: { businessName
 
     // Mobile layout with full functionality
     if (isMobile) {
-        return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-                {/* Mobile Header */}
-                <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4 sticky top-0 z-40">
-                    <div className="flex items-center justify-between">
-                        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Email Analytics</h1>
+        try {
+            return (
+                <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+                    {/* Mobile Header */}
+                    <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-4 sticky top-0 z-40">
+                        <div className="flex items-center justify-between">
+                            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Email Analytics</h1>
+                            <button
+                                onClick={() => setShowUploadModal(true)}
+                                className="p-2 text-purple-600 dark:text-purple-400"
+                            >
+                                <UploadIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Loading overlay for calculations */}
+                    {isCalculating && (
+                        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 backdrop-blur-sm">
+                            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-2xl border border-gray-200 dark:border-gray-700">
+                                <div className="flex items-center space-x-3">
+                                    <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                                    <span className="text-gray-900 dark:text-gray-100 font-medium">
+                                        Calculating metrics...
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Mobile Notice */}
+                    <div className="mx-4 mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                        <div className="flex items-start space-x-3">
+                            <div>
+                                <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">Mobile Dashboard</h3>
+                                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                                    Optimized mobile view with full email performance metrics.
+                                    For advanced analytics like audience insights and detailed charts,
+                                    please use desktop.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Mobile Filters */}
+                    <div className="px-4 py-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                            <div className="grid grid-cols-1 gap-3">
+                                {/* Date Range Selector */}
+                                <div className="flex items-center gap-2">
+                                    <Calendar className="w-4 h-4 text-gray-500" />
+                                    <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Date:</span>
+                                    <div className="flex-1 relative">
+                                        {dateRange === 'custom' && customFrom && customTo ? (
+                                            <div className="flex items-center justify-between w-full px-3 py-2 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">
+                                                <span>{customFrom} – {customTo}</span>
+                                                <button
+                                                    onClick={() => {
+                                                        setDateRange('30d');
+                                                        setCustomFrom(undefined);
+                                                        setCustomTo(undefined);
+                                                    }}
+                                                    className="ml-2 text-gray-400 hover:text-gray-600"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <select
+                                                value={dateRange === 'custom' ? 'custom' : dateRange}
+                                                onChange={(e) => {
+                                                    const v = e.target.value;
+                                                    if (v === 'custom') {
+                                                        setShowCustomDateModal(true);
+                                                    } else {
+                                                        setIsCalculating(true);
+                                                        setDateRange(v as any);
+                                                        // Auto-populate custom dates for consistency
+                                                        const to = new Date(REFERENCE_DATE);
+                                                        const toISO = (d: Date) => {
+                                                            const y = d.getFullYear();
+                                                            const m = String(d.getMonth() + 1).padStart(2, '0');
+                                                            const da = String(d.getDate()).padStart(2, '0');
+                                                            return `${y}-${m}-${da}`;
+                                                        };
+                                                        if (v === 'all') {
+                                                            const dates = [...ALL_CAMPAIGNS, ...ALL_FLOWS].map(e => e.sentDate.getTime());
+                                                            if (dates.length) {
+                                                                const from = new Date(Math.min(...dates));
+                                                                setCustomFrom(toISO(from));
+                                                                setCustomTo(toISO(to));
+                                                            }
+                                                        } else {
+                                                            const days = parseInt(v.replace('d', ''));
+                                                            if (Number.isFinite(days)) {
+                                                                const from = new Date(to);
+                                                                from.setDate(from.getDate() - days + 1);
+                                                                setCustomFrom(toISO(from));
+                                                                setCustomTo(toISO(to));
+                                                            }
+                                                        }
+                                                        setTimeout(() => setIsCalculating(false), 1000);
+                                                    }
+                                                }}
+                                                className="appearance-none w-full px-3 py-2 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+                                            >
+                                                <option value="7d">Last 7 days</option>
+                                                <option value="30d">Last 30 days</option>
+                                                <option value="60d">Last 60 days</option>
+                                                <option value="90d">Last 90 days</option>
+                                                <option value="all">All Time</option>
+                                                <option value="custom">Custom dates</option>
+                                            </select>
+                                        )}
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
+                                    </div>
+                                </div>
+
+                                {/* Flow Filter */}
+                                <div className="flex items-center gap-2">
+                                    <Zap className="w-4 h-4 text-gray-500" />
+                                    <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Flow:</span>
+                                    <div className="flex-1 relative">
+                                        <select
+                                            value={selectedFlow}
+                                            onChange={(e) => setSelectedFlow(e.target.value)}
+                                            className="appearance-none w-full px-3 py-2 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+                                        >
+                                            <option value="all">All Flows</option>
+                                            {uniqueFlowNames.map(name => (
+                                                <option key={name} value={name}>{name}</option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Mobile Content */}
+                    <div className="px-4 pb-8 space-y-6">
+                        {/* Data Coverage Notice */}
+                        {hasData && (
+                            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                                <div className="text-xs text-amber-700 dark:text-amber-300">
+                                    <span className="font-medium">Data Coverage:</span>
+                                    <span>
+                                        {(() => {
+                                            const dates = [...defCampaigns, ...defFlows].map(e => e.sentDate.getTime());
+                                            const lastVisible = dates.length ? new Date(Math.max(...dates)) : dm.getLastEmailDate();
+                                            return ` Email channel performance only. Excludes SMS-attributed revenue through ${lastVisible.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.`;
+                                        })()}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Email Performance Overview */}
+                        {overviewMetrics && (
+                            <section>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <Mail className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                        Email Performance Overview
+                                    </h2>
+                                </div>
+                                <div className="grid grid-cols-1 gap-4">
+                                    <MetricCard
+                                        title="Total Revenue"
+                                        value={formatCurrency(overviewMetrics.totalRevenue.value)}
+                                        change={overviewMetrics.totalRevenue.change}
+                                        isPositive={overviewMetrics.totalRevenue.isPositive}
+                                        previousValue={overviewMetrics.totalRevenue.previousValue}
+                                        previousPeriod={overviewMetrics.totalRevenue.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="revenue"
+                                        sparklineData={overviewSeries.totalRevenue}
+                                    />
+                                    <MetricCard
+                                        title="Average Order Value"
+                                        value={formatCurrency(overviewMetrics.averageOrderValue.value)}
+                                        change={overviewMetrics.averageOrderValue.change}
+                                        isPositive={overviewMetrics.averageOrderValue.isPositive}
+                                        previousValue={overviewMetrics.averageOrderValue.previousValue}
+                                        previousPeriod={overviewMetrics.averageOrderValue.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="avgOrderValue"
+                                        sparklineData={overviewSeries.averageOrderValue}
+                                    />
+                                    <MetricCard
+                                        title="Revenue per Email"
+                                        value={formatCurrency(overviewMetrics.revenuePerEmail.value)}
+                                        change={overviewMetrics.revenuePerEmail.change}
+                                        isPositive={overviewMetrics.revenuePerEmail.isPositive}
+                                        previousValue={overviewMetrics.revenuePerEmail.previousValue}
+                                        previousPeriod={overviewMetrics.revenuePerEmail.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="revenuePerEmail"
+                                        sparklineData={overviewSeries.revenuePerEmail}
+                                    />
+                                    <MetricCard
+                                        title="Open Rate"
+                                        value={formatPercent(overviewMetrics.openRate.value)}
+                                        change={overviewMetrics.openRate.change}
+                                        isPositive={overviewMetrics.openRate.isPositive}
+                                        previousValue={overviewMetrics.openRate.previousValue}
+                                        previousPeriod={overviewMetrics.openRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="openRate"
+                                        sparklineData={overviewSeries.openRate}
+                                    />
+                                    <MetricCard
+                                        title="Click Rate"
+                                        value={formatPercent(overviewMetrics.clickRate.value)}
+                                        change={overviewMetrics.clickRate.change}
+                                        isPositive={overviewMetrics.clickRate.isPositive}
+                                        previousValue={overviewMetrics.clickRate.previousValue}
+                                        previousPeriod={overviewMetrics.clickRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="clickRate"
+                                        sparklineData={overviewSeries.clickRate}
+                                    />
+                                    <MetricCard
+                                        title="Click-to-Open Rate"
+                                        value={formatPercent(overviewMetrics.clickToOpenRate.value)}
+                                        change={overviewMetrics.clickToOpenRate.change}
+                                        isPositive={overviewMetrics.clickToOpenRate.isPositive}
+                                        previousValue={overviewMetrics.clickToOpenRate.previousValue}
+                                        previousPeriod={overviewMetrics.clickToOpenRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="clickToOpenRate"
+                                        sparklineData={overviewSeries.clickToOpenRate}
+                                    />
+                                    <MetricCard
+                                        title="Emails Sent"
+                                        value={formatNumber(overviewMetrics.emailsSent.value)}
+                                        change={overviewMetrics.emailsSent.change}
+                                        isPositive={overviewMetrics.emailsSent.isPositive}
+                                        previousValue={overviewMetrics.emailsSent.previousValue}
+                                        previousPeriod={overviewMetrics.emailsSent.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="emailsSent"
+                                        sparklineData={overviewSeries.emailsSent}
+                                    />
+                                    <MetricCard
+                                        title="Total Orders"
+                                        value={formatNumber(overviewMetrics.totalOrders.value)}
+                                        change={overviewMetrics.totalOrders.change}
+                                        isPositive={overviewMetrics.totalOrders.isPositive}
+                                        previousValue={overviewMetrics.totalOrders.previousValue}
+                                        previousPeriod={overviewMetrics.totalOrders.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="totalOrders"
+                                        sparklineData={overviewSeries.totalOrders}
+                                    />
+                                    <MetricCard
+                                        title="Conversion Rate"
+                                        value={formatPercent(overviewMetrics.conversionRate.value)}
+                                        change={overviewMetrics.conversionRate.change}
+                                        isPositive={overviewMetrics.conversionRate.isPositive}
+                                        previousValue={overviewMetrics.conversionRate.previousValue}
+                                        previousPeriod={overviewMetrics.conversionRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="conversionRate"
+                                        sparklineData={overviewSeries.conversionRate}
+                                    />
+                                    <MetricCard
+                                        title="Unsubscribe Rate"
+                                        value={formatPercent(overviewMetrics.unsubscribeRate.value)}
+                                        change={overviewMetrics.unsubscribeRate.change}
+                                        isPositive={overviewMetrics.unsubscribeRate.isPositive}
+                                        previousValue={overviewMetrics.unsubscribeRate.previousValue}
+                                        previousPeriod={overviewMetrics.unsubscribeRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="unsubscribeRate"
+                                        sparklineData={overviewSeries.unsubscribeRate}
+                                        isNegativeMetric
+                                    />
+                                    <MetricCard
+                                        title="Spam Rate"
+                                        value={formatPercent(overviewMetrics.spamRate.value)}
+                                        change={overviewMetrics.spamRate.change}
+                                        isPositive={overviewMetrics.spamRate.isPositive}
+                                        previousValue={overviewMetrics.spamRate.previousValue}
+                                        previousPeriod={overviewMetrics.spamRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="spamRate"
+                                        sparklineData={overviewSeries.spamRate}
+                                        isNegativeMetric
+                                    />
+                                    <MetricCard
+                                        title="Bounce Rate"
+                                        value={formatPercent(overviewMetrics.bounceRate.value)}
+                                        change={overviewMetrics.bounceRate.change}
+                                        isPositive={overviewMetrics.bounceRate.isPositive}
+                                        previousValue={overviewMetrics.bounceRate.previousValue}
+                                        previousPeriod={overviewMetrics.bounceRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="bounceRate"
+                                        sparklineData={overviewSeries.bounceRate}
+                                        isNegativeMetric
+                                    />
+                                </div>
+                            </section>
+                        )}
+
+                        {/* Campaign Performance */}
+                        {campaignMetrics && (
+                            <section>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <Send className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                        Campaign Performance
+                                    </h2>
+                                </div>
+                                <div className="grid grid-cols-1 gap-4">
+                                    <MetricCard
+                                        title="Total Revenue"
+                                        value={formatCurrency(campaignMetrics.totalRevenue.value)}
+                                        change={campaignMetrics.totalRevenue.change}
+                                        isPositive={campaignMetrics.totalRevenue.isPositive}
+                                        previousValue={campaignMetrics.totalRevenue.previousValue}
+                                        previousPeriod={campaignMetrics.totalRevenue.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="revenue"
+                                        sparklineData={campaignSeries.totalRevenue}
+                                    />
+                                    <MetricCard
+                                        title="Average Order Value"
+                                        value={formatCurrency(campaignMetrics.averageOrderValue.value)}
+                                        change={campaignMetrics.averageOrderValue.change}
+                                        isPositive={campaignMetrics.averageOrderValue.isPositive}
+                                        previousValue={campaignMetrics.averageOrderValue.previousValue}
+                                        previousPeriod={campaignMetrics.averageOrderValue.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="avgOrderValue"
+                                        sparklineData={campaignSeries.averageOrderValue}
+                                    />
+                                    <MetricCard
+                                        title="Revenue per Email"
+                                        value={formatCurrency(campaignMetrics.revenuePerEmail.value)}
+                                        change={campaignMetrics.revenuePerEmail.change}
+                                        isPositive={campaignMetrics.revenuePerEmail.isPositive}
+                                        previousValue={campaignMetrics.revenuePerEmail.previousValue}
+                                        previousPeriod={campaignMetrics.revenuePerEmail.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="revenuePerEmail"
+                                        sparklineData={campaignSeries.revenuePerEmail}
+                                    />
+                                    <MetricCard
+                                        title="Open Rate"
+                                        value={formatPercent(campaignMetrics.openRate.value)}
+                                        change={campaignMetrics.openRate.change}
+                                        isPositive={campaignMetrics.openRate.isPositive}
+                                        previousValue={campaignMetrics.openRate.previousValue}
+                                        previousPeriod={campaignMetrics.openRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="openRate"
+                                        sparklineData={campaignSeries.openRate}
+                                    />
+                                    <MetricCard
+                                        title="Click Rate"
+                                        value={formatPercent(campaignMetrics.clickRate.value)}
+                                        change={campaignMetrics.clickRate.change}
+                                        isPositive={campaignMetrics.clickRate.isPositive}
+                                        previousValue={campaignMetrics.clickRate.previousValue}
+                                        previousPeriod={campaignMetrics.clickRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="clickRate"
+                                        sparklineData={campaignSeries.clickRate}
+                                    />
+                                    <MetricCard
+                                        title="Click-to-Open Rate"
+                                        value={formatPercent(campaignMetrics.clickToOpenRate.value)}
+                                        change={campaignMetrics.clickToOpenRate.change}
+                                        isPositive={campaignMetrics.clickToOpenRate.isPositive}
+                                        previousValue={campaignMetrics.clickToOpenRate.previousValue}
+                                        previousPeriod={campaignMetrics.clickToOpenRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="clickToOpenRate"
+                                        sparklineData={campaignSeries.clickToOpenRate}
+                                    />
+                                    <MetricCard
+                                        title="Emails Sent"
+                                        value={formatNumber(campaignMetrics.emailsSent.value)}
+                                        change={campaignMetrics.emailsSent.change}
+                                        isPositive={campaignMetrics.emailsSent.isPositive}
+                                        previousValue={campaignMetrics.emailsSent.previousValue}
+                                        previousPeriod={campaignMetrics.emailsSent.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="emailsSent"
+                                        sparklineData={campaignSeries.emailsSent}
+                                    />
+                                    <MetricCard
+                                        title="Total Orders"
+                                        value={formatNumber(campaignMetrics.totalOrders.value)}
+                                        change={campaignMetrics.totalOrders.change}
+                                        isPositive={campaignMetrics.totalOrders.isPositive}
+                                        previousValue={campaignMetrics.totalOrders.previousValue}
+                                        previousPeriod={campaignMetrics.totalOrders.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="totalOrders"
+                                        sparklineData={campaignSeries.totalOrders}
+                                    />
+                                    <MetricCard
+                                        title="Conversion Rate"
+                                        value={formatPercent(campaignMetrics.conversionRate.value)}
+                                        change={campaignMetrics.conversionRate.change}
+                                        isPositive={campaignMetrics.conversionRate.isPositive}
+                                        previousValue={campaignMetrics.conversionRate.previousValue}
+                                        previousPeriod={campaignMetrics.conversionRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="conversionRate"
+                                        sparklineData={campaignSeries.conversionRate}
+                                    />
+                                    <MetricCard
+                                        title="Unsubscribe Rate"
+                                        value={formatPercent(campaignMetrics.unsubscribeRate.value)}
+                                        change={campaignMetrics.unsubscribeRate.change}
+                                        isPositive={campaignMetrics.unsubscribeRate.isPositive}
+                                        previousValue={campaignMetrics.unsubscribeRate.previousValue}
+                                        previousPeriod={campaignMetrics.unsubscribeRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="unsubscribeRate"
+                                        sparklineData={campaignSeries.unsubscribeRate}
+                                        isNegativeMetric
+                                    />
+                                    <MetricCard
+                                        title="Spam Rate"
+                                        value={formatPercent(campaignMetrics.spamRate.value)}
+                                        change={campaignMetrics.spamRate.change}
+                                        isPositive={campaignMetrics.spamRate.isPositive}
+                                        previousValue={campaignMetrics.spamRate.previousValue}
+                                        previousPeriod={campaignMetrics.spamRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="spamRate"
+                                        sparklineData={campaignSeries.spamRate}
+                                        isNegativeMetric
+                                    />
+                                    <MetricCard
+                                        title="Bounce Rate"
+                                        value={formatPercent(campaignMetrics.bounceRate.value)}
+                                        change={campaignMetrics.bounceRate.change}
+                                        isPositive={campaignMetrics.bounceRate.isPositive}
+                                        previousValue={campaignMetrics.bounceRate.previousValue}
+                                        previousPeriod={campaignMetrics.bounceRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="bounceRate"
+                                        sparklineData={campaignSeries.bounceRate}
+                                        isNegativeMetric
+                                    />
+                                </div>
+                            </section>
+                        )}
+
+                        {/* Flow Performance */}
+                        {flowMetrics && (
+                            <section>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <Zap className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                        Flow Performance
+                                    </h2>
+                                </div>
+                                <div className="grid grid-cols-1 gap-4">
+                                    <MetricCard
+                                        title="Total Revenue"
+                                        value={formatCurrency(flowMetrics.totalRevenue.value)}
+                                        change={flowMetrics.totalRevenue.change}
+                                        isPositive={flowMetrics.totalRevenue.isPositive}
+                                        previousValue={flowMetrics.totalRevenue.previousValue}
+                                        previousPeriod={flowMetrics.totalRevenue.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="revenue"
+                                        sparklineData={flowSeries.totalRevenue}
+                                    />
+                                    <MetricCard
+                                        title="Average Order Value"
+                                        value={formatCurrency(flowMetrics.averageOrderValue.value)}
+                                        change={flowMetrics.averageOrderValue.change}
+                                        isPositive={flowMetrics.averageOrderValue.isPositive}
+                                        previousValue={flowMetrics.averageOrderValue.previousValue}
+                                        previousPeriod={flowMetrics.averageOrderValue.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="avgOrderValue"
+                                        sparklineData={flowSeries.averageOrderValue}
+                                    />
+                                    <MetricCard
+                                        title="Revenue per Email"
+                                        value={formatCurrency(flowMetrics.revenuePerEmail.value)}
+                                        change={flowMetrics.revenuePerEmail.change}
+                                        isPositive={flowMetrics.revenuePerEmail.isPositive}
+                                        previousValue={flowMetrics.revenuePerEmail.previousValue}
+                                        previousPeriod={flowMetrics.revenuePerEmail.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="revenuePerEmail"
+                                        sparklineData={flowSeries.revenuePerEmail}
+                                    />
+                                    <MetricCard
+                                        title="Open Rate"
+                                        value={formatPercent(flowMetrics.openRate.value)}
+                                        change={flowMetrics.openRate.change}
+                                        isPositive={flowMetrics.openRate.isPositive}
+                                        previousValue={flowMetrics.openRate.previousValue}
+                                        previousPeriod={flowMetrics.openRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="openRate"
+                                        sparklineData={flowSeries.openRate}
+                                    />
+                                    <MetricCard
+                                        title="Click Rate"
+                                        value={formatPercent(flowMetrics.clickRate.value)}
+                                        change={flowMetrics.clickRate.change}
+                                        isPositive={flowMetrics.clickRate.isPositive}
+                                        previousValue={flowMetrics.clickRate.previousValue}
+                                        previousPeriod={flowMetrics.clickRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="clickRate"
+                                        sparklineData={flowSeries.clickRate}
+                                    />
+                                    <MetricCard
+                                        title="Click-to-Open Rate"
+                                        value={formatPercent(flowMetrics.clickToOpenRate.value)}
+                                        change={flowMetrics.clickToOpenRate.change}
+                                        isPositive={flowMetrics.clickToOpenRate.isPositive}
+                                        previousValue={flowMetrics.clickToOpenRate.previousValue}
+                                        previousPeriod={flowMetrics.clickToOpenRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="clickToOpenRate"
+                                        sparklineData={flowSeries.clickToOpenRate}
+                                    />
+                                    <MetricCard
+                                        title="Emails Sent"
+                                        value={formatNumber(flowMetrics.emailsSent.value)}
+                                        change={flowMetrics.emailsSent.change}
+                                        isPositive={flowMetrics.emailsSent.isPositive}
+                                        previousValue={flowMetrics.emailsSent.previousValue}
+                                        previousPeriod={flowMetrics.emailsSent.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="emailsSent"
+                                        sparklineData={flowSeries.emailsSent}
+                                    />
+                                    <MetricCard
+                                        title="Total Orders"
+                                        value={formatNumber(flowMetrics.totalOrders.value)}
+                                        change={flowMetrics.totalOrders.change}
+                                        isPositive={flowMetrics.totalOrders.isPositive}
+                                        previousValue={flowMetrics.totalOrders.previousValue}
+                                        previousPeriod={flowMetrics.totalOrders.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="totalOrders"
+                                        sparklineData={flowSeries.totalOrders}
+                                    />
+                                    <MetricCard
+                                        title="Conversion Rate"
+                                        value={formatPercent(flowMetrics.conversionRate.value)}
+                                        change={flowMetrics.conversionRate.change}
+                                        isPositive={flowMetrics.conversionRate.isPositive}
+                                        previousValue={flowMetrics.conversionRate.previousValue}
+                                        previousPeriod={flowMetrics.conversionRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="conversionRate"
+                                        sparklineData={flowSeries.conversionRate}
+                                    />
+                                    <MetricCard
+                                        title="Unsubscribe Rate"
+                                        value={formatPercent(flowMetrics.unsubscribeRate.value)}
+                                        change={flowMetrics.unsubscribeRate.change}
+                                        isPositive={flowMetrics.unsubscribeRate.isPositive}
+                                        previousValue={flowMetrics.unsubscribeRate.previousValue}
+                                        previousPeriod={flowMetrics.unsubscribeRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="unsubscribeRate"
+                                        sparklineData={flowSeries.unsubscribeRate}
+                                        isNegativeMetric
+                                    />
+                                    <MetricCard
+                                        title="Spam Rate"
+                                        value={formatPercent(flowMetrics.spamRate.value)}
+                                        change={flowMetrics.spamRate.change}
+                                        isPositive={flowMetrics.spamRate.isPositive}
+                                        previousValue={flowMetrics.spamRate.previousValue}
+                                        previousPeriod={flowMetrics.spamRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="spamRate"
+                                        sparklineData={flowSeries.spamRate}
+                                        isNegativeMetric
+                                    />
+                                    <MetricCard
+                                        title="Bounce Rate"
+                                        value={formatPercent(flowMetrics.bounceRate.value)}
+                                        change={flowMetrics.bounceRate.change}
+                                        isPositive={flowMetrics.bounceRate.isPositive}
+                                        previousValue={flowMetrics.bounceRate.previousValue}
+                                        previousPeriod={flowMetrics.bounceRate.previousPeriod}
+                                        dateRange={dateRange}
+                                        metricKey="bounceRate"
+                                        sparklineData={flowSeries.bounceRate}
+                                        isNegativeMetric
+                                    />
+                                </div>
+                            </section>
+                        )}
+
+                        {/* No Data State */}
+                        {!hasData && !isInitialLoading && (
+                            <div className="text-center py-12">
+                                <div className="text-gray-400 mb-4">
+                                    <BarChart3 className="w-12 h-12 mx-auto" />
+                                </div>
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                                    No data available
+                                </h3>
+                                <p className="text-gray-500 dark:text-gray-400 mb-4">
+                                    Upload your email data to see analytics
+                                </p>
+                                <button
+                                    onClick={() => setShowUploadModal(true)}
+                                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                                >
+                                    Upload Data
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Loading State */}
+                        {isInitialLoading && (
+                            <div className="text-center py-12">
+                                <div className="animate-spin h-8 w-8 border-2 border-purple-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                                <p className="text-gray-500 dark:text-gray-400">Loading your data...</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Custom Date Modal */}
+                    {showCustomDateModal && (
+                        <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50">
+                            <div className="flex items-center justify-center min-h-screen p-4">
+                                <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 shadow-2xl">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Select Date Range</h3>
+                                        <button
+                                            onClick={() => setShowCustomDateModal(false)}
+                                            className="text-gray-400 hover:text-gray-600"
+                                        >
+                                            <X className="w-5 h-5" />
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Date</label>
+                                            <input
+                                                type="date"
+                                                value={customFrom || ''}
+                                                onChange={(e) => setCustomFrom(e.target.value || undefined)}
+                                                className="w-full px-3 py-3 text-lg rounded border bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">To Date</label>
+                                            <input
+                                                type="date"
+                                                value={customTo || ''}
+                                                onChange={(e) => setCustomTo(e.target.value || undefined)}
+                                                className="w-full px-3 py-3 text-lg rounded border bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-3 mt-6">
+                                        <button
+                                            onClick={() => setShowCustomDateModal(false)}
+                                            className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                                        >
+                                            Cancel
+                                        </button>
+                                        {customFrom && customTo && (
+                                            <button
+                                                onClick={() => {
+                                                    setDateRange('custom');
+                                                    setShowCustomDateModal(false);
+                                                    setIsCalculating(true);
+                                                    setTimeout(() => setIsCalculating(false), 1000);
+                                                }}
+                                                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                                            >
+                                                Apply
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Upload Modal */}
+                    {showUploadModal && (
+                        <div className="fixed inset-0 z-50 overflow-y-auto">
+                            <div className="flex items-center justify-center min-h-screen p-4">
+                                <div className="fixed inset-0 bg-black opacity-50"></div>
+                                <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-md w-full">
+                                    <UploadWizard />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        } catch (error) {
+            console.error('Mobile layout error:', error);
+            return (
+                <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 max-w-md w-full">
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">Mobile Layout Error</h2>
+                        <p className="text-gray-600 dark:text-gray-400 mb-4">
+                            There was an error loading the mobile dashboard. Please try refreshing the page.
+                        </p>
                         <button
-                            onClick={() => setShowUploadModal(true)}
-                            className="p-2 text-purple-600 dark:text-purple-400"
+                            onClick={() => window.location.reload()}
+                            className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
                         >
-                            <UploadIcon className="w-5 h-5" />
+                            Refresh Page
                         </button>
                     </div>
                 </div>
-
-                {/* Loading overlay for calculations */}
-                {isCalculating && (
-                    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 backdrop-blur-sm">
-                        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-2xl border border-gray-200 dark:border-gray-700">
-                            <div className="flex items-center space-x-3">
-                                <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                                <span className="text-gray-900 dark:text-gray-100 font-medium">
-                                    Calculating metrics...
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Mobile Notice */}
-                <div className="mx-4 mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                    <div className="flex items-start space-x-3">
-                        <div>
-                            <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">Mobile Dashboard</h3>
-                            <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                                Optimized mobile view with full email performance metrics.
-                                For advanced analytics like audience insights and detailed charts,
-                                please use desktop.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Mobile Filters */}
-                <div className="px-4 py-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                        <div className="grid grid-cols-1 gap-3">
-                            {/* Date Range Selector */}
-                            <div className="flex items-center gap-2">
-                                <Calendar className="w-4 h-4 text-gray-500" />
-                                <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Date:</span>
-                                <div className="flex-1 relative">
-                                    {dateRange === 'custom' && customFrom && customTo ? (
-                                        <div className="flex items-center justify-between w-full px-3 py-2 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">
-                                            <span>{customFrom} – {customTo}</span>
-                                            <button
-                                                onClick={() => {
-                                                    setDateRange('30d');
-                                                    setCustomFrom(undefined);
-                                                    setCustomTo(undefined);
-                                                }}
-                                                className="ml-2 text-gray-400 hover:text-gray-600"
-                                            >
-                                                <X className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <select
-                                            value={dateRange === 'custom' ? 'custom' : dateRange}
-                                            onChange={(e) => {
-                                                const v = e.target.value;
-                                                if (v === 'custom') {
-                                                    setShowCustomDateModal(true);
-                                                } else {
-                                                    setIsCalculating(true);
-                                                    setDateRange(v as any);
-                                                    // Auto-populate custom dates for consistency
-                                                    const to = new Date(REFERENCE_DATE);
-                                                    const toISO = (d: Date) => {
-                                                        const y = d.getFullYear();
-                                                        const m = String(d.getMonth() + 1).padStart(2, '0');
-                                                        const da = String(d.getDate()).padStart(2, '0');
-                                                        return `${y}-${m}-${da}`;
-                                                    };
-                                                    if (v === 'all') {
-                                                        const dates = [...ALL_CAMPAIGNS, ...ALL_FLOWS].map(e => e.sentDate.getTime());
-                                                        if (dates.length) {
-                                                            const from = new Date(Math.min(...dates));
-                                                            setCustomFrom(toISO(from));
-                                                            setCustomTo(toISO(to));
-                                                        }
-                                                    } else {
-                                                        const days = parseInt(v.replace('d', ''));
-                                                        if (Number.isFinite(days)) {
-                                                            const from = new Date(to);
-                                                            from.setDate(from.getDate() - days + 1);
-                                                            setCustomFrom(toISO(from));
-                                                            setCustomTo(toISO(to));
-                                                        }
-                                                    }
-                                                    setTimeout(() => setIsCalculating(false), 1000);
-                                                }
-                                            }}
-                                            className="appearance-none w-full px-3 py-2 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm"
-                                        >
-                                            <option value="7d">Last 7 days</option>
-                                            <option value="30d">Last 30 days</option>
-                                            <option value="60d">Last 60 days</option>
-                                            <option value="90d">Last 90 days</option>
-                                            <option value="all">All Time</option>
-                                            <option value="custom">Custom dates</option>
-                                        </select>
-                                    )}
-                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
-                                </div>
-                            </div>
-
-                            {/* Flow Filter */}
-                            <div className="flex items-center gap-2">
-                                <Zap className="w-4 h-4 text-gray-500" />
-                                <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Flow:</span>
-                                <div className="flex-1 relative">
-                                    <select
-                                        value={selectedFlow}
-                                        onChange={(e) => setSelectedFlow(e.target.value)}
-                                        className="appearance-none w-full px-3 py-2 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm"
-                                    >
-                                        <option value="all">All Flows</option>
-                                        {uniqueFlowNames.map(name => (
-                                            <option key={name} value={name}>{name}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Mobile Content */}
-                <div className="px-4 pb-8 space-y-6">
-                    {/* Data Coverage Notice */}
-                    {hasData && (
-                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                            <div className="text-xs text-amber-700 dark:text-amber-300">
-                                <span className="font-medium">Data Coverage:</span>
-                                <span>
-                                    {(() => {
-                                        const dates = [...defCampaigns, ...defFlows].map(e => e.sentDate.getTime());
-                                        const lastVisible = dates.length ? new Date(Math.max(...dates)) : dm.getLastEmailDate();
-                                        return ` Email channel performance only. Excludes SMS-attributed revenue through ${lastVisible.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.`;
-                                    })()}
-                                </span>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Email Performance Overview */}
-                    {overviewMetrics && (
-                        <section>
-                            <div className="flex items-center gap-2 mb-4">
-                                <Mail className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                    Email Performance Overview
-                                </h2>
-                            </div>
-                            <div className="grid grid-cols-1 gap-4">
-                                <MetricCard
-                                    title="Total Revenue"
-                                    value={formatCurrency(overviewMetrics.totalRevenue.value)}
-                                    change={overviewMetrics.totalRevenue.change}
-                                    isPositive={overviewMetrics.totalRevenue.isPositive}
-                                    previousValue={overviewMetrics.totalRevenue.previousValue}
-                                    previousPeriod={overviewMetrics.totalRevenue.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="revenue"
-                                    sparklineData={overviewSeries.totalRevenue}
-                                />
-                                <MetricCard
-                                    title="Average Order Value"
-                                    value={formatCurrency(overviewMetrics.averageOrderValue.value)}
-                                    change={overviewMetrics.averageOrderValue.change}
-                                    isPositive={overviewMetrics.averageOrderValue.isPositive}
-                                    previousValue={overviewMetrics.averageOrderValue.previousValue}
-                                    previousPeriod={overviewMetrics.averageOrderValue.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="avgOrderValue"
-                                    sparklineData={overviewSeries.averageOrderValue}
-                                />
-                                <MetricCard
-                                    title="Revenue per Email"
-                                    value={formatCurrency(overviewMetrics.revenuePerEmail.value)}
-                                    change={overviewMetrics.revenuePerEmail.change}
-                                    isPositive={overviewMetrics.revenuePerEmail.isPositive}
-                                    previousValue={overviewMetrics.revenuePerEmail.previousValue}
-                                    previousPeriod={overviewMetrics.revenuePerEmail.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="revenuePerEmail"
-                                    sparklineData={overviewSeries.revenuePerEmail}
-                                />
-                                <MetricCard
-                                    title="Open Rate"
-                                    value={formatPercent(overviewMetrics.openRate.value)}
-                                    change={overviewMetrics.openRate.change}
-                                    isPositive={overviewMetrics.openRate.isPositive}
-                                    previousValue={overviewMetrics.openRate.previousValue}
-                                    previousPeriod={overviewMetrics.openRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="openRate"
-                                    sparklineData={overviewSeries.openRate}
-                                />
-                                <MetricCard
-                                    title="Click Rate"
-                                    value={formatPercent(overviewMetrics.clickRate.value)}
-                                    change={overviewMetrics.clickRate.change}
-                                    isPositive={overviewMetrics.clickRate.isPositive}
-                                    previousValue={overviewMetrics.clickRate.previousValue}
-                                    previousPeriod={overviewMetrics.clickRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="clickRate"
-                                    sparklineData={overviewSeries.clickRate}
-                                />
-                                <MetricCard
-                                    title="Click-to-Open Rate"
-                                    value={formatPercent(overviewMetrics.clickToOpenRate.value)}
-                                    change={overviewMetrics.clickToOpenRate.change}
-                                    isPositive={overviewMetrics.clickToOpenRate.isPositive}
-                                    previousValue={overviewMetrics.clickToOpenRate.previousValue}
-                                    previousPeriod={overviewMetrics.clickToOpenRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="clickToOpenRate"
-                                    sparklineData={overviewSeries.clickToOpenRate}
-                                />
-                                <MetricCard
-                                    title="Emails Sent"
-                                    value={formatNumber(overviewMetrics.emailsSent.value)}
-                                    change={overviewMetrics.emailsSent.change}
-                                    isPositive={overviewMetrics.emailsSent.isPositive}
-                                    previousValue={overviewMetrics.emailsSent.previousValue}
-                                    previousPeriod={overviewMetrics.emailsSent.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="emailsSent"
-                                    sparklineData={overviewSeries.emailsSent}
-                                />
-                                <MetricCard
-                                    title="Total Orders"
-                                    value={formatNumber(overviewMetrics.totalOrders.value)}
-                                    change={overviewMetrics.totalOrders.change}
-                                    isPositive={overviewMetrics.totalOrders.isPositive}
-                                    previousValue={overviewMetrics.totalOrders.previousValue}
-                                    previousPeriod={overviewMetrics.totalOrders.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="totalOrders"
-                                    sparklineData={overviewSeries.totalOrders}
-                                />
-                                <MetricCard
-                                    title="Conversion Rate"
-                                    value={formatPercent(overviewMetrics.conversionRate.value)}
-                                    change={overviewMetrics.conversionRate.change}
-                                    isPositive={overviewMetrics.conversionRate.isPositive}
-                                    previousValue={overviewMetrics.conversionRate.previousValue}
-                                    previousPeriod={overviewMetrics.conversionRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="conversionRate"
-                                    sparklineData={overviewSeries.conversionRate}
-                                />
-                                <MetricCard
-                                    title="Unsubscribe Rate"
-                                    value={formatPercent(overviewMetrics.unsubscribeRate.value)}
-                                    change={overviewMetrics.unsubscribeRate.change}
-                                    isPositive={overviewMetrics.unsubscribeRate.isPositive}
-                                    previousValue={overviewMetrics.unsubscribeRate.previousValue}
-                                    previousPeriod={overviewMetrics.unsubscribeRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="unsubscribeRate"
-                                    sparklineData={overviewSeries.unsubscribeRate}
-                                    isNegativeMetric
-                                />
-                                <MetricCard
-                                    title="Spam Rate"
-                                    value={formatPercent(overviewMetrics.spamRate.value)}
-                                    change={overviewMetrics.spamRate.change}
-                                    isPositive={overviewMetrics.spamRate.isPositive}
-                                    previousValue={overviewMetrics.spamRate.previousValue}
-                                    previousPeriod={overviewMetrics.spamRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="spamRate"
-                                    sparklineData={overviewSeries.spamRate}
-                                    isNegativeMetric
-                                />
-                                <MetricCard
-                                    title="Bounce Rate"
-                                    value={formatPercent(overviewMetrics.bounceRate.value)}
-                                    change={overviewMetrics.bounceRate.change}
-                                    isPositive={overviewMetrics.bounceRate.isPositive}
-                                    previousValue={overviewMetrics.bounceRate.previousValue}
-                                    previousPeriod={overviewMetrics.bounceRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="bounceRate"
-                                    sparklineData={overviewSeries.bounceRate}
-                                    isNegativeMetric
-                                />
-                            </div>
-                        </section>
-                    )}
-
-                    {/* Campaign Performance */}
-                    {campaignMetrics && (
-                        <section>
-                            <div className="flex items-center gap-2 mb-4">
-                                <Send className="w-5 h-5 text-green-600 dark:text-green-400" />
-                                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                    Campaign Performance
-                                </h2>
-                            </div>
-                            <div className="grid grid-cols-1 gap-4">
-                                <MetricCard
-                                    title="Total Revenue"
-                                    value={formatCurrency(campaignMetrics.totalRevenue.value)}
-                                    change={campaignMetrics.totalRevenue.change}
-                                    isPositive={campaignMetrics.totalRevenue.isPositive}
-                                    previousValue={campaignMetrics.totalRevenue.previousValue}
-                                    previousPeriod={campaignMetrics.totalRevenue.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="revenue"
-                                    sparklineData={campaignSeries.totalRevenue}
-                                />
-                                <MetricCard
-                                    title="Average Order Value"
-                                    value={formatCurrency(campaignMetrics.averageOrderValue.value)}
-                                    change={campaignMetrics.averageOrderValue.change}
-                                    isPositive={campaignMetrics.averageOrderValue.isPositive}
-                                    previousValue={campaignMetrics.averageOrderValue.previousValue}
-                                    previousPeriod={campaignMetrics.averageOrderValue.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="avgOrderValue"
-                                    sparklineData={campaignSeries.averageOrderValue}
-                                />
-                                <MetricCard
-                                    title="Revenue per Email"
-                                    value={formatCurrency(campaignMetrics.revenuePerEmail.value)}
-                                    change={campaignMetrics.revenuePerEmail.change}
-                                    isPositive={campaignMetrics.revenuePerEmail.isPositive}
-                                    previousValue={campaignMetrics.revenuePerEmail.previousValue}
-                                    previousPeriod={campaignMetrics.revenuePerEmail.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="revenuePerEmail"
-                                    sparklineData={campaignSeries.revenuePerEmail}
-                                />
-                                <MetricCard
-                                    title="Open Rate"
-                                    value={formatPercent(campaignMetrics.openRate.value)}
-                                    change={campaignMetrics.openRate.change}
-                                    isPositive={campaignMetrics.openRate.isPositive}
-                                    previousValue={campaignMetrics.openRate.previousValue}
-                                    previousPeriod={campaignMetrics.openRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="openRate"
-                                    sparklineData={campaignSeries.openRate}
-                                />
-                                <MetricCard
-                                    title="Click Rate"
-                                    value={formatPercent(campaignMetrics.clickRate.value)}
-                                    change={campaignMetrics.clickRate.change}
-                                    isPositive={campaignMetrics.clickRate.isPositive}
-                                    previousValue={campaignMetrics.clickRate.previousValue}
-                                    previousPeriod={campaignMetrics.clickRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="clickRate"
-                                    sparklineData={campaignSeries.clickRate}
-                                />
-                                <MetricCard
-                                    title="Click-to-Open Rate"
-                                    value={formatPercent(campaignMetrics.clickToOpenRate.value)}
-                                    change={campaignMetrics.clickToOpenRate.change}
-                                    isPositive={campaignMetrics.clickToOpenRate.isPositive}
-                                    previousValue={campaignMetrics.clickToOpenRate.previousValue}
-                                    previousPeriod={campaignMetrics.clickToOpenRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="clickToOpenRate"
-                                    sparklineData={campaignSeries.clickToOpenRate}
-                                />
-                                <MetricCard
-                                    title="Emails Sent"
-                                    value={formatNumber(campaignMetrics.emailsSent.value)}
-                                    change={campaignMetrics.emailsSent.change}
-                                    isPositive={campaignMetrics.emailsSent.isPositive}
-                                    previousValue={campaignMetrics.emailsSent.previousValue}
-                                    previousPeriod={campaignMetrics.emailsSent.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="emailsSent"
-                                    sparklineData={campaignSeries.emailsSent}
-                                />
-                                <MetricCard
-                                    title="Total Orders"
-                                    value={formatNumber(campaignMetrics.totalOrders.value)}
-                                    change={campaignMetrics.totalOrders.change}
-                                    isPositive={campaignMetrics.totalOrders.isPositive}
-                                    previousValue={campaignMetrics.totalOrders.previousValue}
-                                    previousPeriod={campaignMetrics.totalOrders.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="totalOrders"
-                                    sparklineData={campaignSeries.totalOrders}
-                                />
-                                <MetricCard
-                                    title="Conversion Rate"
-                                    value={formatPercent(campaignMetrics.conversionRate.value)}
-                                    change={campaignMetrics.conversionRate.change}
-                                    isPositive={campaignMetrics.conversionRate.isPositive}
-                                    previousValue={campaignMetrics.conversionRate.previousValue}
-                                    previousPeriod={campaignMetrics.conversionRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="conversionRate"
-                                    sparklineData={campaignSeries.conversionRate}
-                                />
-                                <MetricCard
-                                    title="Unsubscribe Rate"
-                                    value={formatPercent(campaignMetrics.unsubscribeRate.value)}
-                                    change={campaignMetrics.unsubscribeRate.change}
-                                    isPositive={campaignMetrics.unsubscribeRate.isPositive}
-                                    previousValue={campaignMetrics.unsubscribeRate.previousValue}
-                                    previousPeriod={campaignMetrics.unsubscribeRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="unsubscribeRate"
-                                    sparklineData={campaignSeries.unsubscribeRate}
-                                    isNegativeMetric
-                                />
-                                <MetricCard
-                                    title="Spam Rate"
-                                    value={formatPercent(campaignMetrics.spamRate.value)}
-                                    change={campaignMetrics.spamRate.change}
-                                    isPositive={campaignMetrics.spamRate.isPositive}
-                                    previousValue={campaignMetrics.spamRate.previousValue}
-                                    previousPeriod={campaignMetrics.spamRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="spamRate"
-                                    sparklineData={campaignSeries.spamRate}
-                                    isNegativeMetric
-                                />
-                                <MetricCard
-                                    title="Bounce Rate"
-                                    value={formatPercent(campaignMetrics.bounceRate.value)}
-                                    change={campaignMetrics.bounceRate.change}
-                                    isPositive={campaignMetrics.bounceRate.isPositive}
-                                    previousValue={campaignMetrics.bounceRate.previousValue}
-                                    previousPeriod={campaignMetrics.bounceRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="bounceRate"
-                                    sparklineData={campaignSeries.bounceRate}
-                                    isNegativeMetric
-                                />
-                            </div>
-                        </section>
-                    )}
-
-                    {/* Flow Performance */}
-                    {flowMetrics && (
-                        <section>
-                            <div className="flex items-center gap-2 mb-4">
-                                <Zap className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                    Flow Performance
-                                </h2>
-                            </div>
-                            <div className="grid grid-cols-1 gap-4">
-                                <MetricCard
-                                    title="Total Revenue"
-                                    value={formatCurrency(flowMetrics.totalRevenue.value)}
-                                    change={flowMetrics.totalRevenue.change}
-                                    isPositive={flowMetrics.totalRevenue.isPositive}
-                                    previousValue={flowMetrics.totalRevenue.previousValue}
-                                    previousPeriod={flowMetrics.totalRevenue.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="revenue"
-                                    sparklineData={flowSeries.totalRevenue}
-                                />
-                                <MetricCard
-                                    title="Average Order Value"
-                                    value={formatCurrency(flowMetrics.averageOrderValue.value)}
-                                    change={flowMetrics.averageOrderValue.change}
-                                    isPositive={flowMetrics.averageOrderValue.isPositive}
-                                    previousValue={flowMetrics.averageOrderValue.previousValue}
-                                    previousPeriod={flowMetrics.averageOrderValue.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="avgOrderValue"
-                                    sparklineData={flowSeries.averageOrderValue}
-                                />
-                                <MetricCard
-                                    title="Revenue per Email"
-                                    value={formatCurrency(flowMetrics.revenuePerEmail.value)}
-                                    change={flowMetrics.revenuePerEmail.change}
-                                    isPositive={flowMetrics.revenuePerEmail.isPositive}
-                                    previousValue={flowMetrics.revenuePerEmail.previousValue}
-                                    previousPeriod={flowMetrics.revenuePerEmail.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="revenuePerEmail"
-                                    sparklineData={flowSeries.revenuePerEmail}
-                                />
-                                <MetricCard
-                                    title="Open Rate"
-                                    value={formatPercent(flowMetrics.openRate.value)}
-                                    change={flowMetrics.openRate.change}
-                                    isPositive={flowMetrics.openRate.isPositive}
-                                    previousValue={flowMetrics.openRate.previousValue}
-                                    previousPeriod={flowMetrics.openRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="openRate"
-                                    sparklineData={flowSeries.openRate}
-                                />
-                                <MetricCard
-                                    title="Click Rate"
-                                    value={formatPercent(flowMetrics.clickRate.value)}
-                                    change={flowMetrics.clickRate.change}
-                                    isPositive={flowMetrics.clickRate.isPositive}
-                                    previousValue={flowMetrics.clickRate.previousValue}
-                                    previousPeriod={flowMetrics.clickRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="clickRate"
-                                    sparklineData={flowSeries.clickRate}
-                                />
-                                <MetricCard
-                                    title="Click-to-Open Rate"
-                                    value={formatPercent(flowMetrics.clickToOpenRate.value)}
-                                    change={flowMetrics.clickToOpenRate.change}
-                                    isPositive={flowMetrics.clickToOpenRate.isPositive}
-                                    previousValue={flowMetrics.clickToOpenRate.previousValue}
-                                    previousPeriod={flowMetrics.clickToOpenRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="clickToOpenRate"
-                                    sparklineData={flowSeries.clickToOpenRate}
-                                />
-                                <MetricCard
-                                    title="Emails Sent"
-                                    value={formatNumber(flowMetrics.emailsSent.value)}
-                                    change={flowMetrics.emailsSent.change}
-                                    isPositive={flowMetrics.emailsSent.isPositive}
-                                    previousValue={flowMetrics.emailsSent.previousValue}
-                                    previousPeriod={flowMetrics.emailsSent.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="emailsSent"
-                                    sparklineData={flowSeries.emailsSent}
-                                />
-                                <MetricCard
-                                    title="Total Orders"
-                                    value={formatNumber(flowMetrics.totalOrders.value)}
-                                    change={flowMetrics.totalOrders.change}
-                                    isPositive={flowMetrics.totalOrders.isPositive}
-                                    previousValue={flowMetrics.totalOrders.previousValue}
-                                    previousPeriod={flowMetrics.totalOrders.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="totalOrders"
-                                    sparklineData={flowSeries.totalOrders}
-                                />
-                                <MetricCard
-                                    title="Conversion Rate"
-                                    value={formatPercent(flowMetrics.conversionRate.value)}
-                                    change={flowMetrics.conversionRate.change}
-                                    isPositive={flowMetrics.conversionRate.isPositive}
-                                    previousValue={flowMetrics.conversionRate.previousValue}
-                                    previousPeriod={flowMetrics.conversionRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="conversionRate"
-                                    sparklineData={flowSeries.conversionRate}
-                                />
-                                <MetricCard
-                                    title="Unsubscribe Rate"
-                                    value={formatPercent(flowMetrics.unsubscribeRate.value)}
-                                    change={flowMetrics.unsubscribeRate.change}
-                                    isPositive={flowMetrics.unsubscribeRate.isPositive}
-                                    previousValue={flowMetrics.unsubscribeRate.previousValue}
-                                    previousPeriod={flowMetrics.unsubscribeRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="unsubscribeRate"
-                                    sparklineData={flowSeries.unsubscribeRate}
-                                    isNegativeMetric
-                                />
-                                <MetricCard
-                                    title="Spam Rate"
-                                    value={formatPercent(flowMetrics.spamRate.value)}
-                                    change={flowMetrics.spamRate.change}
-                                    isPositive={flowMetrics.spamRate.isPositive}
-                                    previousValue={flowMetrics.spamRate.previousValue}
-                                    previousPeriod={flowMetrics.spamRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="spamRate"
-                                    sparklineData={flowSeries.spamRate}
-                                    isNegativeMetric
-                                />
-                                <MetricCard
-                                    title="Bounce Rate"
-                                    value={formatPercent(flowMetrics.bounceRate.value)}
-                                    change={flowMetrics.bounceRate.change}
-                                    isPositive={flowMetrics.bounceRate.isPositive}
-                                    previousValue={flowMetrics.bounceRate.previousValue}
-                                    previousPeriod={flowMetrics.bounceRate.previousPeriod}
-                                    dateRange={dateRange}
-                                    metricKey="bounceRate"
-                                    sparklineData={flowSeries.bounceRate}
-                                    isNegativeMetric
-                                />
-                            </div>
-                        </section>
-                    )}
-
-                    {/* No Data State */}
-                    {!hasData && !isInitialLoading && (
-                        <div className="text-center py-12">
-                            <div className="text-gray-400 mb-4">
-                                <BarChart3 className="w-12 h-12 mx-auto" />
-                            </div>
-                            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                                No data available
-                            </h3>
-                            <p className="text-gray-500 dark:text-gray-400 mb-4">
-                                Upload your email data to see analytics
-                            </p>
-                            <button
-                                onClick={() => setShowUploadModal(true)}
-                                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-                            >
-                                Upload Data
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Loading State */}
-                    {isInitialLoading && (
-                        <div className="text-center py-12">
-                            <div className="animate-spin h-8 w-8 border-2 border-purple-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-                            <p className="text-gray-500 dark:text-gray-400">Loading your data...</p>
-                        </div>
-                    )}
-                </div>
-
-                {/* Custom Date Modal */}
-                {showCustomDateModal && (
-                    <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50">
-                        <div className="flex items-center justify-center min-h-screen p-4">
-                            <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 shadow-2xl">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Select Date Range</h3>
-                                    <button
-                                        onClick={() => setShowCustomDateModal(false)}
-                                        className="text-gray-400 hover:text-gray-600"
-                                    >
-                                        <X className="w-5 h-5" />
-                                    </button>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Date</label>
-                                        <input
-                                            type="date"
-                                            value={customFrom || ''}
-                                            onChange={(e) => setCustomFrom(e.target.value || undefined)}
-                                            className="w-full px-3 py-3 text-lg rounded border bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">To Date</label>
-                                        <input
-                                            type="date"
-                                            value={customTo || ''}
-                                            onChange={(e) => setCustomTo(e.target.value || undefined)}
-                                            className="w-full px-3 py-3 text-lg rounded border bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-3 mt-6">
-                                    <button
-                                        onClick={() => setShowCustomDateModal(false)}
-                                        className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
-                                    >
-                                        Cancel
-                                    </button>
-                                    {customFrom && customTo && (
-                                        <button
-                                            onClick={() => {
-                                                setDateRange('custom');
-                                                setShowCustomDateModal(false);
-                                                setIsCalculating(true);
-                                                setTimeout(() => setIsCalculating(false), 1000);
-                                            }}
-                                            className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-                                        >
-                                            Apply
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Upload Modal */}
-                {showUploadModal && (
-                    <div className="fixed inset-0 z-50 overflow-y-auto">
-                        <div className="flex items-center justify-center min-h-screen p-4">
-                            <div className="fixed inset-0 bg-black opacity-50"></div>
-                            <div className="relative bg-white dark:bg-gray-800 rounded-lg max-w-md w-full">
-                                <UploadWizard />
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-        );
+            );
+        }
     }
 
     return (
