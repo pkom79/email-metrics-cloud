@@ -78,31 +78,42 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             startDate.setDate(endDate.getDate() - days + 1); // Fix: add +1 to match DataManager logic
         }
 
-        // Calculate previous period for comparison
-        const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        // Calculate period days to match DataManager logic exactly
+        let periodDays: number;
+        if (dateRange === 'custom' && customFrom && customTo) {
+            // For custom ranges, use the same formula as DataManager
+            periodDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        } else {
+            // For preset ranges, use the parsed value
+            periodDays = parseInt(dateRange.replace('d', ''));
+        }
 
-        // Fix single-day period calculation to match DataManager
+        // Calculate previous period dates to match DataManager exactly
         let prevStartDate: Date, prevEndDate: Date;
 
-        if (daysDiff === 1) {
-            // For single-day comparisons, go back exactly 1 day
-            prevEndDate = toDateOnly(new Date(startDate));
+        if (periodDays === 1) {
+            // For single-day comparisons, go back exactly 1 day for previous period
+            prevEndDate = new Date(startDate);
             prevEndDate.setDate(prevEndDate.getDate() - 1);
-            prevStartDate = toDateOnly(new Date(prevEndDate));
+            prevEndDate.setHours(23, 59, 59, 999);
+            prevStartDate = new Date(prevEndDate);
+            prevStartDate.setHours(0, 0, 0, 0);
         } else {
-            // For multi-day periods, use original logic
-            prevEndDate = toDateOnly(new Date(startDate));
+            // For multi-day periods, use the original logic
+            prevEndDate = new Date(startDate);
             prevEndDate.setDate(prevEndDate.getDate() - 1);
-            prevStartDate = toDateOnly(new Date(prevEndDate));
-            prevStartDate.setDate(prevEndDate.getDate() - daysDiff + 1);
+            prevEndDate.setHours(23, 59, 59, 999);
+            prevStartDate = new Date(prevEndDate);
+            prevStartDate.setDate(prevStartDate.getDate() - periodDays + 1);
+            prevStartDate.setHours(0, 0, 0, 0);
         }
 
         return {
             startDateOnly: toDateOnly(startDate),
             endDateOnly: toDateOnly(endDate),
-            prevStartDateOnly: prevStartDate,
-            prevEndDateOnly: prevEndDate,
-            days: daysDiff
+            prevStartDateOnly: toDateOnly(prevStartDate),
+            prevEndDateOnly: toDateOnly(prevEndDate),
+            days: periodDays
         };
     }, [dateRange, customFrom, customTo, dataManager]);
 
@@ -413,7 +424,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 </span>
             );
         }
-        if (value === 0 && sparklineData.length === 0) { chartColor = '#9ca3af'; dotColor = chartColor; }
+        // Change from gray to purple for no data cases to match global chart color scheme
+        if (value === 0 && sparklineData.length === 0) { chartColor = '#8b5cf6'; dotColor = chartColor; }
         const chartGradient = `linear-gradient(180deg, ${chartColor}40 0%, ${chartColor}10 100%)`;
         let xTicks: { x: number; label: string }[] = [];
         if (sparklineData.length > 1) {

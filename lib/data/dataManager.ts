@@ -194,7 +194,10 @@ export class DataManager {
         }
     }
 
-    resetToMockData(): void {
+    /**
+     * Clear all data and reset to empty state
+     */
+    clearAllData(): void {
         this.campaigns = []; this.flowEmails = []; this.subscribers = []; this.isRealDataLoaded = false;
         this.loadProgress = { campaigns: { loaded: false, progress: 0 }, flows: { loaded: false, progress: 0 }, subscribers: { loaded: false, progress: 0 } };
     }
