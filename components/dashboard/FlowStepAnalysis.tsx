@@ -515,7 +515,9 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         const metricConfig = metricOptions.find(m => m.value === selectedMetric);
                                         switch (metricConfig?.format) {
                                             case 'currency':
-                                                return `$${value.toFixed(1)}`;
+                                                return value >= 1000
+                                                    ? `$${value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`
+                                                    : `$${value.toFixed(1)}`;
                                             case 'percentage':
                                                 const formatted = value.toFixed(1);
                                                 const num = parseFloat(formatted);
@@ -587,7 +589,9 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         const metricConfig = metricOptions.find(m => m.value === selectedMetric);
                                         switch (metricConfig?.format) {
                                             case 'currency':
-                                                return `$${hoveredPoint.value.toFixed(1)}`;
+                                                return hoveredPoint.value >= 1000
+                                                    ? `$${hoveredPoint.value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`
+                                                    : `$${hoveredPoint.value.toFixed(1)}`;
                                             case 'percentage':
                                                 const formatted = hoveredPoint.value.toFixed(1);
                                                 const num = parseFloat(formatted);
