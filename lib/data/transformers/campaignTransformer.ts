@@ -30,6 +30,7 @@ export class CampaignTransformer {
 
         return {
             id,
+            campaignName: (raw as any)['Campaign Name'] || '',
             subject: (raw as any)['Subject'] || (raw as any)['Campaign Name'],
             sentDate,
             dayOfWeek: sentDate.getDay(),

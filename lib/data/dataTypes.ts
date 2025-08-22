@@ -3,6 +3,7 @@
 // Processed data interfaces with all calculated metrics
 export interface ProcessedCampaign {
     id: number;
+    campaignName: string;
     subject: string;
     sentDate: Date;
     dayOfWeek: number;

@@ -219,13 +219,25 @@ export default function DashboardClient({ businessName, userId }: { businessName
             // Stop stickiness when reaching Audience Overview
             if (audienceOverviewRef && shouldStick) {
                 const rect = audienceOverviewRef.getBoundingClientRect();
-                // If Audience Overview section is at the top of viewport or above, stop sticky
-                const isAudienceAtTop = rect.top <= 120; // Account for sticky header height + margin
-                setStickyBar(shouldStick && !isAudienceAtTop);
+                // Debug logging
+                console.log('Sticky debug:', {
+                    scrollY: window.scrollY,
+                    rectTop: rect.top,
+                    rectBottom: rect.bottom,
+                    viewportHeight: window.innerHeight
+                });
+
+                // More aggressive threshold - when top of section is near top of viewport
+                const isAudienceVisible = rect.top <= 150; // Increased threshold
+                setStickyBar(shouldStick && !isAudienceVisible);
             } else {
                 setStickyBar(shouldStick);
             }
         };
+
+        // Add immediate call to set initial state
+        onScroll();
+
         window.addEventListener('scroll', onScroll, { passive: true });
         return () => window.removeEventListener('scroll', onScroll);
     }, [audienceOverviewRef]);    // Data
@@ -1181,6 +1193,8 @@ export default function DashboardClient({ businessName, userId }: { businessName
                                                         <span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium bg-purple-100 text-purple-900">{index + 1}</span>
                                                         <h4 className="font-medium text-gray-900 dark:text-gray-100">{campaign.subject}</h4>
                                                     </div>
+                                                    {/* Add campaign name above date */}
+                                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{campaign.campaignName}</p>
                                                     <p className="text-sm text-gray-500 dark:text-gray-400">Sent on {campaign.sentDate.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                                                 </div>
                                                 <div className="text-right">

@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useMemo } from 'react';
-import { ChevronDown, Workflow, GitBranch, AlertTriangle, ArrowUp, ArrowDown } from 'lucide-react';
+import { ChevronDown, Workflow, GitBranch, AlertTriangle, ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 
 interface FlowStepAnalysisProps {
@@ -75,14 +75,27 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             const days = parseInt(dateRange.replace('d', ''));
             endDate = toDateOnly(dataManager.getLastEmailDate());
             startDate = toDateOnly(new Date(endDate));
-            startDate.setDate(endDate.getDate() - days);
+            startDate.setDate(endDate.getDate() - days + 1); // Fix: add +1 to match DataManager logic
         }
 
         // Calculate previous period for comparison
-        const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-        const prevEndDate = toDateOnly(new Date(startDate));
-        const prevStartDate = toDateOnly(new Date(prevEndDate));
-        prevStartDate.setDate(prevEndDate.getDate() - daysDiff);
+        const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+        // Fix single-day period calculation to match DataManager
+        let prevStartDate: Date, prevEndDate: Date;
+
+        if (daysDiff === 1) {
+            // For single-day comparisons, go back exactly 1 day
+            prevEndDate = toDateOnly(new Date(startDate));
+            prevEndDate.setDate(prevEndDate.getDate() - 1);
+            prevStartDate = toDateOnly(new Date(prevEndDate));
+        } else {
+            // For multi-day periods, use original logic
+            prevEndDate = toDateOnly(new Date(startDate));
+            prevEndDate.setDate(prevEndDate.getDate() - 1);
+            prevStartDate = toDateOnly(new Date(prevEndDate));
+            prevStartDate.setDate(prevEndDate.getDate() - daysDiff + 1);
+        }
 
         return {
             startDateOnly: toDateOnly(startDate),
@@ -360,21 +373,28 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             const isIncrease = periodChange.change > 0;
             const isGood = periodChange.isPositive;
 
-            // Match MetricCard logic: exactly 0.0% change should be treated specially
+            // Check for exactly 0% change
             const isZeroChange = Math.abs(periodChange.change) < 0.01;
+            const hasInsufficientData = periodChange.previousValue === 0;
 
             let colorClass: string;
+
             if (isZeroChange) {
-                colorClass = 'text-purple-600'; // Purple for zero change
+                // Gray arrow for exactly 0% change
+                colorClass = 'text-gray-600 dark:text-gray-400';
+            } else if (hasInsufficientData) {
+                // Purple arrow for insufficient data
+                colorClass = 'text-purple-600 dark:text-purple-400';
             } else {
+                // Normal green/red for actual changes
                 colorClass = isGood ? 'text-green-600' : 'text-red-600';
             }
 
             const trendTooltip = `Previous period (${formatDate(periodChange.previousPeriod.startDate)} – ${formatDate(periodChange.previousPeriod.endDate)}): ${formatMetricValue(periodChange.previousValue, selectedMetric)}`;
 
-            // Set chart colors based on change state
-            if (isZeroChange) {
-                chartColor = '#9333ea'; // Purple for zero change
+            // Chart color: Purple for both 0% change AND insufficient data
+            if (isZeroChange || hasInsufficientData) {
+                chartColor = '#8b5cf6'; // Purple for both cases
             } else {
                 chartColor = isGood ? '#10b981' : '#ef4444';
             }
@@ -382,8 +402,14 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
             changeNode = (
                 <span className={`text-lg font-bold px-2 py-1 rounded ${colorClass}`} title={trendTooltip} aria-label={trendTooltip}>
-                    {!isZeroChange && (isIncrease ? (<ArrowUp className="inline w-4 h-4 mr-1" />) : (<ArrowDown className="inline w-4 h-4 mr-1" />))}
-                    {Math.abs(periodChange.change).toFixed(1)}%
+                    {isZeroChange ? (
+                        <ArrowRight className="inline w-4 h-4 mr-1" />
+                    ) : (isIncrease ? (
+                        <ArrowUp className="inline w-4 h-4 mr-1" />
+                    ) : (
+                        <ArrowDown className="inline w-4 h-4 mr-1" />
+                    ))}
+                    {isZeroChange ? '0.0' : Math.abs(periodChange.change).toFixed(1)}%
                 </span>
             );
         }
