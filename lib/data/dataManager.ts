@@ -311,9 +311,18 @@ export class DataManager {
         customFrom?: string,
         customTo?: string
     ): { value: number; date: string }[] {
+        const startTime = Date.now();
+        const maxExecutionTime = 10000; // 10 seconds max execution time
+
         try {
             const allEmails = [...campaigns, ...flows];
             if (allEmails.length === 0) return [];
+
+            // Check execution time periodically
+            if (Date.now() - startTime > maxExecutionTime) {
+                console.warn('getMetricTimeSeries: Execution timeout, returning empty result');
+                return [];
+            }
 
             // Filter out emails with invalid dates before any processing
             const validEmails = allEmails.filter(email => {
@@ -496,28 +505,83 @@ export class DataManager {
 
             console.log(`Building buckets with ${adjustedGranularity} granularity for ${Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))} days`);
 
+            // Add safeguard counters to prevent infinite loops
+            let bucketCount = 0;
+            const maxBuckets = 250; // Hard limit on number of buckets
+
             if (adjustedGranularity === 'daily') {
-                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                for (let d = new Date(start); d <= end && bucketCount < maxBuckets; d.setDate(d.getDate() + 1)) {
                     const key = dateKeyLocal(d); const label = this.safeToLocaleDateString(d, { month: 'short', day: 'numeric' });
-                    if (!buckets.has(key)) buckets.set(key, { emails: [], label });
+                    if (!buckets.has(key)) {
+                        buckets.set(key, { emails: [], label });
+                        bucketCount++;
+                    }
+
+                    // Additional safeguard against infinite loops
+                    if (bucketCount % 100 === 0) {
+                        console.log(`Created ${bucketCount} daily buckets, current date: ${d.toISOString().split('T')[0]}`);
+                    }
                 }
             } else if (adjustedGranularity === 'weekly') {
-                for (let d = mondayOfLocal(start); d <= end; d.setDate(d.getDate() + 7)) {
+                for (let d = mondayOfLocal(start); d <= end && bucketCount < maxBuckets; d.setDate(d.getDate() + 7)) {
                     const key = dateKeyLocal(d);
                     const weekEnd = new Date(d); weekEnd.setDate(weekEnd.getDate() + 6);
                     const cappedEnd = weekEnd > end ? end : weekEnd;
                     const label = this.safeToLocaleDateString(cappedEnd, { month: 'short', day: 'numeric' });
-                    if (!buckets.has(key)) buckets.set(key, { emails: [], label });
+                    if (!buckets.has(key)) {
+                        buckets.set(key, { emails: [], label });
+                        bucketCount++;
+                    }
+
+                    // Additional safeguard against infinite loops
+                    if (bucketCount % 50 === 0) {
+                        console.log(`Created ${bucketCount} weekly buckets, current date: ${d.toISOString().split('T')[0]}`);
+                    }
                 }
             } else {
-                for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
-                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; const label = this.safeToLocaleDateString(d, { month: 'short', year: '2-digit' });
-                    if (!buckets.has(key)) buckets.set(key, { emails: [], label });
+                // Enhanced monthly loop with better safeguards
+                for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end && bucketCount < maxBuckets; bucketCount++) {
+                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    const label = this.safeToLocaleDateString(d, { month: 'short', year: '2-digit' });
+
+                    if (!buckets.has(key)) {
+                        buckets.set(key, { emails: [], label });
+                    }
+
+                    // Additional safeguard logging
+                    if (bucketCount % 20 === 0) {
+                        console.log(`Created ${bucketCount} monthly buckets, current date: ${d.toISOString().split('T')[0]}`);
+                    }
+
+                    // Advance to next month with validation
+                    const nextMonth = d.getMonth() + 1;
+                    const nextYear = nextMonth > 11 ? d.getFullYear() + 1 : d.getFullYear();
+                    const adjustedMonth = nextMonth > 11 ? 0 : nextMonth;
+
+                    d = new Date(nextYear, adjustedMonth, 1);
+
+                    // Validate the new date
+                    if (isNaN(d.getTime()) || d.getFullYear() > 2030) {
+                        console.warn('Monthly loop: Invalid date generated, breaking loop:', d);
+                        break;
+                    }
                 }
             }
 
-            emailsToProcess.forEach(email => {
+            console.log(`Created ${bucketCount} buckets total for ${adjustedGranularity} granularity`);
+
+            if (bucketCount >= maxBuckets) {
+                console.warn(`Bucket creation limited to ${maxBuckets} to prevent performance issues`);
+            }
+
+            emailsToProcess.forEach((email, index) => {
                 try {
+                    // Check execution time every 1000 emails
+                    if (index % 1000 === 0 && Date.now() - startTime > maxExecutionTime) {
+                        console.warn(`getMetricTimeSeries: Execution timeout at email ${index}, stopping processing`);
+                        return;
+                    }
+
                     // Additional validation before processing each email
                     if (!email.sentDate || !(email.sentDate instanceof Date) || isNaN(email.sentDate.getTime())) {
                         console.warn('Skipping email with invalid sentDate in forEach:', email);
@@ -556,10 +620,23 @@ export class DataManager {
                 }
             });
 
+            // Check execution time before final calculations
+            if (Date.now() - startTime > maxExecutionTime) {
+                console.warn('getMetricTimeSeries: Execution timeout before final calculations, returning partial result');
+                return [];
+            }
+
             const sortedKeys = Array.from(buckets.keys()).sort();
             const timeSeriesData: { value: number; date: string }[] = [];
 
-            sortedKeys.forEach(key => {
+            console.log(`Processing ${sortedKeys.length} time buckets for final calculations`);
+
+            sortedKeys.forEach((key, index) => {
+                // Check timeout periodically during calculations
+                if (index % 50 === 0 && Date.now() - startTime > maxExecutionTime) {
+                    console.warn(`getMetricTimeSeries: Execution timeout at bucket ${index}, returning partial result`);
+                    return;
+                }
                 const bucket = buckets.get(key)!;
                 const emailsInBucket = bucket.emails as typeof allEmails;
                 let value = 0;
@@ -593,9 +670,13 @@ export class DataManager {
                 timeSeriesData.push({ value, date: bucket.label });
             });
 
+            const executionTime = Date.now() - startTime;
+            console.log(`getMetricTimeSeries completed in ${executionTime}ms with ${timeSeriesData.length} data points`);
+
             return timeSeriesData;
         } catch (error) {
-            console.error('Error in getMetricTimeSeries:', error);
+            const executionTime = Date.now() - startTime;
+            console.error(`Error in getMetricTimeSeries after ${executionTime}ms:`, error);
             return [];
         }
     }
