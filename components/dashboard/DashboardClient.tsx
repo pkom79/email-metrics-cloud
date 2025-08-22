@@ -853,69 +853,94 @@ export default function DashboardClient({ businessName, userId }: { businessName
                                 <Calendar className="w-4 h-4 text-gray-500" />
                                 <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Date:</span>
                                 <div className="flex-1 relative">
-                                    <select
-                                        value={dateRange === 'custom' ? 'custom' : (dateRange as any)}
-                                        onChange={(e) => {
-                                            const v = e.target.value as any;
-                                            if (v === 'custom') {
-                                                // Enable custom date inputs
-                                                setDateRange('custom');
-                                                return;
-                                            }
-
-                                            setIsCalculating(true);
-
-                                            // compute dates for inputs when using presets
-                                            const to = new Date(REFERENCE_DATE);
-                                            const toISO = (d: Date) => {
-                                                const y = d.getFullYear();
-                                                const m = String(d.getMonth() + 1).padStart(2, '0');
-                                                const da = String(d.getDate()).padStart(2, '0');
-                                                return `${y}-${m}-${da}`;
-                                            };
-                                            if (v === 'all') {
-                                                const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow);
-                                                const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime());
-                                                const flowTs = flowSubset.map(f => f.sentDate.getTime());
-                                                const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n));
-                                                if (all.length) {
-                                                    const from = new Date(Math.min(...all));
+                                    {dateRange === 'custom' && customFrom && customTo ? (
+                                        <div className="flex items-center justify-between w-full px-3 py-2 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">
+                                            <span>{new Date(customFrom).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} – {new Date(customTo).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                            <button
+                                                onClick={() => setDateRange('30d')}
+                                                className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <select
+                                            value={dateRange === 'custom' ? 'custom' : (dateRange as any)}
+                                            onChange={(e) => {
+                                                const v = e.target.value as any;
+                                                if (v === 'custom') {
+                                                    // Set default custom dates (last 30 days)
+                                                    const to = new Date(REFERENCE_DATE);
+                                                    const from = new Date(to);
+                                                    from.setDate(from.getDate() - 29);
+                                                    const toISO = (d: Date) => {
+                                                        const y = d.getFullYear();
+                                                        const m = String(d.getMonth() + 1).padStart(2, '0');
+                                                        const da = String(d.getDate()).padStart(2, '0');
+                                                        return `${y}-${m}-${da}`;
+                                                    };
                                                     setCustomFrom(toISO(from));
                                                     setCustomTo(toISO(to));
+                                                    setDateRange('custom');
+                                                    return;
+                                                }
+
+                                                setIsCalculating(true);
+
+                                                // compute dates for inputs when using presets
+                                                const to = new Date(REFERENCE_DATE);
+                                                const toISO = (d: Date) => {
+                                                    const y = d.getFullYear();
+                                                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                                                    const da = String(d.getDate()).padStart(2, '0');
+                                                    return `${y}-${m}-${da}`;
+                                                };
+                                                if (v === 'all') {
+                                                    const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow);
+                                                    const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime());
+                                                    const flowTs = flowSubset.map(f => f.sentDate.getTime());
+                                                    const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n));
+                                                    if (all.length) {
+                                                        const from = new Date(Math.min(...all));
+                                                        setCustomFrom(toISO(from));
+                                                        setCustomTo(toISO(to));
+                                                    } else {
+                                                        setCustomFrom(undefined);
+                                                        setCustomTo(undefined);
+                                                    }
                                                 } else {
-                                                    setCustomFrom(undefined);
-                                                    setCustomTo(undefined);
+                                                    const days = parseInt(String(v).replace('d', ''));
+                                                    if (Number.isFinite(days)) {
+                                                        const from = new Date(to); from.setDate(from.getDate() - days + 1);
+                                                        setCustomFrom(toISO(from));
+                                                        setCustomTo(toISO(to));
+                                                    }
                                                 }
-                                            } else {
-                                                const days = parseInt(String(v).replace('d', ''));
-                                                if (Number.isFinite(days)) {
-                                                    const from = new Date(to); from.setDate(from.getDate() - days + 1);
-                                                    setCustomFrom(toISO(from));
-                                                    setCustomTo(toISO(to));
-                                                }
-                                            }
-                                            setDateRange(v);
+                                                setDateRange(v);
 
-                                            // Add delay to show loading state, then hide it
-                                            setTimeout(() => setIsCalculating(false), 1000);
-                                        }}
-                                        className="appearance-none w-full px-3 py-2 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm"
-                                    >
-                                        <option value="30d">Last 30 days</option>
-                                        <option value="60d">Last 60 days</option>
-                                        <option value="90d">Last 90 days</option>
-                                        <option value="120d">Last 120 days</option>
-                                        <option value="180d">Last 180 days</option>
-                                        <option value="365d">Last 365 days</option>
-                                        <option value="all">All time</option>
-                                        <option value="custom">Custom dates</option>
-                                    </select>
-                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
+                                                // Add delay to show loading state, then hide it
+                                                setTimeout(() => setIsCalculating(false), 1000);
+                                            }}
+                                            className="appearance-none w-full px-3 py-2 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+                                        >
+                                            <option value="30d">Last 30 days</option>
+                                            <option value="60d">Last 60 days</option>
+                                            <option value="90d">Last 90 days</option>
+                                            <option value="120d">Last 120 days</option>
+                                            <option value="180d">Last 180 days</option>
+                                            <option value="365d">Last 365 days</option>
+                                            <option value="all">All time</option>
+                                            <option value="custom">Custom dates</option>
+                                        </select>
+                                    )}
+                                    {dateRange !== 'custom' && (
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
+                                    )}
                                 </div>
                             </div>
 
-                            {/* Custom Date Inputs (show only when custom is selected) */}
-                            {dateRange === 'custom' && (
+                            {/* Custom Date Inputs Modal (show only when custom is selected) */}
+                            {dateRange === 'custom' && (!customFrom || !customTo) && (
                                 <div className="flex flex-col gap-3">
                                     {/* From Date */}
                                     <div className="flex items-center gap-2">
@@ -955,9 +980,7 @@ export default function DashboardClient({ businessName, userId }: { businessName
                                         </div>
                                     </div>
                                 </div>
-                            )}
-
-                            {/* Granularity Dropdown */}
+                            )}                            {/* Granularity Dropdown */}
                             <div className="flex items-center gap-2">
                                 <BarChart3 className="w-4 h-4 text-gray-500" />
                                 <span className="font-medium text-sm text-gray-900 dark:text-gray-100">View:</span>

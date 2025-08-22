@@ -30,7 +30,7 @@ interface FlowStepMetrics {
 }
 
 export default function FlowStepAnalysis({ dateRange, granularity, customFrom, customTo }: FlowStepAnalysisProps) {
-    const [tooltip] = useState<{
+    const [hoveredPoint, setHoveredPoint] = useState<{
         chartIndex: number;
         x: number;
         y: number;
@@ -401,7 +401,10 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 colorClass = isGood ? 'text-green-600' : 'text-red-600';
             }
 
-            const trendTooltip = `Previous period (${formatDate(periodChange.previousPeriod.startDate)} – ${formatDate(periodChange.previousPeriod.endDate)}): ${formatMetricValue(periodChange.previousValue, selectedMetric)}`;
+            const isSingleDay = formatDate(periodChange.previousPeriod.startDate) === formatDate(periodChange.previousPeriod.endDate);
+            const trendTooltip = isSingleDay
+                ? `Previous period (${formatDate(periodChange.previousPeriod.startDate)}): ${formatMetricValue(periodChange.previousValue, selectedMetric)}`
+                : `Previous period (${formatDate(periodChange.previousPeriod.startDate)} – ${formatDate(periodChange.previousPeriod.endDate)}): ${formatMetricValue(periodChange.previousValue, selectedMetric)}`;
 
             // Chart color: Purple for both 0% change AND insufficient data
             if (isZeroChange || hasInsufficientData) {
@@ -496,9 +499,84 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         pathD += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${points[i].x},${points[i].y}`;
                                     }
                                     const areaPath = pathD + ` L 900,120 L 0,120 Z`;
-                                    return (<g><path d={areaPath} fill={`url(#gradient-${index})`} /><path d={pathD} fill="none" stroke={chartColor} strokeWidth="2" /></g>);
+
+                                    const formatTooltipValue = (value: number): string => {
+                                        const metricConfig = metricOptions.find(m => m.value === selectedMetric);
+                                        switch (metricConfig?.format) {
+                                            case 'currency':
+                                                return `$${value.toFixed(1)}`;
+                                            case 'percentage':
+                                                return `${value.toFixed(1)}%`;
+                                            case 'number':
+                                            default:
+                                                return value.toLocaleString('en-US');
+                                        }
+                                    };
+
+                                    return (
+                                        <g>
+                                            <path d={areaPath} fill={`url(#gradient-${index})`} />
+                                            <path d={pathD} fill="none" stroke={chartColor} strokeWidth="2" />
+                                            {/* Hover points */}
+                                            {points.map((point, i) => (
+                                                <circle
+                                                    key={i}
+                                                    cx={point.x}
+                                                    cy={point.y}
+                                                    r="6"
+                                                    fill="transparent"
+                                                    style={{ cursor: 'pointer' }}
+                                                    onMouseEnter={() => setHoveredPoint({
+                                                        chartIndex: index,
+                                                        x: point.x,
+                                                        y: point.y,
+                                                        value: point.value,
+                                                        date: point.date
+                                                    })}
+                                                    onMouseLeave={() => setHoveredPoint(null)}
+                                                />
+                                            ))}
+                                            {/* Visible hover point */}
+                                            {hoveredPoint && hoveredPoint.chartIndex === index && (
+                                                <circle
+                                                    cx={hoveredPoint.x}
+                                                    cy={hoveredPoint.y}
+                                                    r="4"
+                                                    fill={chartColor}
+                                                    stroke="white"
+                                                    strokeWidth="2"
+                                                />
+                                            )}
+                                        </g>
+                                    );
                                 })()}
                             </svg>
+                            {/* Tooltip */}
+                            {hoveredPoint && hoveredPoint.chartIndex === index && (
+                                <div
+                                    className="absolute z-10 px-2 py-1 bg-black text-white text-xs rounded shadow-lg pointer-events-none"
+                                    style={{
+                                        left: `${(hoveredPoint.x / 900) * 100}%`,
+                                        top: `${(hoveredPoint.y / 160) * 100}%`,
+                                        transform: 'translate(-50%, -100%)',
+                                        marginTop: '-8px'
+                                    }}
+                                >
+                                    <div>{new Date(hoveredPoint.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                                    <div>{(() => {
+                                        const metricConfig = metricOptions.find(m => m.value === selectedMetric);
+                                        switch (metricConfig?.format) {
+                                            case 'currency':
+                                                return `$${hoveredPoint.value.toFixed(1)}`;
+                                            case 'percentage':
+                                                return `${hoveredPoint.value.toFixed(1)}%`;
+                                            case 'number':
+                                            default:
+                                                return hoveredPoint.value.toLocaleString('en-US');
+                                        }
+                                    })()}</div>
+                                </div>
+                            )}
                         </div>
                     ) : value === 0 ? (
                         <div className="flex items-center justify-center h-full">
