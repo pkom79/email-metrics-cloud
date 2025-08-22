@@ -214,39 +214,61 @@ export class DataManager {
             const campaignDates = this.campaigns
                 .map(c => c.sentDate instanceof Date ? c.sentDate.getTime() : NaN)
                 .filter(t => !isNaN(t) && isFinite(t));
-            
+
             // Get valid timestamps from flow emails
             const flowDates = this.flowEmails
                 .map(f => f.sentDate instanceof Date ? f.sentDate.getTime() : NaN)
                 .filter(t => !isNaN(t) && isFinite(t));
-            
+
             const allDates = [...campaignDates, ...flowDates];
-            
+
             if (allDates.length === 0) {
                 console.warn('getLastEmailDate: No valid dates found, returning current date');
                 return new Date();
             }
-            
+
             const maxTime = Math.max(...allDates);
-            
+
             // Validate the result
             if (isNaN(maxTime) || !isFinite(maxTime)) {
                 console.warn('getLastEmailDate: Invalid max time calculated, returning current date');
                 return new Date();
             }
-            
+
             const result = new Date(maxTime);
-            
+
             // Final validation
             if (isNaN(result.getTime())) {
                 console.warn('getLastEmailDate: Invalid date result, returning current date');
                 return new Date();
             }
-            
+
             return result;
         } catch (error) {
             console.error('Error in getLastEmailDate:', error);
             return new Date(); // Safe fallback
+        }
+    }
+
+    // Safe date formatting function to prevent DateTimeFormat errors
+    private safeToLocaleDateString(date: Date, options: Intl.DateTimeFormatOptions): string {
+        try {
+            if (!date || isNaN(date.getTime())) {
+                return 'Invalid Date';
+            }
+            return date.toLocaleDateString('en-US', options);
+        } catch (error) {
+            console.warn('Date formatting error:', error, 'for date:', date);
+            // Fallback to manual formatting
+            if (date && !isNaN(date.getTime())) {
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                if (options.year) {
+                    return `${monthNames[date.getMonth()]} ${String(date.getFullYear()).slice(-2)}`;
+                } else {
+                    return `${monthNames[date.getMonth()]} ${date.getDate()}`;
+                }
+            }
+            return 'Invalid Date';
         }
     }
 
@@ -301,7 +323,7 @@ export class DataManager {
             const start = cloneAtMidnight(startDate); const end = cloneAtMidnight(endDate);
             if (granularity === 'daily') {
                 for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-                    const key = dateKeyLocal(d); const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    const key = dateKeyLocal(d); const label = this.safeToLocaleDateString(d, { month: 'short', day: 'numeric' });
                     if (!buckets.has(key)) buckets.set(key, { emails: [], label });
                 }
             } else if (granularity === 'weekly') {
@@ -309,12 +331,12 @@ export class DataManager {
                     const key = dateKeyLocal(d);
                     const weekEnd = new Date(d); weekEnd.setDate(weekEnd.getDate() + 6);
                     const cappedEnd = weekEnd > end ? end : weekEnd;
-                    const label = cappedEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    const label = this.safeToLocaleDateString(cappedEnd, { month: 'short', day: 'numeric' });
                     if (!buckets.has(key)) buckets.set(key, { emails: [], label });
                 }
             } else {
                 for (let d = new Date(start.getFullYear(), start.getMonth(), 1); d <= end; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
-                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; const label = this.safeToLocaleDateString(d, { month: 'short', year: '2-digit' });
                     if (!buckets.has(key)) buckets.set(key, { emails: [], label });
                 }
             }
@@ -322,9 +344,9 @@ export class DataManager {
             filteredEmails.forEach(email => {
                 const date = new Date(email.sentDate);
                 let key: string; let label: string;
-                if (granularity === 'daily') { key = dateKeyLocal(date); label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
-                else if (granularity === 'weekly') { const monday = mondayOfLocal(date); key = dateKeyLocal(monday); const weekEnd = new Date(monday); weekEnd.setDate(weekEnd.getDate() + 6); const cappedEnd = weekEnd > end ? end : weekEnd; label = cappedEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
-                else { key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; label = new Date(date.getFullYear(), date.getMonth(), 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }); }
+                if (granularity === 'daily') { key = dateKeyLocal(date); label = this.safeToLocaleDateString(date, { month: 'short', day: 'numeric' }); }
+                else if (granularity === 'weekly') { const monday = mondayOfLocal(date); key = dateKeyLocal(monday); const weekEnd = new Date(monday); weekEnd.setDate(weekEnd.getDate() + 6); const cappedEnd = weekEnd > end ? end : weekEnd; label = this.safeToLocaleDateString(cappedEnd, { month: 'short', day: 'numeric' }); }
+                else { key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; label = this.safeToLocaleDateString(new Date(date.getFullYear(), date.getMonth(), 1), { month: 'short', year: '2-digit' }); }
                 if (!buckets.has(key)) buckets.set(key, { emails: [], label });
                 buckets.get(key)!.emails.push(email);
             });
@@ -447,7 +469,7 @@ export class DataManager {
     getGranularityForDateRange(dateRange: string): 'daily' | 'weekly' | 'monthly' {
         try {
             console.log('getGranularityForDateRange called with:', dateRange);
-            
+
             if (dateRange === 'all') {
                 // Safely handle case where no data exists yet
                 if (this.campaigns.length === 0 && this.flowEmails.length === 0) {
