@@ -8,9 +8,10 @@ interface SparklineProps {
     isNegativeMetric?: boolean;
     data: { value: number; date: string }[];
     valueFormat?: 'currency' | 'percentage' | 'number';
+    hasInsufficientData?: boolean;
 }
 
-const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, isNegativeMetric = false, data, valueFormat = 'number' }) => {
+const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, isNegativeMetric = false, data, valueFormat = 'number', hasInsufficientData = false }) => {
     const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; value: number; date: string } | null>(null);
     const svgRef = useRef<SVGSVGElement>(null);
 
@@ -27,8 +28,12 @@ const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, is
     };
 
     const getColorScheme = () => {
-        if (isAllTime || Math.abs(change) < 0.1) {
-            return { stroke: '#8b5cf6', gradientStart: '#8b5cf6', gradientEnd: '#c084fc' };
+        const isZeroChange = Math.abs(change) < 0.1;
+
+        if (isAllTime || isZeroChange) {
+            return { stroke: '#6b7280', gradientStart: '#6b7280', gradientEnd: '#9ca3af' }; // Gray for zero change
+        } else if (hasInsufficientData) {
+            return { stroke: '#8b5cf6', gradientStart: '#8b5cf6', gradientEnd: '#c084fc' }; // Purple for insufficient data
         } else if (isPositive) {
             return { stroke: '#10b981', gradientStart: '#10b981', gradientEnd: '#6ee7b7' };
         } else {

@@ -307,14 +307,28 @@ export default function DashboardClient({ businessName, userId }: { businessName
             options?: { flowName?: string }
         ) => {
             const isAll = dateRange === 'all';
-            const periodDays = dateRange === 'custom' ? customDays : parseInt(String(dateRange).replace('d', ''));
-            if (!Number.isFinite(periodDays) || periodDays <= 0 || isAll) {
+            if (isAll) {
                 return { changePercent: 0, isPositive: true, previousValue: 0, previousPeriod: undefined as any };
             }
 
-            // Anchor to visible end-of-day, but use unfiltered base arrays for period comparisons
-            const endDate = new Date(REFERENCE_DATE); endDate.setHours(23, 59, 59, 999);
-            const startDate = new Date(endDate); startDate.setDate(startDate.getDate() - periodDays + 1); startDate.setHours(0, 0, 0, 0);
+            let startDate: Date, endDate: Date, periodDays: number;
+
+            // Handle custom date ranges
+            if (dateRange === 'custom' && customActive) {
+                startDate = new Date(customFrom! + 'T00:00:00');
+                endDate = new Date(customTo! + 'T23:59:59');
+                periodDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+            } else {
+                // Preset ranges - anchor to REFERENCE_DATE
+                periodDays = parseInt(String(dateRange).replace('d', ''));
+                if (!Number.isFinite(periodDays) || periodDays <= 0) {
+                    return { changePercent: 0, isPositive: true, previousValue: 0, previousPeriod: undefined as any };
+                }
+                endDate = new Date(REFERENCE_DATE); endDate.setHours(23, 59, 59, 999);
+                startDate = new Date(endDate); startDate.setDate(startDate.getDate() - periodDays + 1); startDate.setHours(0, 0, 0, 0);
+            }
+
+            // Calculate previous period - go back exactly the same number of days
             const prevEndDate = new Date(startDate); prevEndDate.setDate(prevEndDate.getDate() - 1); prevEndDate.setHours(23, 59, 59, 999);
             const prevStartDate = new Date(prevEndDate); prevStartDate.setDate(prevStartDate.getDate() - periodDays + 1); prevStartDate.setHours(0, 0, 0, 0);
 
@@ -338,7 +352,7 @@ export default function DashboardClient({ businessName, userId }: { businessName
             const isPositive = negative.has(metricKey) ? changePercent < 0 : changePercent > 0;
             return { changePercent, isPositive, previousValue, previousPeriod: { startDate: prevStartDate, endDate: prevEndDate } };
         };
-    }, [dateRange, dm, customDays, REFERENCE_DATE, ALL_CAMPAIGNS, ALL_FLOWS]);
+    }, [dateRange, dm, customDays, customActive, customFrom, customTo, REFERENCE_DATE, ALL_CAMPAIGNS, ALL_FLOWS]);
     const defCampaigns = useDeferredValue(filteredCampaigns);
     const defFlows = useDeferredValue(filteredFlowEmails);
 
@@ -1365,16 +1379,6 @@ export default function DashboardClient({ businessName, userId }: { businessName
 
                         {/* Audience Overview */}
                         <div ref={(el) => setAudienceOverviewRef(el)}>
-                            <div className="mb-4">
-                                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Audience Overview</h2>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    📊 Snapshot data collected through {REFERENCE_DATE.toLocaleDateString('en-US', {
-                                        year: 'numeric',
-                                        month: 'long',
-                                        day: 'numeric'
-                                    })}
-                                </p>
-                            </div>
                             <AudienceCharts />
                         </div>
 

@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
 import Sparkline from './Sparkline';
 import { getBenchmarkStatus, parseMetricValue } from '../../lib/utils/benchmarks';
 
@@ -39,6 +39,10 @@ const MetricCard: React.FC<MetricCardProps> = ({
 
     // DIRECTION arrow: based purely on change sign (increase vs decrease)
     const isIncrease = change > 0;
+    const isZeroChange = Math.abs(change) < 0.1; // Consider 0.0% as zero change
+
+    // Check if we have insufficient data for comparison (no previous period data)
+    const hasInsufficientData = previousValue == null || previousPeriod == null;
 
     const benchmarkResult = metricKey ? getBenchmarkStatus(metricKey, parseMetricValue(value)) : null;
     const numericValue = metricKey === 'conversionRate' ? parseMetricValue(value) : undefined;
@@ -101,6 +105,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
                 isNegativeMetric={isNegativeMetric}
                 data={sparklineData}
                 valueFormat={valueFormat as any}
+                hasInsufficientData={hasInsufficientData}
             />
 
             <div className="flex items-end justify-between">
@@ -115,11 +120,20 @@ const MetricCard: React.FC<MetricCardProps> = ({
                     )}
                     {!isAllTime && (
                         <div
-                            className={`flex items-center text-sm font-medium ${shouldShowAsPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                            className={`flex items-center text-sm font-medium ${isZeroChange
+                                    ? 'text-gray-600 dark:text-gray-400' // Black/gray for 0% change
+                                    : hasInsufficientData
+                                        ? 'text-purple-600 dark:text-purple-400' // Purple for insufficient data
+                                        : shouldShowAsPositive
+                                            ? 'text-green-600 dark:text-green-400'
+                                            : 'text-red-600 dark:text-red-400'
+                                }`}
                             title={trendTooltip}
                             aria-label={trendTooltip}
                         >
-                            {isIncrease ? (
+                            {isZeroChange ? (
+                                <ArrowRight className="w-4 h-4 mr-1" />
+                            ) : isIncrease ? (
                                 <ArrowUp className="w-4 h-4 mr-1" />
                             ) : (
                                 <ArrowDown className="w-4 h-4 mr-1" />

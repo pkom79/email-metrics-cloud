@@ -62,16 +62,36 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
     const toDateOnly = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
     const dateWindows = useMemo(() => {
-        if (dateRange === 'all') return null;
-        const days = parseInt(dateRange.replace('d', ''));
-        const endDate = toDateOnly(dataManager.getLastEmailDate());
-        const startDate = toDateOnly(new Date(endDate));
-        startDate.setDate(endDate.getDate() - days);
+        let startDate: Date, endDate: Date;
+
+        // Handle custom date range
+        if (dateRange === 'custom' && customFrom && customTo) {
+            startDate = new Date(customFrom + 'T00:00:00');
+            endDate = new Date(customTo + 'T23:59:59');
+        } else if (dateRange === 'all') {
+            return null; // All time doesn't need windowing
+        } else {
+            // Preset ranges
+            const days = parseInt(dateRange.replace('d', ''));
+            endDate = toDateOnly(dataManager.getLastEmailDate());
+            startDate = toDateOnly(new Date(endDate));
+            startDate.setDate(endDate.getDate() - days);
+        }
+
+        // Calculate previous period for comparison
+        const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
         const prevEndDate = toDateOnly(new Date(startDate));
         const prevStartDate = toDateOnly(new Date(prevEndDate));
-        prevStartDate.setDate(prevEndDate.getDate() - days);
-        return { startDateOnly: startDate, endDateOnly: endDate, prevStartDateOnly: prevStartDate, prevEndDateOnly: prevEndDate, days };
-    }, [dateRange, dataManager]);
+        prevStartDate.setDate(prevEndDate.getDate() - daysDiff);
+
+        return {
+            startDateOnly: toDateOnly(startDate),
+            endDateOnly: toDateOnly(endDate),
+            prevStartDateOnly: prevStartDate,
+            prevEndDateOnly: prevEndDate,
+            days: daysDiff
+        };
+    }, [dateRange, customFrom, customTo, dataManager]);
 
     const liveFlowEmails = useMemo(() => ALL_FLOW_EMAILS.filter(e => e.status && e.status.toLowerCase() === 'live'), [ALL_FLOW_EMAILS]);
 
@@ -82,19 +102,19 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
     }, [liveFlowEmails]);
 
     const currentFlowEmails = useMemo(() => {
-        if (!dateWindows) return liveFlowEmails;
+        if (!dateWindows) return liveFlowEmails; // All time
         const { startDateOnly, endDateOnly } = dateWindows;
         return liveFlowEmails.filter(e => {
-            const sent = toDateOnly(new Date(e.sentDate));
+            const sent = new Date(e.sentDate);
             return sent >= startDateOnly && sent <= endDateOnly;
         });
     }, [liveFlowEmails, dateWindows]);
 
     const previousFlowEmails = useMemo(() => {
-        if (!dateWindows) return [];
+        if (!dateWindows) return []; // No comparison for all time
         const { prevStartDateOnly, prevEndDateOnly } = dateWindows;
         return liveFlowEmails.filter(e => {
-            const sent = toDateOnly(new Date(e.sentDate));
+            const sent = new Date(e.sentDate);
             return sent >= prevStartDateOnly && sent <= prevEndDateOnly;
         });
     }, [liveFlowEmails, dateWindows]);
