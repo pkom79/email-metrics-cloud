@@ -220,7 +220,7 @@ export default function DashboardClient({ businessName, userId }: { businessName
     const [isMobile, setIsMobile] = useState<boolean>(() => {
         if (typeof window === 'undefined') return false;
         try {
-            return window.innerWidth < 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            return window.innerWidth < 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || false;
         } catch { return false; }
     });
     useEffect(() => {
@@ -446,7 +446,7 @@ export default function DashboardClient({ businessName, userId }: { businessName
     const overviewMetrics = useMemo(() => {
         const all = [...defCampaigns, ...defFlows];
         if (all.length === 0) return null as any;
-        const totalRevenue = all.reduce((s, e) => s + e.revenue, 0);
+        const totalRevenue = all.reduce((s, e) => s + (e.revenue || 0), 0);
         const totalEmailsSent = all.reduce((s, e) => s + e.emailsSent, 0);
         const totalOrders = all.reduce((s, e) => s + e.totalOrders, 0);
         const totalOpens = all.reduce((s, e) => s + e.uniqueOpens, 0);
