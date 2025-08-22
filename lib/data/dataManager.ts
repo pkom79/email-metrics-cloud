@@ -272,32 +272,25 @@ export class DataManager {
                 return 'Invalid Date';
             }
 
-            return date.toLocaleDateString('en-US', options);
+            // Use manual formatting first to avoid DateTimeFormat issues
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const month = date.getMonth();
+            const day = date.getDate();
+
+            // Validate individual components
+            if (month < 0 || month > 11 || day < 1 || day > 31 || year < 1900 || year > 2100) {
+                console.warn('safeToLocaleDateString: Invalid date components:', { year, month, day });
+                return 'Invalid Date';
+            }
+
+            // Return manual formatting directly instead of trying native DateTimeFormat
+            if (options.year) {
+                return `${monthNames[month]} ${String(year).slice(-2)}`;
+            } else {
+                return `${monthNames[month]} ${day}`;
+            }
         } catch (error) {
             console.warn('safeToLocaleDateString error:', error, 'for date:', date);
-            // Enhanced fallback to manual formatting
-            try {
-                if (date && !isNaN(date.getTime())) {
-                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                    const year = date.getFullYear();
-                    const month = date.getMonth();
-                    const day = date.getDate();
-
-                    // Validate individual components
-                    if (month < 0 || month > 11 || day < 1 || day > 31 || year < 1900 || year > 2100) {
-                        console.warn('safeToLocaleDateString: Invalid date components:', { year, month, day });
-                        return 'Invalid Date';
-                    }
-
-                    if (options.year) {
-                        return `${monthNames[month]} ${String(year).slice(-2)}`;
-                    } else {
-                        return `${monthNames[month]} ${day}`;
-                    }
-                }
-            } catch (fallbackError) {
-                console.error('safeToLocaleDateString: Even fallback failed:', fallbackError);
-            }
             return 'Invalid Date';
         }
     }

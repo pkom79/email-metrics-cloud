@@ -194,6 +194,7 @@ export default function DashboardClient({ businessName, userId }: { businessName
     const [displayedCampaigns, setDisplayedCampaigns] = useState<number>(5);
     const [stickyBar, setStickyBar] = useState(false);
     const [showUploadModal, setShowUploadModal] = useState(false);
+    const [isCalculating, setIsCalculating] = useState(false);
 
     useEffect(() => {
         const onScroll = () => setStickyBar(window.scrollY > 100);
@@ -589,7 +590,21 @@ export default function DashboardClient({ businessName, userId }: { businessName
     // Export PDF feature removed per request
 
     return (
-        <div className="min-h-screen">
+        <div className="min-h-screen relative">
+            {/* Loading overlay */}
+            {isCalculating && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-2xl border border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center space-x-3">
+                            <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                            <span className="text-gray-900 dark:text-gray-100 font-medium">
+                                Calculating metrics for selected time period...
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Modal for uploading new reports */}
             {showUploadModal && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center">
@@ -681,6 +696,8 @@ export default function DashboardClient({ businessName, userId }: { businessName
                                         value={dateRange === 'custom' ? '' : (dateRange as any)}
                                         onChange={(e) => {
                                             const v = (e.target.value || '30d') as any;
+                                            setIsCalculating(true);
+
                                             // compute dates for inputs when using presets
                                             const to = new Date(REFERENCE_DATE);
                                             const toISO = (d: Date) => {
@@ -711,6 +728,9 @@ export default function DashboardClient({ businessName, userId }: { businessName
                                                 }
                                             }
                                             setDateRange(v);
+
+                                            // Add delay to show loading state, then hide it
+                                            setTimeout(() => setIsCalculating(false), 1000);
                                         }}
                                         className="appearance-none px-2 py-1 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs"
                                     >
