@@ -21,6 +21,7 @@ export default function DashboardClient({ businessName, userId }: { businessName
     useEffect(() => {
         if (userId) {
             DataManager.setUserId(userId);
+            console.log('DashboardClient: Set userId for data isolation:', userId?.substring(0, 8));
         }
     }, [userId]);
 
@@ -43,10 +44,18 @@ export default function DashboardClient({ businessName, userId }: { businessName
         // On mount, ensure DataManager pulls from durable storage; retry briefly if empty
         let active = true;
         (async () => {
+            console.log('DashboardClient: Attempting data hydration, userId:', userId?.substring(0, 8));
             for (let i = 0; i < 5 && active; i++) {
                 const ok = await DataManager.getInstance().ensureHydrated();
-                if (ok) { setDataVersion(v => v + 1); break; }
+                if (ok) {
+                    console.log('DashboardClient: Data hydrated successfully on attempt', i + 1);
+                    setDataVersion(v => v + 1);
+                    break;
+                }
                 await new Promise(r => setTimeout(r, 150));
+            }
+            if (active && !DataManager.getInstance().hasRealData()) {
+                console.log('DashboardClient: No data found after hydration attempts');
             }
         })();
         return () => {

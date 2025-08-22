@@ -209,9 +209,45 @@ export class DataManager {
     getUniqueFlowNames(): string[] { return this.flowTransformer.getUniqueFlowNames(this.flowEmails); }
 
     getLastEmailDate(): Date {
-        const allDates: number[] = [...this.campaigns.map(c => c.sentDate.getTime()), ...this.flowEmails.map(f => f.sentDate.getTime())];
-        if (allDates.length === 0) return new Date();
-        return new Date(Math.max(...allDates));
+        try {
+            // Get valid timestamps from campaigns
+            const campaignDates = this.campaigns
+                .map(c => c.sentDate instanceof Date ? c.sentDate.getTime() : NaN)
+                .filter(t => !isNaN(t) && isFinite(t));
+            
+            // Get valid timestamps from flow emails
+            const flowDates = this.flowEmails
+                .map(f => f.sentDate instanceof Date ? f.sentDate.getTime() : NaN)
+                .filter(t => !isNaN(t) && isFinite(t));
+            
+            const allDates = [...campaignDates, ...flowDates];
+            
+            if (allDates.length === 0) {
+                console.warn('getLastEmailDate: No valid dates found, returning current date');
+                return new Date();
+            }
+            
+            const maxTime = Math.max(...allDates);
+            
+            // Validate the result
+            if (isNaN(maxTime) || !isFinite(maxTime)) {
+                console.warn('getLastEmailDate: Invalid max time calculated, returning current date');
+                return new Date();
+            }
+            
+            const result = new Date(maxTime);
+            
+            // Final validation
+            if (isNaN(result.getTime())) {
+                console.warn('getLastEmailDate: Invalid date result, returning current date');
+                return new Date();
+            }
+            
+            return result;
+        } catch (error) {
+            console.error('Error in getLastEmailDate:', error);
+            return new Date(); // Safe fallback
+        }
     }
 
     getMetricTimeSeries(
@@ -410,29 +446,58 @@ export class DataManager {
 
     getGranularityForDateRange(dateRange: string): 'daily' | 'weekly' | 'monthly' {
         try {
+            console.log('getGranularityForDateRange called with:', dateRange);
+            
             if (dateRange === 'all') {
                 // Safely handle case where no data exists yet
                 if (this.campaigns.length === 0 && this.flowEmails.length === 0) {
+                    console.log('No data available, returning daily granularity');
                     return 'daily'; // Safe fallback
                 }
 
-                const campaignDates = this.campaigns.length ? this.campaigns.map(c => c.sentDate.getTime()).filter(t => !isNaN(t)) : [];
-                const flowDates = this.flowEmails.length ? this.flowEmails.map(f => f.sentDate.getTime()).filter(t => !isNaN(t)) : [];
+                // Get valid timestamps with better error handling
+                const campaignDates = this.campaigns
+                    .map(c => {
+                        try {
+                            const time = c.sentDate instanceof Date ? c.sentDate.getTime() : NaN;
+                            return !isNaN(time) && isFinite(time) ? time : null;
+                        } catch {
+                            return null;
+                        }
+                    })
+                    .filter((t): t is number => t !== null);
+
+                const flowDates = this.flowEmails
+                    .map(f => {
+                        try {
+                            const time = f.sentDate instanceof Date ? f.sentDate.getTime() : NaN;
+                            return !isNaN(time) && isFinite(time) ? time : null;
+                        } catch {
+                            return null;
+                        }
+                    })
+                    .filter((t): t is number => t !== null);
+
                 const allDates = [...campaignDates, ...flowDates];
+                console.log('Valid dates found:', allDates.length);
 
                 if (allDates.length === 0) {
+                    console.log('No valid dates found, returning daily granularity');
                     return 'daily'; // Safe fallback
                 }
 
-                const oldestDate = new Date(Math.min(...allDates));
-                const lastEmailDate = this.getLastEmailDate();
+                const oldestTime = Math.min(...allDates);
+                const newestTime = Math.max(...allDates);
 
-                // Validate dates
-                if (isNaN(oldestDate.getTime()) || isNaN(lastEmailDate.getTime())) {
-                    return 'daily'; // Safe fallback
+                // Validate timestamps
+                if (!isFinite(oldestTime) || !isFinite(newestTime) || isNaN(oldestTime) || isNaN(newestTime)) {
+                    console.warn('Invalid timestamps calculated, returning daily granularity');
+                    return 'daily';
                 }
 
-                const daysDiff = Math.floor((lastEmailDate.getTime() - oldestDate.getTime()) / (1000 * 60 * 60 * 24));
+                const daysDiff = Math.floor((newestTime - oldestTime) / (1000 * 60 * 60 * 24));
+                console.log('Days difference calculated:', daysDiff);
+
                 if (daysDiff <= 60) return 'daily';
                 if (daysDiff <= 365) return 'weekly';
                 return 'monthly';
@@ -440,6 +505,7 @@ export class DataManager {
 
             const days = parseInt(dateRange.replace('d', ''));
             if (isNaN(days) || days <= 0) {
+                console.warn('Invalid day range, returning daily granularity');
                 return 'daily'; // Safe fallback
             }
 
@@ -447,7 +513,7 @@ export class DataManager {
             if (days <= 365) return 'weekly';
             return 'monthly';
         } catch (error) {
-            console.error('Error in getGranularityForDateRange:', error);
+            console.error('Error in getGranularityForDateRange:', error, 'for dateRange:', dateRange);
             return 'daily'; // Safe fallback
         }
     }
