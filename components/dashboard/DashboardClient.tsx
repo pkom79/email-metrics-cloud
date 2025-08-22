@@ -216,70 +216,60 @@ export default function DashboardClient({ businessName, userId }: { businessName
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [showCustomDateModal, setShowCustomDateModal] = useState(false);
 
-    // Mobile detection (must be declared before usage)
-    const [isMobile, setIsMobile] = useState(false);
-
+    // Mobile detection (initialize immediately to avoid double heavy desktop render on mobile)
+    const [isMobile, setIsMobile] = useState<boolean>(() => {
+        if (typeof window === 'undefined') return false;
+        try {
+            return window.innerWidth < 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        } catch { return false; }
+    });
     useEffect(() => {
-        const checkMobile = () => {
-            const mobile = window.innerWidth < 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            setIsMobile(mobile);
+        const update = () => {
+            const mobileNow = window.innerWidth < 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            setIsMobile(prev => prev === mobileNow ? prev : mobileNow);
         };
-
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
+        const onResize = () => requestAnimationFrame(update);
+        window.addEventListener('resize', onResize);
+        update();
+        return () => window.removeEventListener('resize', onResize);
     }, []);
 
     // Audience overview reference for sticky logic (after mobile detection)
     const [audienceOverviewRef, setAudienceOverviewRef] = useState<HTMLElement | null>(null);
-    const [audienceOverviewTop, setAudienceOverviewTop] = useState<number | null>(null);
+    const [isBeforeAudience, setIsBeforeAudience] = useState(true);
 
-    // Calculate audience overview absolute position when ref changes
+    // IntersectionObserver-based sticky toggle (more robust than cached absolute positions)
     useEffect(() => {
-        if (audienceOverviewRef && !isMobile) {
-            const updateAudiencePosition = () => {
-                const rect = audienceOverviewRef.getBoundingClientRect();
-                const absoluteTop = window.scrollY + rect.top;
-                setAudienceOverviewTop(absoluteTop);
-            };
-
-            // Calculate initial position
-            updateAudiencePosition();
-
-            // Recalculate on window resize
-            window.addEventListener('resize', updateAudiencePosition);
-            return () => window.removeEventListener('resize', updateAudiencePosition);
-        } else {
-            setAudienceOverviewTop(null);
+        if (!audienceOverviewRef || isMobile) {
+            // Disable sticky on mobile entirely
+            if (isMobile) setStickyBar(false);
+            return;
         }
-    }, [audienceOverviewRef, isMobile]);
-
-    useEffect(() => {
-        const onScroll = () => {
-            // Only apply sticky behavior on desktop
-            if (isMobile) {
+        const observer = new IntersectionObserver(([entry]) => {
+            if (entry.isIntersecting) {
+                // Audience section is entering view: disable sticky
+                setIsBeforeAudience(false);
                 setStickyBar(false);
-                return;
-            }
-
-            const shouldStick = window.scrollY > 100;
-
-            // Stop stickiness when reaching Audience Overview using absolute position
-            if (audienceOverviewTop !== null && shouldStick) {
-                // Use absolute position with buffer - unsticky when within 150px of the section
-                const scrolledNearAudience = window.scrollY >= (audienceOverviewTop - 150);
-                setStickyBar(shouldStick && !scrolledNearAudience);
             } else {
-                setStickyBar(shouldStick);
+                // We are before the audience section (scrolled above it)
+                setIsBeforeAudience(true);
+                setStickyBar(window.scrollY > 100);
             }
+        }, { root: null, rootMargin: '0px 0px -85% 0px', threshold: 0 });
+        observer.observe(audienceOverviewRef);
+        const onScroll = () => {
+            if (!isBeforeAudience || isMobile) return; // don't restick once audience intersected or on mobile
+            setStickyBar(window.scrollY > 100);
         };
-
-        // Add immediate call to set initial state
-        onScroll();
-
         window.addEventListener('scroll', onScroll, { passive: true });
-        return () => window.removeEventListener('scroll', onScroll);
-    }, [audienceOverviewTop, isMobile]);    // Data
+        // Initial state
+        onScroll();
+        return () => {
+            observer.disconnect();
+            window.removeEventListener('scroll', onScroll);
+        };
+    }, [audienceOverviewRef, isMobile, isBeforeAudience]);
+    // Data
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const ALL_CAMPAIGNS = useMemo(() => dm.getCampaigns(), [dm, dataVersion]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1500,8 +1490,9 @@ export default function DashboardClient({ businessName, userId }: { businessName
                 </div>
             </div>
 
-            {/* Filters bar */}
-            <div className="hidden sm:block sm:sticky sm:top-0 sm:z-50 sm:pt-2">
+            {/* Filters bar (conditionally sticky) */}
+            <div className={`hidden sm:block sm:pt-2 ${stickyBar ? 'sm:sticky sm:top-0 sm:z-50' : ''}`}
+            >
                 <div className="max-w-7xl mx-auto px-4">
                     <div className={`rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${stickyBar ? 'shadow-lg' : 'shadow-sm'} px-3 py-2`}>
                         {/* Desktop Layout */}
