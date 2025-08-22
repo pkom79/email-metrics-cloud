@@ -281,14 +281,57 @@ export class DataManager {
         customFrom?: string,
         customTo?: string
     ): { value: number; date: string }[] {
-        const allEmails = [...campaigns, ...flows];
-        if (allEmails.length === 0) return [];
-
         try {
-            // Helpers for local-date-safe bucketing/labels
-            const cloneAtMidnight = (d: Date) => { const n = new Date(d); n.setHours(0, 0, 0, 0); return n; };
-            const dateKeyLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            const mondayOfLocal = (dt: Date) => { const d = cloneAtMidnight(dt); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); d.setDate(diff); return d; };
+            const allEmails = [...campaigns, ...flows];
+            if (allEmails.length === 0) return [];
+
+            // Filter out emails with invalid dates before any processing
+            const validEmails = allEmails.filter(email => {
+                try {
+                    return email.sentDate &&
+                        email.sentDate instanceof Date &&
+                        !isNaN(email.sentDate.getTime()) &&
+                        email.sentDate.getTime() > 0;
+                } catch (e) {
+                    console.warn('Invalid email date detected and filtered out:', email);
+                    return false;
+                }
+            });
+
+            if (validEmails.length === 0) {
+                console.warn('No valid emails found with proper dates');
+                return [];
+            }
+
+            // Helpers for local-date-safe bucketing/labels with validation
+            const cloneAtMidnight = (d: Date) => {
+                if (!d || isNaN(d.getTime())) {
+                    console.warn('Invalid date passed to cloneAtMidnight:', d);
+                    return new Date(); // Return current date as fallback
+                }
+                const n = new Date(d);
+                n.setHours(0, 0, 0, 0);
+                return n;
+            };
+            const dateKeyLocal = (d: Date) => {
+                if (!d || isNaN(d.getTime())) {
+                    console.warn('Invalid date passed to dateKeyLocal:', d);
+                    const fallback = new Date();
+                    return `${fallback.getFullYear()}-${String(fallback.getMonth() + 1).padStart(2, '0')}-${String(fallback.getDate()).padStart(2, '0')}`;
+                }
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            };
+            const mondayOfLocal = (dt: Date) => {
+                if (!dt || isNaN(dt.getTime())) {
+                    console.warn('Invalid date passed to mondayOfLocal:', dt);
+                    return cloneAtMidnight(new Date()); // Return current Monday as fallback
+                }
+                const d = cloneAtMidnight(dt);
+                const day = d.getDay();
+                const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+                d.setDate(diff);
+                return d;
+            };
 
             let endDate: Date;
             let startDate: Date;
@@ -300,15 +343,27 @@ export class DataManager {
                 startDate.setHours(0, 0, 0, 0);
                 endDate.setHours(23, 59, 59, 999); // Include full end day
             } else if (dateRange === 'all') {
-                const endTs = Math.max(...allEmails.map(e => e.sentDate.getTime()));
-                endDate = new Date(isFinite(endTs) ? endTs : Date.now());
+                // Safe timestamp extraction from valid emails only
+                const timestamps = validEmails.map(e => e.sentDate.getTime()).filter(ts => isFinite(ts));
+                if (timestamps.length === 0) {
+                    console.warn('No valid timestamps found in emails');
+                    return [];
+                }
+                const endTs = Math.max(...timestamps);
+                endDate = new Date(endTs);
                 endDate.setHours(23, 59, 59, 999);
-                const oldestTs = Math.min(...allEmails.map(e => e.sentDate.getTime()));
-                startDate = new Date(isFinite(oldestTs) ? oldestTs : endDate.getTime());
+                const oldestTs = Math.min(...timestamps);
+                startDate = new Date(oldestTs);
                 startDate.setHours(0, 0, 0, 0);
             } else {
-                const endTs = Math.max(...allEmails.map(e => e.sentDate.getTime()));
-                endDate = new Date(isFinite(endTs) ? endTs : Date.now());
+                // Safe timestamp extraction from valid emails only
+                const timestamps = validEmails.map(e => e.sentDate.getTime()).filter(ts => isFinite(ts));
+                if (timestamps.length === 0) {
+                    console.warn('No valid timestamps found in emails');
+                    return [];
+                }
+                const endTs = Math.max(...timestamps);
+                endDate = new Date(endTs);
                 endDate.setHours(23, 59, 59, 999);
                 startDate = new Date(endDate);
                 const days = parseInt(dateRange.replace('d', ''));
@@ -316,7 +371,7 @@ export class DataManager {
                 startDate.setHours(0, 0, 0, 0);
             }
 
-            const filteredEmails = allEmails.filter(e => e.sentDate >= startDate && e.sentDate <= endDate);
+            const filteredEmails = validEmails.filter(e => e.sentDate >= startDate && e.sentDate <= endDate);
 
             // Build buckets
             const buckets = new Map<string, { emails: typeof allEmails; label: string }>();
