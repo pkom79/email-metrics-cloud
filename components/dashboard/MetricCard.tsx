@@ -39,12 +39,10 @@ const MetricCard: React.FC<MetricCardProps> = ({
 
     // DIRECTION arrow: based purely on change sign (increase vs decrease)
     const isIncrease = change > 0;
-    const isZeroChange = Math.abs(change) < 0.1; // Consider 0.0% as zero change
+    const isZeroChange = Math.abs(change) < 0.01; // Exactly 0.0% (changed from 0.1%)
 
     // Check if we have insufficient data for comparison (no previous period data)
-    const hasInsufficientData = previousValue == null || previousPeriod == null;
-
-    const benchmarkResult = metricKey ? getBenchmarkStatus(metricKey, parseMetricValue(value)) : null;
+    const hasInsufficientData = previousValue == null || previousPeriod == null; const benchmarkResult = metricKey ? getBenchmarkStatus(metricKey, parseMetricValue(value)) : null;
     const numericValue = metricKey === 'conversionRate' ? parseMetricValue(value) : undefined;
 
     const getValueFormat = () => {
@@ -121,12 +119,12 @@ const MetricCard: React.FC<MetricCardProps> = ({
                     {!isAllTime && (
                         <div
                             className={`flex items-center text-sm font-medium ${isZeroChange
-                                    ? 'text-gray-600 dark:text-gray-400' // Black/gray for 0% change
-                                    : hasInsufficientData
-                                        ? 'text-purple-600 dark:text-purple-400' // Purple for insufficient data
-                                        : shouldShowAsPositive
-                                            ? 'text-green-600 dark:text-green-400'
-                                            : 'text-red-600 dark:text-red-400'
+                                ? 'text-gray-600 dark:text-gray-400' // Black/gray for 0% change
+                                : hasInsufficientData
+                                    ? 'text-purple-600 dark:text-purple-400' // Purple for insufficient data
+                                    : shouldShowAsPositive
+                                        ? 'text-green-600 dark:text-green-400'
+                                        : 'text-red-600 dark:text-red-400'
                                 }`}
                             title={trendTooltip}
                             aria-label={trendTooltip}

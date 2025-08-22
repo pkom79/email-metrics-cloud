@@ -912,12 +912,27 @@ export class DataManager {
         }
 
         // Calculate previous period - go back exactly the same number of days
-        const prevEndDate = new Date(startDate);
-        prevEndDate.setDate(prevEndDate.getDate() - 1);
-        prevEndDate.setHours(23, 59, 59, 999);
-        const prevStartDate = new Date(prevEndDate);
-        prevStartDate.setDate(prevStartDate.getDate() - periodDays + 1);
-        prevStartDate.setHours(0, 0, 0, 0);
+        // Declare variables for previous period dates
+        let prevStartDate: Date;
+        let prevEndDate: Date;
+
+        // Validate for single-day ranges to prevent invalid previous periods
+        if (periodDays === 1) {
+            // For single-day comparisons, go back exactly 1 day for previous period
+            prevEndDate = new Date(startDate);
+            prevEndDate.setDate(prevEndDate.getDate() - 1);
+            prevEndDate.setHours(23, 59, 59, 999);
+            prevStartDate = new Date(prevEndDate);
+            prevStartDate.setHours(0, 0, 0, 0);
+        } else {
+            // For multi-day periods, use the original logic
+            prevEndDate = new Date(startDate);
+            prevEndDate.setDate(prevEndDate.getDate() - 1);
+            prevEndDate.setHours(23, 59, 59, 999);
+            prevStartDate = new Date(prevEndDate);
+            prevStartDate.setDate(prevStartDate.getDate() - periodDays + 1);
+            prevStartDate.setHours(0, 0, 0, 0);
+        }
 
         // Get data based on type
         let campaignsToUse = this.campaigns;

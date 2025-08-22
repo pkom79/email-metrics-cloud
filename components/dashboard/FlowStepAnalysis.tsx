@@ -320,8 +320,18 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const previousValue = calc(prevStepEmails);
         if (prevStepEmails.length === 0 || previousValue === 0) return null;
         const change = ((currentValue - previousValue) / previousValue) * 100;
-        const isNegativeMetric = ['unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric);
-        const isPositive = isNegativeMetric ? change < 0 : change > 0;
+
+        // Match MetricCard zero change logic: exactly 0.0%
+        const isZeroChange = Math.abs(change) < 0.01;
+
+        let isPositive: boolean;
+        if (isZeroChange) {
+            isPositive = true; // Neutral for zero change
+        } else {
+            const isNegativeMetric = ['unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric);
+            isPositive = isNegativeMetric ? change < 0 : change > 0;
+        }
+
         const previousPeriod = { startDate: dateWindows!.prevStartDateOnly, endDate: dateWindows!.prevEndDateOnly };
         return { change, isPositive, previousValue, previousPeriod };
     };
@@ -349,13 +359,30 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         if (periodChange && dateRange !== 'all') {
             const isIncrease = periodChange.change > 0;
             const isGood = periodChange.isPositive;
-            const colorClass = isGood ? 'text-green-600' : 'text-red-600';
+
+            // Match MetricCard logic: exactly 0.0% change should be treated specially
+            const isZeroChange = Math.abs(periodChange.change) < 0.01;
+
+            let colorClass: string;
+            if (isZeroChange) {
+                colorClass = 'text-purple-600'; // Purple for zero change
+            } else {
+                colorClass = isGood ? 'text-green-600' : 'text-red-600';
+            }
+
             const trendTooltip = `Previous period (${formatDate(periodChange.previousPeriod.startDate)} – ${formatDate(periodChange.previousPeriod.endDate)}): ${formatMetricValue(periodChange.previousValue, selectedMetric)}`;
-            chartColor = isGood ? '#10b981' : '#ef4444';
+
+            // Set chart colors based on change state
+            if (isZeroChange) {
+                chartColor = '#9333ea'; // Purple for zero change
+            } else {
+                chartColor = isGood ? '#10b981' : '#ef4444';
+            }
             dotColor = chartColor;
+
             changeNode = (
                 <span className={`text-lg font-bold px-2 py-1 rounded ${colorClass}`} title={trendTooltip} aria-label={trendTooltip}>
-                    {isIncrease ? (<ArrowUp className="inline w-4 h-4 mr-1" />) : (<ArrowDown className="inline w-4 h-4 mr-1" />)}
+                    {!isZeroChange && (isIncrease ? (<ArrowUp className="inline w-4 h-4 mr-1" />) : (<ArrowDown className="inline w-4 h-4 mr-1" />))}
                     {Math.abs(periodChange.change).toFixed(1)}%
                 </span>
             );

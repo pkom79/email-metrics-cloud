@@ -219,17 +219,16 @@ export default function DashboardClient({ businessName, userId }: { businessName
             // Stop stickiness when reaching Audience Overview
             if (audienceOverviewRef && shouldStick) {
                 const rect = audienceOverviewRef.getBoundingClientRect();
-                const isAudienceVisible = rect.top <= window.innerHeight && rect.bottom >= 0;
-                setStickyBar(!isAudienceVisible);
+                // If Audience Overview section is at the top of viewport or above, stop sticky
+                const isAudienceAtTop = rect.top <= 120; // Account for sticky header height + margin
+                setStickyBar(shouldStick && !isAudienceAtTop);
             } else {
                 setStickyBar(shouldStick);
             }
         };
         window.addEventListener('scroll', onScroll, { passive: true });
         return () => window.removeEventListener('scroll', onScroll);
-    }, [audienceOverviewRef]);
-
-    // Data
+    }, [audienceOverviewRef]);    // Data
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const ALL_CAMPAIGNS = useMemo(() => dm.getCampaigns(), [dm, dataVersion]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
