@@ -391,10 +391,9 @@ export class DataManager {
 
             // Handle custom date ranges
             if (dateRange === 'custom' && customFrom && customTo) {
-                startDate = new Date(customFrom);
-                endDate = new Date(customTo);
-                startDate.setHours(0, 0, 0, 0);
-                endDate.setHours(23, 59, 59, 999); // Include full end day
+                // Parse dates as local dates to avoid timezone issues
+                startDate = new Date(customFrom + 'T00:00:00'); // Force local time interpretation
+                endDate = new Date(customTo + 'T23:59:59'); // Force local time interpretation
             } else if (dateRange === 'all') {
                 // Safe timestamp extraction from valid emails only
                 const timestamps = validEmails.map(e => e.sentDate.getTime()).filter(ts => isFinite(ts));

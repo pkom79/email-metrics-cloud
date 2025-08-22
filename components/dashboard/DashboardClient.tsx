@@ -38,7 +38,10 @@ export default function DashboardClient({ businessName, userId }: { businessName
             setDataVersion(v => v + 1);
             setShowUploadModal(false);
         };
-        const onHydrated = () => setDataVersion(v => v + 1);
+        const onHydrated = () => {
+            setDataVersion(v => v + 1);
+            setIsInitialLoading(false); // Mark initial loading complete when data hydrates
+        };
         window.addEventListener('em:snapshot-created', onCreated as EventListener);
         window.addEventListener('em:dataset-hydrated', onHydrated as EventListener);
         // On mount, ensure DataManager pulls from durable storage; retry briefly if empty
@@ -50,12 +53,14 @@ export default function DashboardClient({ businessName, userId }: { businessName
                 if (ok) {
                     console.log('DashboardClient: Data hydrated successfully on attempt', i + 1);
                     setDataVersion(v => v + 1);
+                    setIsInitialLoading(false); // Mark initial loading complete when data hydrates
                     break;
                 }
                 await new Promise(r => setTimeout(r, 150));
             }
             if (active && !DataManager.getInstance().hasRealData()) {
                 console.log('DashboardClient: No data found after hydration attempts');
+                setIsInitialLoading(false); // Mark loading complete even if no data found
             }
         })();
         return () => {
@@ -71,7 +76,10 @@ export default function DashboardClient({ businessName, userId }: { businessName
         (async () => {
             try {
                 // If we already have data (from IDB/localStorage), skip
-                if (dm.getCampaigns().length || dm.getFlowEmails().length || dm.getSubscribers().length) return;
+                if (dm.getCampaigns().length || dm.getFlowEmails().length || dm.getSubscribers().length) {
+                    setIsInitialLoading(false); // Mark loading complete if we have data
+                    return;
+                }
 
                 console.log('No local data found, downloading from server...');
 
@@ -79,12 +87,14 @@ export default function DashboardClient({ businessName, userId }: { businessName
                 const list = await fetch('/api/snapshots/list', { cache: 'no-store' });
                 if (!list.ok) {
                     console.log('Failed to fetch snapshots list:', list.status);
+                    setIsInitialLoading(false); // Mark loading complete even on error
                     return;
                 }
                 const j = await list.json().catch(() => ({}));
                 const latest = (j.snapshots || []).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
                 if (!latest?.id) {
                     console.log('No snapshots found for user');
+                    setIsInitialLoading(false); // Mark loading complete when no snapshots
                     return;
                 }
 
@@ -125,18 +135,22 @@ export default function DashboardClient({ businessName, userId }: { businessName
                         console.log('Successfully loaded data from server CSV files');
                         if (cancelled) return;
                         setDataVersion(v => v + 1);
+                        setIsInitialLoading(false); // Mark initial loading complete after CSV processing
                         // Dispatch event to notify other components
                         window.dispatchEvent(new CustomEvent('em:dataset-hydrated'));
                     } else {
                         console.error('Failed to process CSV files:', result.errors);
                         setDashboardError(`Failed to process server data: ${result.errors.join(', ')}`);
+                        setIsInitialLoading(false); // Mark loading complete even on error
                     }
                 } else {
                     console.log('No CSV files downloaded');
+                    setIsInitialLoading(false); // Mark loading complete when no files to download
                 }
             } catch (err) {
                 console.error('Error loading data from server:', err);
                 setDashboardError(`Failed to load data from server: ${err instanceof Error ? err.message : 'Unknown error'}`);
+                setIsInitialLoading(false); // Mark loading complete even on error
             }
         })();
         return () => { cancelled = true; };
@@ -195,12 +209,25 @@ export default function DashboardClient({ businessName, userId }: { businessName
     const [stickyBar, setStickyBar] = useState(false);
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [isCalculating, setIsCalculating] = useState(false);
+    const [isInitialLoading, setIsInitialLoading] = useState(true);
+    const [audienceOverviewRef, setAudienceOverviewRef] = useState<HTMLElement | null>(null);
 
     useEffect(() => {
-        const onScroll = () => setStickyBar(window.scrollY > 100);
+        const onScroll = () => {
+            const shouldStick = window.scrollY > 100;
+
+            // Stop stickiness when reaching Audience Overview
+            if (audienceOverviewRef && shouldStick) {
+                const rect = audienceOverviewRef.getBoundingClientRect();
+                const isAudienceVisible = rect.top <= window.innerHeight && rect.bottom >= 0;
+                setStickyBar(!isAudienceVisible);
+            } else {
+                setStickyBar(shouldStick);
+            }
+        };
         window.addEventListener('scroll', onScroll, { passive: true });
         return () => window.removeEventListener('scroll', onScroll);
-    }, []);
+    }, [audienceOverviewRef]);
 
     // Data
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -222,8 +249,9 @@ export default function DashboardClient({ businessName, userId }: { businessName
         if (!hasData) return [] as typeof ALL_CAMPAIGNS;
         let list = ALL_CAMPAIGNS;
         if (dateRange === 'custom' && customActive) {
-            const from = new Date(customFrom!); from.setHours(0, 0, 0, 0);
-            const to = new Date(customTo!); to.setHours(23, 59, 59, 999);
+            // Parse dates as local dates to avoid timezone issues
+            const from = new Date(customFrom! + 'T00:00:00'); // Force local time interpretation
+            const to = new Date(customTo! + 'T23:59:59'); // Force local time interpretation
             list = list.filter(c => c.sentDate >= from && c.sentDate <= to);
         } else if (dateRange !== 'all') {
             const days = parseInt(dateRange.replace('d', ''));
@@ -239,8 +267,9 @@ export default function DashboardClient({ businessName, userId }: { businessName
         let flows = ALL_FLOWS;
         if (selectedFlow !== 'all') flows = flows.filter(f => f.flowName === selectedFlow);
         if (dateRange === 'custom' && customActive) {
-            const from = new Date(customFrom!); from.setHours(0, 0, 0, 0);
-            const to = new Date(customTo!); to.setHours(23, 59, 59, 999);
+            // Parse dates as local dates to avoid timezone issues
+            const from = new Date(customFrom! + 'T00:00:00'); // Force local time interpretation
+            const to = new Date(customTo! + 'T23:59:59'); // Force local time interpretation
             flows = flows.filter(f => f.sentDate >= from && f.sentDate <= to);
         } else if (dateRange !== 'all') {
             const days = parseInt(dateRange.replace('d', ''));
@@ -591,7 +620,7 @@ export default function DashboardClient({ businessName, userId }: { businessName
 
     return (
         <div className="min-h-screen relative">
-            {/* Loading overlay */}
+            {/* Loading overlay for calculations */}
             {isCalculating && (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 backdrop-blur-sm">
                     <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-2xl border border-gray-200 dark:border-gray-700">
@@ -599,6 +628,20 @@ export default function DashboardClient({ businessName, userId }: { businessName
                             <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>
                             <span className="text-gray-900 dark:text-gray-100 font-medium">
                                 Calculating metrics for selected time period...
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Loading overlay for initial data loading */}
+            {isInitialLoading && (
+                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/30 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-2xl border border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center space-x-3">
+                            <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                            <span className="text-gray-900 dark:text-gray-100 font-medium">
+                                Loading your email metrics...
                             </span>
                         </div>
                     </div>
@@ -1321,7 +1364,19 @@ export default function DashboardClient({ businessName, userId }: { businessName
                         </section>
 
                         {/* Audience Overview */}
-                        <div><AudienceCharts /></div>
+                        <div ref={(el) => setAudienceOverviewRef(el)}>
+                            <div className="mb-4">
+                                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Audience Overview</h2>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    📊 Snapshot data collected through {REFERENCE_DATE.toLocaleDateString('en-US', {
+                                        year: 'numeric',
+                                        month: 'long',
+                                        day: 'numeric'
+                                    })}
+                                </p>
+                            </div>
+                            <AudienceCharts />
+                        </div>
 
                         {/* Analyze Custom Segment (last) */}
                         <section>
