@@ -258,7 +258,7 @@ export class DataManager {
                 console.warn('safeToLocaleDateString: Invalid date object type:', typeof date, date);
                 return 'Invalid Date';
             }
-            
+
             const timestamp = date.getTime();
             if (isNaN(timestamp) || !isFinite(timestamp)) {
                 console.warn('safeToLocaleDateString: Invalid timestamp:', timestamp, 'for date:', date);
@@ -282,13 +282,13 @@ export class DataManager {
                     const year = date.getFullYear();
                     const month = date.getMonth();
                     const day = date.getDate();
-                    
+
                     // Validate individual components
                     if (month < 0 || month > 11 || day < 1 || day > 31 || year < 1900 || year > 2100) {
                         console.warn('safeToLocaleDateString: Invalid date components:', { year, month, day });
                         return 'Invalid Date';
                     }
-                    
+
                     if (options.year) {
                         return `${monthNames[month]} ${String(year).slice(-2)}`;
                     } else {
@@ -323,25 +323,25 @@ export class DataManager {
                         console.warn('validEmails filter: Email missing sentDate:', email);
                         return false;
                     }
-                    
+
                     if (!(email.sentDate instanceof Date)) {
                         console.warn('validEmails filter: sentDate not a Date object:', typeof email.sentDate, email.sentDate);
                         return false;
                     }
-                    
+
                     const timestamp = email.sentDate.getTime();
                     if (isNaN(timestamp) || !isFinite(timestamp)) {
                         console.warn('validEmails filter: Invalid timestamp:', timestamp);
                         return false;
                     }
-                    
+
                     // Check for reasonable date range (email marketing didn't exist before 1990)
                     const year = email.sentDate.getFullYear();
                     if (year < 1990 || year > 2030) {
                         console.warn('validEmails filter: Date year out of range:', year);
                         return false;
                     }
-                    
+
                     return timestamp > 0;
                 } catch (e) {
                     console.warn('validEmails filter: Exception during validation:', e, 'for email:', email);
@@ -424,15 +424,84 @@ export class DataManager {
 
             const filteredEmails = validEmails.filter(e => e.sentDate >= startDate && e.sentDate <= endDate);
 
-            // Build buckets
+            // Performance safeguard: limit the number of data points to prevent browser crashes
+            const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+            let maxDataPoints = 0;
+            let adjustedGranularity = granularity;
+
+            if (granularity === 'daily') {
+                maxDataPoints = daysDiff;
+                // If too many daily points, force weekly granularity
+                if (maxDataPoints > 365) {
+                    console.warn(`Performance protection: ${maxDataPoints} daily points requested, switching to weekly`);
+                    adjustedGranularity = 'weekly';
+                    maxDataPoints = Math.ceil(daysDiff / 7);
+                }
+            } else if (granularity === 'weekly') {
+                maxDataPoints = Math.ceil(daysDiff / 7);
+                // If too many weekly points, force monthly granularity
+                if (maxDataPoints > 104) { // ~2 years
+                    console.warn(`Performance protection: ${maxDataPoints} weekly points requested, switching to monthly`);
+                    adjustedGranularity = 'monthly';
+                    maxDataPoints = Math.ceil(daysDiff / 30);
+                }
+            } else {
+                maxDataPoints = Math.ceil(daysDiff / 30);
+            }
+
+            // Ultimate safeguard: if still too many points, limit the dataset
+            if (maxDataPoints > 200) {
+                console.warn(`Performance protection: ${maxDataPoints} data points would cause performance issues, limiting to 200 most recent periods`);
+                if (adjustedGranularity === 'monthly') {
+                    // Limit to last 200 months (~16 years)
+                    const limitedStartDate = new Date(endDate);
+                    limitedStartDate.setMonth(limitedStartDate.getMonth() - 200);
+                    startDate = limitedStartDate;
+                } else if (adjustedGranularity === 'weekly') {
+                    // Limit to last 200 weeks (~4 years)
+                    const limitedStartDate = new Date(endDate);
+                    limitedStartDate.setDate(limitedStartDate.getDate() - (200 * 7));
+                    startDate = limitedStartDate;
+                } else {
+                    // Limit to last 200 days
+                    const limitedStartDate = new Date(endDate);
+                    limitedStartDate.setDate(limitedStartDate.getDate() - 200);
+                    startDate = limitedStartDate;
+                }
+
+                // Re-filter emails with adjusted date range
+                const reFilteredEmails = validEmails.filter(e => e.sentDate >= startDate && e.sentDate <= endDate);
+                console.log(`Performance protection: Filtered emails from ${filteredEmails.length} to ${reFilteredEmails.length}`);
+            }
+
+            const finalFilteredEmails = validEmails.filter(e => e.sentDate >= startDate && e.sentDate <= endDate);
+
+            // Additional performance safeguard: limit number of emails processed
+            const maxEmailsToProcess = 50000; // Reasonable limit for browser performance
+            let emailsToProcess = finalFilteredEmails;
+
+            if (finalFilteredEmails.length > maxEmailsToProcess) {
+                console.warn(`Performance protection: ${finalFilteredEmails.length} emails found, limiting to ${maxEmailsToProcess} most recent emails`);
+                // Sort by date descending and take the most recent emails
+                emailsToProcess = finalFilteredEmails
+                    .sort((a, b) => b.sentDate.getTime() - a.sentDate.getTime())
+                    .slice(0, maxEmailsToProcess);
+            }
+
+            console.log(`Processing ${emailsToProcess.length} emails with ${adjustedGranularity} granularity`);
+
+            // Build buckets with adjusted granularity
             const buckets = new Map<string, { emails: typeof allEmails; label: string }>();
             const start = cloneAtMidnight(startDate); const end = cloneAtMidnight(endDate);
-            if (granularity === 'daily') {
+
+            console.log(`Building buckets with ${adjustedGranularity} granularity for ${Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))} days`);
+
+            if (adjustedGranularity === 'daily') {
                 for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
                     const key = dateKeyLocal(d); const label = this.safeToLocaleDateString(d, { month: 'short', day: 'numeric' });
                     if (!buckets.has(key)) buckets.set(key, { emails: [], label });
                 }
-            } else if (granularity === 'weekly') {
+            } else if (adjustedGranularity === 'weekly') {
                 for (let d = mondayOfLocal(start); d <= end; d.setDate(d.getDate() + 7)) {
                     const key = dateKeyLocal(d);
                     const weekEnd = new Date(d); weekEnd.setDate(weekEnd.getDate() + 6);
@@ -447,38 +516,38 @@ export class DataManager {
                 }
             }
 
-            filteredEmails.forEach(email => {
+            emailsToProcess.forEach(email => {
                 try {
                     // Additional validation before processing each email
                     if (!email.sentDate || !(email.sentDate instanceof Date) || isNaN(email.sentDate.getTime())) {
                         console.warn('Skipping email with invalid sentDate in forEach:', email);
                         return;
                     }
-                    
+
                     const date = new Date(email.sentDate);
-                    
+
                     // Validate the cloned date
                     if (isNaN(date.getTime())) {
                         console.warn('Skipping email with invalid cloned date:', date);
                         return;
                     }
-                    
+
                     let key: string; let label: string;
-                    if (granularity === 'daily') { 
-                        key = dateKeyLocal(date); 
-                        label = this.safeToLocaleDateString(date, { month: 'short', day: 'numeric' }); 
+                    if (adjustedGranularity === 'daily') {
+                        key = dateKeyLocal(date);
+                        label = this.safeToLocaleDateString(date, { month: 'short', day: 'numeric' });
                     }
-                    else if (granularity === 'weekly') { 
-                        const monday = mondayOfLocal(date); 
-                        key = dateKeyLocal(monday); 
-                        const weekEnd = new Date(monday); 
-                        weekEnd.setDate(weekEnd.getDate() + 6); 
-                        const cappedEnd = weekEnd > end ? end : weekEnd; 
-                        label = this.safeToLocaleDateString(cappedEnd, { month: 'short', day: 'numeric' }); 
+                    else if (adjustedGranularity === 'weekly') {
+                        const monday = mondayOfLocal(date);
+                        key = dateKeyLocal(monday);
+                        const weekEnd = new Date(monday);
+                        weekEnd.setDate(weekEnd.getDate() + 6);
+                        const cappedEnd = weekEnd > end ? end : weekEnd;
+                        label = this.safeToLocaleDateString(cappedEnd, { month: 'short', day: 'numeric' });
                     }
-                    else { 
-                        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; 
-                        label = this.safeToLocaleDateString(new Date(date.getFullYear(), date.getMonth(), 1), { month: 'short', year: '2-digit' }); 
+                    else {
+                        key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                        label = this.safeToLocaleDateString(new Date(date.getFullYear(), date.getMonth(), 1), { month: 'short', year: '2-digit' });
                     }
                     if (!buckets.has(key)) buckets.set(key, { emails: [], label });
                     buckets.get(key)!.emails.push(email);
