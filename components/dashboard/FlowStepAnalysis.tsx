@@ -81,8 +81,10 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         // Calculate period days to match DataManager logic exactly
         let periodDays: number;
         if (dateRange === 'custom' && customFrom && customTo) {
-            // For custom ranges, use the same formula as DataManager
-            periodDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+            // For custom ranges, use the same formula as DataManager (no +1)
+            periodDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+            // Ensure at least 1 day for same-day ranges
+            if (periodDays === 0) periodDays = 1;
         } else {
             // For preset ranges, use the parsed value
             periodDays = parseInt(dateRange.replace('d', ''));
@@ -523,17 +525,23 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                                     key={i}
                                                     cx={point.x}
                                                     cy={point.y}
-                                                    r="6"
+                                                    r="10"
                                                     fill="transparent"
                                                     style={{ cursor: 'pointer' }}
-                                                    onMouseEnter={() => setHoveredPoint({
-                                                        chartIndex: index,
-                                                        x: point.x,
-                                                        y: point.y,
-                                                        value: point.value,
-                                                        date: point.date
-                                                    })}
-                                                    onMouseLeave={() => setHoveredPoint(null)}
+                                                    onMouseEnter={(e) => {
+                                                        e.stopPropagation();
+                                                        setHoveredPoint({
+                                                            chartIndex: index,
+                                                            x: point.x,
+                                                            y: point.y,
+                                                            value: point.value,
+                                                            date: point.date
+                                                        });
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.stopPropagation();
+                                                        setHoveredPoint(null);
+                                                    }}
                                                 />
                                             ))}
                                             {/* Visible hover point */}
@@ -554,16 +562,17 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                             {/* Tooltip */}
                             {hoveredPoint && hoveredPoint.chartIndex === index && (
                                 <div
-                                    className="absolute z-10 px-2 py-1 bg-black text-white text-xs rounded shadow-lg pointer-events-none"
+                                    className="absolute z-20 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl pointer-events-none border border-gray-700"
                                     style={{
                                         left: `${(hoveredPoint.x / 900) * 100}%`,
-                                        top: `${(hoveredPoint.y / 160) * 100}%`,
+                                        top: `${Math.max(0, (hoveredPoint.y / 160) * 100 - 10)}%`,
                                         transform: 'translate(-50%, -100%)',
-                                        marginTop: '-8px'
+                                        marginTop: '-12px',
+                                        whiteSpace: 'nowrap'
                                     }}
                                 >
-                                    <div>{new Date(hoveredPoint.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
-                                    <div>{(() => {
+                                    <div className="font-medium">{new Date(hoveredPoint.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                                    <div className="text-xs opacity-90">{(() => {
                                         const metricConfig = metricOptions.find(m => m.value === selectedMetric);
                                         switch (metricConfig?.format) {
                                             case 'currency':
