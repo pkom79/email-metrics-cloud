@@ -20,7 +20,9 @@ const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, is
             case 'currency':
                 return `$${value.toFixed(1)}`;
             case 'percentage':
-                return `${value.toFixed(1)}%`;
+                const formatted = value.toFixed(1);
+                const num = parseFloat(formatted);
+                return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : `${formatted}%`;
             case 'number':
             default:
                 return value.toLocaleString('en-US');

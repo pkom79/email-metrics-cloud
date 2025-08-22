@@ -59,7 +59,9 @@ const MetricCard: React.FC<MetricCardProps> = ({
             case 'currency':
                 return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
             case 'percentage':
-                return `${v.toFixed(1)}%`;
+                const formatted = v.toFixed(1);
+                const num = parseFloat(formatted);
+                return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : `${formatted}%`;
             default:
                 return Math.round(v).toLocaleString('en-US');
         }
@@ -136,7 +138,12 @@ const MetricCard: React.FC<MetricCardProps> = ({
                             ) : (
                                 <ArrowDown className="w-4 h-4 mr-1" />
                             )}
-                            {Math.abs(change).toFixed(1)}%
+                            {(() => {
+                                const changeValue = Math.abs(change);
+                                const formatted = changeValue.toFixed(1);
+                                const num = parseFloat(formatted);
+                                return num >= 1000 ? num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatted;
+                            })()}%
                         </div>
                     )}
                 </div>

@@ -101,6 +101,12 @@ const CustomSegmentBlock: React.FC = () => {
     const percent = (count: number) =>
         segmentSubscribers.length > 0 ? (count / segmentSubscribers.length) * 100 : 0;
 
+    const formatPercent = (value: number) => {
+        const formatted = value.toFixed(1);
+        const num = parseFloat(formatted);
+        return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : `${formatted}%`;
+    };
+
     const cardBase = `bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6`;
     const labelClass = `text-sm font-medium text-gray-500 dark:text-gray-400`;
     const valueClass = `text-2xl font-bold text-gray-900 dark:text-gray-100`;
@@ -182,7 +188,7 @@ const CustomSegmentBlock: React.FC = () => {
                                             <CalendarPlus className="w-5 h-5 text-purple-600" />
                                             <p className={labelClass}>Created in last {days} days</p>
                                         </div>
-                                        <p className={valueClass}>{count.toLocaleString()} ({percent(count).toFixed(1)}%)</p>
+                                        <p className={valueClass}>{count.toLocaleString()} ({formatPercent(percent(count))})</p>
                                     </div>
                                 );
                             })}
@@ -201,7 +207,7 @@ const CustomSegmentBlock: React.FC = () => {
                                             <Calendar className="w-5 h-5 text-purple-600" />
                                             <p className={labelClass}>Engaged in last {days} days</p>
                                         </div>
-                                        <p className={valueClass}>{count.toLocaleString()} ({percent(count).toFixed(1)}%)</p>
+                                        <p className={valueClass}>{count.toLocaleString()} ({formatPercent(percent(count))})</p>
                                     </div>
                                 );
                             })}
@@ -231,14 +237,14 @@ const CustomSegmentBlock: React.FC = () => {
                                     <MailCheck className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>Non‑Suppressed</p>
                                 </div>
-                                <p className={valueClass}>{nonSuppressedCount.toLocaleString()} ({percent(nonSuppressedCount).toFixed(1)}%)</p>
+                                <p className={valueClass}>{nonSuppressedCount.toLocaleString()} ({formatPercent(percent(nonSuppressedCount))})</p>
                             </div>
                             <div className={cardBase} title="Profiles with no First Active and no Last Active dates">
                                 <div className="flex items-center gap-3 mb-2">
                                     <Moon className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>Never Active</p>
                                 </div>
-                                <p className={valueClass}>{neverActiveCount.toLocaleString()} ({percent(neverActiveCount).toFixed(1)}%)</p>
+                                <p className={valueClass}>{neverActiveCount.toLocaleString()} ({formatPercent(percent(neverActiveCount))})</p>
                             </div>
                         </div>
 
@@ -252,28 +258,28 @@ const CustomSegmentBlock: React.FC = () => {
                                     <AlertTriangle className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>% Unsubscribed</p>
                                 </div>
-                                <p className={valueClass}>{percent(unsubscribedCount).toFixed(1)}%</p>
+                                <p className={valueClass}>{formatPercent(percent(unsubscribedCount))}</p>
                             </div>
                             <div className={cardBase} title="Email Suppressions contains SPAM_COMPLAINT/MARKED_AS_SPAM/SPAM">
                                 <div className="flex items-center gap-3 mb-2">
                                     <AlertTriangle className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>% Spam Complaint</p>
                                 </div>
-                                <p className={valueClass}>{percent(spamComplaintCount).toFixed(1)}%</p>
+                                <p className={valueClass}>{formatPercent(percent(spamComplaintCount))}</p>
                             </div>
                             <div className={cardBase} title="Email Suppressions contains USER_SUPPRESSED/SUPPRESSED/MANUAL_SUPPRESSION">
                                 <div className="flex items-center gap-3 mb-2">
                                     <AlertTriangle className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>% User Suppressed</p>
                                 </div>
-                                <p className={valueClass}>{percent(userSuppressedCount).toFixed(1)}%</p>
+                                <p className={valueClass}>{formatPercent(percent(userSuppressedCount))}</p>
                             </div>
                             <div className={cardBase} title="Percentage with Email Marketing Consent not equal to 'NEVER_SUBSCRIBED'">
                                 <div className="flex items-center gap-3 mb-2">
                                     <ThumbsUp className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>% Opt‑in Rate</p>
                                 </div>
-                                <p className={valueClass}>{percent(optInCount).toFixed(1)}%</p>
+                                <p className={valueClass}>{formatPercent(percent(optInCount))}</p>
                             </div>
                         </div>
                     </div>

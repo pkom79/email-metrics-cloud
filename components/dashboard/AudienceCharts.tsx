@@ -10,7 +10,11 @@ export default function AudienceCharts() {
     const hasData = subscribers.length > 0;
 
     const formatCurrency = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
-    const formatPercent = (value: number) => `${value.toFixed(1)}%`;
+    const formatPercent = (value: number) => {
+        const formatted = value.toFixed(1);
+        const num = parseFloat(formatted);
+        return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : `${formatted}%`;
+    };
 
     const purchaseFrequencyData = [
         { label: 'Never', value: audienceInsights.purchaseFrequency.never, percentage: (audienceInsights.purchaseFrequency.never / (audienceInsights.totalSubscribers || 1)) * 100 },
@@ -125,7 +129,12 @@ export default function AudienceCharts() {
                         <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Buyers</p>
                     </div>
                     <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{audienceInsights.buyerCount.toLocaleString()}</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{`${(audienceInsights.buyerPercentage || 0).toFixed(1)}% of total`}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{(() => {
+                        const value = (audienceInsights.buyerPercentage || 0);
+                        const formatted = value.toFixed(1);
+                        const num = parseFloat(formatted);
+                        return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : `${formatted}%`;
+                    })()} of total</p>
                 </div>
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-3 mb-2">

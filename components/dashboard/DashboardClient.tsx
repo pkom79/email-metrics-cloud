@@ -13,7 +13,11 @@ import UploadWizard from '../../components/UploadWizard';
 function formatCurrency(value: number) {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 }
-function formatPercent(value: number) { return `${value.toFixed(2)}%`; }
+function formatPercent(value: number) {
+    const formatted = value.toFixed(2);
+    const num = parseFloat(formatted);
+    return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : `${formatted}%`;
+}
 function formatNumber(value: number) { return Math.round(value).toLocaleString('en-US'); }
 
 export default function DashboardClient({ businessName, userId }: { businessName?: string; userId?: string }) {
@@ -210,6 +214,7 @@ export default function DashboardClient({ businessName, userId }: { businessName
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [isCalculating, setIsCalculating] = useState(false);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
+    const [showCustomDateModal, setShowCustomDateModal] = useState(false);
     const [audienceOverviewRef, setAudienceOverviewRef] = useState<HTMLElement | null>(null);
 
     useEffect(() => {
@@ -869,18 +874,8 @@ export default function DashboardClient({ businessName, userId }: { businessName
                                             onChange={(e) => {
                                                 const v = e.target.value as any;
                                                 if (v === 'custom') {
-                                                    // Set default custom dates (last 30 days)
-                                                    const to = new Date(REFERENCE_DATE);
-                                                    const from = new Date(to);
-                                                    from.setDate(from.getDate() - 29);
-                                                    const toISO = (d: Date) => {
-                                                        const y = d.getFullYear();
-                                                        const m = String(d.getMonth() + 1).padStart(2, '0');
-                                                        const da = String(d.getDate()).padStart(2, '0');
-                                                        return `${y}-${m}-${da}`;
-                                                    };
-                                                    setCustomFrom(toISO(from));
-                                                    setCustomTo(toISO(to));
+                                                    // Show the modal for date selection
+                                                    setShowCustomDateModal(true);
                                                     setDateRange('custom');
                                                     return;
                                                 }
@@ -939,14 +934,19 @@ export default function DashboardClient({ businessName, userId }: { businessName
                                 </div>
                             </div>
 
-                            {/* Custom Date Inputs Modal (show only when custom is selected) */}
-                            {dateRange === 'custom' && (!customFrom || !customTo) && (
+                            {/* Custom Date Inputs Modal (show when modal state is true) */}
+                            {showCustomDateModal && (
                                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
                                     <div className="bg-white dark:bg-gray-800 rounded-lg p-6 mx-4 w-full max-w-md border border-gray-200 dark:border-gray-700">
                                         <div className="flex items-center justify-between mb-4">
                                             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Select Date Range</h3>
                                             <button
-                                                onClick={() => setDateRange('30d')}
+                                                onClick={() => {
+                                                    setShowCustomDateModal(false);
+                                                    setDateRange('30d');
+                                                    setCustomFrom(undefined);
+                                                    setCustomTo(undefined);
+                                                }}
                                                 className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
                                             >
                                                 <X className="w-5 h-5 text-gray-500" />
@@ -986,17 +986,30 @@ export default function DashboardClient({ businessName, userId }: { businessName
                                                 />
                                             </div>
 
-                                            {/* Apply Button */}
-                                            {customFrom && customTo && (
+                                            {/* Apply/Cancel Buttons */}
+                                            <div className="flex gap-3">
                                                 <button
                                                     onClick={() => {
-                                                        // Close modal by ensuring both dates are set
+                                                        setShowCustomDateModal(false);
+                                                        setDateRange('30d');
+                                                        setCustomFrom(undefined);
+                                                        setCustomTo(undefined);
                                                     }}
-                                                    className="w-full px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+                                                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                                                 >
-                                                    Apply Date Range
+                                                    Cancel
                                                 </button>
-                                            )}
+                                                {customFrom && customTo && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowCustomDateModal(false);
+                                                        }}
+                                                        className="flex-1 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+                                                    >
+                                                        Apply Date Range
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

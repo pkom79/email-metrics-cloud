@@ -366,7 +366,11 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const metricConfig = (metricOptions as any).find((m: any) => m.value === metric);
         if (!metricConfig) return value.toString();
         if (metricConfig.format === 'currency') return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
-        if (metricConfig.format === 'percentage') return `${(metric === 'spamRate' ? value.toFixed(3) : value.toFixed(2))}%`;
+        if (metricConfig.format === 'percentage') {
+            const formatted = metric === 'spamRate' ? value.toFixed(3) : value.toFixed(2);
+            const num = parseFloat(formatted);
+            return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: metric === 'spamRate' ? 3 : 2, maximumFractionDigits: metric === 'spamRate' ? 3 : 2 })}%` : `${formatted}%`;
+        }
         if (metric === 'emailsSent' || metric === 'totalOrders') return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(value));
         return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
     };
@@ -425,7 +429,12 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                     ) : (
                         <ArrowDown className="inline w-4 h-4 mr-1" />
                     ))}
-                    {isZeroChange ? '0.0' : Math.abs(periodChange.change).toFixed(1)}%
+                    {isZeroChange ? '0.0' : (() => {
+                        const changeValue = Math.abs(periodChange.change);
+                        const formatted = changeValue.toFixed(1);
+                        const num = parseFloat(formatted);
+                        return num >= 1000 ? num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatted;
+                    })()}%
                 </span>
             );
         }
@@ -508,7 +517,9 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                             case 'currency':
                                                 return `$${value.toFixed(1)}`;
                                             case 'percentage':
-                                                return `${value.toFixed(1)}%`;
+                                                const formatted = value.toFixed(1);
+                                                const num = parseFloat(formatted);
+                                                return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : `${formatted}%`;
                                             case 'number':
                                             default:
                                                 return value.toLocaleString('en-US');
@@ -578,7 +589,9 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                             case 'currency':
                                                 return `$${hoveredPoint.value.toFixed(1)}`;
                                             case 'percentage':
-                                                return `${hoveredPoint.value.toFixed(1)}%`;
+                                                const formatted = hoveredPoint.value.toFixed(1);
+                                                const num = parseFloat(formatted);
+                                                return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : `${formatted}%`;
                                             case 'number':
                                             default:
                                                 return hoveredPoint.value.toLocaleString('en-US');

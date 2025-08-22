@@ -46,9 +46,9 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
         if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric)) {
             return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         } else if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric)) {
-            return value < 0.01 && value > 0
-                ? `${value.toFixed(3)}%`
-                : `${value.toFixed(2)}%`;
+            const formatted = value < 0.01 && value > 0 ? value.toFixed(3) : value.toFixed(2);
+            const num = parseFloat(formatted);
+            return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: value < 0.01 && value > 0 ? 3 : 2, maximumFractionDigits: value < 0.01 && value > 0 ? 3 : 2 })}%` : `${formatted}%`;
         } else {
             return value.toLocaleString('en-US');
         }
@@ -215,7 +215,11 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
                                 {hoveredBar.campaignCount} campaign{hoveredBar.campaignCount !== 1 ? 's' : ''} sent
                             </div>
                             <div className="text-xs text-gray-500 dark:text-gray-400">
-                                {hoveredBar.percentageOfTotal.toFixed(1)}% of all campaigns
+                                {(() => {
+                                    const formatted = hoveredBar.percentageOfTotal.toFixed(1);
+                                    const num = parseFloat(formatted);
+                                    return num >= 1000 ? num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatted;
+                                })()}% of all campaigns
                             </div>
                         </div>
                     )}

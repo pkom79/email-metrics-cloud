@@ -41,9 +41,9 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
         if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric)) {
             return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         } else if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric)) {
-            return value < 0.01 && value > 0
-                ? `${value.toFixed(3)}%`
-                : `${value.toFixed(2)}%`;
+            const formatted = value < 0.01 && value > 0 ? value.toFixed(3) : value.toFixed(2);
+            const num = parseFloat(formatted);
+            return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: value < 0.01 && value > 0 ? 3 : 2, maximumFractionDigits: value < 0.01 && value > 0 ? 3 : 2 })}%` : `${formatted}%`;
         } else {
             return value.toLocaleString('en-US');
         }
