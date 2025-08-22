@@ -339,9 +339,20 @@ export default function DashboardClient({ businessName, userId }: { businessName
                 startDate = new Date(endDate); startDate.setDate(startDate.getDate() - periodDays + 1); startDate.setHours(0, 0, 0, 0);
             }
 
-            // Calculate previous period - go back exactly the same number of days
+            // Calculate previous period
             const prevEndDate = new Date(startDate); prevEndDate.setDate(prevEndDate.getDate() - 1); prevEndDate.setHours(23, 59, 59, 999);
-            const prevStartDate = new Date(prevEndDate); prevStartDate.setDate(prevStartDate.getDate() - periodDays + 1); prevStartDate.setHours(0, 0, 0, 0);
+
+            let prevStartDate: Date;
+            if (periodDays === 1) {
+                // For single-day comparisons, previous period is exactly 1 day before (same day)
+                prevStartDate = new Date(prevEndDate);
+                prevStartDate.setHours(0, 0, 0, 0);
+            } else {
+                // For multi-day periods, use the original logic
+                prevStartDate = new Date(prevEndDate);
+                prevStartDate.setDate(prevStartDate.getDate() - periodDays + 1);
+                prevStartDate.setHours(0, 0, 0, 0);
+            }
 
             let campaignsToUse = ALL_CAMPAIGNS;
             let flowsToUse = ALL_FLOWS;
@@ -905,31 +916,44 @@ export default function DashboardClient({ businessName, userId }: { businessName
 
                             {/* Custom Date Inputs (show only when custom is selected) */}
                             {dateRange === 'custom' && (
-                                <div className="flex items-center gap-2">
-                                    <span className="text-sm text-gray-500">From:</span>
-                                    <input
-                                        type="date"
-                                        value={customFrom || ''}
-                                        onChange={(e) => {
-                                            const v = e.target.value || undefined;
-                                            setCustomFrom(v);
-                                            if (v && customTo && new Date(v) > new Date(customTo)) setCustomTo(v);
-                                            setDateRange('custom');
-                                        }}
-                                        className="flex-1 px-2 py-2 rounded text-sm border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100"
-                                    />
-                                    <span className="text-sm text-gray-500">to</span>
-                                    <input
-                                        type="date"
-                                        value={customTo || ''}
-                                        onChange={(e) => {
-                                            const v = e.target.value || undefined;
-                                            setCustomTo(v);
-                                            if (v && customFrom && new Date(v) < new Date(customFrom)) setCustomFrom(v);
-                                            setDateRange('custom');
-                                        }}
-                                        className="flex-1 px-2 py-2 rounded text-sm border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100"
-                                    />
+                                <div className="flex flex-col gap-3">
+                                    {/* From Date */}
+                                    <div className="flex items-center gap-2">
+                                        <Calendar className="w-4 h-4 text-gray-500" />
+                                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100">From:</span>
+                                        <div className="flex-1">
+                                            <input
+                                                type="date"
+                                                value={customFrom || ''}
+                                                onChange={(e) => {
+                                                    const v = e.target.value || undefined;
+                                                    setCustomFrom(v);
+                                                    if (v && customTo && new Date(v) > new Date(customTo)) setCustomTo(v);
+                                                    setDateRange('custom');
+                                                }}
+                                                className="w-full px-3 py-2 rounded text-sm border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* To Date */}
+                                    <div className="flex items-center gap-2">
+                                        <Calendar className="w-4 h-4 text-gray-500" />
+                                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100">To:</span>
+                                        <div className="flex-1">
+                                            <input
+                                                type="date"
+                                                value={customTo || ''}
+                                                onChange={(e) => {
+                                                    const v = e.target.value || undefined;
+                                                    setCustomTo(v);
+                                                    if (v && customFrom && new Date(v) < new Date(customFrom)) setCustomFrom(v);
+                                                    setDateRange('custom');
+                                                }}
+                                                className="w-full px-3 py-2 rounded text-sm border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 
@@ -969,7 +993,7 @@ export default function DashboardClient({ businessName, userId }: { businessName
                                             {(() => {
                                                 const dates = [...defCampaigns, ...defFlows].map(e => e.sentDate.getTime());
                                                 const lastVisible = dates.length ? new Date(Math.max(...dates)) : dm.getLastEmailDate();
-                                                return ` All dashboard data and analytics reflect email performance up to ${lastVisible.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.`;
+                                                return ` All dashboard metrics reflect email channel performance only and exclude SMS-attributed revenue through ${lastVisible.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.`;
                                             })()}
                                         </span>
                                     </div>

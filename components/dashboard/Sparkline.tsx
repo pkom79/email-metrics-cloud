@@ -18,7 +18,7 @@ const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, is
     const formatValue = (value: number): string => {
         switch (valueFormat) {
             case 'currency':
-                return `$${Math.round(value).toLocaleString('en-US')}`;
+                return `$${value.toFixed(1)}`;
             case 'percentage':
                 return `${value.toFixed(1)}%`;
             case 'number':
