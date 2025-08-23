@@ -18,3 +18,13 @@ Routes
 
 Region
 - Deploy Vercel Functions in US East (iad1). Align Supabase project to US East.
+
+---
+Stability Status (Aug 23 2025)
+- Current commit represents STABLE DESKTOP DASHBOARD baseline. Desktop analytics dashboard loads and functions.
+- Mobile experience still known to crash / degrade performance; mobile optimization pending. Do not treat current mobile view as stable.
+- Tag to create: desktop-stable (annotated) once merged.
+
+Next Steps
+- Implement lightweight mobile-only dashboard variant.
+- Add guard/crash reporting around heavy analytics hooks for mobile.
