@@ -60,10 +60,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const hasData = ALL_CAMPAIGNS.length > 0 || ALL_FLOWS.length > 0;
     const REFERENCE_DATE = useMemo(() => { const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow); const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime()); const flowTs = flowSubset.map(f => f.sentDate.getTime()); const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n)); return all.length ? new Date(Math.max(...all)) : new Date(); }, [ALL_CAMPAIGNS, ALL_FLOWS, selectedFlow]);
     // Active flows: flows that have at least one send in the currently selected (or custom) date range
+    // Mirror FlowStepAnalysis logic: restrict dropdown to *live* flows only, further filtered to current date window
+    const liveFlows = useMemo(() => ALL_FLOWS.filter(f => (f as any).status && String((f as any).status).toLowerCase() === 'live'), [ALL_FLOWS]);
     const flowsInRange = useMemo(() => {
-        if (!ALL_FLOWS.length) return [] as typeof ALL_FLOWS;
-        let flows = ALL_FLOWS;
-        // Apply only date filtering (not the selected flow filter) so 'active' represents actual sends in window
+        if (!liveFlows.length) return [] as typeof liveFlows;
+        let flows = liveFlows;
         if (dateRange === 'custom' && customActive) {
             const from = new Date(customFrom! + 'T00:00:00');
             const to = new Date(customTo! + 'T23:59:59');
@@ -75,7 +76,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             flows = flows.filter(f => f.sentDate >= start && f.sentDate <= end);
         }
         return flows;
-    }, [ALL_FLOWS, dateRange, customActive, customFrom, customTo, REFERENCE_DATE]);
+    }, [liveFlows, dateRange, customActive, customFrom, customTo, REFERENCE_DATE]);
     const uniqueFlowNames = useMemo(() => Array.from(new Set(flowsInRange.map(f => f.flowName))).sort(), [flowsInRange]);
     // Ensure selected flow remains valid; if not, reset to 'all'
     useEffect(() => { if (selectedFlow !== 'all' && !uniqueFlowNames.includes(selectedFlow)) setSelectedFlow('all'); }, [uniqueFlowNames, selectedFlow]);
@@ -289,11 +290,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <div className="flex items-center justify-between gap-2 mb-3">
                             <div className="flex items-center gap-2"><Zap className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Flow Performance</h2></div>
                             <div className="relative">
-                                <select value={selectedFlow} onChange={e => { setIsCalculating(true); setMetricsReady(false); setSelectedFlow(e.target.value); setTimeout(() => setIsCalculating(false), 400); }} className="appearance-none px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">
+                                <select value={selectedFlow} onChange={e => { setIsCalculating(true); setMetricsReady(false); setSelectedFlow(e.target.value); setTimeout(() => setIsCalculating(false), 400); }} className="appearance-none px-4 py-2 pr-9 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm min-w-[220px]">
                                     <option value="all">All Flows</option>
                                     {uniqueFlowNames.map(f => <option key={f} value={f}>{f}</option>)}
                                 </select>
-                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
+                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
                             </div>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

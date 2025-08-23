@@ -8,7 +8,7 @@ import SupabaseAuthListener from '../components/SupabaseAuthListener';
 import HeaderLinks from '../components/HeaderLinks';
 
 export const metadata: Metadata = {
-    title: 'Email Metrics Cloud',
+    title: 'Email Metrics',
     description: 'Upload CSVs. Get snapshots.',
     icons: {
         icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
