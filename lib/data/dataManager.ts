@@ -30,6 +30,9 @@ export class DataManager {
     private subscribers: ProcessedSubscriber[] = [];
 
     private isRealDataLoaded = false;
+    // Tracks whether we've attempted at least one hydration (localStorage/IDB) so we can suppress
+    // noisy 'no valid dates' warnings during the very first render before hydration finishes.
+    private hasHydratedOnce = false;
     private loadProgress: LoadProgress = {
         campaigns: { loaded: false, progress: 0 },
         flows: { loaded: false, progress: 0 },
@@ -81,7 +84,7 @@ export class DataManager {
 
     constructor() {
         // Hydrate from storage on client if available
-        if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined') {
             try {
                 const raw = localStorage.getItem(this.storageKey);
                 if (raw) {
@@ -114,14 +117,22 @@ export class DataManager {
                         this.isRealDataLoaded = this.campaigns.length > 0 || this.flowEmails.length > 0 || this.subscribers.length > 0;
                         try { window.dispatchEvent(new CustomEvent('em:dataset-hydrated')); } catch { /* ignore */ }
                     }
-                } catch { /* ignore */ }
+                } catch { /* ignore */ } finally {
+                    this.hasHydratedOnce = true;
+                }
             })();
+        } else {
+            // SSR / non-browser contexts: mark hydration attempt complete immediately
+            this.hasHydratedOnce = true;
         }
     }
 
     // Public method for consumers to ensure hydration from durable storage.
     async ensureHydrated(): Promise<boolean> {
-        if (this.campaigns.length || this.flowEmails.length || this.subscribers.length) return true;
+        if (this.campaigns.length || this.flowEmails.length || this.subscribers.length) {
+            this.hasHydratedOnce = true;
+            return true;
+        }
         try {
             const fromIdb = await idbGet<any>(this.idbKey);
             if (fromIdb) {
@@ -131,9 +142,11 @@ export class DataManager {
                 this.subscribers = (fromIdb.subscribers || []);
                 this.isRealDataLoaded = this.campaigns.length > 0 || this.flowEmails.length > 0 || this.subscribers.length > 0;
                 try { window.dispatchEvent(new CustomEvent('em:dataset-hydrated')); } catch { }
+                this.hasHydratedOnce = true;
                 return this.isRealDataLoaded;
             }
         } catch { }
+        this.hasHydratedOnce = true;
         return false;
     }
 
@@ -226,7 +239,10 @@ export class DataManager {
             const allDates = [...campaignDates, ...flowDates];
 
             if (allDates.length === 0) {
-                console.warn('getLastEmailDate: No valid dates found, returning current date');
+                // Only warn after we've tried hydrating at least once; otherwise it's just initial render.
+                if (this.hasHydratedOnce) {
+                    console.warn('getLastEmailDate: No valid dates found, returning current date');
+                }
                 return new Date();
             }
 
