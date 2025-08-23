@@ -262,7 +262,7 @@ export default function DashboardClient({ businessName, userId }: { businessName
             const isPositive = negative.has(metricKey) ? changePercent < 0 : changePercent > 0;
             return { changePercent, isPositive, previousValue, previousPeriod: { startDate: prevStartDate, endDate: prevEndDate } };
         };
-    }, [dateRange, dm, customActive, customFrom, customTo, REFERENCE_DATE, ALL_CAMPAIGNS, ALL_FLOWS]);
+    }, [dateRange, dm, customDays, customActive, customFrom, customTo, REFERENCE_DATE, ALL_CAMPAIGNS, ALL_FLOWS]);
     const defCampaigns = useDeferredValue(filteredCampaigns);
     const defFlows = useDeferredValue(filteredFlowEmails);
 
@@ -489,17 +489,7 @@ export default function DashboardClient({ businessName, userId }: { businessName
         });
     };
 
-    // Progressive mobile section toggles (must be declared before any early returns)
-    const [showCampaignSection, setShowCampaignSection] = useState(false);
-    const [showFlowSection, setShowFlowSection] = useState(false);
-    const [mobileAllAllowed, setMobileAllAllowed] = useState(false);
-    useEffect(() => {
-        if (isMobile && dateRange === 'all' && !mobileAllAllowed) {
-            // Cap initial all-time load to 90d; user can opt-in
-            setDateRange('90d');
-        }
-    }, [isMobile, dateRange, mobileAllAllowed]);
-    // Error boundary for dashboard (after all hooks)
+    // Error boundary for dashboard
     if (dashboardError) {
         return (
             <div className="min-h-screen flex items-center justify-center p-6">
@@ -529,6 +519,17 @@ export default function DashboardClient({ businessName, userId }: { businessName
     }
 
     // Export PDF feature removed per request
+
+    // Progressive mobile section toggles
+    const [showCampaignSection, setShowCampaignSection] = useState(false);
+    const [showFlowSection, setShowFlowSection] = useState(false);
+    const [mobileAllAllowed, setMobileAllAllowed] = useState(false);
+    useEffect(() => {
+        if (isMobile && dateRange === 'all' && !mobileAllAllowed) {
+            // Cap initial all-time load to 90d; user can opt-in
+            setDateRange('90d');
+        }
+    }, [isMobile, dateRange, mobileAllAllowed]);
     useEffect(() => {
         if (!isMobile) return;
         const onErr = (e: any) => console.log('[mobile-error]', e?.message || e);
