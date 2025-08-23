@@ -59,6 +59,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const ALL_FLOWS = useMemo(() => dm.getFlowEmails(), [dm, dataVersion]);
     const hasData = ALL_CAMPAIGNS.length > 0 || ALL_FLOWS.length > 0;
     const REFERENCE_DATE = useMemo(() => { const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow); const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime()); const flowTs = flowSubset.map(f => f.sentDate.getTime()); const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n)); return all.length ? new Date(Math.max(...all)) : new Date(); }, [ALL_CAMPAIGNS, ALL_FLOWS, selectedFlow]);
+    const uniqueFlowNames = useMemo(() => Array.from(new Set(ALL_FLOWS.map(f => f.flowName))).sort(), [ALL_FLOWS]);
 
     // Filters
     const filteredCampaigns = useMemo(() => { if (!hasData) return [] as typeof ALL_CAMPAIGNS; let list = ALL_CAMPAIGNS; if (dateRange === 'custom' && customActive) { const from = new Date(customFrom! + 'T00:00:00'); const to = new Date(customTo! + 'T23:59:59'); list = list.filter(c => c.sentDate >= from && c.sentDate <= to); } else if (dateRange !== 'all') { const days = parseInt(dateRange.replace('d', '')); const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999); const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0); list = list.filter(c => c.sentDate >= start && c.sentDate <= end); } return list; }, [ALL_CAMPAIGNS, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
@@ -233,6 +234,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         </div>
                     </section>
                 )}
+                {/* Day & Hour Performance (placed before Top Campaigns to match legacy ordering) */}
+                {campaignMetrics && (
+                    <>
+                        <DayOfWeekPerformance filteredCampaigns={filteredCampaigns} dateRange={dateRange} />
+                        <HourOfDayPerformance filteredCampaigns={filteredCampaigns} dateRange={dateRange} />
+                    </>
+                )}
                 {/* Top Campaigns moved directly after Campaign Performance */}
                 {campaignMetrics && (
                     <section>
@@ -259,7 +267,16 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 )}
                 {flowMetrics && (
                     <section>
-                        <div className="flex items-center gap-2 mb-3"><Zap className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Flow Performance</h2></div>
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                            <div className="flex items-center gap-2"><Zap className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Flow Performance</h2></div>
+                            <div className="relative">
+                                <select value={selectedFlow} onChange={e => { setIsCalculating(true); setMetricsReady(false); setSelectedFlow(e.target.value); setTimeout(() => setIsCalculating(false), 400); }} className="appearance-none px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">
+                                    <option value="all">All Flows</option>
+                                    {uniqueFlowNames.map(f => <option key={f} value={f}>{f}</option>)}
+                                </select>
+                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
+                            </div>
+                        </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                             <MetricCard title="Total Revenue" value={formatCurrency(flowMetrics.totalRevenue.value)} change={flowMetrics.totalRevenue.change} isPositive={flowMetrics.totalRevenue.isPositive} previousValue={flowMetrics.totalRevenue.previousValue} previousPeriod={flowMetrics.totalRevenue.previousPeriod} dateRange={dateRange} metricKey="revenue" sparklineData={flowSeries.totalRevenue} />
                             <MetricCard title="Average Order Value" value={formatCurrency(flowMetrics.averageOrderValue.value)} change={flowMetrics.averageOrderValue.change} isPositive={flowMetrics.averageOrderValue.isPositive} previousValue={flowMetrics.averageOrderValue.previousValue} previousPeriod={flowMetrics.averageOrderValue.previousPeriod} dateRange={dateRange} metricKey="avgOrderValue" sparklineData={flowSeries.averageOrderValue} />
