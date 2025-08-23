@@ -59,7 +59,26 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const ALL_FLOWS = useMemo(() => dm.getFlowEmails(), [dm, dataVersion]);
     const hasData = ALL_CAMPAIGNS.length > 0 || ALL_FLOWS.length > 0;
     const REFERENCE_DATE = useMemo(() => { const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow); const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime()); const flowTs = flowSubset.map(f => f.sentDate.getTime()); const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n)); return all.length ? new Date(Math.max(...all)) : new Date(); }, [ALL_CAMPAIGNS, ALL_FLOWS, selectedFlow]);
-    const uniqueFlowNames = useMemo(() => Array.from(new Set(ALL_FLOWS.map(f => f.flowName))).sort(), [ALL_FLOWS]);
+    // Active flows: flows that have at least one send in the currently selected (or custom) date range
+    const flowsInRange = useMemo(() => {
+        if (!ALL_FLOWS.length) return [] as typeof ALL_FLOWS;
+        let flows = ALL_FLOWS;
+        // Apply only date filtering (not the selected flow filter) so 'active' represents actual sends in window
+        if (dateRange === 'custom' && customActive) {
+            const from = new Date(customFrom! + 'T00:00:00');
+            const to = new Date(customTo! + 'T23:59:59');
+            flows = flows.filter(f => f.sentDate >= from && f.sentDate <= to);
+        } else if (dateRange !== 'all') {
+            const days = parseInt(dateRange.replace('d', ''));
+            const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999);
+            const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0);
+            flows = flows.filter(f => f.sentDate >= start && f.sentDate <= end);
+        }
+        return flows;
+    }, [ALL_FLOWS, dateRange, customActive, customFrom, customTo, REFERENCE_DATE]);
+    const uniqueFlowNames = useMemo(() => Array.from(new Set(flowsInRange.map(f => f.flowName))).sort(), [flowsInRange]);
+    // Ensure selected flow remains valid; if not, reset to 'all'
+    useEffect(() => { if (selectedFlow !== 'all' && !uniqueFlowNames.includes(selectedFlow)) setSelectedFlow('all'); }, [uniqueFlowNames, selectedFlow]);
 
     // Filters
     const filteredCampaigns = useMemo(() => { if (!hasData) return [] as typeof ALL_CAMPAIGNS; let list = ALL_CAMPAIGNS; if (dateRange === 'custom' && customActive) { const from = new Date(customFrom! + 'T00:00:00'); const to = new Date(customTo! + 'T23:59:59'); list = list.filter(c => c.sentDate >= from && c.sentDate <= to); } else if (dateRange !== 'all') { const days = parseInt(dateRange.replace('d', '')); const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999); const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0); list = list.filter(c => c.sentDate >= start && c.sentDate <= end); } return list; }, [ALL_CAMPAIGNS, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
