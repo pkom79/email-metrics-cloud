@@ -31,6 +31,19 @@ export default function DashboardClient({ businessName, userId }: { businessName
 
     const dm = useMemo(() => DataManager.getInstance(), []);
 
+    // Ensure data is hydrated from storage
+    useEffect(() => {
+        const hydrate = async () => {
+            try {
+                await dm.ensureHydrated();
+                console.log('DataManager hydrated from storage');
+            } catch (error) {
+                console.warn('Failed to hydrate data from storage:', error);
+            }
+        };
+        hydrate();
+    }, [dm]);
+
     // Error handling state
     const [dashboardError, setDashboardError] = useState<string | null>(null);
     // Core data / filter state (reconstructed after patch corruption)
