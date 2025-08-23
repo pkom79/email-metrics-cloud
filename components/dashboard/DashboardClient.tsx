@@ -235,42 +235,6 @@ export default function DashboardClient({ businessName, userId }: { businessName
         return () => window.removeEventListener('resize', onResize);
     }, []);
 
-    // CRITICAL: Return mobile notice immediately to prevent ANY heavy calculations on mobile
-    if (isMobile) {
-        return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-6">
-                <div className="max-w-md mx-auto text-center bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-                    <div className="mb-4">
-                        <BarChart3 className="w-16 h-16 text-blue-600 mx-auto mb-2" />
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                            Desktop Experience Required
-                        </h2>
-                    </div>
-
-                    <p className="text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
-                        This email analytics dashboard performs intensive calculations that require desktop-class hardware for optimal performance.
-                    </p>
-
-                    <div className="space-y-3 text-sm text-gray-500 dark:text-gray-400 mb-8">
-                        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                            <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">System Requirements:</h3>
-                            <ul className="space-y-1 text-left">
-                                <li>• Desktop or laptop computer</li>
-                                <li>• Minimum 4GB RAM recommended</li>
-                                <li>• Modern browser (Chrome, Firefox, Safari, Edge)</li>
-                                <li>• Stable internet connection</li>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <p className="text-xs text-gray-400 dark:text-gray-500">
-                        Please access this dashboard from a desktop or laptop computer for the best experience.
-                    </p>
-                </div>
-            </div>
-        );
-    }
-
     // Audience overview reference for sticky logic (after mobile detection)
     const [audienceOverviewRef, setAudienceOverviewRef] = useState<HTMLElement | null>(null);
     const [isBeforeAudience, setIsBeforeAudience] = useState(true);
@@ -736,6 +700,42 @@ export default function DashboardClient({ businessName, userId }: { businessName
                             Reload Page
                         </button>
                     </div>
+                </div>
+            </div>
+        );
+    }
+
+    // CRITICAL: Return mobile notice immediately to prevent ANY heavy calculations on mobile
+    if (isMobile) {
+        return (
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-6">
+                <div className="max-w-md mx-auto text-center bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
+                    <div className="mb-4">
+                        <BarChart3 className="w-16 h-16 text-blue-600 mx-auto mb-2" />
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                            Desktop Experience Required
+                        </h2>
+                    </div>
+
+                    <p className="text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
+                        This email analytics dashboard performs intensive calculations that require desktop-class hardware for optimal performance.
+                    </p>
+
+                    <div className="space-y-3 text-sm text-gray-500 dark:text-gray-400 mb-8">
+                        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                            <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">System Requirements:</h3>
+                            <ul className="space-y-1 text-left">
+                                <li>• Desktop or laptop computer</li>
+                                <li>• Minimum 4GB RAM recommended</li>
+                                <li>• Modern browser (Chrome, Firefox, Safari, Edge)</li>
+                                <li>• Stable internet connection</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                        Please access this dashboard from a desktop or laptop computer for the best experience.
+                    </p>
                 </div>
             </div>
         );
@@ -1638,7 +1638,7 @@ export default function DashboardClient({ businessName, userId }: { businessName
                                 <div className="flex-1 relative">
                                     {dateRange === 'custom' && customFrom && customTo ? (
                                         <div className="flex items-center justify-between w-full px-3 py-2 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">
-                                            <span>{new Date(customFrom).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} – {new Date(customTo).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                            <span>{customFrom && customTo ? `${new Date(customFrom as string).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} – ${new Date(customTo as string).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : 'Custom dates'}</span>
                                             <button
                                                 onClick={() => setDateRange('30d')}
                                                 className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
