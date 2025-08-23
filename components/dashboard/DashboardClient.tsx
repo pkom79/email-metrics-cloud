@@ -716,17 +716,17 @@ export default function DashboardClient({ businessName, userId }: { businessName
                             Desktop Experience Required
                         </h2>
                     </div>
-                    
+
                     <p className="text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
                         Our advanced email analytics dashboard is optimized for desktop and tablet devices to ensure the best experience with complex data visualizations and comprehensive reporting features.
                     </p>
-                    
+
                     <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-6">
                         <p className="text-sm text-blue-800 dark:text-blue-200">
-                            <strong>For the full experience:</strong> Please access this dashboard from a computer or tablet with a screen width of at least 768px.
+                            <strong>For the full experience:</strong> Please access from a desktop, laptop, or high-end tablet (iPad Pro) with 8GB+ RAM, modern processor (Intel i5, AMD Ryzen 5, Apple M1, or A12Z+), and screen width of at least 768px. Chrome/Safari recommended.
                         </p>
                     </div>
-                    
+
                     <div className="space-y-3">
                         <button
                             onClick={() => window.location.href = 'mailto:?subject=Email Analytics Dashboard&body=View your email analytics dashboard at: ' + window.location.href}
@@ -734,7 +734,7 @@ export default function DashboardClient({ businessName, userId }: { businessName
                         >
                             Email Link to Desktop
                         </button>
-                        
+
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                             You can also bookmark this page and return on a larger device
                         </p>
