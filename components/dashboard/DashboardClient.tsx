@@ -31,180 +31,60 @@ export default function DashboardClient({ businessName, userId }: { businessName
 
     const dm = useMemo(() => DataManager.getInstance(), []);
 
-    // Error handling state
-    const [dashboardError, setDashboardError] = useState<string | null>(null);
-
-    // Lightweight data refresh when uploads complete (no saved reports UI)
-    const [dataVersion, setDataVersion] = useState(0);
+    // Ensure data is hydrated from storage
     useEffect(() => {
-        const onCreated = () => {
-            // UploadWizard loaded new CSVs into DataManager; trigger a re-render and close modal
-            setDataVersion(v => v + 1);
-            setShowUploadModal(false);
-        };
-        const onHydrated = () => {
-            setDataVersion(v => v + 1);
-            setIsInitialLoading(false); // Mark initial loading complete when data hydrates
-        };
-        window.addEventListener('em:snapshot-created', onCreated as EventListener);
-        window.addEventListener('em:dataset-hydrated', onHydrated as EventListener);
-        // On mount, ensure DataManager pulls from durable storage; retry briefly if empty
-        let active = true;
-        (async () => {
-            console.log('DashboardClient: Attempting data hydration, userId:', userId?.substring(0, 8));
-            for (let i = 0; i < 5 && active; i++) {
-                const ok = await DataManager.getInstance().ensureHydrated();
-                if (ok) {
-                    console.log('DashboardClient: Data hydrated successfully on attempt', i + 1);
-                    setDataVersion(v => v + 1);
-                    setIsInitialLoading(false); // Mark initial loading complete when data hydrates
-                    break;
-                }
-                await new Promise(r => setTimeout(r, 150));
-            }
-            if (active && !DataManager.getInstance().hasRealData()) {
-                console.log('DashboardClient: No data found after hydration attempts');
-                setIsInitialLoading(false); // Mark loading complete even if no data found
-            }
-        })();
-        return () => {
-            window.removeEventListener('em:snapshot-created', onCreated as EventListener);
-            window.removeEventListener('em:dataset-hydrated', onHydrated as EventListener);
-            active = false;
-        };
-    }, []);
-
-    // Download and process CSV files from server if no local data exists
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
+        const hydrate = async () => {
             try {
-                // If we already have data (from IDB/localStorage), skip
-                if (dm.getCampaigns().length || dm.getFlowEmails().length || dm.getSubscribers().length) {
-                    setIsInitialLoading(false); // Mark loading complete if we have data
-                    return;
-                }
-
-                console.log('No local data found, downloading from server...');
-
-                // Check if we have any snapshots
-                const list = await fetch('/api/snapshots/list', { cache: 'no-store' });
-                if (!list.ok) {
-                    console.log('Failed to fetch snapshots list:', list.status);
-                    setIsInitialLoading(false); // Mark loading complete even on error
-                    return;
-                }
-                const j = await list.json().catch(() => ({}));
-                const latest = (j.snapshots || []).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-                if (!latest?.id) {
-                    console.log('No snapshots found for user');
-                    setIsInitialLoading(false); // Mark loading complete when no snapshots
-                    return;
-                }
-
-                console.log('Found latest snapshot:', latest.id);
-
-                // Download CSV files and process them
-                const csvTypes = ['campaigns', 'flows', 'subscribers'];
-                const csvFiles: { [key: string]: File } = {};
-
-                for (const type of csvTypes) {
-                    try {
-                        const response = await fetch(`/api/snapshots/download-csv?type=${type}`, { cache: 'no-store' });
-                        if (response.ok) {
-                            const csvText = await response.text();
-                            if (csvText.trim()) {
-                                const blob = new Blob([csvText], { type: 'text/csv' });
-                                csvFiles[type] = new File([blob], `${type}.csv`, { type: 'text/csv' });
-                                console.log(`Downloaded ${type}.csv (${csvText.length} chars)`);
-                            }
-                        } else {
-                            console.warn(`Failed to download ${type}.csv: ${response.status}`);
-                        }
-                    } catch (err) {
-                        console.warn(`Error downloading ${type}.csv:`, err);
-                    }
-                }
-
-                // If we have at least one CSV file, process them
-                if (Object.keys(csvFiles).length > 0) {
-                    console.log('Processing downloaded CSV files...');
-                    const result = await dm.loadCSVFiles({
-                        campaigns: csvFiles.campaigns,
-                        flows: csvFiles.flows,
-                        subscribers: csvFiles.subscribers,
-                    });
-
-                    if (result.success) {
-                        console.log('Successfully loaded data from server CSV files');
-                        if (cancelled) return;
-                        setDataVersion(v => v + 1);
-                        setIsInitialLoading(false); // Mark initial loading complete after CSV processing
-                        // Dispatch event to notify other components
-                        window.dispatchEvent(new CustomEvent('em:dataset-hydrated'));
-                    } else {
-                        console.error('Failed to process CSV files:', result.errors);
-                        setDashboardError(`Failed to process server data: ${result.errors.join(', ')}`);
-                        setIsInitialLoading(false); // Mark loading complete even on error
-                    }
-                } else {
-                    console.log('No CSV files downloaded');
-                    setIsInitialLoading(false); // Mark loading complete when no files to download
-                }
-            } catch (err) {
-                console.error('Error loading data from server:', err);
-                setDashboardError(`Failed to load data from server: ${err instanceof Error ? err.message : 'Unknown error'}`);
-                setIsInitialLoading(false); // Mark loading complete even on error
+                await dm.ensureHydrated();
+                console.log('DataManager hydrated from storage');
+            } catch (error) {
+                console.warn('Failed to hydrate data from storage:', error);
             }
-        })();
-        return () => { cancelled = true; };
+        };
+        hydrate();
     }, [dm]);
 
-    // Date range and granularity state
-    const [dateRange, setDateRange] = useState<'30d' | '60d' | '90d' | '120d' | '180d' | '365d' | 'all' | 'custom'>('30d');
-    const [customFrom, setCustomFrom] = useState<string | undefined>(undefined); // YYYY-MM-DD
-    const [customTo, setCustomTo] = useState<string | undefined>(undefined); // YYYY-MM-DD
-    const customActive = dateRange === 'custom' && customFrom && customTo;
+    // Error handling state
+    const [dashboardError, setDashboardError] = useState<string | null>(null);
+    // Core data / filter state (reconstructed after patch corruption)
+    const [dataVersion, setDataVersion] = useState(0);
+    const [dateRange, setDateRange] = useState<'7d' | '30d' | '60d' | '90d' | '120d' | '180d' | '365d' | 'all' | 'custom'>('30d');
+    const [customFrom, setCustomFrom] = useState<string | undefined>(undefined);
+    const [customTo, setCustomTo] = useState<string | undefined>(undefined);
+    const customActive = useMemo(() => dateRange === 'custom' && !!customFrom && !!customTo, [dateRange, customFrom, customTo]);
     const customDays = useMemo(() => {
         if (!customActive) return 0;
-        const from = new Date(customFrom!); from.setHours(0, 0, 0, 0);
-        const to = new Date(customTo!); to.setHours(23, 59, 59, 999);
-        const diff = Math.floor((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1; // inclusive
-        return Math.max(diff, 1);
+        try {
+            const from = new Date(customFrom! + 'T00:00:00');
+            const to = new Date(customTo! + 'T23:59:59');
+            return Math.max(1, Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+        } catch { return 0; }
     }, [customActive, customFrom, customTo]);
     const [granularity, setGranularity] = useState<'daily' | 'weekly' | 'monthly'>('daily');
-
-    // Safe granularity calculation with error handling
     const safeGranularity = useMemo(() => {
-        try {
-            // Ensure we have data before calculating granularity
-            if (dm.getCampaigns().length === 0 && dm.getFlowEmails().length === 0) {
-                return 'daily'; // Safe fallback when no data
-            }
-
-            if (customActive && customDays > 0) {
-                return dm.getGranularityForDateRange(`${customDays}d`);
-            } else if (dateRange === 'all') {
-                return dm.getGranularityForDateRange('all');
-            } else {
-                return dm.getGranularityForDateRange(dateRange === 'custom' ? '30d' : dateRange);
-            }
-        } catch (error: any) {
-            console.error('Error calculating granularity:', error);
-            setDashboardError(`Granularity calculation error: ${error?.message || 'Unknown error'}`);
-            return 'daily'; // Safe fallback
-        }
-    }, [dateRange, customActive, customDays, dm, dataVersion]); // Add dataVersion to dependencies
-
-    // Update granularity safely
+        let days = 0;
+        if (dateRange === 'all') days = 365; // heuristic
+        else if (dateRange === 'custom' && customActive) days = customDays;
+        else days = parseInt(String(dateRange).replace('d', '')) || 30;
+        if (days <= 90) return 'daily';
+        if (days <= 180) return 'weekly';
+        return 'monthly';
+    }, [dateRange, customActive, customDays]);
+    // Auto-adjust granularity when out of bounds (but don't fight user if already matched)
     useEffect(() => {
-        if (!dashboardError) {
-            setGranularity(safeGranularity);
-        }
+        if (dashboardError) return; // don't thrash while error state
+        setGranularity(g => (g === safeGranularity ? g : safeGranularity));
     }, [safeGranularity, dashboardError]);
 
-    // Keep date inputs in sync with selected preset; default to Last 30 days
-    // moved below after dependent variables are declared
+    // Clear initial loading state once data is fetched or determined to be empty
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setIsInitialLoading(false);
+        }, 1000); // Allow 1 second for data manager to initialize
+        return () => clearTimeout(timer);
+    }, []);
+
+    // Keep date inputs in sync with selected preset (handled later once data present)
 
     // UI state
     const [selectedFlow, setSelectedFlow] = useState<string>('all');
@@ -403,7 +283,7 @@ export default function DashboardClient({ businessName, userId }: { businessName
             const isPositive = negative.has(metricKey) ? changePercent < 0 : changePercent > 0;
             return { changePercent, isPositive, previousValue, previousPeriod: { startDate: prevStartDate, endDate: prevEndDate } };
         };
-    }, [dateRange, dm, customDays, customActive, customFrom, customTo, REFERENCE_DATE, ALL_CAMPAIGNS, ALL_FLOWS]);
+    }, [dateRange, dm, customActive, customFrom, customTo, REFERENCE_DATE, ALL_CAMPAIGNS, ALL_FLOWS]);
     const defCampaigns = useDeferredValue(filteredCampaigns);
     const defFlows = useDeferredValue(filteredFlowEmails);
 
@@ -441,155 +321,109 @@ export default function DashboardClient({ businessName, userId }: { businessName
         }
     }, [dateRange, REFERENCE_DATE, selectedFlow, ALL_CAMPAIGNS, ALL_FLOWS, hasData]);
 
-    // Overview metrics (all emails)
+    // Single-pass aggregation helper
+    const aggregateEmails = (list: any[]) => {
+        let totalRevenue = 0, emailsSent = 0, totalOrders = 0, opens = 0, clicks = 0, unsubs = 0, spam = 0, bounces = 0;
+        for (let i = 0; i < list.length; i++) {
+            const e = list[i];
+            totalRevenue += e.revenue || 0;
+            emailsSent += e.emailsSent || 0;
+            totalOrders += e.totalOrders || 0;
+            opens += e.uniqueOpens || 0;
+            clicks += e.uniqueClicks || 0;
+            unsubs += e.unsubscribesCount || 0;
+            spam += e.spamComplaintsCount || 0;
+            bounces += e.bouncesCount || 0;
+        }
+        const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+        const revenuePerEmail = emailsSent > 0 ? totalRevenue / emailsSent : 0;
+        const openRate = emailsSent > 0 ? (opens / emailsSent) * 100 : 0;
+        const clickRate = emailsSent > 0 ? (clicks / emailsSent) * 100 : 0;
+        const clickToOpenRate = opens > 0 ? (clicks / opens) * 100 : 0;
+        const conversionRate = clicks > 0 ? (totalOrders / clicks) * 100 : 0;
+        const unsubscribeRate = emailsSent > 0 ? (unsubs / emailsSent) * 100 : 0;
+        const spamRate = emailsSent > 0 ? (spam / emailsSent) * 100 : 0;
+        const bounceRate = emailsSent > 0 ? (bounces / emailsSent) * 100 : 0;
+        return { totalRevenue, avgOrderValue, revenuePerEmail, openRate, clickRate, clickToOpenRate, emailsSent, totalOrders, conversionRate, unsubscribeRate, spamRate, bounceRate };
+    };
 
     const overviewMetrics = useMemo(() => {
-        const all = [...defCampaigns, ...defFlows];
-        if (all.length === 0) return null as any;
-        const totalRevenue = all.reduce((s, e) => s + (e.revenue || 0), 0);
-        const totalEmailsSent = all.reduce((s, e) => s + e.emailsSent, 0);
-        const totalOrders = all.reduce((s, e) => s + e.totalOrders, 0);
-        const totalOpens = all.reduce((s, e) => s + e.uniqueOpens, 0);
-        const totalClicks = all.reduce((s, e) => s + e.uniqueClicks, 0);
-        const totalUnsubs = all.reduce((s, e) => s + e.unsubscribesCount, 0);
-        const totalSpam = all.reduce((s, e) => s + e.spamComplaintsCount, 0);
-        const totalBounces = all.reduce((s, e) => s + e.bouncesCount, 0);
-
-        const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-        const revenuePerEmail = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0;
-        const openRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0;
-        const clickRate = totalEmailsSent > 0 ? (totalClicks / totalEmailsSent) * 100 : 0;
-        const clickToOpenRate = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0;
-        const conversionRate = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0;
-        const unsubscribeRate = totalEmailsSent > 0 ? (totalUnsubs / totalEmailsSent) * 100 : 0;
-        const spamRate = totalEmailsSent > 0 ? (totalSpam / totalEmailsSent) * 100 : 0;
-        const bounceRate = totalEmailsSent > 0 ? (totalBounces / totalEmailsSent) * 100 : 0;
-
+        const list = [...defCampaigns, ...defFlows];
+        if (!list.length) return null as any;
+        const agg = aggregateEmails(list);
         const mk = (key: string, value: number) => {
             const d = calcPoP(key, 'all');
             return { value, change: d.changePercent, isPositive: d.isPositive, previousValue: d.previousValue, previousPeriod: d.previousPeriod };
         };
-
         return {
-            totalRevenue: mk('totalRevenue', totalRevenue),
-            averageOrderValue: mk('avgOrderValue', avgOrderValue),
-            revenuePerEmail: mk('revenuePerEmail', revenuePerEmail),
-            openRate: mk('openRate', openRate),
-            clickRate: mk('clickRate', clickRate),
-            clickToOpenRate: mk('clickToOpenRate', clickToOpenRate),
-            emailsSent: mk('emailsSent', totalEmailsSent),
-            totalOrders: mk('totalOrders', totalOrders),
-            conversionRate: mk('conversionRate', conversionRate),
-            unsubscribeRate: mk('unsubscribeRate', unsubscribeRate),
-            spamRate: mk('spamRate', spamRate),
-            bounceRate: mk('bounceRate', bounceRate),
+            totalRevenue: mk('totalRevenue', agg.totalRevenue),
+            averageOrderValue: mk('avgOrderValue', agg.avgOrderValue),
+            revenuePerEmail: mk('revenuePerEmail', agg.revenuePerEmail),
+            openRate: mk('openRate', agg.openRate),
+            clickRate: mk('clickRate', agg.clickRate),
+            clickToOpenRate: mk('clickToOpenRate', agg.clickToOpenRate),
+            emailsSent: mk('emailsSent', agg.emailsSent),
+            totalOrders: mk('totalOrders', agg.totalOrders),
+            conversionRate: mk('conversionRate', agg.conversionRate),
+            unsubscribeRate: mk('unsubscribeRate', agg.unsubscribeRate),
+            spamRate: mk('spamRate', agg.spamRate),
+            bounceRate: mk('bounceRate', agg.bounceRate),
         };
     }, [defCampaigns, defFlows, calcPoP]);
 
     // Campaign-only metrics
     const campaignMetrics = useMemo(() => {
-        const all = defCampaigns;
-        if (all.length === 0) return null as any;
-        const totalRevenue = all.reduce((s, e) => s + e.revenue, 0);
-        const totalEmailsSent = all.reduce((s, e) => s + e.emailsSent, 0);
-        const totalOrders = all.reduce((s, e) => s + e.totalOrders, 0);
-        const totalOpens = all.reduce((s, e) => s + e.uniqueOpens, 0);
-        const totalClicks = all.reduce((s, e) => s + e.uniqueClicks, 0);
-        const totalUnsubs = all.reduce((s, e) => s + e.unsubscribesCount, 0);
-        const totalSpam = all.reduce((s, e) => s + e.spamComplaintsCount, 0);
-        const totalBounces = all.reduce((s, e) => s + e.bouncesCount, 0);
-
-        const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-        const revenuePerEmail = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0;
-        const openRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0;
-        const clickRate = totalEmailsSent > 0 ? (totalClicks / totalEmailsSent) * 100 : 0;
-        const clickToOpenRate = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0;
-        const conversionRate = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0;
-        const unsubscribeRate = totalEmailsSent > 0 ? (totalUnsubs / totalEmailsSent) * 100 : 0;
-        const spamRate = totalEmailsSent > 0 ? (totalSpam / totalEmailsSent) * 100 : 0;
-        const bounceRate = totalEmailsSent > 0 ? (totalBounces / totalEmailsSent) * 100 : 0;
-
+        const list = defCampaigns;
+        if (!list.length) return null as any;
+        const agg = aggregateEmails(list);
         const mk = (key: string, value: number) => {
             const d = calcPoP(key, 'campaigns');
             return { value, change: d.changePercent, isPositive: d.isPositive, previousValue: d.previousValue, previousPeriod: d.previousPeriod };
         };
-
         return {
-            totalRevenue: mk('totalRevenue', totalRevenue),
-            averageOrderValue: mk('avgOrderValue', avgOrderValue),
-            revenuePerEmail: mk('revenuePerEmail', revenuePerEmail),
-            openRate: mk('openRate', openRate),
-            clickRate: mk('clickRate', clickRate),
-            clickToOpenRate: mk('clickToOpenRate', clickToOpenRate),
-            emailsSent: mk('emailsSent', totalEmailsSent),
-            totalOrders: mk('totalOrders', totalOrders),
-            conversionRate: mk('conversionRate', conversionRate),
-            unsubscribeRate: mk('unsubscribeRate', unsubscribeRate),
-            spamRate: mk('spamRate', spamRate),
-            bounceRate: mk('bounceRate', bounceRate),
+            totalRevenue: mk('totalRevenue', agg.totalRevenue),
+            averageOrderValue: mk('avgOrderValue', agg.avgOrderValue),
+            revenuePerEmail: mk('revenuePerEmail', agg.revenuePerEmail),
+            openRate: mk('openRate', agg.openRate),
+            clickRate: mk('clickRate', agg.clickRate),
+            clickToOpenRate: mk('clickToOpenRate', agg.clickToOpenRate),
+            emailsSent: mk('emailsSent', agg.emailsSent),
+            totalOrders: mk('totalOrders', agg.totalOrders),
+            conversionRate: mk('conversionRate', agg.conversionRate),
+            unsubscribeRate: mk('unsubscribeRate', agg.unsubscribeRate),
+            spamRate: mk('spamRate', agg.spamRate),
+            bounceRate: mk('bounceRate', agg.bounceRate),
         };
     }, [defCampaigns, calcPoP]);
 
     // Flow-only metrics
     const flowMetrics = useMemo(() => {
-        const all = defFlows;
-        if (all.length === 0) return null as any;
-        const totalRevenue = all.reduce((s, e) => s + e.revenue, 0);
-        const totalEmailsSent = all.reduce((s, e) => s + e.emailsSent, 0);
-        const totalOrders = all.reduce((s, e) => s + e.totalOrders, 0);
-        const totalOpens = all.reduce((s, e) => s + e.uniqueOpens, 0);
-        const totalClicks = all.reduce((s, e) => s + e.uniqueClicks, 0);
-        const totalUnsubs = all.reduce((s, e) => s + e.unsubscribesCount, 0);
-        const totalSpam = all.reduce((s, e) => s + e.spamComplaintsCount, 0);
-        const totalBounces = all.reduce((s, e) => s + e.bouncesCount, 0);
-
-        const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-        const revenuePerEmail = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0;
-        const openRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0;
-        const clickRate = totalEmailsSent > 0 ? (totalClicks / totalEmailsSent) * 100 : 0;
-        const clickToOpenRate = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0;
-        const conversionRate = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0;
-        const unsubscribeRate = totalEmailsSent > 0 ? (totalUnsubs / totalEmailsSent) * 100 : 0;
-        const spamRate = totalEmailsSent > 0 ? (totalSpam / totalEmailsSent) * 100 : 0;
-        const bounceRate = totalEmailsSent > 0 ? (totalBounces / totalEmailsSent) * 100 : 0;
-
+        const list = defFlows;
+        if (!list.length) return null as any;
+        const agg = aggregateEmails(list);
         const mk = (key: string, value: number) => {
             const d = calcPoP(key, 'flows', { flowName: selectedFlow });
             return { value, change: d.changePercent, isPositive: d.isPositive, previousValue: d.previousValue, previousPeriod: d.previousPeriod };
         };
-
         return {
-            totalRevenue: mk('totalRevenue', totalRevenue),
-            averageOrderValue: mk('avgOrderValue', avgOrderValue),
-            revenuePerEmail: mk('revenuePerEmail', revenuePerEmail),
-            openRate: mk('openRate', openRate),
-            clickRate: mk('clickRate', clickRate),
-            clickToOpenRate: mk('clickToOpenRate', clickToOpenRate),
-            emailsSent: mk('emailsSent', totalEmailsSent),
-            totalOrders: mk('totalOrders', totalOrders),
-            conversionRate: mk('conversionRate', conversionRate),
-            unsubscribeRate: mk('unsubscribeRate', unsubscribeRate),
-            spamRate: mk('spamRate', spamRate),
-            bounceRate: mk('bounceRate', bounceRate),
+            totalRevenue: mk('totalRevenue', agg.totalRevenue),
+            averageOrderValue: mk('avgOrderValue', agg.avgOrderValue),
+            revenuePerEmail: mk('revenuePerEmail', agg.revenuePerEmail),
+            openRate: mk('openRate', agg.openRate),
+            clickRate: mk('clickRate', agg.clickRate),
+            clickToOpenRate: mk('clickToOpenRate', agg.clickToOpenRate),
+            emailsSent: mk('emailsSent', agg.emailsSent),
+            totalOrders: mk('totalOrders', agg.totalOrders),
+            conversionRate: mk('conversionRate', agg.conversionRate),
+            unsubscribeRate: mk('unsubscribeRate', agg.unsubscribeRate),
+            spamRate: mk('spamRate', agg.spamRate),
+            bounceRate: mk('bounceRate', agg.bounceRate),
         };
-    }, [defFlows, calcPoP]);
+    }, [defFlows, calcPoP, selectedFlow]);
 
-    // Sparkline data
+    // Sparkline data (hard disabled on mobile for stability)
     const effectiveSeriesRange = dateRange === 'custom' && customActive ? 'custom' : dateRange;
-    // Defer heavy time-series generation on mobile until idle to reduce crash risk
-    const [enableSeries, setEnableSeries] = useState<boolean>(() => !isMobile);
-    useEffect(() => {
-        if (!isMobile) { setEnableSeries(true); return; }
-        let cancelled = false;
-        const run = () => { if (!cancelled) setEnableSeries(true); };
-        // Use requestIdleCallback if available, else fallback timeout
-        const id: any = (window as any).requestIdleCallback ? (window as any).requestIdleCallback(run, { timeout: 1200 }) : setTimeout(run, 800);
-        return () => {
-            cancelled = true;
-            if ((window as any).cancelIdleCallback && typeof id === 'number') (window as any).cancelIdleCallback(id);
-            else clearTimeout(id);
-        };
-    }, [isMobile]);
+    const enableSeries = !isMobile;
 
     const overviewSeries = useMemo(() => {
         if (!enableSeries) return {} as any;
@@ -676,7 +510,26 @@ export default function DashboardClient({ businessName, userId }: { businessName
         });
     };
 
-    // Error boundary for dashboard
+    // Progressive mobile section toggles (must be declared before any early returns)
+    const [showCampaignSection, setShowCampaignSection] = useState(false);
+    const [showFlowSection, setShowFlowSection] = useState(false);
+    const [mobileAllAllowed, setMobileAllAllowed] = useState(false);
+    useEffect(() => {
+        if (isMobile && dateRange === 'all' && !mobileAllAllowed) {
+            // Cap initial all-time load to 90d; user can opt-in
+            setDateRange('90d');
+        }
+    }, [isMobile, dateRange, mobileAllAllowed]);
+    // Mobile error instrumentation (must be before early returns)
+    useEffect(() => {
+        if (!isMobile) return;
+        const onErr = (e: any) => console.log('[mobile-error]', e?.message || e);
+        const onRej = (e: any) => console.log('[mobile-unhandled]', e?.reason || e);
+        window.addEventListener('error', onErr);
+        window.addEventListener('unhandledrejection', onRej);
+        return () => { window.removeEventListener('error', onErr); window.removeEventListener('unhandledrejection', onRej); };
+    }, [isMobile]);
+    // Error boundary for dashboard (after all hooks)
     if (dashboardError) {
         return (
             <div className="min-h-screen flex items-center justify-center p-6">
@@ -1002,149 +855,31 @@ export default function DashboardClient({ businessName, userId }: { businessName
                         {/* Campaign Performance */}
                         {campaignMetrics && (
                             <section>
-                                <div className="flex items-center gap-2 mb-4">
-                                    <Send className="w-5 h-5 text-green-600 dark:text-green-400" />
-                                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                        Campaign Performance
-                                    </h2>
-                                </div>
-                                <div className="grid grid-cols-1 gap-4">
-                                    <MetricCard
-                                        title="Total Revenue"
-                                        value={formatCurrency(campaignMetrics.totalRevenue.value)}
-                                        change={campaignMetrics.totalRevenue.change}
-                                        isPositive={campaignMetrics.totalRevenue.isPositive}
-                                        previousValue={campaignMetrics.totalRevenue.previousValue}
-                                        previousPeriod={campaignMetrics.totalRevenue.previousPeriod}
-                                        dateRange={dateRange}
-                                        metricKey="revenue"
-                                        sparklineData={campaignSeries.totalRevenue}
-                                    />
-                                    <MetricCard
-                                        title="Average Order Value"
-                                        value={formatCurrency(campaignMetrics.averageOrderValue.value)}
-                                        change={campaignMetrics.averageOrderValue.change}
-                                        isPositive={campaignMetrics.averageOrderValue.isPositive}
-                                        previousValue={campaignMetrics.averageOrderValue.previousValue}
-                                        previousPeriod={campaignMetrics.averageOrderValue.previousPeriod}
-                                        dateRange={dateRange}
-                                        metricKey="avgOrderValue"
-                                        sparklineData={campaignSeries.averageOrderValue}
-                                    />
-                                    <MetricCard
-                                        title="Revenue per Email"
-                                        value={formatCurrency(campaignMetrics.revenuePerEmail.value)}
-                                        change={campaignMetrics.revenuePerEmail.change}
-                                        isPositive={campaignMetrics.revenuePerEmail.isPositive}
-                                        previousValue={campaignMetrics.revenuePerEmail.previousValue}
-                                        previousPeriod={campaignMetrics.revenuePerEmail.previousPeriod}
-                                        dateRange={dateRange}
-                                        metricKey="revenuePerEmail"
-                                        sparklineData={campaignSeries.revenuePerEmail}
-                                    />
-                                    <MetricCard
-                                        title="Open Rate"
-                                        value={formatPercent(campaignMetrics.openRate.value)}
-                                        change={campaignMetrics.openRate.change}
-                                        isPositive={campaignMetrics.openRate.isPositive}
-                                        previousValue={campaignMetrics.openRate.previousValue}
-                                        previousPeriod={campaignMetrics.openRate.previousPeriod}
-                                        dateRange={dateRange}
-                                        metricKey="openRate"
-                                        sparklineData={campaignSeries.openRate}
-                                    />
-                                    <MetricCard
-                                        title="Click Rate"
-                                        value={formatPercent(campaignMetrics.clickRate.value)}
-                                        change={campaignMetrics.clickRate.change}
-                                        isPositive={campaignMetrics.clickRate.isPositive}
-                                        previousValue={campaignMetrics.clickRate.previousValue}
-                                        previousPeriod={campaignMetrics.clickRate.previousPeriod}
-                                        dateRange={dateRange}
-                                        metricKey="clickRate"
-                                        sparklineData={campaignSeries.clickRate}
-                                    />
-                                    <MetricCard
-                                        title="Click-to-Open Rate"
-                                        value={formatPercent(campaignMetrics.clickToOpenRate.value)}
-                                        change={campaignMetrics.clickToOpenRate.change}
-                                        isPositive={campaignMetrics.clickToOpenRate.isPositive}
-                                        previousValue={campaignMetrics.clickToOpenRate.previousValue}
-                                        previousPeriod={campaignMetrics.clickToOpenRate.previousPeriod}
-                                        dateRange={dateRange}
-                                        metricKey="clickToOpenRate"
-                                        sparklineData={campaignSeries.clickToOpenRate}
-                                    />
-                                    <MetricCard
-                                        title="Emails Sent"
-                                        value={formatNumber(campaignMetrics.emailsSent.value)}
-                                        change={campaignMetrics.emailsSent.change}
-                                        isPositive={campaignMetrics.emailsSent.isPositive}
-                                        previousValue={campaignMetrics.emailsSent.previousValue}
-                                        previousPeriod={campaignMetrics.emailsSent.previousPeriod}
-                                        dateRange={dateRange}
-                                        metricKey="emailsSent"
-                                        sparklineData={campaignSeries.emailsSent}
-                                    />
-                                    <MetricCard
-                                        title="Total Orders"
-                                        value={formatNumber(campaignMetrics.totalOrders.value)}
-                                        change={campaignMetrics.totalOrders.change}
-                                        isPositive={campaignMetrics.totalOrders.isPositive}
-                                        previousValue={campaignMetrics.totalOrders.previousValue}
-                                        previousPeriod={campaignMetrics.totalOrders.previousPeriod}
-                                        dateRange={dateRange}
-                                        metricKey="totalOrders"
-                                        sparklineData={campaignSeries.totalOrders}
-                                    />
-                                    <MetricCard
-                                        title="Conversion Rate"
-                                        value={formatPercent(campaignMetrics.conversionRate.value)}
-                                        change={campaignMetrics.conversionRate.change}
-                                        isPositive={campaignMetrics.conversionRate.isPositive}
-                                        previousValue={campaignMetrics.conversionRate.previousValue}
-                                        previousPeriod={campaignMetrics.conversionRate.previousPeriod}
-                                        dateRange={dateRange}
-                                        metricKey="conversionRate"
-                                        sparklineData={campaignSeries.conversionRate}
-                                    />
-                                    <MetricCard
-                                        title="Unsubscribe Rate"
-                                        value={formatPercent(campaignMetrics.unsubscribeRate.value)}
-                                        change={campaignMetrics.unsubscribeRate.change}
-                                        isPositive={campaignMetrics.unsubscribeRate.isPositive}
-                                        previousValue={campaignMetrics.unsubscribeRate.previousValue}
-                                        previousPeriod={campaignMetrics.unsubscribeRate.previousPeriod}
-                                        dateRange={dateRange}
-                                        metricKey="unsubscribeRate"
-                                        sparklineData={campaignSeries.unsubscribeRate}
-                                        isNegativeMetric
-                                    />
-                                    <MetricCard
-                                        title="Spam Rate"
-                                        value={formatPercent(campaignMetrics.spamRate.value)}
-                                        change={campaignMetrics.spamRate.change}
-                                        isPositive={campaignMetrics.spamRate.isPositive}
-                                        previousValue={campaignMetrics.spamRate.previousValue}
-                                        previousPeriod={campaignMetrics.spamRate.previousPeriod}
-                                        dateRange={dateRange}
-                                        metricKey="spamRate"
-                                        sparklineData={campaignSeries.spamRate}
-                                        isNegativeMetric
-                                    />
-                                    <MetricCard
-                                        title="Bounce Rate"
-                                        value={formatPercent(campaignMetrics.bounceRate.value)}
-                                        change={campaignMetrics.bounceRate.change}
-                                        isPositive={campaignMetrics.bounceRate.isPositive}
-                                        previousValue={campaignMetrics.bounceRate.previousValue}
-                                        previousPeriod={campaignMetrics.bounceRate.previousPeriod}
-                                        dateRange={dateRange}
-                                        metricKey="bounceRate"
-                                        sparklineData={campaignSeries.bounceRate}
-                                        isNegativeMetric
-                                    />
-                                </div>
+                                {!showCampaignSection ? (
+                                    <button onClick={() => setShowCampaignSection(true)} className="w-full text-sm py-2 px-3 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200">Show Campaign Performance</button>
+                                ) : (
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <Send className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Performance</h2>
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-4">
+                                            <MetricCard title="Total Revenue" value={formatCurrency(campaignMetrics.totalRevenue.value)} change={campaignMetrics.totalRevenue.change} isPositive={campaignMetrics.totalRevenue.isPositive} previousValue={campaignMetrics.totalRevenue.previousValue} previousPeriod={campaignMetrics.totalRevenue.previousPeriod} dateRange={dateRange} metricKey="revenue" sparklineData={campaignSeries.totalRevenue} />
+                                            <MetricCard title="Average Order Value" value={formatCurrency(campaignMetrics.averageOrderValue.value)} change={campaignMetrics.averageOrderValue.change} isPositive={campaignMetrics.averageOrderValue.isPositive} previousValue={campaignMetrics.averageOrderValue.previousValue} previousPeriod={campaignMetrics.averageOrderValue.previousPeriod} dateRange={dateRange} metricKey="avgOrderValue" sparklineData={campaignSeries.averageOrderValue} />
+                                            <MetricCard title="Revenue per Email" value={formatCurrency(campaignMetrics.revenuePerEmail.value)} change={campaignMetrics.revenuePerEmail.change} isPositive={campaignMetrics.revenuePerEmail.isPositive} previousValue={campaignMetrics.revenuePerEmail.previousValue} previousPeriod={campaignMetrics.revenuePerEmail.previousPeriod} dateRange={dateRange} metricKey="revenuePerEmail" sparklineData={campaignSeries.revenuePerEmail} />
+                                            <MetricCard title="Open Rate" value={formatPercent(campaignMetrics.openRate.value)} change={campaignMetrics.openRate.change} isPositive={campaignMetrics.openRate.isPositive} previousValue={campaignMetrics.openRate.previousValue} previousPeriod={campaignMetrics.openRate.previousPeriod} dateRange={dateRange} metricKey="openRate" sparklineData={campaignSeries.openRate} />
+                                            <MetricCard title="Click Rate" value={formatPercent(campaignMetrics.clickRate.value)} change={campaignMetrics.clickRate.change} isPositive={campaignMetrics.clickRate.isPositive} previousValue={campaignMetrics.clickRate.previousValue} previousPeriod={campaignMetrics.clickRate.previousPeriod} dateRange={dateRange} metricKey="clickRate" sparklineData={campaignSeries.clickRate} />
+                                            <MetricCard title="Click-to-Open Rate" value={formatPercent(campaignMetrics.clickToOpenRate.value)} change={campaignMetrics.clickToOpenRate.change} isPositive={campaignMetrics.clickToOpenRate.isPositive} previousValue={campaignMetrics.clickToOpenRate.previousValue} previousPeriod={campaignMetrics.clickToOpenRate.previousPeriod} dateRange={dateRange} metricKey="clickToOpenRate" sparklineData={campaignSeries.clickToOpenRate} />
+                                            <MetricCard title="Emails Sent" value={formatNumber(campaignMetrics.emailsSent.value)} change={campaignMetrics.emailsSent.change} isPositive={campaignMetrics.emailsSent.isPositive} previousValue={campaignMetrics.emailsSent.previousValue} previousPeriod={campaignMetrics.emailsSent.previousPeriod} dateRange={dateRange} metricKey="emailsSent" sparklineData={campaignSeries.emailsSent} />
+                                            <MetricCard title="Total Orders" value={formatNumber(campaignMetrics.totalOrders.value)} change={campaignMetrics.totalOrders.change} isPositive={campaignMetrics.totalOrders.isPositive} previousValue={campaignMetrics.totalOrders.previousValue} previousPeriod={campaignMetrics.totalOrders.previousPeriod} dateRange={dateRange} metricKey="totalOrders" sparklineData={campaignSeries.totalOrders} />
+                                            <MetricCard title="Conversion Rate" value={formatPercent(campaignMetrics.conversionRate.value)} change={campaignMetrics.conversionRate.change} isPositive={campaignMetrics.conversionRate.isPositive} previousValue={campaignMetrics.conversionRate.previousValue} previousPeriod={campaignMetrics.conversionRate.previousPeriod} dateRange={dateRange} metricKey="conversionRate" sparklineData={campaignSeries.conversionRate} />
+                                            <MetricCard title="Unsubscribe Rate" value={formatPercent(campaignMetrics.unsubscribeRate.value)} change={campaignMetrics.unsubscribeRate.change} isPositive={campaignMetrics.unsubscribeRate.isPositive} previousValue={campaignMetrics.unsubscribeRate.previousValue} previousPeriod={campaignMetrics.unsubscribeRate.previousPeriod} dateRange={dateRange} metricKey="unsubscribeRate" sparklineData={campaignSeries.unsubscribeRate} isNegativeMetric />
+                                            <MetricCard title="Spam Rate" value={formatPercent(campaignMetrics.spamRate.value)} change={campaignMetrics.spamRate.change} isPositive={campaignMetrics.spamRate.isPositive} previousValue={campaignMetrics.spamRate.previousValue} previousPeriod={campaignMetrics.spamRate.previousPeriod} dateRange={dateRange} metricKey="spamRate" sparklineData={campaignSeries.spamRate} isNegativeMetric />
+                                            <MetricCard title="Bounce Rate" value={formatPercent(campaignMetrics.bounceRate.value)} change={campaignMetrics.bounceRate.change} isPositive={campaignMetrics.bounceRate.isPositive} previousValue={campaignMetrics.bounceRate.previousValue} previousPeriod={campaignMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={campaignSeries.bounceRate} isNegativeMetric />
+                                        </div>
+                                        <button onClick={() => setShowCampaignSection(false)} className="mt-3 text-xs text-blue-600 dark:text-blue-400 underline">Hide Campaign Performance</button>
+                                    </div>
+                                )}
                             </section>
                         )}
 
