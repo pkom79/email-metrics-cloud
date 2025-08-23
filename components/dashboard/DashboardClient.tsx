@@ -63,6 +63,14 @@ export default function DashboardClient({ businessName, userId }: { businessName
         setGranularity(g => (g === safeGranularity ? g : safeGranularity));
     }, [safeGranularity, dashboardError]);
 
+    // Clear initial loading state once data is fetched or determined to be empty
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setIsInitialLoading(false);
+        }, 1000); // Allow 1 second for data manager to initialize
+        return () => clearTimeout(timer);
+    }, []);
+
     // Keep date inputs in sync with selected preset (handled later once data present)
 
     // UI state
