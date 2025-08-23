@@ -271,10 +271,16 @@ export default function DashboardClient({ businessName, userId }: { businessName
 
     // Data (only executes on desktop now)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    const ALL_CAMPAIGNS = useMemo(() => dm.getCampaigns(), [dm, dataVersion]);
+    const ALL_CAMPAIGNS = useMemo(() => {
+        if (isMobile) return [] as ReturnType<typeof dm.getCampaigns>;
+        return dm.getCampaigns();
+    }, [dm, dataVersion, isMobile]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    const ALL_FLOWS = useMemo(() => dm.getFlowEmails(), [dm, dataVersion]);
-    const hasData = ALL_CAMPAIGNS.length > 0 || ALL_FLOWS.length > 0;
+    const ALL_FLOWS = useMemo(() => {
+        if (isMobile) return [] as ReturnType<typeof dm.getFlowEmails>;
+        return dm.getFlowEmails();
+    }, [dm, dataVersion, isMobile]);
+    const hasData = !isMobile && (ALL_CAMPAIGNS.length > 0 || ALL_FLOWS.length > 0);
     // Anchor to the latest date within the currently visible subset (campaigns + selected flow)
     const REFERENCE_DATE = useMemo(() => {
         const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow);
@@ -708,8 +714,8 @@ export default function DashboardClient({ businessName, userId }: { businessName
     // CRITICAL: Return mobile notice immediately to prevent ANY heavy calculations on mobile
     if (isMobile) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-6">
-                <div className="max-w-md mx-auto text-center bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-start justify-center pt-8 sm:pt-10 px-4">
+                <div className="w-full max-w-md text-center bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 sm:p-8 border border-gray-200 dark:border-gray-700">
                     <div className="mb-4">
                         <BarChart3 className="w-16 h-16 text-blue-600 mx-auto mb-2" />
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
@@ -717,24 +723,20 @@ export default function DashboardClient({ businessName, userId }: { businessName
                         </h2>
                     </div>
 
-                    <p className="text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
-                        This email analytics dashboard performs intensive calculations that require desktop-class hardware for optimal performance.
+                    <p className="text-gray-600 dark:text-gray-300 mb-5 leading-relaxed text-sm">
+                        This dashboard performs advanced calculations and high‑resolution data visualizations that are optimized for desktop devices.
                     </p>
-
-                    <div className="space-y-3 text-sm text-gray-500 dark:text-gray-400 mb-8">
-                        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                            <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">System Requirements:</h3>
-                            <ul className="space-y-1 text-left">
-                                <li>• Desktop or laptop computer</li>
-                                <li>• Minimum 4GB RAM recommended</li>
-                                <li>• Modern browser (Chrome, Firefox, Safari, Edge)</li>
-                                <li>• Stable internet connection</li>
-                            </ul>
-                        </div>
+                    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6 text-left">
+                        <h3 className="font-semibold text-gray-700 dark:text-gray-300 mb-2 text-sm">Recommended Minimum</h3>
+                        <ul className="space-y-1 text-xs text-gray-600 dark:text-gray-300">
+                            <li>• Desktop or laptop (modern CPU)</li>
+                            <li>• 8GB RAM (4GB minimum)</li>
+                            <li>• Chrome, Safari, Firefox or Edge</li>
+                            <li>• Stable broadband connection</li>
+                        </ul>
                     </div>
-
-                    <p className="text-xs text-gray-400 dark:text-gray-500">
-                        Please access this dashboard from a desktop or laptop computer for the best experience.
+                    <p className="text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
+                        Please access from a desktop or laptop to view full performance analytics, audience insights and segmentation features.
                     </p>
                 </div>
             </div>
