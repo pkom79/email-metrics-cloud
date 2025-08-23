@@ -499,6 +499,15 @@ export default function DashboardClient({ businessName, userId }: { businessName
             setDateRange('90d');
         }
     }, [isMobile, dateRange, mobileAllAllowed]);
+    // Mobile error instrumentation (must be before early returns)
+    useEffect(() => {
+        if (!isMobile) return;
+        const onErr = (e: any) => console.log('[mobile-error]', e?.message || e);
+        const onRej = (e: any) => console.log('[mobile-unhandled]', e?.reason || e);
+        window.addEventListener('error', onErr);
+        window.addEventListener('unhandledrejection', onRej);
+        return () => { window.removeEventListener('error', onErr); window.removeEventListener('unhandledrejection', onRej); };
+    }, [isMobile]);
     // Error boundary for dashboard (after all hooks)
     if (dashboardError) {
         return (
@@ -529,14 +538,6 @@ export default function DashboardClient({ businessName, userId }: { businessName
     }
 
     // Export PDF feature removed per request
-    useEffect(() => {
-        if (!isMobile) return;
-        const onErr = (e: any) => console.log('[mobile-error]', e?.message || e);
-        const onRej = (e: any) => console.log('[mobile-unhandled]', e?.reason || e);
-        window.addEventListener('error', onErr);
-        window.addEventListener('unhandledrejection', onRej);
-        return () => { window.removeEventListener('error', onErr); window.removeEventListener('unhandledrejection', onRej); };
-    }, [isMobile]);
 
     // Mobile layout with full functionality
     if (isMobile) {
