@@ -705,6 +705,45 @@ export default function DashboardClient({ businessName, userId }: { businessName
         );
     }
 
+    // Mobile notice for desktop-optimized experience
+    if (isMobile) {
+        return (
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-6">
+                <div className="max-w-md mx-auto text-center bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
+                    <div className="mb-6">
+                        <BarChart3 className="w-16 h-16 text-blue-600 mx-auto mb-4" />
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                            Desktop Experience Required
+                        </h2>
+                    </div>
+                    
+                    <p className="text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
+                        Our advanced email analytics dashboard is optimized for desktop and tablet devices to ensure the best experience with complex data visualizations and comprehensive reporting features.
+                    </p>
+                    
+                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-6">
+                        <p className="text-sm text-blue-800 dark:text-blue-200">
+                            <strong>For the full experience:</strong> Please access this dashboard from a computer or tablet with a screen width of at least 768px.
+                        </p>
+                    </div>
+                    
+                    <div className="space-y-3">
+                        <button
+                            onClick={() => window.location.href = 'mailto:?subject=Email Analytics Dashboard&body=View your email analytics dashboard at: ' + window.location.href}
+                            className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                        >
+                            Email Link to Desktop
+                        </button>
+                        
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                            You can also bookmark this page and return on a larger device
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     // Export PDF feature removed per request
 
     // Mobile layout with full functionality
