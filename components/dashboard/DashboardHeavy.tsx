@@ -115,10 +115,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     label: a.label || a.businessName || a.id?.slice(0, 8) || 'Account'
                 }));
                 setAllAccounts(list);
-                if (!selectedAccountId && list.length) {
-                    setSelectedAccountId(list[0].id);
-                    setSelectedAccountLabel(list[0].label);
-                }
+                // Do not auto-select; wait for admin to choose explicitly.
             } catch (e: any) {
                 if (!cancelled) setAccountsError(e?.message || 'Failed to load accounts');
             }

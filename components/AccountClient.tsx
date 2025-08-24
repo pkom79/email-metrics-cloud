@@ -153,7 +153,6 @@ export default function AccountClient({ initial }: Props) {
                                 const a = (allAccounts || []).find(x => x.id === selectedAccountId); if (!a) return null; return (
                                     <>
                                         <div><span className="font-medium">Owner Email:</span> {a.ownerEmail || '—'}</div>
-                                        <div><span className="font-medium">Business Name:</span> {a.businessName || a.name || '—'}</div>
                                         <div><span className="font-medium">Store URL:</span> {a.storeUrl ? `https://${a.storeUrl}` : '—'}</div>
                                     </>
                                 );

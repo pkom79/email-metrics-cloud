@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
+import { createServiceClient } from '../../../lib/supabase/server';
 
 // Returns list of all accounts with owner email & metadata (admin only)
 export async function GET() {
@@ -10,17 +11,29 @@ export async function GET() {
     const isAdmin = user.app_metadata?.role === 'admin';
     if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    // Active accounts only (deleted_at IS NULL) and include store_url if present
+    // Use service client to also fetch owner emails via Auth Admin API
+    const service = createServiceClient();
     const { data, error } = await supabase
         .from('accounts')
-        .select('id,name,company,store_url,deleted_at,created_at')
+        .select('id,name,company,store_url,deleted_at,created_at,owner_user_id')
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // Collect unique owner user IDs
+    const ownerIds = Array.from(new Set((data || []).map(r => (r as any).owner_user_id).filter(Boolean)));
+    const emailMap: Record<string, string> = {};
+    for (const oid of ownerIds) {
+        try {
+            const { data: usr } = await (service as any).auth.admin.getUserById(oid);
+            if (usr?.user?.email) emailMap[oid] = usr.user.email;
+        } catch { /* ignore individual failures */ }
+    }
     const looksLikeEmail = (s: string | null) => !!s && /@/.test(s);
     const trimmed = (s: string | null) => (s && s.trim()) || null;
     const rawAccounts = (data || []).map(a => ({
         id: (a as any).id as string,
+        ownerUserId: (a as any).owner_user_id as string | null,
         company: trimmed((a as any).company as string | null),
         name: trimmed((a as any).name as string | null),
         storeUrl: (a as any).store_url || null,
@@ -30,7 +43,7 @@ export async function GET() {
         let businessName: string | null = null;
         if (a.company && !looksLikeEmail(a.company)) businessName = a.company;
         else if (a.name && !looksLikeEmail(a.name)) businessName = a.name;
-        return { id: a.id, businessName, storeUrl: a.storeUrl, ownerEmail: null };
+        return { id: a.id, businessName, storeUrl: a.storeUrl, ownerEmail: a.ownerUserId ? emailMap[a.ownerUserId] || null : null };
     });
 
     // Keep only those with a businessName initially
