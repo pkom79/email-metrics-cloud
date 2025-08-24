@@ -8,6 +8,7 @@ export default function HeaderLinks({ isAuthed }: { isAuthed: boolean }) {
     const pathname = usePathname();
     const router = useRouter();
     const onDashboard = pathname === '/dashboard';
+    const onAccount = pathname === '/account';
 
     const signOut = async () => {
         await supabase.auth.signOut();
@@ -22,11 +23,11 @@ export default function HeaderLinks({ isAuthed }: { isAuthed: boolean }) {
         <div className="flex items-center gap-3">
             {isAuthed ? (
                 <>
-                    {!onDashboard && (
+                    {(!onDashboard) && (
                         <Link href="/dashboard" className="text-sm text-purple-600 dark:text-purple-400">Dashboard</Link>
                     )}
-                    {!isAdmin && <Link href="/account" className="text-sm text-gray-600 dark:text-gray-300">Account</Link>}
-                    {isAdmin && <Link href="/account" className="text-sm text-gray-600 dark:text-gray-300">Admin</Link>}
+                    {!isAdmin && !onAccount && <Link href="/account" className="text-sm text-gray-600 dark:text-gray-300">Account</Link>}
+                    {isAdmin && !onAccount && <Link href="/account" className="text-sm text-gray-600 dark:text-gray-300">Account</Link>}
                     <button onClick={signOut} className="text-sm text-gray-600 dark:text-gray-300 hover:underline">Sign out</button>
                 </>
             ) : (

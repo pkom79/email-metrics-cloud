@@ -9,8 +9,9 @@ export async function GET(request: Request) {
         const user = await getServerUser();
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-        const { searchParams } = new URL(request.url);
-        const type = searchParams.get('type'); // 'campaigns', 'flows', or 'subscribers'
+    const { searchParams } = new URL(request.url);
+    const type = searchParams.get('type'); // 'campaigns', 'flows', or 'subscribers'
+    const overrideAccountId = searchParams.get('account_id');
 
         if (!type || !['campaigns', 'flows', 'subscribers'].includes(type)) {
             return NextResponse.json({ error: 'Invalid type parameter' }, { status: 400 });
@@ -19,19 +20,25 @@ export async function GET(request: Request) {
         const supabase = createServiceClient();
 
         // Find the user's account
-        const { data: acct, error: acctErr } = await supabase
-            .from('accounts')
-            .select('id')
-            .eq('owner_user_id', user.id)
-            .maybeSingle();
-        if (acctErr) throw acctErr;
-        if (!acct) return NextResponse.json({ error: 'No account found' }, { status: 404 });
+        let targetAccountId: string | null = null;
+        if (overrideAccountId && /^[0-9a-fA-F-]{36}$/.test(overrideAccountId)) {
+            targetAccountId = overrideAccountId;
+        } else {
+            const { data: acct, error: acctErr } = await supabase
+                .from('accounts')
+                .select('id')
+                .eq('owner_user_id', user.id)
+                .maybeSingle();
+            if (acctErr) throw acctErr;
+            if (!acct) return NextResponse.json({ error: 'No account found' }, { status: 404 });
+            targetAccountId = acct.id;
+        }
 
         // Get the latest snapshot for this account
         const { data: snap, error: snapErr } = await supabase
             .from('snapshots')
             .select('upload_id')
-            .eq('account_id', acct.id)
+            .eq('account_id', targetAccountId)
             .eq('status', 'ready')
             .order('created_at', { ascending: false })
             .limit(1)
