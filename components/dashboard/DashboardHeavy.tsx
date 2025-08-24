@@ -357,6 +357,28 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     </select><ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" /></div></div>
                     <div className="flex items-center gap-1.5"><BarChart3 className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Granularity:</span><div className="flex gap-1.5 ml-2 flex-nowrap">{(['daily', 'weekly', 'monthly'] as const).map(g => <button key={g} onClick={() => { if (g !== granularity) { setGranularity(g); } }} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${granularity === g ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>{g.charAt(0).toUpperCase() + g.slice(1)}</button>)}</div></div>
                 </div></div></div></div>
+            {/* Empty state (no data) */}
+            {!showOverlay && !hasData && (
+                <div className="px-6 pb-4">
+                    <div className="max-w-3xl mx-auto mt-8">
+                        <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm p-10 text-center">
+                            <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">
+                                {isAdmin ? (selectedAccountId ? 'No data for this account yet' : 'Select an account to view data') : 'Get started by uploading your reports'}
+                            </h2>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                                {isAdmin ? (
+                                    selectedAccountId ? 'This account has no processed snapshots. Once an upload is processed, metrics will appear here.' : 'Choose an account from the dropdown in the header to view its metrics.'
+                                ) : 'Upload your campaigns, flows, and subscribers CSV exports to see performance metrics and insights.'}
+                            </p>
+                            {!isAdmin && (
+                                <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-purple-500 bg-purple-600 text-white px-5 py-2 text-sm font-medium shadow hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                    <UploadIcon className="h-4 w-4" /> Upload Reports
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
             {/* Data coverage notice */}
             {hasData && (<div className="py-3"><div className="max-w-7xl mx-auto"><div className="mx-4 sm:mx-6"><div className="p-0 text-purple-700 dark:text-purple-200"><span className="text-xs"><span className="font-medium">Data Coverage Notice:</span>{(() => { const dates = [...defCampaigns, ...defFlows].map(e => e.sentDate.getTime()); const lastVisible = dates.length ? new Date(Math.max(...dates)) : dm.getLastEmailDate(); return ` All dashboard metrics reflect email channel performance only and exclude SMS-attributed revenue through ${lastVisible.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.`; })()}</span></div></div></div></div>)}
             {/* Main content */}
