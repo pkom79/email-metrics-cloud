@@ -9,9 +9,10 @@ interface SparklineProps {
     data: { value: number; date: string }[];
     valueFormat?: 'currency' | 'percentage' | 'number';
     hasInsufficientData?: boolean;
+    forceZeroStyle?: boolean; // treat as displayed zero (purple style)
 }
 
-const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, isNegativeMetric = false, data, valueFormat = 'number', hasInsufficientData = false }) => {
+const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, isNegativeMetric = false, data, valueFormat = 'number', hasInsufficientData = false, forceZeroStyle = false }) => {
     const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; value: number; date: string } | null>(null);
     const svgRef = useRef<SVGSVGElement>(null);
 
@@ -32,16 +33,12 @@ const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, is
     };
 
     const getColorScheme = () => {
-        const isZeroChange = Math.abs(change) < 0.1;
-
-        // All time, 0% changes, and insufficient data should all show purple charts
-        if (isAllTime || isZeroChange || hasInsufficientData) {
-            return { stroke: '#8b5cf6', gradientStart: '#8b5cf6', gradientEnd: '#c084fc' }; // Purple for all these cases
-        } else if (isPositive) {
-            return { stroke: '#10b981', gradientStart: '#10b981', gradientEnd: '#6ee7b7' };
-        } else {
-            return { stroke: '#ef4444', gradientStart: '#ef4444', gradientEnd: '#fca5a5' };
+        const isZeroDisplay = forceZeroStyle || Math.abs(change) < 1e-9; // true zero or forced small rounded-to-zero
+        if (isAllTime || hasInsufficientData || isZeroDisplay) {
+            return { stroke: '#8b5cf6', gradientStart: '#8b5cf6', gradientEnd: '#c084fc' };
         }
+        if (isPositive) return { stroke: '#10b981', gradientStart: '#10b981', gradientEnd: '#6ee7b7' };
+        return { stroke: '#ef4444', gradientStart: '#ef4444', gradientEnd: '#fca5a5' };
     };
 
     const colorScheme = getColorScheme();

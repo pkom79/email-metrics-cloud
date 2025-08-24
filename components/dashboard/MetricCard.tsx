@@ -35,16 +35,15 @@ const MetricCard: React.FC<MetricCardProps> = ({
     compareMode = 'prev-period'
 }) => {
     const isAllTime = dateRange === 'all';
+    const DISPLAY_EPS = 0.05; // <0.05% rounds to 0.0%
 
-    // GOODNESS color (green/red): already computed by DataManager including negative metrics logic
     const shouldShowAsPositive = isPositive;
-
-    // DIRECTION arrow: based purely on change sign (increase vs decrease)
+    const hasInsufficientData = previousValue == null || previousPeriod == null;
+    const tinyChange = Math.abs(change) < DISPLAY_EPS; // will display as 0.0%
+    const isZeroDisplay = tinyChange || Math.abs(change) < 1e-9;
+    const showChangeBlock = !isAllTime && !hasInsufficientData;
     const isIncrease = change > 0;
-    const isZeroChange = Math.abs(change) < 0.01; // Exactly 0.0% (changed from 0.1%)
-
-    // Check if we have insufficient data for comparison (no previous period data)
-    const hasInsufficientData = previousValue == null || previousPeriod == null; const benchmarkResult = metricKey ? getBenchmarkStatus(metricKey, parseMetricValue(value)) : null;
+    const benchmarkResult = metricKey ? getBenchmarkStatus(metricKey, parseMetricValue(value)) : null;
     const numericValue = metricKey === 'conversionRate' ? parseMetricValue(value) : undefined;
 
     const getValueFormat = () => {
@@ -109,6 +108,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
                 data={sparklineData}
                 valueFormat={valueFormat as any}
                 hasInsufficientData={hasInsufficientData}
+                forceZeroStyle={showChangeBlock ? isZeroDisplay : true /* if we hide arrow treat as purple */}
             />
 
             <div className="flex items-end justify-between">
@@ -121,29 +121,26 @@ const MetricCard: React.FC<MetricCardProps> = ({
                             Includes view-through
                         </span>
                     )}
-                    {!isAllTime && (
+                    {showChangeBlock && (
                         <div
-                            className={`flex items-center text-sm font-medium ${isZeroChange
-                                ? 'text-gray-600 dark:text-gray-400' // Black/gray for 0% change
-                                : hasInsufficientData
-                                    ? 'text-purple-600 dark:text-purple-400' // Purple for insufficient data
-                                    : shouldShowAsPositive
-                                        ? 'text-green-600 dark:text-green-400'
-                                        : 'text-red-600 dark:text-red-400'
+                            className={`flex items-center text-sm font-medium ${isZeroDisplay
+                                ? 'text-gray-600 dark:text-gray-400'
+                                : shouldShowAsPositive
+                                    ? 'text-green-600 dark:text-green-400'
+                                    : 'text-red-600 dark:text-red-400'
                                 }`}
                             title={trendTooltip}
                             aria-label={trendTooltip}
                         >
-                            {isZeroChange ? (
+                            {isZeroDisplay ? (
                                 <ArrowRight className="w-4 h-4 mr-1" />
                             ) : isIncrease ? (
                                 <ArrowUp className="w-4 h-4 mr-1" />
                             ) : (
                                 <ArrowDown className="w-4 h-4 mr-1" />
                             )}
-                            {(() => {
-                                const changeValue = Math.abs(change);
-                                const formatted = changeValue.toFixed(1);
+                            {isZeroDisplay ? '0.0' : (() => {
+                                const formatted = Math.abs(change).toFixed(1);
                                 const num = parseFloat(formatted);
                                 return num >= 1000 ? num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatted;
                             })()}%

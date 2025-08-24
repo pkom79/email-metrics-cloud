@@ -812,6 +812,18 @@ export class DataManager {
             prevEndDate
         );
 
+        // Strict active day coverage: previous period must have identical active day count to current
+        const collectActiveDays = (s: Date, e: Date) => {
+            const set = new Set<string>();
+            const inRange = (d: Date) => d >= s && d <= e;
+            for (const c of campaignsToUse) if (c.sentDate && inRange(c.sentDate)) set.add(this._dayKey(c.sentDate));
+            for (const f of flowsToUse) if (f.sentDate && inRange(f.sentDate)) set.add(this._dayKey(f.sentDate));
+            return set;
+        };
+        const currentActiveDays = collectActiveDays(startDate, endDate);
+        const previousActiveDays = collectActiveDays(prevStartDate, prevEndDate);
+        const baselineComplete = currentActiveDays.size > 0 && previousActiveDays.size === currentActiveDays.size;
+
         // Extract the specific metric value
         let currentValue = 0;
         let previousValue = 0;
@@ -868,26 +880,38 @@ export class DataManager {
                 break;
         }
 
-        // Calculate percentage change
+        if (!baselineComplete) {
+            // Insufficient baseline coverage
+            return {
+                currentValue,
+                previousValue: null,
+                changePercent: 0,
+                isPositive: true,
+                currentPeriod: { startDate, endDate },
+                previousPeriod: undefined
+            };
+        }
+
+        // Calculate percentage change only with complete baseline
         let changePercent = 0;
         if (previousValue !== 0) {
             changePercent = ((currentValue - previousValue) / previousValue) * 100;
         } else if (currentValue > 0) {
-            changePercent = compareMode === 'prev-period' ? 100 : 0;
+            // When baseline value is zero but coverage matches, treat as 0% (avoid artificial 100% spikes)
+            changePercent = 0;
         }
 
         // Determine if change is positive (good) based on metric type
         const negativeMetrics = ['unsubscribeRate', 'spamRate', 'bounceRate'];
         const isPositive = negativeMetrics.includes(metricKey) ? changePercent <= 0 : changePercent >= 0;
 
-        const noBaseline = previousValue === 0;
         return {
             currentValue,
-            previousValue: noBaseline ? null : previousValue,
-            changePercent: noBaseline ? 0 : changePercent,
+            previousValue,
+            changePercent,
             isPositive,
             currentPeriod: { startDate, endDate },
-            previousPeriod: noBaseline ? undefined : { startDate: prevStartDate, endDate: prevEndDate }
+            previousPeriod: { startDate: prevStartDate, endDate: prevEndDate }
         };
     }
 }
