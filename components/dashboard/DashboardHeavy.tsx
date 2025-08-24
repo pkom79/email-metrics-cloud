@@ -118,7 +118,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 }));
                 setAllAccounts(list);
                 if (!selectedAccountId && list.length) {
-                    setSelectedAccountId(list[0].id);
+                    // Guard: only set once
+                    setSelectedAccountId(prev => prev || list[0].id);
                     setSelectedAccountLabel(list[0].label);
                 }
             } catch (e: any) {
@@ -127,6 +128,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         })();
         return () => { cancelled = true; };
     }, []);
+
+    // (moved loop detector below base data section)
 
     // Admin: reload data when selectedAccountId changes (stable, uses helper)
     useEffect(() => {
@@ -191,44 +194,42 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const ALL_FLOWS = useMemo(() => dm.getFlowEmails(), [dm, dataVersion]);
     const hasData = ALL_CAMPAIGNS.length > 0 || ALL_FLOWS.length > 0;
-    // Stable reference date: if no data, reuse last value to avoid new Date() churn triggering recalculations
+    // Stable reference date: only updates when we actually have dated records; otherwise reuse last
     const lastReferenceRef = useRef<Date | null>(null);
     const REFERENCE_DATE = useMemo(() => {
         const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow);
         const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime());
         const flowTs = flowSubset.map(f => f.sentDate.getTime());
-        const all = [...campTs, ...flowTs].filter(Number.isFinite);
+        const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n));
         if (all.length) {
             const d = new Date(Math.max(...all));
             lastReferenceRef.current = d;
             return d;
         }
-        return lastReferenceRef.current || new Date(0); // epoch sentinel when truly no data ever
+        return lastReferenceRef.current || new Date();
     }, [ALL_CAMPAIGNS, ALL_FLOWS, selectedFlow]);
-    // Active flows: flows that have at least one send in the currently selected (or custom) date range
-    // Mirror FlowStepAnalysis logic: restrict dropdown to *live* flows only, further filtered to current date window
-    const liveFlows = useMemo(() => ALL_FLOWS.filter(f => (f as any).status && String((f as any).status).toLowerCase() === 'live'), [ALL_FLOWS]);
-    const flowsInRange = useMemo(() => {
-        if (!liveFlows.length) return [] as typeof liveFlows;
-        let flows = liveFlows;
-        if (dateRange === 'custom' && customActive) {
-            const from = new Date(customFrom! + 'T00:00:00');
-            const to = new Date(customTo! + 'T23:59:59');
-            flows = flows.filter(f => f.sentDate >= from && f.sentDate <= to);
-        } else if (dateRange !== 'all') {
-            const days = parseInt(dateRange.replace('d', ''));
-            const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999);
-            const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0);
-            flows = flows.filter(f => f.sentDate >= start && f.sentDate <= end);
+    // Dev-only render loop detector (after hasData is defined)
+    if (process.env.NODE_ENV !== 'production') {
+        const ref = (globalThis as any).__emDashRenderCount = (globalThis as any).__emDashRenderCount || { c: 0, t: Date.now() };
+        ref.c++;
+        const now = Date.now();
+        if (now - ref.t > 1000) { ref.c = 0; ref.t = now; }
+        else if (ref.c > 200) {
+            // eslint-disable-next-line no-console
+            console.warn('[DashboardHeavy] High render count', { c: ref.c, dateRange, selectedAccountId, dataVersion, hasData });
         }
-        return flows;
-    }, [liveFlows, dateRange, customActive, customFrom, customTo, REFERENCE_DATE]);
-    const uniqueFlowNames = useMemo(() => Array.from(new Set(flowsInRange.map(f => f.flowName))).sort(), [flowsInRange]);
-    // Ensure selected flow remains valid; if not, reset to 'all'
-    useEffect(() => { if (selectedFlow !== 'all' && !uniqueFlowNames.includes(selectedFlow)) setSelectedFlow('all'); }, [uniqueFlowNames, selectedFlow]);
+    }
 
     // Filters
     const filteredCampaigns = useMemo(() => { if (!hasData) return [] as typeof ALL_CAMPAIGNS; let list = ALL_CAMPAIGNS; if (dateRange === 'custom' && customActive) { const from = new Date(customFrom! + 'T00:00:00'); const to = new Date(customTo! + 'T23:59:59'); list = list.filter(c => c.sentDate >= from && c.sentDate <= to); } else if (dateRange !== 'all') { const days = parseInt(dateRange.replace('d', '')); const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999); const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0); list = list.filter(c => c.sentDate >= start && c.sentDate <= end); } return list; }, [ALL_CAMPAIGNS, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
+    // Unique flow names (stable across renders unless dataVersion changes)
+    const uniqueFlowNames = useMemo(() => {
+        const set = new Set<string>();
+        for (const f of ALL_FLOWS) { if (f.flowName) set.add(f.flowName); }
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }, [ALL_FLOWS]);
+    // Ensure selectedFlow stays valid if underlying data changes (e.g., account switch)
+    useEffect(() => { if (selectedFlow !== 'all' && !uniqueFlowNames.includes(selectedFlow)) { setSelectedFlow('all'); } }, [selectedFlow, uniqueFlowNames]);
     const filteredFlowEmails = useMemo(() => { if (!hasData) return [] as typeof ALL_FLOWS; let flows = ALL_FLOWS; if (selectedFlow !== 'all') flows = flows.filter(f => f.flowName === selectedFlow); if (dateRange === 'custom' && customActive) { const from = new Date(customFrom! + 'T00:00:00'); const to = new Date(customTo! + 'T23:59:59'); flows = flows.filter(f => f.sentDate >= from && f.sentDate <= to); } else if (dateRange !== 'all') { const days = parseInt(dateRange.replace('d', '')); const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999); const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0); flows = flows.filter(f => f.sentDate >= start && f.sentDate <= end); } return flows; }, [ALL_FLOWS, selectedFlow, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
 
     // PoP
