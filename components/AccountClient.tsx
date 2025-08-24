@@ -142,7 +142,7 @@ export default function AccountClient({ initial }: Props) {
                         >
                             <option value="admin-self">Admin (My Account)</option>
                             {(allAccounts || []).map(a => (
-                                <option key={a.id} value={a.id}>{a.businessName || a.name || a.id}</option>
+                                <option key={a.id} value={a.id}>{a.businessName || a.id}</option>
                             ))}
                         </select>
                         <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-xs">▼</span>

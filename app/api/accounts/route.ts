@@ -13,17 +13,18 @@ export async function GET() {
     // Active accounts only (deleted_at IS NULL) and include store_url if present
     const { data, error } = await supabase
         .from('accounts')
-        .select('id,name,company,store_url,deleted_at')
+        .select('id,company,store_url,deleted_at')
         .is('deleted_at', null)
-        .order('created_at', { ascending: false });
+        .not('company', 'is', null)
+        .neq('company', '')
+        .order('company', { ascending: true });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     const accounts = (data || []).map(a => ({
         id: (a as any).id,
-        name: (a as any).name,
-        businessName: (a as any).company || (a as any).name || null,
-        ownerEmail: null, // owner email intentionally omitted (needs service client)
+        businessName: (a as any).company || null,
+        ownerEmail: null,
         storeUrl: (a as any).store_url || null,
-    })).sort((a, b) => (a.businessName || a.name || a.id).localeCompare(b.businessName || b.name || b.id));
+    }));
 
     return NextResponse.json({ accounts });
 }
