@@ -88,13 +88,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [isBeforeAudience, setIsBeforeAudience] = useState(true);
     // Admin accounts selector state
     const [isAdmin, setIsAdmin] = useState(false);
+    const [adminCheckComplete, setAdminCheckComplete] = useState(false);
     const [allAccounts, setAllAccounts] = useState<any[] | null>(null);
     const [accountsError, setAccountsError] = useState<string | null>(null);
     const [selectedAccountId, setSelectedAccountId] = useState<string>('');
     // Human readable label for currently selected admin account
     const [selectedAccountLabel, setSelectedAccountLabel] = useState<string>('');
 
-    // Load admin accounts once (no dependency on selectedAccountId to avoid re-fetch loops)
+    // Determine admin status early and (if admin) load accounts list before any hydration
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -102,22 +103,30 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 const sessionResp = await supabase.auth.getSession();
                 const s = sessionResp.data.session;
                 const admin = s?.user?.app_metadata?.role === 'admin';
-                if (!admin) return; // not admin, skip
-                setIsAdmin(true);
-
-                const r = await fetch('/api/accounts', { cache: 'no-store' });
-                if (!r.ok) throw new Error(`Accounts ${r.status}`);
-                const j = await r.json();
                 if (cancelled) return;
-                const list = (j.accounts || []).map((a: any) => ({
-                    id: a.id,
-                    businessName: a.businessName || null,
-                    label: a.label || a.businessName || a.id?.slice(0, 8) || 'Account'
-                }));
-                setAllAccounts(list);
-                // Do not auto-select; wait for admin to choose explicitly.
-            } catch (e: any) {
-                if (!cancelled) setAccountsError(e?.message || 'Failed to load accounts');
+                if (admin) {
+                    setIsAdmin(true);
+                    try {
+                        const r = await fetch('/api/accounts', { cache: 'no-store' });
+                        if (r.ok) {
+                            const j = await r.json();
+                            if (!cancelled) {
+                                const list = (j.accounts || []).map((a: any) => ({
+                                    id: a.id,
+                                    businessName: a.businessName || null,
+                                    label: a.label || a.businessName || a.id?.slice(0, 8) || 'Account'
+                                }));
+                                setAllAccounts(list);
+                            }
+                        } else if (!cancelled) {
+                            setAccountsError(`Accounts ${r.status}`);
+                        }
+                    } catch (e: any) {
+                        if (!cancelled) setAccountsError(e?.message || 'Failed to load accounts');
+                    }
+                }
+            } finally {
+                if (!cancelled) setAdminCheckComplete(true);
             }
         })();
         return () => { cancelled = true; };
@@ -168,8 +177,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // Events / hydration
     const [showUploadModal, setShowUploadModal] = useState(false);
     useEffect(() => {
-        // For admins, do not hydrate any data until an account is explicitly selected
+        // Wait until we know admin status
+        if (!adminCheckComplete) return;
+        // Admin with no selected account: nothing to hydrate
         if (isAdmin && !selectedAccountId) { setIsInitialLoading(false); return; }
+        // Non-admin path OR admin + selected account (account-specific hydration handled in separate effect already)
+        if (isAdmin) return; // Avoid double-hydration; admin account hydration is in another effect.
         const onCreated = () => { setDataVersion(v => v + 1); setShowUploadModal(false); };
         const onHydrated = () => { setDataVersion(v => v + 1); setIsInitialLoading(false); };
         window.addEventListener('em:snapshot-created', onCreated as EventListener);
@@ -188,12 +201,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             window.removeEventListener('em:snapshot-created', onCreated as EventListener);
             window.removeEventListener('em:dataset-hydrated', onHydrated as EventListener);
         };
-    }, [userId, isAdmin, selectedAccountId]);
+    }, [userId, isAdmin, selectedAccountId, adminCheckComplete]);
 
     // Server snapshot CSV fallback
     useEffect(() => {
-        // Skip fallback load for admin with no selected account
-        if (isAdmin && !selectedAccountId) return;
+        // Wait for admin check; only for non-admin users (user auto-load of latest snapshot)
+        if (!adminCheckComplete) return;
+        if (isAdmin) return;
         let cancelled = false;
         (async () => {
             try {
@@ -237,7 +251,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             }
         })();
         return () => { cancelled = true };
-    }, [dm, isAdmin, selectedAccountId]);
+    }, [dm, isAdmin, adminCheckComplete]);
 
     // Safe granularity
     const safeGranularity = useMemo(() => { try { if (dm.getCampaigns().length === 0 && dm.getFlowEmails().length === 0) return 'daily'; if (customActive && customDays > 0) return dm.getGranularityForDateRange(`${customDays}d`); if (dateRange === 'all') return dm.getGranularityForDateRange('all'); return dm.getGranularityForDateRange(dateRange === 'custom' ? '30d' : dateRange); } catch { return 'daily'; } }, [dateRange, customActive, customDays, dm]);
