@@ -191,7 +191,20 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const ALL_FLOWS = useMemo(() => dm.getFlowEmails(), [dm, dataVersion]);
     const hasData = ALL_CAMPAIGNS.length > 0 || ALL_FLOWS.length > 0;
-    const REFERENCE_DATE = useMemo(() => { const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow); const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime()); const flowTs = flowSubset.map(f => f.sentDate.getTime()); const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n)); return all.length ? new Date(Math.max(...all)) : new Date(); }, [ALL_CAMPAIGNS, ALL_FLOWS, selectedFlow]);
+    // Stable reference date: if no data, reuse last value to avoid new Date() churn triggering recalculations
+    const lastReferenceRef = useRef<Date | null>(null);
+    const REFERENCE_DATE = useMemo(() => {
+        const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow);
+        const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime());
+        const flowTs = flowSubset.map(f => f.sentDate.getTime());
+        const all = [...campTs, ...flowTs].filter(Number.isFinite);
+        if (all.length) {
+            const d = new Date(Math.max(...all));
+            lastReferenceRef.current = d;
+            return d;
+        }
+        return lastReferenceRef.current || new Date(0); // epoch sentinel when truly no data ever
+    }, [ALL_CAMPAIGNS, ALL_FLOWS, selectedFlow]);
     // Active flows: flows that have at least one send in the currently selected (or custom) date range
     // Mirror FlowStepAnalysis logic: restrict dropdown to *live* flows only, further filtered to current date window
     const liveFlows = useMemo(() => ALL_FLOWS.filter(f => (f as any).status && String((f as any).status).toLowerCase() === 'live'), [ALL_FLOWS]);
@@ -223,14 +236,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         // Map our metric keys to DataManager keys if needed
         const keyMap: Record<string, string> = { avgOrderValue: 'avgOrderValue', averageOrderValue: 'avgOrderValue' };
         const dmKey = keyMap[metricKey] || metricKey;
-    let effectiveRange: string = dateRange as string;
+        let effectiveRange: string = dateRange as string;
         if (dateRange === 'custom' && customActive && customFrom && customTo) {
             effectiveRange = `custom:${customFrom}:${customTo}`;
         }
         if (effectiveRange === 'all') {
             return { changePercent: 0, isPositive: true, previousValue: 0, previousPeriod: undefined as any };
         }
-    const res = dm.calculatePeriodOverPeriodChange(dmKey, effectiveRange as string, dataset, { flowName: options?.flowName });
+        const res = dm.calculatePeriodOverPeriodChange(dmKey, effectiveRange as string, dataset, { flowName: options?.flowName });
         return { changePercent: res.changePercent, isPositive: res.isPositive, previousValue: res.previousValue, previousPeriod: res.previousPeriod };
     }, [dateRange, customActive, customFrom, customTo, dm]);
 
