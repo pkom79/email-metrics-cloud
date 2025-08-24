@@ -118,8 +118,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 }));
                 setAllAccounts(list);
                 if (!selectedAccountId && list.length) {
-                    // Guard: only set once
-                    setSelectedAccountId(prev => prev || list[0].id);
+                    setSelectedAccountId(list[0].id);
                     setSelectedAccountLabel(list[0].label);
                 }
             } catch (e: any) {
@@ -129,55 +128,44 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         return () => { cancelled = true; };
     }, []);
 
-    // (moved loop detector below base data section)
-
-    // Guard refs to avoid duplicate loads (e.g. React StrictMode double-invoke) that could cascade renders
-    const adminLoadRef = useRef<{ accountId: string | null; loading: boolean }>({ accountId: null, loading: false });
-    // Admin: reload data when selectedAccountId changes (stable, guarded)
+    // Admin: reload data when selectedAccountId changes (stable, uses helper)
     useEffect(() => {
         if (!isAdmin || !selectedAccountId) return;
-        // Skip if same account already loaded or a load is in-flight
-        if (adminLoadRef.current.loading || adminLoadRef.current.accountId === selectedAccountId) return;
-        adminLoadRef.current.loading = true;
         let cancelled = false;
         (async () => {
             setIsInitialLoading(true);
             setMetricsReady(false);
-            try { (dm as any).clearAllData?.(); } catch { /* ignore */ }
-            let success = false;
             try {
-                const listResp = await fetch(`/api/snapshots/list?account_id=${selectedAccountId}`, { cache: 'no-store' });
-                if (listResp.ok) {
+                (dm as any).clearAllData?.();
+            } catch { /* ignore */ }
+            const success = await (async () => {
+                try {
+                    const listResp = await fetch(`/api/snapshots/list?account_id=${selectedAccountId}`, { cache: 'no-store' });
+                    if (!listResp.ok) return false;
                     const j = await listResp.json().catch(() => ({}));
-                    if (j.snapshots?.length) {
-                        const csvTypes = ['campaigns', 'flows', 'subscribers'];
-                        const files: Record<string, File> = {};
-                        for (const t of csvTypes) {
-                            try {
-                                const r = await fetch(`/api/snapshots/download-csv?type=${t}&account_id=${selectedAccountId}`, { cache: 'no-store' });
-                                if (r.ok) {
-                                    const text = await r.text();
-                                    if (text.trim()) {
-                                        const blob = new Blob([text], { type: 'text/csv' });
-                                        files[t] = new File([blob], `${t}.csv`, { type: 'text/csv' });
-                                    }
-                                }
-                            } catch { /* ignore individual file errors */ }
-                        }
-                        if (Object.keys(files).length) {
-                            await dm.loadCSVFiles({ campaigns: files.campaigns, flows: files.flows, subscribers: files.subscribers });
-                            success = true;
+                    if (!j.snapshots?.length) return false;
+                    const csvTypes = ['campaigns', 'flows', 'subscribers'];
+                    const files: Record<string, File> = {};
+                    for (const t of csvTypes) {
+                        const r = await fetch(`/api/snapshots/download-csv?type=${t}&account_id=${selectedAccountId}`, { cache: 'no-store' });
+                        if (r.ok) {
+                            const text = await r.text();
+                            if (text.trim()) {
+                                const blob = new Blob([text], { type: 'text/csv' });
+                                files[t] = new File([blob], `${t}.csv`, { type: 'text/csv' });
+                            }
                         }
                     }
+                    if (!Object.keys(files).length) return false;
+                    await dm.loadCSVFiles({ campaigns: files.campaigns, flows: files.flows, subscribers: files.subscribers });
+                    return true;
+                } catch {
+                    return false;
                 }
-            } catch { success = false; }
+            })();
             if (!cancelled) {
-                if (success) {
-                    adminLoadRef.current.accountId = selectedAccountId;
-                    setDataVersion(v => v + 1);
-                }
+                if (success) setDataVersion(v => v + 1);
                 setIsInitialLoading(false);
-                adminLoadRef.current.loading = false;
             }
         })();
         return () => { cancelled = true; };
@@ -203,42 +191,31 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const ALL_FLOWS = useMemo(() => dm.getFlowEmails(), [dm, dataVersion]);
     const hasData = ALL_CAMPAIGNS.length > 0 || ALL_FLOWS.length > 0;
-    // Stable reference date: only updates when we actually have dated records; otherwise reuse last
-    const lastReferenceRef = useRef<Date | null>(null);
-    const REFERENCE_DATE = useMemo(() => {
-        const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow);
-        const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime());
-        const flowTs = flowSubset.map(f => f.sentDate.getTime());
-        const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n));
-        if (all.length) {
-            const d = new Date(Math.max(...all));
-            lastReferenceRef.current = d;
-            return d;
+    const REFERENCE_DATE = useMemo(() => { const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow); const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime()); const flowTs = flowSubset.map(f => f.sentDate.getTime()); const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n)); return all.length ? new Date(Math.max(...all)) : new Date(); }, [ALL_CAMPAIGNS, ALL_FLOWS, selectedFlow]);
+    // Active flows: flows that have at least one send in the currently selected (or custom) date range
+    // Mirror FlowStepAnalysis logic: restrict dropdown to *live* flows only, further filtered to current date window
+    const liveFlows = useMemo(() => ALL_FLOWS.filter(f => (f as any).status && String((f as any).status).toLowerCase() === 'live'), [ALL_FLOWS]);
+    const flowsInRange = useMemo(() => {
+        if (!liveFlows.length) return [] as typeof liveFlows;
+        let flows = liveFlows;
+        if (dateRange === 'custom' && customActive) {
+            const from = new Date(customFrom! + 'T00:00:00');
+            const to = new Date(customTo! + 'T23:59:59');
+            flows = flows.filter(f => f.sentDate >= from && f.sentDate <= to);
+        } else if (dateRange !== 'all') {
+            const days = parseInt(dateRange.replace('d', ''));
+            const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999);
+            const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0);
+            flows = flows.filter(f => f.sentDate >= start && f.sentDate <= end);
         }
-        return lastReferenceRef.current || new Date();
-    }, [ALL_CAMPAIGNS, ALL_FLOWS, selectedFlow]);
-    // Dev-only render loop detector (after hasData is defined)
-    if (process.env.NODE_ENV !== 'production') {
-        const ref = (globalThis as any).__emDashRenderCount = (globalThis as any).__emDashRenderCount || { c: 0, t: Date.now() };
-        ref.c++;
-        const now = Date.now();
-        if (now - ref.t > 1000) { ref.c = 0; ref.t = now; }
-        else if (ref.c > 200) {
-            // eslint-disable-next-line no-console
-            console.warn('[DashboardHeavy] High render count', { c: ref.c, dateRange, selectedAccountId, dataVersion, hasData });
-        }
-    }
+        return flows;
+    }, [liveFlows, dateRange, customActive, customFrom, customTo, REFERENCE_DATE]);
+    const uniqueFlowNames = useMemo(() => Array.from(new Set(flowsInRange.map(f => f.flowName))).sort(), [flowsInRange]);
+    // Ensure selected flow remains valid; if not, reset to 'all'
+    useEffect(() => { if (selectedFlow !== 'all' && !uniqueFlowNames.includes(selectedFlow)) setSelectedFlow('all'); }, [uniqueFlowNames, selectedFlow]);
 
     // Filters
     const filteredCampaigns = useMemo(() => { if (!hasData) return [] as typeof ALL_CAMPAIGNS; let list = ALL_CAMPAIGNS; if (dateRange === 'custom' && customActive) { const from = new Date(customFrom! + 'T00:00:00'); const to = new Date(customTo! + 'T23:59:59'); list = list.filter(c => c.sentDate >= from && c.sentDate <= to); } else if (dateRange !== 'all') { const days = parseInt(dateRange.replace('d', '')); const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999); const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0); list = list.filter(c => c.sentDate >= start && c.sentDate <= end); } return list; }, [ALL_CAMPAIGNS, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
-    // Unique flow names (stable across renders unless dataVersion changes)
-    const uniqueFlowNames = useMemo(() => {
-        const set = new Set<string>();
-        for (const f of ALL_FLOWS) { if (f.flowName) set.add(f.flowName); }
-        return Array.from(set).sort((a, b) => a.localeCompare(b));
-    }, [ALL_FLOWS]);
-    // Ensure selectedFlow stays valid if underlying data changes (e.g., account switch)
-    useEffect(() => { if (selectedFlow !== 'all' && !uniqueFlowNames.includes(selectedFlow)) { setSelectedFlow('all'); } }, [selectedFlow, uniqueFlowNames]);
     const filteredFlowEmails = useMemo(() => { if (!hasData) return [] as typeof ALL_FLOWS; let flows = ALL_FLOWS; if (selectedFlow !== 'all') flows = flows.filter(f => f.flowName === selectedFlow); if (dateRange === 'custom' && customActive) { const from = new Date(customFrom! + 'T00:00:00'); const to = new Date(customTo! + 'T23:59:59'); flows = flows.filter(f => f.sentDate >= from && f.sentDate <= to); } else if (dateRange !== 'all') { const days = parseInt(dateRange.replace('d', '')); const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999); const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0); flows = flows.filter(f => f.sentDate >= start && f.sentDate <= end); } return flows; }, [ALL_FLOWS, selectedFlow, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
 
     // PoP
@@ -246,14 +223,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         // Map our metric keys to DataManager keys if needed
         const keyMap: Record<string, string> = { avgOrderValue: 'avgOrderValue', averageOrderValue: 'avgOrderValue' };
         const dmKey = keyMap[metricKey] || metricKey;
-        let effectiveRange: string = dateRange as string;
+    let effectiveRange: string = dateRange as string;
         if (dateRange === 'custom' && customActive && customFrom && customTo) {
             effectiveRange = `custom:${customFrom}:${customTo}`;
         }
         if (effectiveRange === 'all') {
             return { changePercent: 0, isPositive: true, previousValue: 0, previousPeriod: undefined as any };
         }
-        const res = dm.calculatePeriodOverPeriodChange(dmKey, effectiveRange as string, dataset, { flowName: options?.flowName });
+    const res = dm.calculatePeriodOverPeriodChange(dmKey, effectiveRange as string, dataset, { flowName: options?.flowName });
         return { changePercent: res.changePercent, isPositive: res.isPositive, previousValue: res.previousValue, previousPeriod: res.previousPeriod };
     }, [dateRange, customActive, customFrom, customTo, dm]);
 
