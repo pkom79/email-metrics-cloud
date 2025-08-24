@@ -18,16 +18,21 @@ export async function GET() {
         .order('created_at', { ascending: false });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     const accounts = (data || []).map(a => {
+        const id = (a as any).id as string;
         const rawCompany = (a as any).company as string | null;
         const rawName = (a as any).name as string | null;
         const clean = (s: string | null) => (s && s.trim()) || null;
         const company = clean(rawCompany);
         const name = clean(rawName);
         const looksLikeEmail = (s: string | null) => !!s && /@/.test(s);
-        let businessName: string | null = (company && !looksLikeEmail(company) && company) || (name && !looksLikeEmail(name) && name) || company || name || null;
-        if (!businessName) businessName = (a as any).id; // final fallback
+        // Prefer non-email company/name
+        let businessName: string | null = (company && !looksLikeEmail(company) && company) || (name && !looksLikeEmail(name) && name) || null;
+        // If only email-like strings exist, synthesize a label
+        if (!businessName) {
+            businessName = `Account-${id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8)}`;
+        }
         return {
-            id: (a as any).id,
+            id,
             businessName,
             ownerEmail: null,
             storeUrl: (a as any).store_url || null,
