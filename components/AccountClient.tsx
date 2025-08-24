@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase/client';
 
 type Props = {
@@ -99,9 +99,67 @@ export default function AccountClient({ initial }: Props) {
     const hasEmailChanged = enteredEmail && enteredEmail !== currentEmail;
     const canChangeEmail = !busy && isValidEmail && hasEmailChanged;
 
+    const [allAccounts, setAllAccounts] = useState<any[] | null>(null);
+    const [accountsError, setAccountsError] = useState<string | null>(null);
+    const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+    const [isAdmin, setIsAdmin] = useState(false);
+
+    // Detect admin & fetch accounts list
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            const session = (await supabase.auth.getSession()).data.session;
+            const admin = session?.user?.app_metadata?.role === 'admin';
+            if (!admin) return; // normal users skip
+            setIsAdmin(true);
+            try {
+                const res = await fetch('/api/accounts', { cache: 'no-store' });
+                if (!res.ok) throw new Error(`Failed to load accounts (${res.status})`);
+                const j = await res.json();
+                if (cancelled) return;
+                setAllAccounts(j.accounts || []);
+            } catch (e: any) {
+                if (!cancelled) setAccountsError(e?.message || 'Failed to load accounts');
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
     return (
         <div className="max-w-2xl mx-auto space-y-8">
             <h1 className="text-2xl font-bold">Account</h1>
+
+            {isAdmin && (
+                <section className="space-y-3">
+                    <h2 className="font-semibold flex items-center gap-2">All Accounts <span className="text-xs font-normal px-2 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">Admin</span></h2>
+                    <p className="text-xs text-gray-500">Browse any account. (Read-only until you build impersonation logic.)</p>
+                    {accountsError && <div className="text-xs text-red-600">{accountsError}</div>}
+                    <div className="relative">
+                        <select
+                            value={selectedAccountId}
+                            onChange={e => setSelectedAccountId(e.target.value)}
+                            className="w-full appearance-none px-3 py-2 pr-9 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm text-gray-900 dark:text-gray-100"
+                        >
+                            <option value="">Select an account</option>
+                            {(allAccounts || []).map(a => (
+                                <option key={a.id} value={a.id}>{a.name || a.businessName || a.storeUrl || a.ownerEmail || a.id}</option>
+                            ))}
+                        </select>
+                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-xs">▼</span>
+                    </div>
+                    {selectedAccountId && (
+                        <div className="text-xs text-gray-600 dark:text-gray-300 space-y-1 border rounded p-3 bg-gray-50 dark:bg-gray-800/40">
+                            {(() => { const a = (allAccounts||[]).find(x=>x.id===selectedAccountId); if(!a) return null; return (
+                                <>
+                                    <div><span className="font-medium">Owner Email:</span> {a.ownerEmail || '—'}</div>
+                                    <div><span className="font-medium">Business Name:</span> {a.businessName || a.name || '—'}</div>
+                                    <div><span className="font-medium">Store URL:</span> {a.storeUrl ? `https://${a.storeUrl}` : '—'}</div>
+                                </>
+                            ); })()}
+                        </div>
+                    )}
+                </section>
+            )}
 
             {(msg || err) && (
                 <div className={`p-3 rounded border text-sm ${msg ? 'border-green-300 bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-200 dark:border-green-700' : 'border-red-300 bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-200 dark:border-red-700'}`}>
