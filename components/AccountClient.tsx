@@ -101,7 +101,7 @@ export default function AccountClient({ initial }: Props) {
 
     const [allAccounts, setAllAccounts] = useState<any[] | null>(null);
     const [accountsError, setAccountsError] = useState<string | null>(null);
-    const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+    const [selectedAccountId, setSelectedAccountId] = useState<string>('admin-self');
     const [isAdmin, setIsAdmin] = useState(false);
 
     // Detect admin & fetch accounts list
@@ -131,8 +131,8 @@ export default function AccountClient({ initial }: Props) {
 
             {isAdmin && (
                 <section className="space-y-3">
-                    <h2 className="font-semibold flex items-center gap-2">All Accounts <span className="text-xs font-normal px-2 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">Admin</span></h2>
-                    <p className="text-xs text-gray-500">Browse any account. (Read-only until you build impersonation logic.)</p>
+                    <h2 className="font-semibold flex items-center gap-2">Accounts <span className="text-xs font-normal px-2 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">Admin</span></h2>
+                    <p className="text-xs text-gray-500">Select Admin (your profile) or view another account below (read-only).</p>
                     {accountsError && <div className="text-xs text-red-600">{accountsError}</div>}
                     <div className="relative">
                         <select
@@ -140,14 +140,14 @@ export default function AccountClient({ initial }: Props) {
                             onChange={e => setSelectedAccountId(e.target.value)}
                             className="w-full appearance-none px-3 py-2 pr-9 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm text-gray-900 dark:text-gray-100"
                         >
-                            <option value="">Select an account</option>
+                            <option value="admin-self">Admin (My Account)</option>
                             {(allAccounts || []).map(a => (
                                 <option key={a.id} value={a.id}>{a.name || a.businessName || a.storeUrl || a.ownerEmail || a.id}</option>
                             ))}
                         </select>
                         <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-xs">▼</span>
                     </div>
-                    {selectedAccountId && (
+                    {selectedAccountId !== 'admin-self' && selectedAccountId && (
                         <div className="text-xs text-gray-600 dark:text-gray-300 space-y-1 border rounded p-3 bg-gray-50 dark:bg-gray-800/40">
                             {(() => {
                                 const a = (allAccounts || []).find(x => x.id === selectedAccountId); if (!a) return null; return (
@@ -169,7 +169,7 @@ export default function AccountClient({ initial }: Props) {
                 </div>
             )}
 
-            {!isAdmin && (
+            {(!isAdmin || selectedAccountId !== 'admin-self') && !isAdmin && (
                 <section className="space-y-3">
                     <h2 className="font-semibold">Company</h2>
                     <div className="space-y-2">
