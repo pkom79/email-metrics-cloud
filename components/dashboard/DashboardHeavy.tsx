@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState, useEffect, useDeferredValue } from 'react';
+import React, { useMemo, useState, useEffect, useDeferredValue, useRef, useCallback } from 'react';
 import { DataManager } from '../../lib/data/dataManager';
 import MetricCard from './MetricCard';
 import DayOfWeekPerformance from './DayOfWeekPerformance';
@@ -14,6 +14,56 @@ import { supabase } from '../../lib/supabase/client';
 function formatCurrency(value: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value); }
 function formatPercent(value: number) { const formatted = value.toFixed(2); const num = parseFloat(formatted); return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : `${formatted}%`; }
 function formatNumber(value: number) { return Math.round(value).toLocaleString('en-US'); }
+
+// Consolidated data loading function to prevent race conditions
+async function loadAccountData(dm: any, accountId: string): Promise<boolean> {
+    try {
+        // Clear existing data before switching accounts
+        if (typeof (dm as any).clearAllData === 'function') {
+            (dm as any).clearAllData();
+        }
+
+        // Fetch snapshots for account
+        const listResponse = await fetch(`/api/snapshots/list?account_id=${accountId}`, { cache: 'no-store' });
+        if (!listResponse.ok) return false;
+
+        const listData = await listResponse.json().catch(() => ({}));
+        if (!listData.snapshots?.length) return false;
+
+        // Fetch CSV files
+        const csvTypes = ['campaigns', 'flows', 'subscribers'];
+        const files: Record<string, File> = {};
+
+        for (const type of csvTypes) {
+            try {
+                const csvResponse = await fetch(`/api/snapshots/download-csv?type=${type}&account_id=${accountId}`, { cache: 'no-store' });
+                if (csvResponse.ok) {
+                    const text = await csvResponse.text();
+                    if (text.trim()) {
+                        const blob = new Blob([text], { type: 'text/csv' });
+                        files[type] = new File([blob], `${type}.csv`, { type: 'text/csv' });
+                    }
+                }
+            } catch (error) {
+                console.warn(`Failed to load ${type} CSV:`, error);
+            }
+        }
+
+        if (Object.keys(files).length > 0) {
+            await dm.loadCSVFiles({
+                campaigns: files.campaigns,
+                flows: files.flows,
+                subscribers: files.subscribers
+            });
+            return true;
+        }
+
+        return false;
+    } catch (error) {
+        console.error('Failed to load account data:', error);
+        return false;
+    }
+}
 
 export default function DashboardHeavy({ businessName, userId }: { businessName?: string; userId?: string }) {
     // Set user ID for data isolation
@@ -46,25 +96,79 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // Human readable label for currently selected admin account
     const [selectedAccountLabel, setSelectedAccountLabel] = useState<string>('');
 
-    useEffect(() => { let cancelled = false; (async () => { try { const s = (await supabase.auth.getSession()).data.session; const admin = s?.user?.app_metadata?.role === 'admin'; if (!admin) return; setIsAdmin(true); const r = await fetch('/api/accounts', { cache: 'no-store' }); if (!r.ok) throw new Error(`Accounts ${r.status}`); const j = await r.json(); if (!cancelled) { const list = (j.accounts || []).filter((a: any) => a.businessName); setAllAccounts(list); if (!selectedAccountId && list.length) { setSelectedAccountId(list[0].id); setSelectedAccountLabel(list[0].businessName || list[0].id); } } } catch (e: any) { if (!cancelled) setAccountsError(e?.message || 'Failed to load accounts'); } })(); return () => { cancelled = true; }; }, [selectedAccountId]);
-
-    // Admin: reload data when selectedAccountId changes
+    // Load admin accounts once (no dependency on selectedAccountId to avoid re-fetch loops)
     useEffect(() => {
-        if (!isAdmin) return; if (!selectedAccountId) return; (async () => {
+        let cancelled = false;
+        (async () => {
             try {
-                // Clear existing data before switching accounts
-                try { (dm as any).clearAllData?.(); } catch { }
-                setIsInitialLoading(true); setMetricsReady(false);
-                // Fetch list snapshots for account, then fetch CSV files
-                const list = await fetch(`/api/snapshots/list?account_id=${selectedAccountId}`, { cache: 'no-store' }); if (list.ok) {
-                    const j = await list.json().catch(() => ({})); if (j.snapshots?.length) {
-                        const csvTypes = ['campaigns', 'flows', 'subscribers']; const files: Record<string, File> = {}; for (const t of csvTypes) { const r = await fetch(`/api/snapshots/download-csv?type=${t}&account_id=${selectedAccountId}`, { cache: 'no-store' }); if (r.ok) { const text = await r.text(); if (text.trim()) { const blob = new Blob([text], { type: 'text/csv' }); files[t] = new File([blob], `${t}.csv`, { type: 'text/csv' }); } } }
-                        if (Object.keys(files).length) { await dm.loadCSVFiles({ campaigns: files.campaigns, flows: files.flows, subscribers: files.subscribers }); setDataVersion(v => v + 1); }
-                    }
+                const sessionResp = await supabase.auth.getSession();
+                const s = sessionResp.data.session;
+                const admin = s?.user?.app_metadata?.role === 'admin';
+                if (!admin) return; // not admin, skip
+                setIsAdmin(true);
+
+                const r = await fetch('/api/accounts', { cache: 'no-store' });
+                if (!r.ok) throw new Error(`Accounts ${r.status}`);
+                const j = await r.json();
+                if (cancelled) return;
+                const list = (j.accounts || []).map((a: any) => ({
+                    id: a.id,
+                    businessName: a.businessName || null,
+                    label: a.label || a.businessName || a.id?.slice(0, 8) || 'Account'
+                }));
+                setAllAccounts(list);
+                if (!selectedAccountId && list.length) {
+                    setSelectedAccountId(list[0].id);
+                    setSelectedAccountLabel(list[0].label);
                 }
-                setIsInitialLoading(false);
-            } catch { /* ignore */ }
+            } catch (e: any) {
+                if (!cancelled) setAccountsError(e?.message || 'Failed to load accounts');
+            }
         })();
+        return () => { cancelled = true; };
+    }, []);
+
+    // Admin: reload data when selectedAccountId changes (stable, uses helper)
+    useEffect(() => {
+        if (!isAdmin || !selectedAccountId) return;
+        let cancelled = false;
+        (async () => {
+            setIsInitialLoading(true);
+            setMetricsReady(false);
+            try {
+                (dm as any).clearAllData?.();
+            } catch { /* ignore */ }
+            const success = await (async () => {
+                try {
+                    const listResp = await fetch(`/api/snapshots/list?account_id=${selectedAccountId}`, { cache: 'no-store' });
+                    if (!listResp.ok) return false;
+                    const j = await listResp.json().catch(() => ({}));
+                    if (!j.snapshots?.length) return false;
+                    const csvTypes = ['campaigns', 'flows', 'subscribers'];
+                    const files: Record<string, File> = {};
+                    for (const t of csvTypes) {
+                        const r = await fetch(`/api/snapshots/download-csv?type=${t}&account_id=${selectedAccountId}`, { cache: 'no-store' });
+                        if (r.ok) {
+                            const text = await r.text();
+                            if (text.trim()) {
+                                const blob = new Blob([text], { type: 'text/csv' });
+                                files[t] = new File([blob], `${t}.csv`, { type: 'text/csv' });
+                            }
+                        }
+                    }
+                    if (!Object.keys(files).length) return false;
+                    await dm.loadCSVFiles({ campaigns: files.campaigns, flows: files.flows, subscribers: files.subscribers });
+                    return true;
+                } catch {
+                    return false;
+                }
+            })();
+            if (!cancelled) {
+                if (success) setDataVersion(v => v + 1);
+                setIsInitialLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
     }, [isAdmin, selectedAccountId, dm]);
 
     // Events / hydration
@@ -209,7 +313,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 </div>
             )}
             {/* Header */}
-            <div className="pt-4 sm:pt-6"><div className="max-w-7xl mx-auto"><div className="p-6 sm:p-8 mb-4"><div className="flex items-start justify-between gap-4"><div><h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>{businessName && <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>}</div><div className="flex items-center gap-3 relative">{!isAdmin && (<button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"><UploadIcon className="h-4 w-4" />Upload New Reports</button>)}{isAdmin && (<div className="relative"><select value={selectedAccountId} onChange={e => { setSelectedAccountId(e.target.value); const a = (allAccounts || []).find(x => x.id === e.target.value); setSelectedAccountLabel(a?.businessName || a?.id || ''); }} className="appearance-none pl-3 pr-8 py-2 rounded-lg border border-purple-300/70 dark:border-purple-400/40 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-200 min-w-[240px] font-medium focus:outline-none focus:ring-2 focus:ring-purple-400">{!selectedAccountId && <option value="">Select account…</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.businessName || a.id}</option>)}</select><ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400 pointer-events-none" /></div>)}</div></div></div></div></div>
+            <div className="pt-4 sm:pt-6"><div className="max-w-7xl mx-auto"><div className="p-6 sm:p-8 mb-4"><div className="flex items-start justify-between gap-4"><div><h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>{businessName && <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>}</div><div className="flex items-center gap-3 relative">{!isAdmin && (<button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"><UploadIcon className="h-4 w-4" />Upload New Reports</button>)}{isAdmin && (<div className="relative"><select value={selectedAccountId} onChange={e => { setSelectedAccountId(e.target.value); const a = (allAccounts || []).find(x => x.id === e.target.value); setSelectedAccountLabel(a?.label || a?.businessName || a?.id || ''); }} className="appearance-none pl-3 pr-8 py-2 rounded-lg border border-purple-300/70 dark:border-purple-400/40 bg-white dark:bg-gray-800 text-sm text-gray-700 dark:text-gray-200 min-w-[240px] font-medium focus:outline-none focus:ring-2 focus:ring-purple-400">{!selectedAccountId && <option value="">Select account…</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</select><ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400 pointer-events-none" /></div>)}</div></div></div></div></div>
             {showUploadModal && !isAdmin && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center">
                     <div className="absolute inset-0 bg-black/50" onClick={() => setShowUploadModal(false)} />
