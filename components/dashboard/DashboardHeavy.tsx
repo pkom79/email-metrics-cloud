@@ -7,7 +7,7 @@ import HourOfDayPerformance from './HourOfDayPerformance';
 import AudienceCharts from './AudienceCharts';
 import FlowStepAnalysis from './FlowStepAnalysis';
 import CustomSegmentBlock from './CustomSegmentBlock';
-import { BarChart3, Calendar, ChevronDown, Mail, Send, Zap, Star, Upload as UploadIcon, X } from 'lucide-react';
+import { BarChart3, Calendar, ChevronDown, GitCompare, Mail, Send, Zap, Star, Upload as UploadIcon, X } from 'lucide-react';
 import UploadWizard from '../../components/UploadWizard';
 import { supabase } from '../../lib/supabase/client';
 
@@ -436,7 +436,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     </select><ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" /></div></div>
                     <div className="flex items-center gap-1.5"><BarChart3 className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Granularity:</span><div className="flex gap-1.5 ml-2 flex-nowrap">{(['daily', 'weekly', 'monthly'] as const).map(g => <button key={g} onClick={() => { if (g !== granularity) { setGranularity(g); } }} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${granularity === g ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>{g.charAt(0).toUpperCase() + g.slice(1)}</button>)}</div></div>
                     {/* Compare Mode */}
-                    <div className="flex items-center gap-1.5"><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Compare:</span><div className="flex gap-1.5 ml-1 flex-nowrap">{([
+                    <div className="flex items-center gap-1.5"><GitCompare className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Compare:</span><div className="flex gap-1.5 ml-1 flex-nowrap">{([
                         { key: 'prev-period', label: 'Prev Period' },
                         { key: 'prev-year', label: 'Prev Year' }
                     ] as const).map(m => (
