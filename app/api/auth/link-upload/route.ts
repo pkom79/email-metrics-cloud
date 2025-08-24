@@ -26,10 +26,26 @@ export async function POST(request: Request) {
 
         let accountId = acctRow?.id as string | undefined;
         if (!accountId) {
-            const name = (user.user_metadata as any)?.name || user.email || 'My Account';
+            const md = (user.user_metadata as any) || {};
+            const rawBusiness = (md.businessName as string | undefined) || '';
+            const businessName = rawBusiness.trim();
+            const name = (md.name as string | undefined)?.trim() || user.email || 'My Account';
+            const country = (md.country as string | undefined)?.trim() || null;
+            const storeUrlRaw = (md.storeUrl as string | undefined) || '';
+            const normalizeStoreUrl = (value: string) => {
+                if (!value) return '';
+                let v = value.trim();
+                v = v.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, '');
+                return v.toLowerCase();
+            };
+            const store_url = normalizeStoreUrl(storeUrlRaw) || null;
+            const insertPayload: any = { owner_user_id: user.id, name };
+            if (businessName) insertPayload.company = businessName;
+            if (country) insertPayload.country = country;
+            if (store_url) insertPayload.store_url = store_url;
             const { data: created, error: createErr } = await supabase
                 .from('accounts')
-                .insert({ owner_user_id: user.id, name })
+                .insert(insertPayload)
                 .select('id')
                 .single();
             if (createErr) throw createErr;
