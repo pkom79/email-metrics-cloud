@@ -149,13 +149,15 @@ export default function AccountClient({ initial }: Props) {
                     </div>
                     {selectedAccountId && (
                         <div className="text-xs text-gray-600 dark:text-gray-300 space-y-1 border rounded p-3 bg-gray-50 dark:bg-gray-800/40">
-                            {(() => { const a = (allAccounts||[]).find(x=>x.id===selectedAccountId); if(!a) return null; return (
-                                <>
-                                    <div><span className="font-medium">Owner Email:</span> {a.ownerEmail || '—'}</div>
-                                    <div><span className="font-medium">Business Name:</span> {a.businessName || a.name || '—'}</div>
-                                    <div><span className="font-medium">Store URL:</span> {a.storeUrl ? `https://${a.storeUrl}` : '—'}</div>
-                                </>
-                            ); })()}
+                            {(() => {
+                                const a = (allAccounts || []).find(x => x.id === selectedAccountId); if (!a) return null; return (
+                                    <>
+                                        <div><span className="font-medium">Owner Email:</span> {a.ownerEmail || '—'}</div>
+                                        <div><span className="font-medium">Business Name:</span> {a.businessName || a.name || '—'}</div>
+                                        <div><span className="font-medium">Store URL:</span> {a.storeUrl ? `https://${a.storeUrl}` : '—'}</div>
+                                    </>
+                                );
+                            })()}
                         </div>
                     )}
                 </section>
@@ -167,27 +169,29 @@ export default function AccountClient({ initial }: Props) {
                 </div>
             )}
 
-            <section className="space-y-3">
-                <h2 className="font-semibold">Company</h2>
-                <div className="space-y-2">
-                    <label className="block text-sm">Business name</label>
-                    <input value={businessName} onChange={e => setBusinessName(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700" />
-                </div>
-                <div className="space-y-2">
-                    <label className="block text-sm">Store domain</label>
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-500">https://</span>
-                        <input
-                            value={storeUrl}
-                            onChange={e => setStoreUrl(normalizeStoreUrl(e.target.value))}
-                            onBlur={e => setStoreUrl(normalizeStoreUrl(e.target.value))}
-                            placeholder="store.com"
-                            className="flex-1 px-3 py-2 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700"
-                        />
+            {!isAdmin && (
+                <section className="space-y-3">
+                    <h2 className="font-semibold">Company</h2>
+                    <div className="space-y-2">
+                        <label className="block text-sm">Business name</label>
+                        <input value={businessName} onChange={e => setBusinessName(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700" />
                     </div>
-                </div>
-                <button disabled={busy} onClick={onSaveCompany} className="mt-2 inline-flex items-center px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50">Save</button>
-            </section>
+                    <div className="space-y-2">
+                        <label className="block text-sm">Store domain</label>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">https://</span>
+                            <input
+                                value={storeUrl}
+                                onChange={e => setStoreUrl(normalizeStoreUrl(e.target.value))}
+                                onBlur={e => setStoreUrl(normalizeStoreUrl(e.target.value))}
+                                placeholder="store.com"
+                                className="flex-1 px-3 py-2 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700"
+                            />
+                        </div>
+                    </div>
+                    <button disabled={busy} onClick={onSaveCompany} className="mt-2 inline-flex items-center px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50">Save</button>
+                </section>
+            )}
 
             <section className="space-y-3">
                 <h2 className="font-semibold">Email</h2>

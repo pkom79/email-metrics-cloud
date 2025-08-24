@@ -9,6 +9,7 @@ import FlowStepAnalysis from './FlowStepAnalysis';
 import CustomSegmentBlock from './CustomSegmentBlock';
 import { BarChart3, Calendar, ChevronDown, Mail, Send, Zap, Star, Upload as UploadIcon, X } from 'lucide-react';
 import UploadWizard from '../../components/UploadWizard';
+import { supabase } from '../../lib/supabase/client';
 
 function formatCurrency(value: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value); }
 function formatPercent(value: number) { const formatted = value.toFixed(2); const num = parseFloat(formatted); return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : `${formatted}%`; }
@@ -38,6 +39,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [showCustomDateModal, setShowCustomDateModal] = useState(false);
     const [audienceOverviewRef, setAudienceOverviewRef] = useState<HTMLElement | null>(null);
     const [isBeforeAudience, setIsBeforeAudience] = useState(true);
+    // Admin accounts selector state
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [allAccounts, setAllAccounts] = useState<any[] | null>(null);
+    const [accountsError, setAccountsError] = useState<string | null>(null);
+    const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+
+    useEffect(() => { let cancelled = false; (async () => { try { const s = (await supabase.auth.getSession()).data.session; const admin = s?.user?.app_metadata?.role === 'admin'; if (!admin) return; setIsAdmin(true); const r = await fetch('/api/accounts', { cache: 'no-store' }); if (!r.ok) throw new Error(`Accounts ${r.status}`); const j = await r.json(); if (!cancelled) setAllAccounts(j.accounts || []); } catch (e: any) { if (!cancelled) setAccountsError(e?.message || 'Failed to load accounts'); } })(); return () => { cancelled = true; }; }, []);
 
     // Events / hydration
     useEffect(() => { const onCreated = () => { setDataVersion(v => v + 1); setShowUploadModal(false); }; const onHydrated = () => { setDataVersion(v => v + 1); setIsInitialLoading(false); }; window.addEventListener('em:snapshot-created', onCreated as EventListener); window.addEventListener('em:dataset-hydrated', onHydrated as EventListener); let active = true; (async () => { for (let i = 0; i < 5 && active; i++) { const ok = await DataManager.getInstance().ensureHydrated(); if (ok) { setDataVersion(v => v + 1); setIsInitialLoading(false); break; } await new Promise(r => setTimeout(r, 150)); } if (active && !DataManager.getInstance().hasRealData()) setIsInitialLoading(false); })(); return () => { active = false; window.removeEventListener('em:snapshot-created', onCreated as EventListener); window.removeEventListener('em:dataset-hydrated', onHydrated as EventListener); }; }, [userId]);
@@ -191,6 +199,18 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             {/* Filters bar (sticky) */}
             <div className={`hidden sm:block sm:pt-2 ${stickyBar ? 'sm:sticky sm:top-0 sm:z-50' : ''}`}> <div className="max-w-7xl mx-auto px-4"><div className={`rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${stickyBar ? 'shadow-lg' : 'shadow-sm'} px-3 py-2`}>
                 <div className="hidden sm:flex items-center justify-center gap-3 flex-nowrap whitespace-nowrap">
+                    {isAdmin && (
+                        <div className="flex items-center gap-1.5 min-w-[200px]">
+                            <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Account:</span>
+                            <div className="relative">
+                                <select value={selectedAccountId} onChange={e => setSelectedAccountId(e.target.value)} className="appearance-none px-2 py-1 pr-7 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs min-w-[160px]">
+                                    <option value="">All</option>
+                                    {(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.name || a.businessName || a.id}</option>)}
+                                </select>
+                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none text-gray-500 dark:text-gray-400" />
+                            </div>
+                        </div>
+                    )}
                     {/* Custom date inputs */}
                     <div className="flex items-center gap-1.5">
                         <Calendar className="w-4 h-4 text-gray-500" />
