@@ -41,6 +41,27 @@ export class DataManager {
     private flowTransformer = new FlowTransformer();
     private subscriberTransformer = new SubscriberTransformer();
 
+    // ----------------------------------------------
+    // Performance caches
+    // ----------------------------------------------
+    // Cache of base daily aggregates (combined campaigns + flows) so that
+    // daily/weekly/monthly time series can be generated without re-scanning
+    // the entire email list on every granularity / metric switch.
+    private _dailyAggVersion = '';
+    private _dailyAgg: Map<string, {
+        revenue: number;
+        emailsSent: number;
+        totalOrders: number;
+        uniqueOpens: number;
+        uniqueClicks: number;
+        unsubscribesCount: number;
+        spamComplaintsCount: number;
+        bouncesCount: number;
+        emailCount: number;
+    }> = new Map();
+    // Memoized derived series cache: key = signature|metric|granularity|dateRange|customFrom|customTo
+    private _timeSeriesCache: Map<string, { built: number; data: { value: number; date: string }[] }> = new Map();
+
     // Dynamic storage keys based on user
     private get storageKey() {
         const userId = DataManager.currentUserId || 'anonymous';
@@ -288,6 +309,123 @@ export class DataManager {
         customFrom?: string,
         customTo?: string
     ): { value: number; date: string }[] {
+        // Fast path using pre-aggregated daily cache. Falls back to existing logic if something unexpected occurs.
+        try {
+            const signature = `${this.campaigns.length}:${this.flowEmails.length}`;
+            // Rebuild daily aggregates only if underlying dataset size changed (cheap heuristic).
+            if (this._dailyAggVersion !== signature) {
+                this._rebuildDailyAggregates();
+            }
+            const cacheKey = `${signature}|${metricKey}|${granularity}|${dateRange}|${customFrom || ''}|${customTo || ''}`;
+            const cached = this._timeSeriesCache.get(cacheKey);
+            if (cached) return cached.data;
+            const range = this._computeDateRangeForTimeSeries(dateRange, customFrom, customTo);
+            if (!range) return [];
+            const { startDate, endDate } = range;
+            // Build ordered list of days within range
+            const days: { key: string; date: Date }[] = [];
+            const cursor = new Date(startDate); cursor.setHours(0, 0, 0, 0);
+            const end = new Date(endDate); end.setHours(0, 0, 0, 0);
+            let guard = 0;
+            while (cursor <= end && guard < 8000) { // hard cap ~22 years
+                const k = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
+                days.push({ key: k, date: new Date(cursor) });
+                cursor.setDate(cursor.getDate() + 1);
+                guard++;
+            }
+            if (guard >= 8000) console.warn('Daily series guard triggered, truncated build');
+
+            // Helper to aggregate a slice of day keys into one value
+            const deriveValue = (dayKeys: string[]): { value: number; dateLabel: string } => {
+                let agg = { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsub: 0, spam: 0, bounces: 0 };
+                for (const dk of dayKeys) {
+                    const rec = this._dailyAgg.get(dk); if (!rec) continue;
+                    agg.revenue += rec.revenue; agg.emailsSent += rec.emailsSent; agg.totalOrders += rec.totalOrders;
+                    agg.uniqueOpens += rec.uniqueOpens; agg.uniqueClicks += rec.uniqueClicks; agg.unsub += rec.unsubscribesCount;
+                    agg.spam += rec.spamComplaintsCount; agg.bounces += rec.bouncesCount;
+                }
+                let value = 0;
+                switch (metricKey) {
+                    case 'revenue': value = agg.revenue; break;
+                    case 'avgOrderValue': value = agg.totalOrders > 0 ? agg.revenue / agg.totalOrders : 0; break;
+                    case 'revenuePerEmail': value = agg.emailsSent > 0 ? agg.revenue / agg.emailsSent : 0; break;
+                    case 'emailsSent': value = agg.emailsSent; break;
+                    case 'totalOrders': value = agg.totalOrders; break;
+                    case 'openRate': value = agg.emailsSent > 0 ? (agg.uniqueOpens / agg.emailsSent) * 100 : 0; break;
+                    case 'clickRate': value = agg.emailsSent > 0 ? (agg.uniqueClicks / agg.emailsSent) * 100 : 0; break;
+                    case 'clickToOpenRate': value = agg.uniqueOpens > 0 ? (agg.uniqueClicks / agg.uniqueOpens) * 100 : 0; break;
+                    case 'conversionRate': value = agg.uniqueClicks > 0 ? (agg.totalOrders / agg.uniqueClicks) * 100 : 0; break;
+                    case 'unsubscribeRate': value = agg.emailsSent > 0 ? (agg.unsub / agg.emailsSent) * 100 : 0; break;
+                    case 'spamRate': value = agg.emailsSent > 0 ? (agg.spam / agg.emailsSent) * 100 : 0; break;
+                    case 'bounceRate': value = agg.emailsSent > 0 ? (agg.bounces / agg.emailsSent) * 100 : 0; break;
+                    default: value = 0;
+                }
+                const firstDay = dayKeys[0];
+                const dateObj = firstDay ? new Date(firstDay) : new Date();
+                let label: string;
+                if (granularity === 'monthly') {
+                    label = this.safeToLocaleDateString(new Date(dateObj.getFullYear(), dateObj.getMonth(), 1), { month: 'short', year: '2-digit' });
+                } else if (granularity === 'weekly') {
+                    // show end of week label similar to legacy code (Mon-based weeks)
+                    const monday = new Date(dateObj); // assume keys already Monday when built
+                    const weekEnd = new Date(monday); weekEnd.setDate(weekEnd.getDate() + 6);
+                    label = this.safeToLocaleDateString(weekEnd, { month: 'short', day: 'numeric' });
+                } else {
+                    label = this.safeToLocaleDateString(dateObj, { month: 'short', day: 'numeric' });
+                }
+                return { value, dateLabel: label };
+            };
+
+            const result: { value: number; date: string }[] = [];
+            if (granularity === 'daily') {
+                for (const d of days) {
+                    const { value, dateLabel } = deriveValue([d.key]);
+                    result.push({ value, date: dateLabel });
+                }
+            } else if (granularity === 'weekly') {
+                // Group into Monday-based weeks
+                let weekGroup: string[] = [];
+                for (const d of days) {
+                    const dateObj = new Date(d.key);
+                    const day = dateObj.getDay();
+                    if (day === 1 || weekGroup.length === 0) { // Monday or first
+                        if (weekGroup.length) {
+                            const { value, dateLabel } = deriveValue(weekGroup);
+                            result.push({ value, date: dateLabel });
+                        }
+                        weekGroup = [d.key];
+                    } else {
+                        weekGroup.push(d.key);
+                    }
+                }
+                if (weekGroup.length) {
+                    const { value, dateLabel } = deriveValue(weekGroup);
+                    result.push({ value, date: dateLabel });
+                }
+            } else { // monthly
+                let monthGroup: string[] = [];
+                let currentMonth = -1;
+                for (const d of days) {
+                    const dateObj = new Date(d.key);
+                    const m = dateObj.getMonth();
+                    if (m !== currentMonth && monthGroup.length) {
+                        const { value, dateLabel } = deriveValue(monthGroup);
+                        result.push({ value, date: dateLabel });
+                        monthGroup = [];
+                    }
+                    if (m !== currentMonth) currentMonth = m;
+                    monthGroup.push(d.key);
+                }
+                if (monthGroup.length) {
+                    const { value, dateLabel } = deriveValue(monthGroup);
+                    result.push({ value, date: dateLabel });
+                }
+            }
+            this._timeSeriesCache.set(cacheKey, { built: Date.now(), data: result });
+            return result;
+        } catch (fastPathErr) {
+            console.warn('Fast path metric time series failed, falling back to legacy path', fastPathErr);
+        }
         const startTime = Date.now();
         const maxExecutionTime = 10000; // 10 seconds max execution time
 
@@ -654,6 +792,60 @@ export class DataManager {
             const executionTime = Date.now() - startTime;
             console.error(`Error in getMetricTimeSeries after ${executionTime}ms:`, error);
             return [];
+        }
+    }
+
+    // Build base daily aggregates for all emails (campaigns + flows)
+    private _rebuildDailyAggregates() {
+        this._dailyAgg.clear();
+        const allEmails = [...this.campaigns, ...this.flowEmails];
+        for (const e of allEmails) {
+            if (!e.sentDate || !(e.sentDate instanceof Date) || isNaN(e.sentDate.getTime())) continue;
+            const k = `${e.sentDate.getFullYear()}-${String(e.sentDate.getMonth() + 1).padStart(2, '0')}-${String(e.sentDate.getDate()).padStart(2, '0')}`;
+            let rec = this._dailyAgg.get(k);
+            if (!rec) {
+                rec = { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 };
+                this._dailyAgg.set(k, rec);
+            }
+            rec.revenue += e.revenue;
+            rec.emailsSent += e.emailsSent;
+            rec.totalOrders += e.totalOrders;
+            rec.uniqueOpens += e.uniqueOpens;
+            rec.uniqueClicks += e.uniqueClicks;
+            rec.unsubscribesCount += e.unsubscribesCount;
+            rec.spamComplaintsCount += e.spamComplaintsCount;
+            rec.bouncesCount += e.bouncesCount;
+            rec.emailCount += 1;
+        }
+        this._dailyAggVersion = `${this.campaigns.length}:${this.flowEmails.length}`;
+        // Invalidate derived cache because base changed
+        this._timeSeriesCache.clear();
+    }
+
+    // Compute date range object for the time series fast path
+    private _computeDateRangeForTimeSeries(dateRange: string, customFrom?: string, customTo?: string): { startDate: Date; endDate: Date } | null {
+        try {
+            if (dateRange === 'custom' && customFrom && customTo) {
+                const startDate = new Date(customFrom + 'T00:00:00');
+                const endDate = new Date(customTo + 'T23:59:59');
+                return { startDate, endDate };
+            }
+            const allEmails = [...this.campaigns, ...this.flowEmails].filter(e => e.sentDate instanceof Date && !isNaN(e.sentDate.getTime()));
+            if (!allEmails.length) return null;
+            let startDate: Date; let endDate: Date;
+            if (dateRange === 'all') {
+                const times = allEmails.map(e => e.sentDate.getTime());
+                endDate = new Date(Math.max(...times)); endDate.setHours(23, 59, 59, 999);
+                startDate = new Date(Math.min(...times)); startDate.setHours(0, 0, 0, 0);
+            } else {
+                const times = allEmails.map(e => e.sentDate.getTime());
+                endDate = new Date(Math.max(...times)); endDate.setHours(23, 59, 59, 999);
+                const days = parseInt(dateRange.replace('d', ''));
+                startDate = new Date(endDate); startDate.setDate(startDate.getDate() - days + 1); startDate.setHours(0, 0, 0, 0);
+            }
+            return { startDate, endDate };
+        } catch {
+            return null;
         }
     }
 
