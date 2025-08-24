@@ -165,7 +165,6 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
     const flowStepMetrics = useMemo((): FlowStepMetrics[] => {
         if (!selectedFlow || !flowSequenceInfo) {
-            console.log('No selected flow or sequence info');
             return [];
         }
 

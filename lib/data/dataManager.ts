@@ -213,43 +213,24 @@ export class DataManager {
 
     getLastEmailDate(): Date {
         try {
-            // Get valid timestamps from campaigns
-            const campaignDates = this.campaigns
-                .map(c => c.sentDate instanceof Date ? c.sentDate.getTime() : NaN)
-                .filter(t => !isNaN(t) && isFinite(t));
-
-            // Get valid timestamps from flow emails
-            const flowDates = this.flowEmails
-                .map(f => f.sentDate instanceof Date ? f.sentDate.getTime() : NaN)
-                .filter(t => !isNaN(t) && isFinite(t));
-
-            const allDates = [...campaignDates, ...flowDates];
-
-            if (allDates.length === 0) {
-                console.warn('getLastEmailDate: No valid dates found, returning current date');
-                return new Date();
+            // Lazy cache invalidation based on counts reference (fast heuristic)
+            const countsSignature = `${this.campaigns.length}:${this.flowEmails.length}`;
+            // @ts-ignore - internal symbol
+            if ((this as any)._lastEmailDateCache && (this as any)._lastEmailDateCache.sig === countsSignature) {
+                return (this as any)._lastEmailDateCache.value;
             }
-
-            const maxTime = Math.max(...allDates);
-
-            // Validate the result
-            if (isNaN(maxTime) || !isFinite(maxTime)) {
-                console.warn('getLastEmailDate: Invalid max time calculated, returning current date');
-                return new Date();
-            }
-
+            const campaignDates = this.campaigns.map(c => c.sentDate instanceof Date ? c.sentDate.getTime() : NaN).filter(t => Number.isFinite(t));
+            const flowDates = this.flowEmails.map(f => f.sentDate instanceof Date ? f.sentDate.getTime() : NaN).filter(t => Number.isFinite(t));
+            const all = [...campaignDates, ...flowDates];
+            if (!all.length) return new Date();
+            const maxTime = Math.max(...all);
+            if (!Number.isFinite(maxTime)) return new Date();
             const result = new Date(maxTime);
-
-            // Final validation
-            if (isNaN(result.getTime())) {
-                console.warn('getLastEmailDate: Invalid date result, returning current date');
-                return new Date();
-            }
-
+            if (isNaN(result.getTime())) return new Date();
+            (this as any)._lastEmailDateCache = { sig: countsSignature, value: result };
             return result;
-        } catch (error) {
-            console.error('Error in getLastEmailDate:', error);
-            return new Date(); // Safe fallback
+        } catch {
+            return new Date();
         }
     }
 
