@@ -10,33 +10,20 @@ export async function GET() {
     const isAdmin = user.app_metadata?.role === 'admin';
     if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    // Simpler select only from accounts to avoid cross-schema joins (previous nested join caused 500)
+    // Active accounts only (deleted_at IS NULL) and include store_url if present
     const { data, error } = await supabase
         .from('accounts')
-        .select('id,name,company')
+        .select('id,name,company,store_url,deleted_at')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-    let accounts = (data || []).map(a => ({
+    const accounts = (data || []).map(a => ({
         id: (a as any).id,
         name: (a as any).name,
-        businessName: (a as any).company || null,
-        ownerEmail: null,
-        storeUrl: null,
-    }));
-
-    // Fallback: include any distinct account_ids present in snapshots but missing from accounts (defensive if seeds incomplete)
-    try {
-        const { data: snaps } = await supabase.from('snapshots').select('account_id').limit(500);
-        const distinct = Array.from(new Set((snaps || []).map(s => (s as any).account_id).filter(Boolean)));
-        for (const id of distinct) {
-            if (!accounts.find(a => a.id === id)) {
-                accounts.push({ id, name: null as any, businessName: null, ownerEmail: null, storeUrl: null });
-            }
-        }
-    } catch { /* ignore */ }
-
-    accounts.sort((a, b) => (a.name || a.businessName || a.id).localeCompare(b.name || b.businessName || b.id));
+        businessName: (a as any).company || (a as any).name || null,
+        ownerEmail: null, // owner email intentionally omitted (needs service client)
+        storeUrl: (a as any).store_url || null,
+    })).sort((a, b) => (a.businessName || a.name || a.id).localeCompare(b.businessName || b.name || b.id));
 
     return NextResponse.json({ accounts });
 }

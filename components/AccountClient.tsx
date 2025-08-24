@@ -131,8 +131,8 @@ export default function AccountClient({ initial }: Props) {
 
             {isAdmin && (
                 <section className="space-y-3">
-                    <h2 className="font-semibold flex items-center gap-2">Accounts <span className="text-xs font-normal px-2 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">Admin</span></h2>
-                    <p className="text-xs text-gray-500">Select Admin (your profile) or view another account below (read-only).</p>
+                    <h2 className="font-semibold flex items-center gap-2">Accounts</h2>
+                    <p className="text-xs text-gray-500">Select your profile or view another account (read-only).</p>
                     {accountsError && <div className="text-xs text-red-600">{accountsError}</div>}
                     <div className="relative">
                         <select
@@ -142,7 +142,7 @@ export default function AccountClient({ initial }: Props) {
                         >
                             <option value="admin-self">Admin (My Account)</option>
                             {(allAccounts || []).map(a => (
-                                <option key={a.id} value={a.id}>{a.name || a.businessName || a.storeUrl || a.ownerEmail || a.id}</option>
+                                <option key={a.id} value={a.id}>{a.businessName || a.name || a.id}</option>
                             ))}
                         </select>
                         <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-xs">▼</span>
@@ -169,7 +169,7 @@ export default function AccountClient({ initial }: Props) {
                 </div>
             )}
 
-            {(!isAdmin || selectedAccountId !== 'admin-self') && !isAdmin && (
+            {!isAdmin && (
                 <section className="space-y-3">
                     <h2 className="font-semibold">Company</h2>
                     <div className="space-y-2">
