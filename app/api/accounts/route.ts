@@ -13,22 +13,26 @@ export async function GET() {
     // Active accounts only (deleted_at IS NULL) and include store_url if present
     const { data, error } = await supabase
         .from('accounts')
-        .select('id,name,company,store_url,deleted_at')
+        .select('id,name,company,store_url,deleted_at,created_at')
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     const accounts = (data || []).map(a => {
-        const company = (a as any).company as string | null;
-        const name = (a as any).name as string | null;
-        const candidate = company && company.trim() ? company : (name && name.trim() ? name : null);
-        const looksLikeEmail = candidate ? /@/.test(candidate) : false;
+        const rawCompany = (a as any).company as string | null;
+        const rawName = (a as any).name as string | null;
+        const clean = (s: string | null) => (s && s.trim()) || null;
+        const company = clean(rawCompany);
+        const name = clean(rawName);
+        const looksLikeEmail = (s: string | null) => !!s && /@/.test(s);
+        let businessName: string | null = (company && !looksLikeEmail(company) && company) || (name && !looksLikeEmail(name) && name) || company || name || null;
+        if (!businessName) businessName = (a as any).id; // final fallback
         return {
             id: (a as any).id,
-            businessName: looksLikeEmail ? null : candidate,
+            businessName,
             ownerEmail: null,
             storeUrl: (a as any).store_url || null,
         };
-    }).filter(a => a.businessName); // only show those with a usable business name
+    });
 
     return NextResponse.json({ accounts });
 }
