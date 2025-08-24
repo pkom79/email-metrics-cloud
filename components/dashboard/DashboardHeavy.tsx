@@ -7,8 +7,7 @@ import HourOfDayPerformance from './HourOfDayPerformance';
 import AudienceCharts from './AudienceCharts';
 import FlowStepAnalysis from './FlowStepAnalysis';
 import CustomSegmentBlock from './CustomSegmentBlock';
-import { BarChart3, Calendar, ChevronDown, Mail, Send, Zap, Star, Upload as UploadIcon, X } from 'lucide-react';
-import UploadWizard from '../../components/UploadWizard';
+import { BarChart3, Calendar, ChevronDown, Mail, Send, Zap, Star } from 'lucide-react';
 import { supabase } from '../../lib/supabase/client';
 
 function formatCurrency(value: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value); }
@@ -25,7 +24,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [isCalculating, setIsCalculating] = useState(false);
     const [metricsReady, setMetricsReady] = useState(false); // unified readiness gate
-    const [showUploadModal, setShowUploadModal] = useState(false);
     const [dateRange, setDateRange] = useState<'30d' | '60d' | '90d' | '120d' | '180d' | '365d' | 'all' | 'custom'>('30d');
     const [customFrom, setCustomFrom] = useState<string | undefined>();
     const [customTo, setCustomTo] = useState<string | undefined>();
@@ -48,7 +46,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     useEffect(() => { let cancelled = false; (async () => { try { const s = (await supabase.auth.getSession()).data.session; const admin = s?.user?.app_metadata?.role === 'admin'; if (!admin) return; setIsAdmin(true); const r = await fetch('/api/accounts', { cache: 'no-store' }); if (!r.ok) throw new Error(`Accounts ${r.status}`); const j = await r.json(); if (!cancelled) setAllAccounts(j.accounts || []); } catch (e: any) { if (!cancelled) setAccountsError(e?.message || 'Failed to load accounts'); } })(); return () => { cancelled = true; }; }, []);
 
     // Events / hydration
-    useEffect(() => { const onCreated = () => { setDataVersion(v => v + 1); setShowUploadModal(false); }; const onHydrated = () => { setDataVersion(v => v + 1); setIsInitialLoading(false); }; window.addEventListener('em:snapshot-created', onCreated as EventListener); window.addEventListener('em:dataset-hydrated', onHydrated as EventListener); let active = true; (async () => { for (let i = 0; i < 5 && active; i++) { const ok = await DataManager.getInstance().ensureHydrated(); if (ok) { setDataVersion(v => v + 1); setIsInitialLoading(false); break; } await new Promise(r => setTimeout(r, 150)); } if (active && !DataManager.getInstance().hasRealData()) setIsInitialLoading(false); })(); return () => { active = false; window.removeEventListener('em:snapshot-created', onCreated as EventListener); window.removeEventListener('em:dataset-hydrated', onHydrated as EventListener); }; }, [userId]);
+    useEffect(() => { const onCreated = () => { setDataVersion(v => v + 1); }; const onHydrated = () => { setDataVersion(v => v + 1); setIsInitialLoading(false); }; window.addEventListener('em:snapshot-created', onCreated as EventListener); window.addEventListener('em:dataset-hydrated', onHydrated as EventListener); let active = true; (async () => { for (let i = 0; i < 5 && active; i++) { const ok = await DataManager.getInstance().ensureHydrated(); if (ok) { setDataVersion(v => v + 1); setIsInitialLoading(false); break; } await new Promise(r => setTimeout(r, 150)); } if (active && !DataManager.getInstance().hasRealData()) setIsInitialLoading(false); })(); return () => { active = false; window.removeEventListener('em:snapshot-created', onCreated as EventListener); window.removeEventListener('em:dataset-hydrated', onHydrated as EventListener); }; }, [userId]);
 
     // Server snapshot CSV fallback
     useEffect(() => { let cancelled = false; (async () => { try { if (dm.getCampaigns().length || dm.getFlowEmails().length || dm.getSubscribers().length) { setIsInitialLoading(false); return; } const list = await fetch('/api/snapshots/list', { cache: 'no-store' }); if (!list.ok) { setIsInitialLoading(false); return; } const j = await list.json().catch(() => ({})); const latest = (j.snapshots || []).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]; if (!latest?.id) { setIsInitialLoading(false); return; } const csvTypes = ['campaigns', 'flows', 'subscribers']; const csvFiles: Record<string, File> = {}; for (const t of csvTypes) { try { const r = await fetch(`/api/snapshots/download-csv?type=${t}`, { cache: 'no-store' }); if (r.ok) { const csv = await r.text(); if (csv.trim()) { const blob = new Blob([csv], { type: 'text/csv' }); csvFiles[t] = new File([blob], `${t}.csv`, { type: 'text/csv' }); } } } catch { } } if (Object.keys(csvFiles).length) { const result = await dm.loadCSVFiles({ campaigns: csvFiles.campaigns, flows: csvFiles.flows, subscribers: csvFiles.subscribers }); if (result.success) { if (cancelled) return; setDataVersion(v => v + 1); setIsInitialLoading(false); window.dispatchEvent(new CustomEvent('em:dataset-hydrated')); } else { setDashboardError('Failed to process server data'); setIsInitialLoading(false); } } else { setIsInitialLoading(false); } } catch (e: any) { setDashboardError(`Failed to load data: ${e?.message || 'Unknown'}`); setIsInitialLoading(false); } })(); return () => { cancelled = true }; }, [dm]);
@@ -185,17 +183,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     </div>
                 </div>
             )}
-            {showUploadModal && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center">
-                    <div className="absolute inset-0 bg-black/50" onClick={() => setShowUploadModal(false)} />
-                    <div className="relative z-[61] w-[min(100%,900px)] max-h-[90vh] overflow-auto rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl p-6">
-                        <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold">Upload New Reports</h3><button onClick={() => setShowUploadModal(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"><X className="w-5 h-5" /></button></div>
-                        <UploadWizard />
-                    </div>
-                </div>
-            )}
             {/* Header */}
-            <div className="pt-4 sm:pt-6"><div className="max-w-7xl mx-auto"><div className="p-6 sm:p-8 mb-4"><div className="flex items-start justify-between gap-4"><div><h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>{businessName && <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>}</div><div className="flex items-center gap-2 relative"><button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"><UploadIcon className="h-4 w-4" />Upload New Reports</button></div></div></div></div></div>
+            <div className="pt-4 sm:pt-6"><div className="max-w-7xl mx-auto"><div className="p-6 sm:p-8 mb-4"><div className="flex items-start justify-between gap-4"><div><h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>{businessName && <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>}</div></div></div></div></div>
             {/* Filters bar (sticky) */}
             <div className={`hidden sm:block sm:pt-2 ${stickyBar ? 'sm:sticky sm:top-0 sm:z-50' : ''}`}> <div className="max-w-7xl mx-auto px-4"><div className={`rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${stickyBar ? 'shadow-lg' : 'shadow-sm'} px-3 py-2`}>
                 <div className="hidden sm:flex items-center justify-center gap-3 flex-nowrap whitespace-nowrap">
