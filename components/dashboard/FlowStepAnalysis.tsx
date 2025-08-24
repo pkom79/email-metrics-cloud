@@ -8,6 +8,7 @@ interface FlowStepAnalysisProps {
     granularity: 'daily' | 'weekly' | 'monthly';
     customFrom?: string;
     customTo?: string;
+    compareMode?: 'prev-period' | 'prev-year';
 }
 
 interface FlowStepMetrics {
@@ -29,7 +30,7 @@ interface FlowStepMetrics {
     totalClicks: number;
 }
 
-export default function FlowStepAnalysis({ dateRange, granularity, customFrom, customTo }: FlowStepAnalysisProps) {
+export default function FlowStepAnalysis({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period' }: FlowStepAnalysisProps) {
     const [hoveredPoint, setHoveredPoint] = useState<{
         chartIndex: number;
         x: number;
@@ -90,24 +91,31 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             periodDays = parseInt(dateRange.replace('d', ''));
         }
 
-        // Calculate previous period dates to match DataManager exactly
+        // Calculate previous comparison window based on compareMode
         let prevStartDate: Date, prevEndDate: Date;
-
-        if (periodDays === 1) {
-            // For single-day comparisons, go back exactly 1 day for previous period
-            prevEndDate = new Date(startDate);
-            prevEndDate.setDate(prevEndDate.getDate() - 1);
-            prevEndDate.setHours(23, 59, 59, 999);
-            prevStartDate = new Date(prevEndDate);
-            prevStartDate.setHours(0, 0, 0, 0);
+        if (compareMode === 'prev-year') {
+            prevStartDate = new Date(startDate);
+            prevEndDate = new Date(endDate);
+            prevStartDate.setFullYear(prevStartDate.getFullYear() - 1);
+            prevEndDate.setFullYear(prevEndDate.getFullYear() - 1);
+            // Leap day adjustments (if current range includes Feb 29 not present previous year)
+            if (startDate.getMonth() === 1 && startDate.getDate() === 29 && prevStartDate.getMonth() === 2) prevStartDate.setDate(0);
+            if (endDate.getMonth() === 1 && endDate.getDate() === 29 && prevEndDate.getMonth() === 2) prevEndDate.setDate(0);
         } else {
-            // For multi-day periods, use the original logic
-            prevEndDate = new Date(startDate);
-            prevEndDate.setDate(prevEndDate.getDate() - 1);
-            prevEndDate.setHours(23, 59, 59, 999);
-            prevStartDate = new Date(prevEndDate);
-            prevStartDate.setDate(prevStartDate.getDate() - periodDays + 1);
-            prevStartDate.setHours(0, 0, 0, 0);
+            if (periodDays === 1) {
+                prevEndDate = new Date(startDate);
+                prevEndDate.setDate(prevEndDate.getDate() - 1);
+                prevEndDate.setHours(23, 59, 59, 999);
+                prevStartDate = new Date(prevEndDate);
+                prevStartDate.setHours(0, 0, 0, 0);
+            } else {
+                prevEndDate = new Date(startDate);
+                prevEndDate.setDate(prevEndDate.getDate() - 1);
+                prevEndDate.setHours(23, 59, 59, 999);
+                prevStartDate = new Date(prevEndDate);
+                prevStartDate.setDate(prevStartDate.getDate() - periodDays + 1);
+                prevStartDate.setHours(0, 0, 0, 0);
+            }
         }
 
         return {
@@ -117,7 +125,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             prevEndDateOnly: toDateOnly(prevEndDate),
             days: periodDays
         };
-    }, [dateRange, customFrom, customTo, dataManager]);
+    }, [dateRange, customFrom, customTo, dataManager, compareMode]);
 
     const liveFlowEmails = useMemo(() => ALL_FLOW_EMAILS.filter(e => e.status && e.status.toLowerCase() === 'live'), [ALL_FLOW_EMAILS]);
 
@@ -407,9 +415,10 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             }
 
             const isSingleDay = formatDate(periodChange.previousPeriod.startDate) === formatDate(periodChange.previousPeriod.endDate);
+            const label = compareMode === 'prev-year' ? 'Same period last year' : 'Previous period';
             const trendTooltip = isSingleDay
-                ? `Previous period (${formatDate(periodChange.previousPeriod.startDate)}): ${formatMetricValue(periodChange.previousValue, selectedMetric)}`
-                : `Previous period (${formatDate(periodChange.previousPeriod.startDate)} – ${formatDate(periodChange.previousPeriod.endDate)}): ${formatMetricValue(periodChange.previousValue, selectedMetric)}`;
+                ? `${label} (${formatDate(periodChange.previousPeriod.startDate)}): ${formatMetricValue(periodChange.previousValue, selectedMetric)}`
+                : `${label} (${formatDate(periodChange.previousPeriod.startDate)} – ${formatDate(periodChange.previousPeriod.endDate)}): ${formatMetricValue(periodChange.previousValue, selectedMetric)}`;
 
             // Chart color: Purple for both 0% change AND insufficient data
             if (isZeroChange || hasInsufficientData) {
