@@ -54,3 +54,59 @@ export async function GET() {
 
     return NextResponse.json({ accounts });
 }
+
+// Soft delete an account (admin only). Body: { accountId: string, hard?: boolean }
+export async function DELETE(request: Request) {
+    try {
+        const supabase = createRouteHandlerClient({ cookies });
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const isAdmin = user.app_metadata?.role === 'admin';
+        if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+        const { accountId, hard } = await request.json().catch(() => ({}));
+        if (!accountId || !/^[0-9a-fA-F-]{36}$/.test(accountId)) {
+            return NextResponse.json({ error: 'Invalid accountId' }, { status: 400 });
+        }
+        if (accountId === user.id) {
+            return NextResponse.json({ error: 'Cannot delete admin root account' }, { status: 400 });
+        }
+
+        // Ensure account exists
+        const { data: acct, error: acctErr } = await supabase
+            .from('accounts')
+            .select('id, deleted_at, owner_user_id')
+            .eq('id', accountId)
+            .maybeSingle();
+        if (acctErr) return NextResponse.json({ error: acctErr.message }, { status: 500 });
+        if (!acct) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        if ((acct as any).owner_user_id === user.id) {
+            return NextResponse.json({ error: 'Cannot delete account you own via admin API' }, { status: 400 });
+        }
+
+        if (hard) {
+            // Hard delete: rely on ON DELETE CASCADE for children
+            const { error: delErr } = await supabase.from('accounts').delete().eq('id', accountId);
+            if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+            return NextResponse.json({ status: 'hard-deleted' });
+        }
+
+        // Soft delete: set deleted_at and purge children manually for immediate cleanup
+        const { error: updErr } = await supabase
+            .from('accounts')
+            .update({ deleted_at: new Date().toISOString() })
+            .eq('id', accountId);
+        if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+
+        // Call helper function to purge children (service role needed; fallback: direct deletes)
+        // Using RPC would require exposing function; for now attempt direct deletes since RLS allows admin.
+        const { error: snapsErr } = await supabase.from('snapshots').delete().eq('account_id', accountId);
+        if (snapsErr) return NextResponse.json({ error: snapsErr.message }, { status: 500 });
+        const { error: uploadsErr } = await supabase.from('uploads').delete().eq('account_id', accountId);
+        if (uploadsErr) return NextResponse.json({ error: uploadsErr.message }, { status: 500 });
+
+        return NextResponse.json({ status: 'soft-deleted' });
+    } catch (e: any) {
+        return NextResponse.json({ error: e?.message || 'Delete failed' }, { status: 500 });
+    }
+}
