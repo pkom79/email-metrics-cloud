@@ -73,9 +73,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [dashboardError, setDashboardError] = useState<string | null>(null);
     const [dataVersion, setDataVersion] = useState(0);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
-    // Removed artificial calculation spinner delays; we now rely solely on metricsReady & initial loading
-    const [isCalculating, setIsCalculating] = useState(false); // kept for minimal diff, but will be set only during true recompute events
-    const [metricsReady, setMetricsReady] = useState(false); // unified readiness gate
     const [dateRange, setDateRange] = useState<'30d' | '60d' | '90d' | '120d' | '180d' | '365d' | 'all' | 'custom'>('30d');
     const [customFrom, setCustomFrom] = useState<string | undefined>();
     const [customTo, setCustomTo] = useState<string | undefined>();
@@ -135,7 +132,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         let cancelled = false;
         (async () => {
             setIsInitialLoading(true);
-            setMetricsReady(false);
             try {
                 (dm as any).clearAllData?.();
             } catch { /* ignore */ }
@@ -291,7 +287,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     }), [defFlows, effectiveSeriesRange, granularity, dm, customFrom, customTo]);
 
     // Unified readiness effect
-    useEffect(() => { if (isInitialLoading) { setMetricsReady(false); return; } if (!hasData) { setMetricsReady(true); return; } if (overviewMetrics && campaignMetrics && flowMetrics) { requestAnimationFrame(() => setMetricsReady(true)); } }, [isInitialLoading, hasData, overviewMetrics, campaignMetrics, flowMetrics]);
+    // Overlay now only tied to isInitialLoading; metric calculations are synchronous & cached
 
     const campaignMetricOptions = [
         { value: 'revenue', label: 'Revenue' },
@@ -312,7 +308,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     // If admin and there are zero accounts, don't block UI with overlay after initial load
     const noAccounts = isAdmin && (allAccounts?.length === 0);
-    const showOverlay = (isInitialLoading && !noAccounts) || (!metricsReady && !noAccounts);
+    const showOverlay = isInitialLoading && !noAccounts;
 
     if (dashboardError) { return <div className="min-h-screen flex items-center justify-center p-6"><div className="max-w-md mx-auto text-center"><h2 className="text-lg font-semibold text-red-600 mb-4">Dashboard Error</h2><p className="text-gray-600 dark:text-gray-300 mb-6">{dashboardError}</p><div className="space-x-4"><button onClick={() => { setDashboardError(null); setDataVersion(v => v + 1); }} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Retry</button><button onClick={() => window.location.reload()} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Reload Page</button></div></div></div>; }
 
@@ -322,7 +318,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/30 backdrop-blur-sm">
                     <div className="bg-white dark:bg-gray-800 rounded-xl px-8 py-6 shadow-2xl border border-gray-200 dark:border-gray-700 flex items-center gap-3">
                         <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full" />
-                        <span className="text-gray-900 dark:text-gray-100 font-medium text-sm">{isInitialLoading ? 'Loading data…' : 'Calculating metrics…'}</span>
+                        <span className="text-gray-900 dark:text-gray-100 font-medium text-sm">Loading data…</span>
                     </div>
                 </div>
             )}
@@ -344,12 +340,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     <div className="flex items-center gap-1.5">
                         <Calendar className="w-4 h-4 text-gray-500" />
                         <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Date Range:</span>
-                        <input type="date" value={customFrom || ''} onChange={e => { const v = e.target.value || undefined; setCustomFrom(v); if (v && customTo && new Date(v) > new Date(customTo)) setCustomTo(v); setDateRange('custom'); setMetricsReady(false); }} className="px-2 py-1 rounded text-xs border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
+                        <input type="date" value={customFrom || ''} onChange={e => { const v = e.target.value || undefined; setCustomFrom(v); if (v && customTo && new Date(v) > new Date(customTo)) setCustomTo(v); setDateRange('custom'); }} className="px-2 py-1 rounded text-xs border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
                         <span className="text-xs text-gray-500">to</span>
-                        <input type="date" value={customTo || ''} onChange={e => { const v = e.target.value || undefined; setCustomTo(v); if (v && customFrom && new Date(v) < new Date(customFrom)) setCustomFrom(v); setDateRange('custom'); setMetricsReady(false); }} className="px-2 py-1 rounded text-xs border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
-                        {customActive && <button onClick={() => { setCustomFrom(undefined); setCustomTo(undefined); setDateRange('30d'); setMetricsReady(false); }} className="ml-1 px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700">Clear</button>}
+                        <input type="date" value={customTo || ''} onChange={e => { const v = e.target.value || undefined; setCustomTo(v); if (v && customFrom && new Date(v) < new Date(customFrom)) setCustomFrom(v); setDateRange('custom'); }} className="px-2 py-1 rounded text-xs border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
+                        {customActive && <button onClick={() => { setCustomFrom(undefined); setCustomTo(undefined); setDateRange('30d'); }} className="ml-1 px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700">Clear</button>}
                     </div>
-                    <div className="flex flex-col items-start gap-1"><div className="relative"><select value={dateRange === 'custom' ? '' : dateRange} onChange={e => { const v = (e.target.value || '30d') as any; setMetricsReady(false); const to = new Date(REFERENCE_DATE); const toISO = (d: Date) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const da = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${da}`; }; if (v === 'all') { const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow); const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime()); const flowTs = flowSubset.map(f => f.sentDate.getTime()); const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n)); if (all.length) { const from = new Date(Math.min(...all)); setCustomFrom(toISO(from)); setCustomTo(toISO(to)); } else { setCustomFrom(undefined); setCustomTo(undefined); } } else { const days = parseInt(String(v).replace('d', '')); if (Number.isFinite(days)) { const from = new Date(to); from.setDate(from.getDate() - days + 1); setCustomFrom(toISO(from)); setCustomTo(toISO(to)); } } setDateRange(v); }} className="appearance-none px-2 py-1 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs">
+                    <div className="flex flex-col items-start gap-1"><div className="relative"><select value={dateRange === 'custom' ? '' : dateRange} onChange={e => { const v = (e.target.value || '30d') as any; const to = new Date(REFERENCE_DATE); const toISO = (d: Date) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const da = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${da}`; }; if (v === 'all') { const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow); const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime()); const flowTs = flowSubset.map(f => f.sentDate.getTime()); const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n)); if (all.length) { const from = new Date(Math.min(...all)); setCustomFrom(toISO(from)); setCustomTo(toISO(to)); } else { setCustomFrom(undefined); setCustomTo(undefined); } } else { const days = parseInt(String(v).replace('d', '')); if (Number.isFinite(days)) { const from = new Date(to); from.setDate(from.getDate() - days + 1); setCustomFrom(toISO(from)); setCustomTo(toISO(to)); } } setDateRange(v); }} className="appearance-none px-2 py-1 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs">
                         <option value="" disabled>Presets</option>
                         <option value="30d">Last 30 days</option>
                         <option value="60d">Last 60 days</option>
@@ -359,7 +355,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <option value="365d">Last 365 days</option>
                         <option value="all">All time</option>
                     </select><ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" /></div></div>
-                    <div className="flex items-center gap-1.5"><BarChart3 className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Granularity:</span><div className="flex gap-1.5 ml-2 flex-nowrap">{(['daily', 'weekly', 'monthly'] as const).map(g => <button key={g} onClick={() => { if (g !== granularity) { setMetricsReady(false); setGranularity(g); } }} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${granularity === g ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>{g.charAt(0).toUpperCase() + g.slice(1)}</button>)}</div></div>
+                    <div className="flex items-center gap-1.5"><BarChart3 className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Granularity:</span><div className="flex gap-1.5 ml-2 flex-nowrap">{(['daily', 'weekly', 'monthly'] as const).map(g => <button key={g} onClick={() => { if (g !== granularity) { setGranularity(g); } }} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${granularity === g ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>{g.charAt(0).toUpperCase() + g.slice(1)}</button>)}</div></div>
                 </div></div></div></div>
             {/* Data coverage notice */}
             {hasData && (<div className="py-3"><div className="max-w-7xl mx-auto"><div className="mx-4 sm:mx-6"><div className="p-0 text-purple-700 dark:text-purple-200"><span className="text-xs"><span className="font-medium">Data Coverage Notice:</span>{(() => { const dates = [...defCampaigns, ...defFlows].map(e => e.sentDate.getTime()); const lastVisible = dates.length ? new Date(Math.max(...dates)) : dm.getLastEmailDate(); return ` All dashboard metrics reflect email channel performance only and exclude SMS-attributed revenue through ${lastVisible.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.`; })()}</span></div></div></div></div>)}
@@ -445,7 +441,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <div className="flex items-center justify-between gap-2 mb-3">
                             <div className="flex items-center gap-2"><Zap className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Flow Performance</h2></div>
                             <div className="relative">
-                                <select value={selectedFlow} onChange={e => { setMetricsReady(false); setSelectedFlow(e.target.value); }} className="appearance-none px-4 py-2 pr-9 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm min-w-[220px]">
+                                <select value={selectedFlow} onChange={e => { setSelectedFlow(e.target.value); }} className="appearance-none px-4 py-2 pr-9 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm min-w-[220px]">
                                     <option value="all">All Flows</option>
                                     {uniqueFlowNames.map(f => <option key={f} value={f}>{f}</option>)}
                                 </select>
