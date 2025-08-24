@@ -131,44 +131,53 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     // (moved loop detector below base data section)
 
-    // Admin: reload data when selectedAccountId changes (stable, uses helper)
+    // Guard refs to avoid duplicate loads (e.g. React StrictMode double-invoke) that could cascade renders
+    const adminLoadRef = useRef<{ accountId: string | null; loading: boolean }>({ accountId: null, loading: false });
+    // Admin: reload data when selectedAccountId changes (stable, guarded)
     useEffect(() => {
         if (!isAdmin || !selectedAccountId) return;
+        // Skip if same account already loaded or a load is in-flight
+        if (adminLoadRef.current.loading || adminLoadRef.current.accountId === selectedAccountId) return;
+        adminLoadRef.current.loading = true;
         let cancelled = false;
         (async () => {
             setIsInitialLoading(true);
             setMetricsReady(false);
+            try { (dm as any).clearAllData?.(); } catch { /* ignore */ }
+            let success = false;
             try {
-                (dm as any).clearAllData?.();
-            } catch { /* ignore */ }
-            const success = await (async () => {
-                try {
-                    const listResp = await fetch(`/api/snapshots/list?account_id=${selectedAccountId}`, { cache: 'no-store' });
-                    if (!listResp.ok) return false;
+                const listResp = await fetch(`/api/snapshots/list?account_id=${selectedAccountId}`, { cache: 'no-store' });
+                if (listResp.ok) {
                     const j = await listResp.json().catch(() => ({}));
-                    if (!j.snapshots?.length) return false;
-                    const csvTypes = ['campaigns', 'flows', 'subscribers'];
-                    const files: Record<string, File> = {};
-                    for (const t of csvTypes) {
-                        const r = await fetch(`/api/snapshots/download-csv?type=${t}&account_id=${selectedAccountId}`, { cache: 'no-store' });
-                        if (r.ok) {
-                            const text = await r.text();
-                            if (text.trim()) {
-                                const blob = new Blob([text], { type: 'text/csv' });
-                                files[t] = new File([blob], `${t}.csv`, { type: 'text/csv' });
-                            }
+                    if (j.snapshots?.length) {
+                        const csvTypes = ['campaigns', 'flows', 'subscribers'];
+                        const files: Record<string, File> = {};
+                        for (const t of csvTypes) {
+                            try {
+                                const r = await fetch(`/api/snapshots/download-csv?type=${t}&account_id=${selectedAccountId}`, { cache: 'no-store' });
+                                if (r.ok) {
+                                    const text = await r.text();
+                                    if (text.trim()) {
+                                        const blob = new Blob([text], { type: 'text/csv' });
+                                        files[t] = new File([blob], `${t}.csv`, { type: 'text/csv' });
+                                    }
+                                }
+                            } catch { /* ignore individual file errors */ }
+                        }
+                        if (Object.keys(files).length) {
+                            await dm.loadCSVFiles({ campaigns: files.campaigns, flows: files.flows, subscribers: files.subscribers });
+                            success = true;
                         }
                     }
-                    if (!Object.keys(files).length) return false;
-                    await dm.loadCSVFiles({ campaigns: files.campaigns, flows: files.flows, subscribers: files.subscribers });
-                    return true;
-                } catch {
-                    return false;
                 }
-            })();
+            } catch { success = false; }
             if (!cancelled) {
-                if (success) setDataVersion(v => v + 1);
+                if (success) {
+                    adminLoadRef.current.accountId = selectedAccountId;
+                    setDataVersion(v => v + 1);
+                }
                 setIsInitialLoading(false);
+                adminLoadRef.current.loading = false;
             }
         })();
         return () => { cancelled = true; };
