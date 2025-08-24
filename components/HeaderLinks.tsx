@@ -27,9 +27,7 @@ export default function HeaderLinks({ isAuthed }: { isAuthed: boolean }) {
                         <Link href="/dashboard" className="text-sm text-purple-600 dark:text-purple-400">Dashboard</Link>
                     )}
                     {!onAccount && (
-                        <Link href="/account" className="inline-flex items-center gap-1 rounded-full bg-purple-600/10 border border-purple-600/20 px-3 py-1 text-xs font-semibold tracking-wide text-purple-700 dark:text-purple-300">
-                            Account
-                        </Link>
+                        <Link href="/account" className="text-sm text-purple-600 dark:text-purple-400">Account</Link>
                     )}
                     <button onClick={signOut} className="text-sm text-gray-600 dark:text-gray-300 hover:underline">Sign out</button>
                 </>

@@ -37,7 +37,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                     <Link href="/" className="flex items-center gap-2 text-lg font-semibold hover:opacity-90 transition-opacity">
                         <img src="/brand/logo-email.png" alt="Email Metrics" className="h-6 w-auto" />
                         <span className="text-sm sm:text-base flex items-center gap-2">Email Metrics {isAdmin && (
-                            <span className="inline-flex items-center rounded-full bg-purple-600/10 text-purple-700 dark:text-purple-300 border border-purple-600/20 px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase">Admin</span>
+                            <span className="inline-flex items-center rounded-md bg-purple-600/10 text-purple-700 dark:text-purple-300 border border-purple-600/30 px-1.5 py-0.5 text-[10px] font-medium">Admin</span>
                         )}</span>
                     </Link>
                     <div className="flex items-center gap-3">

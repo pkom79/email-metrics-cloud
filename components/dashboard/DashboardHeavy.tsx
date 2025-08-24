@@ -46,7 +46,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // Human readable label for currently selected admin account
     const [selectedAccountLabel, setSelectedAccountLabel] = useState<string>('');
 
-    useEffect(() => { let cancelled = false; (async () => { try { const s = (await supabase.auth.getSession()).data.session; const admin = s?.user?.app_metadata?.role === 'admin'; if (!admin) return; setIsAdmin(true); const r = await fetch('/api/accounts', { cache: 'no-store' }); if (!r.ok) throw new Error(`Accounts ${r.status}`); const j = await r.json(); if (!cancelled) { const list = j.accounts || []; setAllAccounts(list); if (list.length) { setSelectedAccountId(list[0].id); setSelectedAccountLabel(list[0].businessName || list[0].name || list[0].id); } } } catch (e: any) { if (!cancelled) setAccountsError(e?.message || 'Failed to load accounts'); } })(); return () => { cancelled = true; }; }, []);
+    useEffect(() => { let cancelled = false; (async () => { try { const s = (await supabase.auth.getSession()).data.session; const admin = s?.user?.app_metadata?.role === 'admin'; if (!admin) return; setIsAdmin(true); const r = await fetch('/api/accounts', { cache: 'no-store' }); if (!r.ok) throw new Error(`Accounts ${r.status}`); const j = await r.json(); if (!cancelled) { const list = (j.accounts || []).filter((a: any) => a.businessName); setAllAccounts(list); if (!selectedAccountId && list.length) { setSelectedAccountId(list[0].id); setSelectedAccountLabel(list[0].businessName || list[0].id); } } } catch (e: any) { if (!cancelled) setAccountsError(e?.message || 'Failed to load accounts'); } })(); return () => { cancelled = true; }; }, [selectedAccountId]);
 
     // Admin: reload data when selectedAccountId changes
     useEffect(() => {
@@ -192,7 +192,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const formatMetricValue = (v: number, metric: string) => { if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric)) return formatCurrency(v); if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric)) return formatPercent(v); return formatNumber(v); };
     const getSortedCampaigns = () => [...defCampaigns].sort((a, b) => { const av = Number((a as any)[selectedCampaignMetric]) || 0; const bv = Number((b as any)[selectedCampaignMetric]) || 0; return bv - av; });
 
-    const showOverlay = isInitialLoading || isCalculating || !metricsReady;
+    // If admin and there are zero accounts, don't block UI with overlay after initial load
+    const noAccounts = isAdmin && (allAccounts?.length === 0);
+    const showOverlay = (isInitialLoading && !noAccounts) || isCalculating || (!metricsReady && !noAccounts);
 
     if (dashboardError) { return <div className="min-h-screen flex items-center justify-center p-6"><div className="max-w-md mx-auto text-center"><h2 className="text-lg font-semibold text-red-600 mb-4">Dashboard Error</h2><p className="text-gray-600 dark:text-gray-300 mb-6">{dashboardError}</p><div className="space-x-4"><button onClick={() => { setDashboardError(null); setDataVersion(v => v + 1); }} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Retry</button><button onClick={() => window.location.reload()} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Reload Page</button></div></div></div>; }
 
