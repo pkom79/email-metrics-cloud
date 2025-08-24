@@ -9,9 +9,9 @@ export async function GET(request: Request) {
         const user = await getServerUser();
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { searchParams } = new URL(request.url);
-    const type = searchParams.get('type'); // 'campaigns', 'flows', or 'subscribers'
-    const overrideAccountId = searchParams.get('account_id');
+        const { searchParams } = new URL(request.url);
+        const type = searchParams.get('type'); // 'campaigns', 'flows', or 'subscribers'
+        const overrideAccountId = searchParams.get('account_id');
 
         if (!type || !['campaigns', 'flows', 'subscribers'].includes(type)) {
             return NextResponse.json({ error: 'Invalid type parameter' }, { status: 400 });

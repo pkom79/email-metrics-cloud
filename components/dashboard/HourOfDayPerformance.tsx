@@ -42,6 +42,26 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
         return dataManager.getCampaignPerformanceByHourOfDay(filteredCampaigns, selectedMetric);
     }, [filteredCampaigns, selectedMetric, dataManager]);
 
+    // Match color scheme logic from DayOfWeekPerformance so colors stay consistent across charts
+    const getColorScheme = (metric: string) => {
+        const colorSchemes = {
+            revenue: { primary: '#8b5cf6', secondary: '#a78bfa', light: '#c4b5fd' },
+            avgOrderValue: { primary: '#06b6d4', secondary: '#67e8f9', light: '#a7f3d0' },
+            revenuePerEmail: { primary: '#10b981', secondary: '#34d399', light: '#6ee7b7' },
+            openRate: { primary: '#f59e0b', secondary: '#fbbf24', light: '#fde047' },
+            clickRate: { primary: '#ef4444', secondary: '#f87171', light: '#fca5a5' },
+            clickToOpenRate: { primary: '#8b5cf6', secondary: '#a78bfa', light: '#c4b5fd' },
+            emailsSent: { primary: '#3b82f6', secondary: '#60a5fa', light: '#93c5fd' },
+            totalOrders: { primary: '#10b981', secondary: '#34d399', light: '#6ee7b7' },
+            conversionRate: { primary: '#f97316', secondary: '#fb923c', light: '#fdba74' },
+            unsubscribeRate: { primary: '#ef4444', secondary: '#f87171', light: '#fca5a5' },
+            spamRate: { primary: '#dc2626', secondary: '#ef4444', light: '#f87171' },
+            bounceRate: { primary: '#991b1b', secondary: '#dc2626', light: '#ef4444' }
+        } as const;
+        return (colorSchemes as any)[metric] || colorSchemes.revenue;
+    };
+    const currentColorScheme = getColorScheme(selectedMetric);
+
     const formatMetricValue = (value: number, metric: string): string => {
         if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric)) {
             return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -138,9 +158,9 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
                     >
                         <defs>
                             <linearGradient id={`hourBarGradient-${selectedMetric}`} x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.9} />
-                                <stop offset="50%" stopColor="#a78bfa" stopOpacity={0.9} />
-                                <stop offset="100%" stopColor="#c4b5fd" stopOpacity={0.7} />
+                                <stop offset="0%" stopColor={currentColorScheme.primary} stopOpacity={0.9} />
+                                <stop offset="50%" stopColor={currentColorScheme.secondary} stopOpacity={0.9} />
+                                <stop offset="100%" stopColor={currentColorScheme.light} stopOpacity={0.7} />
                             </linearGradient>
                             <filter id="hourDropShadow" x="-20%" y="-20%" width="140%" height="140%">
                                 <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000000" floodOpacity="0.1" />
@@ -208,7 +228,7 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
                             }}
                         >
                             <div className="font-semibold mb-1">{hoveredBar.hourLabel}</div>
-                            <div className="font-medium mb-1" style={{ color: '#8b5cf6' }}>
+                            <div className="font-medium mb-1" style={{ color: currentColorScheme.primary }}>
                                 {formatMetricValue(hoveredBar.value, selectedMetric)}
                             </div>
                             <div className="text-xs text-gray-500 dark:text-gray-400">

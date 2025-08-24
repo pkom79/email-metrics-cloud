@@ -41,88 +41,123 @@ export class DataManager {
     private flowTransformer = new FlowTransformer();
     private subscriberTransformer = new SubscriberTransformer();
 
-    // ----------------------------------------------
-    // Performance caches
-    // ----------------------------------------------
-    // Cache of base daily aggregates (combined campaigns + flows) so that
-    // daily/weekly/monthly time series can be generated without re-scanning
-    // the entire email list on every granularity / metric switch.
-    private _dailyAggVersion = '';
-    private _dailyAgg: Map<string, {
-        revenue: number;
-        emailsSent: number;
-        totalOrders: number;
-        uniqueOpens: number;
-        uniqueClicks: number;
-        unsubscribesCount: number;
-        spamComplaintsCount: number;
-        bouncesCount: number;
-        emailCount: number;
-    }> = new Map();
-    // Memoized derived series cache: key = signature|metric|granularity|dateRange|customFrom|customTo
-    private _timeSeriesCache: Map<string, { built: number; data: { value: number; date: string }[] }> = new Map();
-
     // Dynamic storage keys based on user
     private get storageKey() {
         const userId = DataManager.currentUserId || 'anonymous';
         return `em:dataset:${userId}:v1`;
     }
-
     private get idbKey() {
         const userId = DataManager.currentUserId || 'anonymous';
         return `dataset:${userId}:v1`;
     }
 
-    static setUserId(userId: string | null) {
-        if (DataManager.currentUserId !== userId) {
-            DataManager.currentUserId = userId;
-            // Clear current instance to force reload with new user data
-            if (DataManager.instance) {
-                DataManager.instance.clearData();
+    private _subsetSignature(campaigns: ProcessedCampaign[], flows: ProcessedFlowEmail[]): string {
+        // If exact reference equality to full arrays, keep it short
+        const fullC = campaigns === this.campaigns;
+        const fullF = flows === this.flowEmails;
+        if (fullC && fullF) return 'all';
+        // Lightweight hash: count + first + last id/date to differentiate
+        const hashArr = (arr: any[]) => {
+            if (!arr.length) return '0';
+            const first = arr[0]?.id || arr[0]?.name || arr[0]?.sentDate?.getTime();
+            const last = arr[arr.length-1]?.id || arr[arr.length-1]?.name || arr[arr.length-1]?.sentDate?.getTime();
+            return `${arr.length}:${first}:${last}`;
+        };
+        return `c(${hashArr(campaigns)})_f(${hashArr(flows)})`;
+    }
+
+    private _buildBaseBucketsForSubset(campaigns: ProcessedCampaign[], flows: ProcessedFlowEmail[], granularity: 'daily'|'weekly'|'monthly', startDate: Date, endDate: Date) {
+        const all = [...campaigns, ...flows].filter(e => e.sentDate instanceof Date && !isNaN(e.sentDate.getTime()) && e.sentDate >= startDate && e.sentDate <= endDate);
+        if (!all.length) return [] as { key: string; label: string; sums: any }[];
+        const dailyMap: Map<string, { revenue:number; emailsSent:number; totalOrders:number; uniqueOpens:number; uniqueClicks:number; unsubscribesCount:number; spamComplaintsCount:number; bouncesCount:number; emailCount:number; date: Date }> = new Map();
+        for (const e of all) {
+            const d = new Date(e.sentDate); d.setHours(0,0,0,0);
+            const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            let rec = dailyMap.get(key);
+            if (!rec) { rec = { revenue:0, emailsSent:0, totalOrders:0, uniqueOpens:0, uniqueClicks:0, unsubscribesCount:0, spamComplaintsCount:0, bouncesCount:0, emailCount:0, date: d }; dailyMap.set(key, rec); }
+            rec.revenue += e.revenue; rec.emailsSent += e.emailsSent; rec.totalOrders += e.totalOrders; rec.uniqueOpens += e.uniqueOpens; rec.uniqueClicks += e.uniqueClicks; rec.unsubscribesCount += e.unsubscribesCount; rec.spamComplaintsCount += e.spamComplaintsCount; rec.bouncesCount += e.bouncesCount; rec.emailCount += 1;
+        }
+        const dayEntries = Array.from(dailyMap.values()).sort((a,b)=>a.date.getTime()-b.date.getTime());
+        if (granularity === 'daily') {
+            return dayEntries.map(d => ({ key: this._dayKey(d.date), label: this.safeToLocaleDateString(d.date, { month: 'short', day: 'numeric' }), sums: d }));
+        }
+        if (granularity === 'weekly') {
+            const weeks: { key:string; label:string; sums:any }[] = [];
+            let currentWeek: any = null;
+            for (const d of dayEntries) {
+                const monday = this._mondayOf(d.date);
+                const wKey = this._dayKey(monday);
+                if (!currentWeek || currentWeek.key !== wKey) {
+                    if (currentWeek) weeks.push(currentWeek);
+                    currentWeek = { key: wKey, label: this.safeToLocaleDateString(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate()+6), { month: 'short', day: 'numeric' }), sums: { revenue:0, emailsSent:0, totalOrders:0, uniqueOpens:0, uniqueClicks:0, unsubscribesCount:0, spamComplaintsCount:0, bouncesCount:0, emailCount:0 } };
+                }
+                const s = currentWeek.sums; s.revenue += d.revenue; s.emailsSent += d.emailsSent; s.totalOrders += d.totalOrders; s.uniqueOpens += d.uniqueOpens; s.uniqueClicks += d.uniqueClicks; s.unsubscribesCount += d.unsubscribesCount; s.spamComplaintsCount += d.spamComplaintsCount; s.bouncesCount += d.bouncesCount; s.emailCount += d.emailCount;
             }
+            if (currentWeek) weeks.push(currentWeek);
+            return weeks;
+        }
+        // monthly
+        const months: { key:string; label:string; sums:any }[] = [];
+        let currentMonth: any = null;
+        for (const d of dayEntries) {
+            const mKey = `${d.date.getFullYear()}-${String(d.date.getMonth()+1).padStart(2,'0')}`;
+            if (!currentMonth || currentMonth.key !== mKey) {
+                if (currentMonth) months.push(currentMonth);
+                currentMonth = { key: mKey, label: this.safeToLocaleDateString(new Date(d.date.getFullYear(), d.date.getMonth(), 1), { month: 'short', year: '2-digit' }), sums: { revenue:0, emailsSent:0, totalOrders:0, uniqueOpens:0, uniqueClicks:0, unsubscribesCount:0, spamComplaintsCount:0, bouncesCount:0, emailCount:0 } };
+            }
+            const s = currentMonth.sums; s.revenue += d.revenue; s.emailsSent += d.emailsSent; s.totalOrders += d.totalOrders; s.uniqueOpens += d.uniqueOpens; s.uniqueClicks += d.uniqueClicks; s.unsubscribesCount += d.unsubscribesCount; s.spamComplaintsCount += d.spamComplaintsCount; s.bouncesCount += d.bouncesCount; s.emailCount += d.emailCount;
+        }
+        if (currentMonth) months.push(currentMonth);
+        return months;
+    }
+
+    private _deriveMetricFromSums(metric: string, sums: { revenue:number; emailsSent:number; totalOrders:number; uniqueOpens:number; uniqueClicks:number; unsubscribesCount:number; spamComplaintsCount:number; bouncesCount:number; emailCount:number }): number {
+        switch(metric) {
+            case 'revenue': return sums.revenue;
+            case 'avgOrderValue': return sums.totalOrders>0? sums.revenue/sums.totalOrders : 0;
+            case 'revenuePerEmail': return sums.emailsSent>0? sums.revenue/sums.emailsSent : 0;
+            case 'emailsSent': return sums.emailsSent;
+            case 'totalOrders': return sums.totalOrders;
+            case 'openRate': return sums.emailsSent>0? (sums.uniqueOpens/sums.emailsSent)*100 : 0;
+            case 'clickRate': return sums.emailsSent>0? (sums.uniqueClicks/sums.emailsSent)*100 : 0;
+            case 'clickToOpenRate': return sums.uniqueOpens>0? (sums.uniqueClicks/sums.uniqueOpens)*100 : 0;
+            case 'conversionRate': return sums.uniqueClicks>0? (sums.totalOrders/sums.uniqueClicks)*100 : 0;
+            case 'unsubscribeRate': return sums.emailsSent>0? (sums.unsubscribesCount/sums.emailsSent)*100 : 0;
+            case 'spamRate': return sums.emailsSent>0? (sums.spamComplaintsCount/sums.emailsSent)*100 : 0;
+            case 'bounceRate': return sums.emailsSent>0? (sums.bouncesCount/sums.emailsSent)*100 : 0;
+            default: return 0;
         }
     }
 
-    static getInstance(): DataManager {
-        if (!DataManager.instance) DataManager.instance = new DataManager();
-        return DataManager.instance;
-    }
+    private _dayKey(d: Date) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+    private _mondayOf(d: Date) { const n = new Date(d); n.setHours(0,0,0,0); const day = n.getDay(); const diff = n.getDate() - day + (day===0? -6 : 1); n.setDate(diff); return n; }
 
-    private clearData() {
-        this.campaigns = [];
-        this.flowEmails = [];
-        this.subscribers = [];
-        this.isRealDataLoaded = false;
-        this.loadProgress = {
-            campaigns: { loaded: false, progress: 0 },
-            flows: { loaded: false, progress: 0 },
-            subscribers: { loaded: false, progress: 0 },
-        };
-    }
+    // ----------------------------------------------
+    // Performance caches (added for faster time series)
+    // ----------------------------------------------
+    private _dailyAggVersion = '';
+    private _dailyAgg: Map<string, {
+        revenue: number; emailsSent: number; totalOrders: number; uniqueOpens: number; uniqueClicks: number; unsubscribesCount: number; spamComplaintsCount: number; bouncesCount: number; emailCount: number;
+    }> = new Map();
+    private _timeSeriesCache: Map<string, { built: number; data: { value: number; date: string }[] }> = new Map();
+    private _seriesBaseCache: Map<string, { built: number; buckets: { key: string; label: string; sums: {
+        revenue: number; emailsSent: number; totalOrders: number; uniqueOpens: number; uniqueClicks: number; unsubscribesCount: number; spamComplaintsCount: number; bouncesCount: number; emailCount: number;
+    } }[] }> = new Map();
 
     constructor() {
-        // Hydrate from storage on client if available
         if (typeof window !== 'undefined') {
             try {
                 const raw = localStorage.getItem(this.storageKey);
                 if (raw) {
-                    const parsed = JSON.parse(raw) as {
-                        campaigns?: any[];
-                        flowEmails?: any[];
-                        subscribers?: any[];
-                    };
+                    const parsed = JSON.parse(raw) as { campaigns?: any[]; flowEmails?: any[]; subscribers?: any[] };
                     const revive = (d: any) => (d instanceof Date ? d : new Date(d));
                     this.campaigns = (parsed.campaigns || []).map((c: any) => ({ ...c, sentDate: revive(c.sentDate) }));
                     this.flowEmails = (parsed.flowEmails || []).map((f: any) => ({ ...f, sentDate: revive(f.sentDate) }));
                     this.subscribers = (parsed.subscribers || []);
                     this.isRealDataLoaded = this.campaigns.length > 0 || this.flowEmails.length > 0 || this.subscribers.length > 0;
-                    try { window.dispatchEvent(new CustomEvent('em:dataset-hydrated')); } catch { /* ignore */ }
+                    try { window.dispatchEvent(new CustomEvent('em:dataset-hydrated')); } catch { }
                 }
-            } catch {
-                // ignore storage issues
-            }
-            // Fire-and-forget hydrate from IndexedDB (larger capacity)
-            // If IDB has data and local arrays are empty, hydrate and mark loaded.
+            } catch { }
             (async () => {
                 try {
                     if (this.campaigns.length || this.flowEmails.length || this.subscribers.length) return;
@@ -133,14 +168,13 @@ export class DataManager {
                         this.flowEmails = (fromIdb.flowEmails || []).map((f: any) => ({ ...f, sentDate: revive(f.sentDate) }));
                         this.subscribers = (fromIdb.subscribers || []);
                         this.isRealDataLoaded = this.campaigns.length > 0 || this.flowEmails.length > 0 || this.subscribers.length > 0;
-                        try { window.dispatchEvent(new CustomEvent('em:dataset-hydrated')); } catch { /* ignore */ }
+                        try { window.dispatchEvent(new CustomEvent('em:dataset-hydrated')); } catch { }
                     }
-                } catch { /* ignore */ }
+                } catch { }
             })();
         }
     }
 
-    // Public method for consumers to ensure hydration from durable storage.
     async ensureHydrated(): Promise<boolean> {
         if (this.campaigns.length || this.flowEmails.length || this.subscribers.length) return true;
         try {
