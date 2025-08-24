@@ -737,8 +737,8 @@ export class DataManager {
         metricKey: string,
         dateRange: string,
         dataType: 'all' | 'campaigns' | 'flows' = 'all',
-        options?: { flowName?: string }
-    ): { currentValue: number; previousValue: number; changePercent: number; isPositive: boolean; currentPeriod?: { startDate: Date; endDate: Date }; previousPeriod?: { startDate: Date; endDate: Date } } {
+        options?: { flowName?: string; compareMode?: 'prev-period' | 'prev-year' }
+    ): { currentValue: number; previousValue: number | null; changePercent: number; isPositive: boolean; currentPeriod?: { startDate: Date; endDate: Date }; previousPeriod?: { startDate: Date; endDate: Date } } {
         let endDate: Date;
         let startDate: Date;
         let periodDays: number;
@@ -763,21 +763,17 @@ export class DataManager {
             startDate.setHours(0, 0, 0, 0);
         }
 
-        // Calculate previous period - go back exactly the same number of days
-        // Declare variables for previous period dates
-        let prevStartDate: Date;
-        let prevEndDate: Date;
-
-        // Validate for single-day ranges to prevent invalid previous periods
-        if (periodDays === 1) {
-            // For single-day comparisons, go back exactly 1 day for previous period
-            prevEndDate = new Date(startDate);
-            prevEndDate.setDate(prevEndDate.getDate() - 1);
-            prevEndDate.setHours(23, 59, 59, 999);
-            prevStartDate = new Date(prevEndDate);
-            prevStartDate.setHours(0, 0, 0, 0);
+        // Comparison mode (default prev-period)
+        const compareMode = options?.compareMode || 'prev-period';
+        let prevStartDate: Date; let prevEndDate: Date;
+        if (compareMode === 'prev-year') {
+            prevStartDate = new Date(startDate);
+            prevEndDate = new Date(endDate);
+            prevStartDate.setFullYear(prevStartDate.getFullYear() - 1);
+            prevEndDate.setFullYear(prevEndDate.getFullYear() - 1);
+            if (startDate.getMonth() === 1 && startDate.getDate() === 29 && prevStartDate.getMonth() === 2) prevStartDate.setDate(0);
+            if (endDate.getMonth() === 1 && endDate.getDate() === 29 && prevEndDate.getMonth() === 2) prevEndDate.setDate(0);
         } else {
-            // For multi-day periods, use the original logic
             prevEndDate = new Date(startDate);
             prevEndDate.setDate(prevEndDate.getDate() - 1);
             prevEndDate.setHours(23, 59, 59, 999);
@@ -877,20 +873,21 @@ export class DataManager {
         if (previousValue !== 0) {
             changePercent = ((currentValue - previousValue) / previousValue) * 100;
         } else if (currentValue > 0) {
-            changePercent = 100;
+            changePercent = compareMode === 'prev-period' ? 100 : 0;
         }
 
         // Determine if change is positive (good) based on metric type
         const negativeMetrics = ['unsubscribeRate', 'spamRate', 'bounceRate'];
         const isPositive = negativeMetrics.includes(metricKey) ? changePercent <= 0 : changePercent >= 0;
 
+        const noBaseline = previousValue === 0;
         return {
             currentValue,
-            previousValue,
-            changePercent,
+            previousValue: noBaseline ? null : previousValue,
+            changePercent: noBaseline ? 0 : changePercent,
             isPositive,
             currentPeriod: { startDate, endDate },
-            previousPeriod: { startDate: prevStartDate, endDate: prevEndDate }
+            previousPeriod: noBaseline ? undefined : { startDate: prevStartDate, endDate: prevEndDate }
         };
     }
 }
