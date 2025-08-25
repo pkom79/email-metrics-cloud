@@ -41,7 +41,7 @@ export default function PrivacyPage() {
             <h2>10. Children</h2>
             <p>The Service is not directed to children under 16 and we do not knowingly collect their personal data.</p>
             <h2>11. Changes</h2>
-            <p>We may update this Policy; continued use after updates signifies acceptance. The "Last updated" date reflects the latest revision.</p>
+            <p>We may update this Policy; continued use after updates signifies acceptance. The &quot;Last updated&quot; date reflects the latest revision.</p>
             <h2>12. Contact</h2>
             <p>Privacy questions: <a href="mailto:privacy@email-metrics.example">privacy@email-metrics.example</a></p>
         </div>
