@@ -19,6 +19,7 @@ interface MetricCardProps {
     previousValue?: number;
     previousPeriod?: { startDate: Date; endDate: Date };
     compareMode?: 'prev-period' | 'prev-year';
+    benchmarkCategory?: 'Campaigns' | 'Flows' | 'Combined';
 }
 
 const MetricCard: React.FC<MetricCardProps> = ({
@@ -32,7 +33,8 @@ const MetricCard: React.FC<MetricCardProps> = ({
     sparklineData = [],
     previousValue,
     previousPeriod,
-    compareMode = 'prev-period'
+    compareMode = 'prev-period',
+    benchmarkCategory = 'Campaigns'
 }) => {
     const isAllTime = dateRange === 'all';
     const DISPLAY_EPS = 0.05; // <0.05% rounds to 0.0%
@@ -43,7 +45,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
     const isZeroDisplay = tinyChange || Math.abs(change) < 1e-9;
     const showChangeBlock = !isAllTime && !hasInsufficientData;
     const isIncrease = change > 0;
-    const benchmarkResult = metricKey ? getBenchmarkStatus(metricKey, parseMetricValue(value)) : null;
+    const benchmarkResult = metricKey ? getBenchmarkStatus(metricKey, parseMetricValue(value), benchmarkCategory) : null;
     const numericValue = metricKey === 'conversionRate' ? parseMetricValue(value) : undefined;
 
     const getValueFormat = () => {
@@ -85,13 +87,14 @@ const MetricCard: React.FC<MetricCardProps> = ({
                         {benchmarkResult && (
                             <div className="flex items-center gap-1">
                                 <div
-                                    className={`w-2 h-2 rounded-full ${benchmarkResult.status === 'good' ? 'bg-green-500' :
-                                        benchmarkResult.status === 'ok' ? 'bg-blue-500' :
-                                            benchmarkResult.status === 'attention' ? 'bg-yellow-500' :
-                                                'bg-red-500'
+                                    className={`w-2 h-2 rounded-full ${benchmarkResult.status === 'excellent' ? 'bg-green-400' :
+                                        benchmarkResult.status === 'good' ? 'bg-green-500' :
+                                            benchmarkResult.status === 'ok' ? 'bg-yellow-400' :
+                                                benchmarkResult.status === 'attention' ? 'bg-orange-400' :
+                                                    'bg-red-500'
                                         }`}
                                 />
-                                <span className={`text-xs font-medium ${benchmarkResult.color}`}>
+                                <span className={`text-xs font-medium ${benchmarkResult.color}`} style={(benchmarkResult as any).hexColor ? { color: (benchmarkResult as any).hexColor } : undefined}>
                                     {benchmarkResult.label}
                                 </span>
                             </div>
