@@ -15,10 +15,10 @@ interface StepProps {
     num: number;
     title: string;
     children: React.ReactNode;
-    image?: { src: string; alt: string; caption?: string }[];
+    
 }
 
-function Step({ num, title, children, image }: StepProps) {
+function Step({ num, title, children }: StepProps) {
     return (
         <section id={`step-${num}`} className="scroll-mt-24">
             <div className="flex items-start gap-4">
@@ -30,7 +30,7 @@ function Step({ num, title, children, image }: StepProps) {
                             {image.map((img, i) => (
                                 <figure key={i} className="bg-white dark:bg-gray-800/60 rounded-md border border-gray-200 dark:border-gray-700 p-3 shadow-sm">
                                     <img src={img.src} alt={img.alt} className="rounded-md ring-1 ring-gray-200 dark:ring-gray-700 w-full h-auto" loading="lazy" />
-                                    {img.caption && (<figcaption className="mt-2 text-[11px] text-gray-500 dark:text-gray-400 uppercase tracking-wide font-medium">{img.caption}</figcaption>)}
+                                    
                                 </figure>
                             ))}
                         </div>
@@ -64,11 +64,6 @@ export default function CsvExportsTutorialPage() {
             <Step
                 num={2}
                 title="Create a Segment of All Active Subscribers"
-                image={[{
-                    src: '/brand/exports_tutorial/subscribers_create_segment.png',
-                    alt: 'Creating a new subscribers segment in Klaviyo',
-                    caption: 'Create segment: can receive email marketing'
-                }]}
             >
                 <ol className="list-decimal pl-5 space-y-1">
                     <li>Go to <strong>Lists &amp; Segments</strong>.</li>
@@ -76,6 +71,7 @@ export default function CsvExportsTutorialPage() {
                     <li>Name the segment (e.g., <em>Klaviyo Subscribers</em>).</li>
                     <li>Set the condition: <strong>can receive email marketing</strong>.</li>
                 </ol>
+                <img src="/brand/exports_tutorial/subscribers_create_segment.png" alt="Creating a new subscribers segment in Klaviyo" className="mt-4 rounded-md border border-gray-200 dark:border-gray-700" />
                 <p className="mt-3">This ensures the segment only contains non-suppressed subscribers for accurate analysis.</p>
                 <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Note: Depending on the size of your account, Klaviyo may take some time to generate the segment. Wait until it is fully built before moving on.</p>
             </Step>
@@ -85,10 +81,6 @@ export default function CsvExportsTutorialPage() {
             <Step
                 num={3}
                 title="Export the Segment"
-                image={[
-                    { src: '/brand/exports_tutorial/susbcribers_export_segment_to_csv.png', alt: 'Export segment to CSV in Klaviyo', caption: 'Manage Segment → Export' },
-                    { src: '/brand/exports_tutorial/subscribers_export_review.png', alt: 'Export review screen checking properties', caption: 'Select all Properties then Start Export' }
-                ]}
             >
                 <ol className="list-decimal pl-5 space-y-1">
                     <li>Open the segment you just created.</li>
@@ -96,6 +88,8 @@ export default function CsvExportsTutorialPage() {
                     <li>On the Export Review screen, check <strong>Property</strong> to select all fields.</li>
                     <li>Click <strong>Start Export</strong>.</li>
                 </ol>
+                <img src="/brand/exports_tutorial/susbcribers_export_segment_to_csv.png" alt="Export segment to CSV" className="mt-4 rounded-md border border-gray-200 dark:border-gray-700" />
+                <img src="/brand/exports_tutorial/subscribers_export_review.png" alt="Export review selecting properties" className="mt-4 rounded-md border border-gray-200 dark:border-gray-700" />
                 <p className="mt-3">Export processing usually takes 1–2 minutes.</p>
             </Step>
 
@@ -104,16 +98,14 @@ export default function CsvExportsTutorialPage() {
             <Step
                 num={4}
                 title="Save the Exported File"
-                image={[
-                    { src: '/brand/exports_tutorial/subscribers_view_my_exports.png', alt: 'Viewing segment exports in Klaviyo', caption: 'View My Exports' },
-                    { src: '/brand/exports_tutorial/susbcribers_download.png', alt: 'Downloading subscribers CSV export', caption: 'Download completed export' }
-                ]}
             >
                 <ul className="list-disc pl-5 space-y-1">
                     <li>If prompted with Save As, name the file something clear (e.g., <em>Klaviyo Subscribers.csv</em>) and save.</li>
                     <li>If not prompted, go to <strong>Manage Segment → View My Exports</strong>.</li>
                     <li>Download the file from the list of completed exports.</li>
                 </ul>
+                <img src="/brand/exports_tutorial/subscribers_view_my_exports.png" alt="View my exports" className="mt-4 rounded-md border border-gray-200 dark:border-gray-700" />
+                <img src="/brand/exports_tutorial/susbcribers_download.png" alt="Download subscribers export" className="mt-4 rounded-md border border-gray-200 dark:border-gray-700" />
                 <p className="mt-3">Your subscriber data is now ready. Next, export Flows.</p>
             </Step>
 
@@ -122,10 +114,6 @@ export default function CsvExportsTutorialPage() {
             <Step
                 num={5}
                 title="Export Flow Analytics"
-                image={[
-                    { src: '/brand/exports_tutorial/flows_export_analytics.png', alt: 'Export analytics option for flows', caption: 'Flows: Options → Export analytics' },
-                    { src: '/brand/exports_tutorial/flows_export_flow_analytics.png', alt: 'Flow analytics export window', caption: 'All-time • Aggregate daily' }
-                ]}
             >
                 <ol className="list-decimal pl-5 space-y-1">
                     <li>Go to <strong>Flows</strong>.</li>
@@ -139,6 +127,8 @@ export default function CsvExportsTutorialPage() {
                     <li>Click <strong>Export Analytics</strong>.</li>
                     <li>Save the file as <em>Klaviyo Flows.csv</em> (or similar).</li>
                 </ol>
+                <img src="/brand/exports_tutorial/flows_export_analytics.png" alt="Flows export analytics option" className="mt-4 rounded-md border border-gray-200 dark:border-gray-700" />
+                <img src="/brand/exports_tutorial/flows_export_flow_analytics.png" alt="Flow analytics export window" className="mt-4 rounded-md border border-gray-200 dark:border-gray-700" />
             </Step>
 
             <StepSeparator />
@@ -146,10 +136,6 @@ export default function CsvExportsTutorialPage() {
             <Step
                 num={6}
                 title="Export Campaign Analytics"
-                image={[
-                    { src: '/brand/exports_tutorial/campaigns_export_analytics.png', alt: 'Export analytics menu for campaigns', caption: 'Campaigns: Export analytics' },
-                    { src: '/brand/exports_tutorial/campaigns_export_campaign_analytics.png', alt: 'Campaign analytics export window', caption: 'All Sent Campaigns' }
-                ]}
             >
                 <ol className="list-decimal pl-5 space-y-1">
                     <li>Go to <strong>Campaigns</strong>.</li>
@@ -158,6 +144,8 @@ export default function CsvExportsTutorialPage() {
                     <li>Click <strong>Export Analytics</strong>.</li>
                     <li>Save the file as <em>Klaviyo Campaigns.csv</em> (or similar).</li>
                 </ol>
+                <img src="/brand/exports_tutorial/campaigns_export_analytics.png" alt="Campaigns export analytics menu" className="mt-4 rounded-md border border-gray-200 dark:border-gray-700" />
+                <img src="/brand/exports_tutorial/campaigns_export_campaign_analytics.png" alt="Campaign analytics export window" className="mt-4 rounded-md border border-gray-200 dark:border-gray-700" />
             </Step>
 
             <StepSeparator />
