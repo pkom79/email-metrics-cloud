@@ -739,6 +739,10 @@ export class DataManager {
         dataType: 'all' | 'campaigns' | 'flows' = 'all',
         options?: { flowName?: string; compareMode?: 'prev-period' | 'prev-year' }
     ): { currentValue: number; previousValue: number | null; changePercent: number; isPositive: boolean; currentPeriod?: { startDate: Date; endDate: Date }; previousPeriod?: { startDate: Date; endDate: Date } } {
+        // Threshold constants (Option C implementation)
+        const MIN_EMAILS_SENT = 20;
+        const MIN_REVENUE = 50; // USD
+        const MIN_ORDERS = 3;
         let endDate: Date;
         let startDate: Date;
         let periodDays: number;
@@ -812,17 +816,13 @@ export class DataManager {
             prevEndDate
         );
 
-        // Strict active day coverage: previous period must have identical active day count to current
-        const collectActiveDays = (s: Date, e: Date) => {
-            const set = new Set<string>();
-            const inRange = (d: Date) => d >= s && d <= e;
-            for (const c of campaignsToUse) if (c.sentDate && inRange(c.sentDate)) set.add(this._dayKey(c.sentDate));
-            for (const f of flowsToUse) if (f.sentDate && inRange(f.sentDate)) set.add(this._dayKey(f.sentDate));
-            return set;
-        };
-        const currentActiveDays = collectActiveDays(startDate, endDate);
-        const previousActiveDays = collectActiveDays(prevStartDate, prevEndDate);
-        const baselineComplete = currentActiveDays.size > 0 && previousActiveDays.size === currentActiveDays.size;
+        // Baseline volume assessment (dense-day requirement removed)
+        const baselineEmails = previousMetrics.emailsSent;
+        const baselineRevenue = previousMetrics.totalRevenue;
+        const baselineOrders = previousMetrics.totalOrders;
+        const baselineHasAnyActivity = (baselineEmails + baselineRevenue + baselineOrders) > 0;
+        const baselineMeetsVolume = baselineEmails >= MIN_EMAILS_SENT || baselineRevenue >= MIN_REVENUE || baselineOrders >= MIN_ORDERS;
+        const lowBaseline = baselineHasAnyActivity && !baselineMeetsVolume;
 
         // Extract the specific metric value
         let currentValue = 0;
@@ -880,8 +880,8 @@ export class DataManager {
                 break;
         }
 
-        if (!baselineComplete) {
-            // Insufficient baseline coverage
+        // If absolutely no baseline activity, keep previous as null (insufficient)
+        if (!baselineHasAnyActivity) {
             return {
                 currentValue,
                 previousValue: null,
@@ -897,7 +897,7 @@ export class DataManager {
         if (previousValue !== 0) {
             changePercent = ((currentValue - previousValue) / previousValue) * 100;
         } else if (currentValue > 0) {
-            // When baseline value is zero but coverage matches, treat as 0% (avoid artificial 100% spikes)
+            // When baseline value is zero (even with volume in other metrics), keep neutral change to avoid spikes
             changePercent = 0;
         }
 
@@ -905,14 +905,23 @@ export class DataManager {
         const negativeMetrics = ['unsubscribeRate', 'spamRate', 'bounceRate'];
         const isPositive = negativeMetrics.includes(metricKey) ? changePercent <= 0 : changePercent >= 0;
 
-        const noBaseline = previousValue === 0;
+        const noBaselineMetric = previousValue === 0;
         return {
             currentValue,
-            previousValue: noBaseline ? null : previousValue,
-            changePercent: noBaseline ? 0 : changePercent,
+            previousValue: noBaselineMetric ? null : previousValue,
+            changePercent: noBaselineMetric ? 0 : changePercent,
             isPositive,
             currentPeriod: { startDate, endDate },
-            previousPeriod: noBaseline ? undefined : { startDate: prevStartDate, endDate: prevEndDate }
+            previousPeriod: noBaselineMetric ? undefined : { startDate: prevStartDate, endDate: prevEndDate },
+            // Added metadata for future UI/tooltips (non-breaking extra fields ok)
+            // @ts-ignore - extended metadata (call sites ignore unknown fields gracefully)
+            baselineInfo: {
+                emails: baselineEmails,
+                revenue: baselineRevenue,
+                orders: baselineOrders,
+                low: lowBaseline,
+                meetsVolume: baselineMeetsVolume
+            }
         };
     }
 }
