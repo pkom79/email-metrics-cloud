@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <!-- Primary SVG favicon (preferred by modern browsers including Chrome and recent Safari) -->
+  <link rel="icon" href="/favicon.svg?v=5" type="image/svg+xml" sizes="any" />
+  <!-- Apple Touch Icon for iOS -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=5" />
+  <!-- Safari pinned tab mask (monochrome) -->
+  <link rel="mask-icon" href="/safari-pinned-tab.svg?v=5" color="#7c3aed" />
+  <meta name="theme-color" content="#0b0b0e" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Email Metrics Dashboard</title>
+  <script>
+    // Generate PNG favicons from SVG at runtime (helps Safari/older engines)
+    (function () {
+      const svgUrl = '/favicon.svg?v=5';
+      const makePngFavicon = (size) => new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const c = document.createElement('canvas');
+          c.width = size; c.height = size;
+          const ctx = c.getContext('2d');
+          ctx.drawImage(img, 0, 0, size, size);
+          const dataUrl = c.toDataURL('image/png');
+          const link = document.createElement('link');
+          link.rel = 'icon';
+          link.type = 'image/png';
+          link.sizes = size + 'x' + size;
+          link.href = dataUrl;
+          document.head.appendChild(link);
+          resolve();
+        };
+        img.src = svgUrl;
+      });
+      // Fire after DOM is ready so head exists
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => { makePngFavicon(32); makePngFavicon(16); });
+      } else {
+        makePngFavicon(32); makePngFavicon(16);
+      }
+    })();
+  </script>
+  <script type="module" crossorigin src="/assets/index-BBxrwYzN.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-DMXd3zYu.css">
+</head>
+
+<body>
+  <div id="root"></div>
+</body>
+
+</html>

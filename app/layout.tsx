@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getServerUser } from '../lib/supabase/auth';
 import SupabaseAuthListener from '../components/SupabaseAuthListener';
 import HeaderLinks from '../components/HeaderLinks';
+import Footer from '../components/Footer';
 
 export const metadata: Metadata = {
     title: 'Email Metrics',
@@ -49,6 +50,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                     </div>
                 </div>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">{children}</div>
+                <Footer />
             </body>
         </html>
     );
