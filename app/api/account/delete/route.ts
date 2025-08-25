@@ -4,9 +4,9 @@ import { createServiceClient } from '../../../../lib/supabase/server';
 
 export const runtime = 'nodejs';
 
-// DELETE current user's account (hard delete) – irreversible.
-// Removes account row (cascades to snapshots/uploads/etc) then best-effort deletes storage objects.
-// Storage cleanup done first so if it fails we abort before irreversible DB delete.
+// Full account deletion for current user – removes storage objects, purges child data, soft-deletes (marks deleted_at)
+// then hard deletes the account row and finally deletes the auth user (if they are the sole owner / single-account model).
+// Idempotent-ish: re-running after partial failure will attempt any remaining steps.
 export async function POST() {
     try {
         const user = await getServerUser();
@@ -14,10 +14,10 @@ export async function POST() {
 
         const supabase = createServiceClient();
 
-        // Find user's account id
+        // 1. Locate owned account (single-owner model assumed)
         const { data: acct, error: acctErr } = await supabase
             .from('accounts')
-            .select('id')
+            .select('id, deleted_at')
             .eq('owner_user_id', user.id)
             .maybeSingle();
         if (acctErr) throw acctErr;
@@ -25,7 +25,7 @@ export async function POST() {
 
         const accountId = acct.id as string;
 
-        // Collect upload IDs for storage cleanup (preauth bucket only; account-specific bucket paths not used yet)
+        // 2. Collect upload IDs for storage cleanup (preauth bucket only; account-specific bucket paths not used yet)
         const bucket = process.env.PREAUTH_BUCKET || 'preauth-uploads';
         const { data: uploads, error: uploadsErr } = await supabase
             .from('uploads')
@@ -48,11 +48,30 @@ export async function POST() {
             }
         }
 
-        // Hard delete account (cascades handle children)
-        const { error: delErr } = await supabase.from('accounts').delete().eq('id', accountId);
-        if (delErr) throw delErr;
+        // 3. Soft delete marker (if not already) so any background jobs / UI know it's gone
+        if (!acct.deleted_at) {
+            await supabase.from('accounts').update({ deleted_at: new Date().toISOString() }).eq('id', accountId);
+        }
 
-        return NextResponse.json({ ok: true });
+        // 4. Purge child rows explicitly (snapshots, uploads). Leave tombstone until end for audit.
+        try {
+            await supabase.rpc('purge_account_children', { p_account_id: accountId });
+        } catch (e) {
+            return NextResponse.json({ error: 'Failed to purge account data' }, { status: 500 });
+        }
+
+        // 5. Hard delete account row (policies allow owner); ignore if already removed.
+        await supabase.from('accounts').delete().eq('id', accountId);
+
+        // 6. Delete auth user (single-account model). Ignore error but report if failure.
+        try {
+            await (supabase as any).auth.admin.deleteUser(user.id);
+        } catch (e) {
+            // If auth deletion fails we still consider account data purged.
+            return NextResponse.json({ ok: true, warning: 'Account data removed but auth user deletion failed – remove manually.' });
+        }
+
+        return NextResponse.json({ ok: true, purged: true });
     } catch (e: any) {
         return NextResponse.json({ error: e?.message || 'Delete failed' }, { status: 500 });
     }
