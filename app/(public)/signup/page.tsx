@@ -27,6 +27,8 @@ export default function Signup() {
     const [error, setError] = useState<string | null>(null);
     const [ok, setOk] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const [resendBusy, setResendBusy] = useState(false);
+    const [resendMsg, setResendMsg] = useState<string | null>(null);
 
     useEffect(() => {
         setMode(qpMode);
@@ -86,11 +88,13 @@ export default function Signup() {
     const onSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null); setOk(null);
+        setResendMsg(null);
         setSubmitting(true);
         try {
             if (mode === 'signup') {
                 if (isGdprCountry) return; // guard in UI layer
                 const origin = typeof window !== 'undefined' ? window.location.origin : '';
+
                 const { error } = await supabase.auth.signUp({
                     email,
                     password,
@@ -138,6 +142,23 @@ export default function Signup() {
         } finally {
             setSubmitting(false);
         }
+    };
+
+    const onResend = async () => {
+        if (!email) return;
+        setResendBusy(true); setResendMsg(null);
+        try {
+            const origin = typeof window !== 'undefined' ? window.location.origin : '';
+            const { error } = await (supabase as any).auth.resend({
+                type: 'signup',
+                email,
+                options: { emailRedirectTo: `${origin}/auth/callback` }
+            });
+            if (error) throw error;
+            setResendMsg('Confirmation email resent. Check your inbox and spam folder.');
+        } catch (e: any) {
+            setResendMsg(e?.message || 'Failed to resend');
+        } finally { setResendBusy(false); }
     };
 
     return (
@@ -199,6 +220,17 @@ export default function Signup() {
                 </button>
             </form>
             {error && <p className="text-sm text-red-500">{error}</p>}
+            {error === 'email rate limit exceeded' && (
+                <div className="space-y-2">
+                    <button
+                        type="button"
+                        disabled={resendBusy || !email}
+                        onClick={onResend}
+                        className={`text-sm underline ${resendBusy ? 'opacity-60' : 'text-purple-600 hover:text-purple-700'}`}
+                    >{resendBusy ? 'Resending…' : 'Resend confirmation email'}</button>
+                    {resendMsg && <p className="text-xs text-gray-600 dark:text-gray-300">{resendMsg}</p>}
+                </div>
+            )}
             {ok && <p className="text-sm text-green-600">{ok}</p>}
         </div>
     );
