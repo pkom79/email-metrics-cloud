@@ -45,7 +45,7 @@ export default function TermsPage() {
             <h2 className="mt-10">13. Governing Law</h2>
             <p className="leading-relaxed">These Terms are governed by applicable laws of the jurisdiction in which we operate, without regard to conflict of law principles.</p>
             <h2 className="mt-10">14. Contact</h2>
-            <p className="leading-relaxed">Questions about these Terms: <a href="mailto:legal@email-metrics.example">legal@email-metrics.example</a></p>
+            <p className="leading-relaxed">Questions about these Terms: <a href="mailto:support@emailmetrics.io">support@emailmetrics.io</a></p>
         </div>
     );
 }
