@@ -28,7 +28,7 @@ function Step({ num, title, children }: StepProps) {
 }
 
 export default function CsvExportsTutorialPage() {
-    const imgCls = "w-full max-w-sm rounded-md border border-gray-200 dark:border-gray-700 shadow-sm";
+    const imgCls = "w-full max-w-sm rounded-md border border-gray-200 dark:border-gray-700 shadow-sm transition-transform duration-200 ease-out hover:scale-[1.8] cursor-zoom-in origin-top-left";
     return (
         <article className="relative">
             <header className="mb-10">
@@ -54,7 +54,6 @@ export default function CsvExportsTutorialPage() {
                     <li>Name the segment (e.g., <em>Klaviyo Subscribers</em>).</li>
                     <li>Set the condition: <strong>can receive email marketing</strong>.</li>
                 </ol>
-                <p className="mt-3">This ensures the segment only contains non-suppressed subscribers for accurate analysis.</p>
                 <div className="mt-3"><img src="/brand/exports_tutorial/subscribers_create_segment.png" alt="Creating a new subscribers segment in Klaviyo" className={imgCls} loading="lazy" /></div>
                 <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">Note: Depending on the size of your account, Klaviyo may take some time to generate the segment. Wait until it is fully built before moving on.</p>
             </Step>
@@ -137,11 +136,6 @@ export default function CsvExportsTutorialPage() {
                     <li>Campaigns (Analytics export)</li>
                 </ul>
                 <p className="mt-3">Return to the Email Metrics App homepage and upload your reports.</p>
-                <div className="mt-5 flex flex-wrap gap-3">
-                    <Link href="/" className="inline-flex items-center gap-2 rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900">Go to Homepage</Link>
-                    <Link href="/upload" className="inline-flex items-center gap-2 rounded-md border border-purple-600 text-purple-700 dark:text-purple-300 px-4 py-2 text-sm font-medium hover:bg-purple-50 dark:hover:bg-purple-900/30">Upload Reports</Link>
-                </div>
-                <p className="mt-6 font-medium text-green-600 dark:text-green-400">You’re done.</p>
             </Step>
 
             <footer className="mt-16 pt-8 border-t border-gray-200 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400">
