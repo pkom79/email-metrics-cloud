@@ -22,33 +22,20 @@ function Step({ num, title, children, image }: StepProps) {
     return (
         <section id={`step-${num}`} className="scroll-mt-24">
             <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-semibold shadow-sm">
-                    {num}
-                </div>
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-semibold shadow-sm">{num}</div>
                 <div className="flex-1">
-                    <h2 className="text-lg font-semibold tracking-tight mb-2">{title}</h2>
-                    <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed">
-                        {children}
-                    </div>
+                    <h2 className="text-lg font-semibold tracking-tight mb-3">{title}</h2>
                     {image && (
-                        <div className="mt-4 grid gap-6 sm:grid-cols-2">
+                        <div className="mb-4 grid gap-6 sm:grid-cols-2">
                             {image.map((img, i) => (
                                 <figure key={i} className="bg-white dark:bg-gray-800/60 rounded-md border border-gray-200 dark:border-gray-700 p-3 shadow-sm">
-                                    <img
-                                        src={img.src}
-                                        alt={img.alt}
-                                        className="rounded-md ring-1 ring-gray-200 dark:ring-gray-700 w-full h-auto"
-                                        loading="lazy"
-                                    />
-                                    {img.caption && (
-                                        <figcaption className="mt-2 text-[11px] text-gray-500 dark:text-gray-400 uppercase tracking-wide font-medium">
-                                            {img.caption}
-                                        </figcaption>
-                                    )}
+                                    <img src={img.src} alt={img.alt} className="rounded-md ring-1 ring-gray-200 dark:ring-gray-700 w-full h-auto" loading="lazy" />
+                                    {img.caption && (<figcaption className="mt-2 text-[11px] text-gray-500 dark:text-gray-400 uppercase tracking-wide font-medium">{img.caption}</figcaption>)}
                                 </figure>
                             ))}
                         </div>
                     )}
+                    <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed">{children}</div>
                 </div>
             </div>
         </section>
@@ -64,18 +51,6 @@ export default function CsvExportsTutorialPage() {
                     To ensure Email Metrics processes your data correctly, prepare and export your Klaviyo CSV files exactly as outlined below. We use CSV uploads instead of an API connection because CSV handles large data sets faster and with fewer errors. For most accounts, the entire export and upload process takes under 3 minutes.
                 </p>
             </header>
-
-            <nav aria-label="On this page" className="mb-8 hidden md:block">
-                <ol className="flex flex-wrap gap-3 text-xs font-medium">
-                    {Array.from({ length: 7 }).map((_, i) => (
-                        <li key={i}>
-                            <a href={`#step-${i + 1}`} className="inline-flex items-center gap-1 rounded-full bg-purple-50 dark:bg-purple-900/30 px-3 py-1 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors">
-                                <span className="font-semibold">{i + 1}</span> <span className="hidden sm:inline">Step</span>
-                            </a>
-                        </li>
-                    ))}
-                </ol>
-            </nav>
 
             <Step num={1} title="Log in to Klaviyo">
                 <ul className="list-disc pl-5 space-y-1">
