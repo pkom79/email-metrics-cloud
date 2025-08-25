@@ -11,9 +11,11 @@ export async function POST() {
         const uploadId = randomUUID();
 
         // Create uploads row (preauth)
+        // TTL extended to 24h (was 1h) per requirements so preauth uploads persist for a day before cleanup
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
         const { error: insertErr } = await supabase
             .from('uploads')
-            .insert({ id: uploadId, status: 'preauth', expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(), updated_at: new Date().toISOString() });
+            .insert({ id: uploadId, status: 'preauth', expires_at: expiresAt, updated_at: new Date().toISOString() });
         if (insertErr) throw insertErr;
 
         const paths = {

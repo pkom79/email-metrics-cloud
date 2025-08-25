@@ -9,6 +9,7 @@ import FlowStepAnalysis from './FlowStepAnalysis';
 import CustomSegmentBlock from './CustomSegmentBlock';
 import { BarChart3, Calendar, ChevronDown, GitCompare, Mail, Send, Zap, Star, Upload as UploadIcon, X } from 'lucide-react';
 import UploadWizard from '../../components/UploadWizard';
+import { usePendingUploadsLinker } from '../../lib/utils/usePendingUploadsLinker';
 import { supabase } from '../../lib/supabase/client';
 
 function formatCurrency(value: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value); }
@@ -177,6 +178,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     // Events / hydration
     const [showUploadModal, setShowUploadModal] = useState(false);
+    // Link any pending preauth uploads right after authentication (non-admin only)
+    usePendingUploadsLinker(!isAdmin && adminCheckComplete);
     useEffect(() => {
         // Wait until we know admin status
         if (!adminCheckComplete) return;

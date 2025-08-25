@@ -106,7 +106,13 @@ export default function UploadWizard() {
 
             // If user is not authenticated, store uploadId for later linking
             if (!linkRes.ok && linkRes.status === 401) {
-                localStorage.setItem('pending-upload-id', uploadId);
+                // Store multiple pending uploads (array) so user can upload multiple times pre-auth
+                try {
+                    const existingRaw = localStorage.getItem('pending-upload-ids');
+                    const arr: string[] = existingRaw ? JSON.parse(existingRaw) : [];
+                    if (!arr.includes(uploadId)) arr.push(uploadId);
+                    localStorage.setItem('pending-upload-ids', JSON.stringify(arr));
+                } catch { /* fallback to legacy key */ localStorage.setItem('pending-upload-id', uploadId); }
                 // Continue with local data loading for immediate preview
             } else if (!linkRes.ok || !linkJson?.ok) {
                 throw new Error(linkJson?.error || 'Failed to finalize upload');

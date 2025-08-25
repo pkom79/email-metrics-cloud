@@ -905,13 +905,14 @@ export class DataManager {
         const negativeMetrics = ['unsubscribeRate', 'spamRate', 'bounceRate'];
         const isPositive = negativeMetrics.includes(metricKey) ? changePercent <= 0 : changePercent >= 0;
 
+        const noBaseline = previousValue === 0;
         return {
             currentValue,
-            previousValue,
-            changePercent,
+            previousValue: noBaseline ? null : previousValue,
+            changePercent: noBaseline ? 0 : changePercent,
             isPositive,
             currentPeriod: { startDate, endDate },
-            previousPeriod: { startDate: prevStartDate, endDate: prevEndDate }
+            previousPeriod: noBaseline ? undefined : { startDate: prevStartDate, endDate: prevEndDate }
         };
     }
 }

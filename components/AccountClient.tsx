@@ -25,6 +25,25 @@ export default function AccountClient({ initial }: Props) {
     const [err, setErr] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [emailChangeRequested, setEmailChangeRequested] = useState(false);
+    const [deleteConfirm, setDeleteConfirm] = useState('');
+    const [deleting, setDeleting] = useState(false);
+
+    const onDeleteAccount = async () => {
+        if (deleting) return;
+        setDeleting(true); setErr(null); setMsg(null);
+        try {
+            const res = await fetch('/api/account/delete', { method: 'POST' });
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok || !j?.ok) throw new Error(j.error || 'Delete failed');
+            setMsg('Account deleted');
+            // Sign out locally
+            await supabase.auth.signOut();
+            // Redirect after short delay
+            setTimeout(() => { window.location.href = '/'; }, 800);
+        } catch (e: any) {
+            setErr(e?.message || 'Failed to delete');
+        } finally { setDeleting(false); }
+    };
 
     const onSaveCompany = async () => {
         setBusy(true); setMsg(null); setErr(null);
@@ -221,6 +240,22 @@ export default function AccountClient({ initial }: Props) {
                 </div>
                 <button disabled={busy} onClick={onChangePassword} className="mt-2 inline-flex items-center px-4 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50">Update Password</button>
             </section>
+
+            {!isAdmin && (
+                <section className="space-y-3 border-t pt-6">
+                    <h2 className="font-semibold text-red-600 flex items-center gap-2">Danger Zone</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">Deleting your account is permanent and will remove all uploaded data and snapshots. This cannot be undone.</p>
+                    <div className="space-y-2">
+                        <label className="block text-xs uppercase tracking-wide font-medium text-gray-500 dark:text-gray-400">Type DELETE to confirm</label>
+                        <input value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700" placeholder="DELETE" />
+                    </div>
+                    <button
+                        disabled={deleting || deleteConfirm !== 'DELETE'}
+                        onClick={onDeleteAccount}
+                        className="inline-flex items-center px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+                    >{deleting ? 'Deleting…' : 'Delete Account'}</button>
+                </section>
+            )}
         </div>
     );
 }

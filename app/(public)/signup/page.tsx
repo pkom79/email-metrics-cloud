@@ -102,24 +102,23 @@ export default function Signup() {
                 if (error) throw error;
 
                 // Link any pending uploads from before account creation
-                const pendingUploadId = localStorage.getItem('pending-upload-id');
-                if (pendingUploadId) {
-                    try {
-                        const linkRes = await fetch('/api/auth/link-upload', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                uploadId: pendingUploadId,
-                                label: businessName || 'My Reports'
-                            })
-                        });
-                        if (linkRes.ok) {
-                            localStorage.removeItem('pending-upload-id');
-                        }
-                    } catch (linkError) {
-                        console.warn('Failed to link upload after signup:', linkError);
+                // Link any pending uploads (array) from pre-auth period
+                try {
+                    const raw = localStorage.getItem('pending-upload-ids') || localStorage.getItem('pending-upload-id');
+                    const ids: string[] = raw ? (raw.startsWith('[') ? JSON.parse(raw) : [raw]) : [];
+                    for (const pid of ids) {
+                        try {
+                            const linkRes = await fetch('/api/auth/link-upload', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ uploadId: pid, label: businessName || 'My Reports' })
+                            });
+                            if (!linkRes.ok) break; // stop on first failure
+                        } catch { break; }
                     }
-                }
+                    localStorage.removeItem('pending-upload-id');
+                    localStorage.removeItem('pending-upload-ids');
+                } catch { }
 
                 setOk('Check your email to confirm your account.');
             } else {
