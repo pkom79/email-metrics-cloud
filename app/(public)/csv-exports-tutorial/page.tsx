@@ -25,16 +25,6 @@ function Step({ num, title, children }: StepProps) {
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-semibold shadow-sm">{num}</div>
                 <div className="flex-1">
                     <h2 className="text-lg font-semibold tracking-tight mb-3">{title}</h2>
-                    {image && (
-                        <div className="mb-4 grid gap-6 sm:grid-cols-2">
-                            {image.map((img, i) => (
-                                <figure key={i} className="bg-white dark:bg-gray-800/60 rounded-md border border-gray-200 dark:border-gray-700 p-3 shadow-sm">
-                                    <img src={img.src} alt={img.alt} className="rounded-md ring-1 ring-gray-200 dark:ring-gray-700 w-full h-auto" loading="lazy" />
-                                    
-                                </figure>
-                            ))}
-                        </div>
-                    )}
                     <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed">{children}</div>
                 </div>
             </div>
