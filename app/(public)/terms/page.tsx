@@ -9,19 +9,19 @@ export default function TermsPage() {
     return (
         <div className="prose dark:prose-invert max-w-3xl">
             <h1>Terms &amp; Conditions</h1>
-            <p className="text-sm -mt-4 text-gray-500 dark:text-gray-400">Last updated: 2025-08-25</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Last updated: 2025-08-25</p>
             <h2>1. Acceptance of Terms</h2>
             <p>By accessing or using Email Metrics (the &quot;Service&quot;), you agree to be bound by these Terms &amp; Conditions. If you do not agree, you must not use the Service.</p>
             <h2>2. The Service</h2>
             <p>The Service allows you to upload email performance CSV files and receive aggregated snapshot reports. We may add, change, or remove features at any time.</p>
             <h2>3. Accounts &amp; Access</h2>
-            <ul>
+            <ul className="list-disc pl-6">
                 <li>You are responsible for safeguarding your credentials.</li>
                 <li>You must be authorized to upload any data you submit.</li>
                 <li>We may suspend accounts for suspected abuse, security risk, or legal compliance.</li>
             </ul>
             <h2>4. Acceptable Use</h2>
-            <ul>
+            <ul className="list-disc pl-6">
                 <li>No uploading malware, abusive, infringing, or unlawful content.</li>
                 <li>No attempts to bypass security, rate limits, or extract source code.</li>
                 <li>No use of the Service for sending unsolicited commercial email.</li>

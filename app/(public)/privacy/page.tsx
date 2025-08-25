@@ -9,18 +9,18 @@ export default function PrivacyPage() {
     return (
         <div className="prose dark:prose-invert max-w-3xl">
             <h1>Privacy Policy</h1>
-            <p className="text-sm -mt-4 text-gray-500 dark:text-gray-400">Last updated: 2025-08-25</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Last updated: 2025-08-25</p>
             <h2>1. Overview</h2>
             <p>This Privacy Policy explains what data we process when you use Email Metrics, why we process it, and the choices you have.</p>
             <h2>2. Data We Collect</h2>
-            <ul>
+            <ul className="list-disc pl-6">
                 <li><strong>Account Data:</strong> Email address and authentication identifiers.</li>
                 <li><strong>Uploaded CSV Data:</strong> Email performance metrics you submit (e.g., sends, opens, clicks).</li>
                 <li><strong>Technical Data:</strong> IP address (short-term for security), user agent, timestamps.</li>
                 <li><strong>Derived Metrics:</strong> Aggregations generated for snapshot reports.</li>
             </ul>
             <h2>3. How We Use Data</h2>
-            <ul>
+            <ul className="list-disc pl-6">
                 <li>Provide, operate, and improve the Service.</li>
                 <li>Generate aggregate analytics and snapshots you request.</li>
                 <li>Secure the Service (fraud and abuse detection).</li>
