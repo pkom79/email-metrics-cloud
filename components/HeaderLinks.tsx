@@ -9,7 +9,7 @@ export default function HeaderLinks({ isAuthed }: { isAuthed: boolean }) {
     const router = useRouter();
     const onDashboard = pathname === '/dashboard';
     const onAccount = pathname === '/account';
-    const onCsvTutorial = pathname === '/csv-exports-tutorial';
+    const onReportGuide = pathname === '/report-export-guide';
 
     const signOut = async () => {
         await supabase.auth.signOut();
@@ -30,13 +30,18 @@ export default function HeaderLinks({ isAuthed }: { isAuthed: boolean }) {
                     {!onAccount && (
                         <Link href="/account" className="text-sm text-purple-600 dark:text-purple-400">Account</Link>
                     )}
-                    {!onCsvTutorial && (
-                        <Link href="/csv-exports-tutorial" className="text-sm text-purple-600 dark:text-purple-400">CSV Tutorial</Link>
+                    {!onReportGuide && (
+                        <Link href="/report-export-guide" className="text-sm text-purple-600 dark:text-purple-400">Report Export Guide</Link>
                     )}
                     <button onClick={signOut} className="text-sm text-gray-600 dark:text-gray-300 hover:underline">Sign out</button>
                 </>
             ) : (
-                <Link href="/signup?mode=signin" className="text-sm text-purple-600 dark:text-purple-400">Sign in</Link>
+                <>
+                    {!onReportGuide && (
+                        <Link href="/report-export-guide" className="text-sm text-purple-600 dark:text-purple-400">Report Export Guide</Link>
+                    )}
+                    <Link href="/signup?mode=signin" className="text-sm text-purple-600 dark:text-purple-400">Sign in</Link>
+                </>
             )}
         </div>
     );
