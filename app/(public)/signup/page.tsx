@@ -93,38 +93,52 @@ export default function Signup() {
         try {
             if (mode === 'signup') {
                 if (isGdprCountry) return; // guard in UI layer
-                const origin = typeof window !== 'undefined' ? window.location.origin : '';
 
                 const { error } = await supabase.auth.signUp({
                     email,
                     password,
                     options: {
-                        emailRedirectTo: `${origin}/auth/callback`,
+                        // Email confirmation disabled - user is immediately authenticated
                         data: { businessName, storeUrl: normalizeStoreUrl(storeUrl), country }
                     }
                 });
                 if (error) throw error;
 
-                // Link any pending uploads from before account creation
-                // Link any pending uploads (array) from pre-auth period
-                try {
-                    const raw = localStorage.getItem('pending-upload-ids') || localStorage.getItem('pending-upload-id');
-                    const ids: string[] = raw ? (raw.startsWith('[') ? JSON.parse(raw) : [raw]) : [];
-                    for (const pid of ids) {
-                        try {
-                            const linkRes = await fetch('/api/auth/link-upload', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ uploadId: pid, label: businessName || 'My Reports' })
-                            });
-                            if (!linkRes.ok) break; // stop on first failure
-                        } catch { break; }
-                    }
-                    localStorage.removeItem('pending-upload-id');
-                    localStorage.removeItem('pending-upload-ids');
-                } catch { }
+                // User is now immediately authenticated! Link uploads using server-side cookie mechanism
+                setOk('Account created! Setting up your data...');
 
-                setOk('Check your email to confirm your account.');
+                try {
+                    const linkResponse = await fetch('/api/auth/link-pending-uploads', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    });
+
+                    if (linkResponse.ok) {
+                        const result = await linkResponse.json();
+                        console.log('Successfully linked uploads during signup:', result);
+                        if (result.processedCount > 0) {
+                            setOk(`Account created! Linked ${result.processedCount} upload(s). Redirecting...`);
+                        } else {
+                            setOk('Account created! Redirecting...');
+                        }
+                    } else {
+                        console.warn('Upload linking failed, but account created successfully');
+                        setOk('Account created! Redirecting...');
+                    }
+                } catch (error) {
+                    console.warn('Upload linking error:', error);
+                    setOk('Account created! Redirecting...');
+                }
+
+                // Clean up localStorage since we've processed the uploads
+                localStorage.removeItem('pending-upload-ids');
+                localStorage.removeItem('pending-upload-id');
+
+                // Brief delay then redirect to dashboard  
+                setTimeout(() => {
+                    router.replace('/dashboard');
+                }, 2000);
             } else {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
