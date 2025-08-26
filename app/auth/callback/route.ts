@@ -34,7 +34,8 @@ export async function GET(request: NextRequest) {
             // We forward any set-cookie header so the subsequent request has session (important
             // for some hosting environments where internal fetch may not automatically share it).
             try {
-                await fetch(new URL('/api/auth/link-pending-uploads', url.origin), {
+                console.log('Auth callback: Attempting to link pending uploads...');
+                const linkResponse = await fetch(new URL('/api/auth/link-pending-uploads', url.origin), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -42,8 +43,22 @@ export async function GET(request: NextRequest) {
                         ...(authResp.headers.get('set-cookie') ? { 'Cookie': authResp.headers.get('set-cookie') as string } : {})
                     },
                     body: JSON.stringify({})
-                }).catch(() => {});
-            } catch { /* non-fatal */ }
+                });
+                
+                if (!linkResponse.ok) {
+                    const errorText = await linkResponse.text().catch(() => 'Unknown error');
+                    console.error('Failed to link pending uploads:', linkResponse.status, errorText);
+                    // Redirect to dashboard with error parameter for debugging
+                    return NextResponse.redirect(new URL(`/dashboard?link_error=1&status=${linkResponse.status}`, url.origin));
+                } else {
+                    const result = await linkResponse.json().catch(() => ({}));
+                    console.log('Successfully linked pending uploads:', result);
+                }
+            } catch (error) {
+                console.error('Error linking pending uploads:', error);
+                // Redirect to dashboard with error parameter for debugging
+                return NextResponse.redirect(new URL(`/dashboard?link_error=2`, url.origin));
+            }
 
             // Step 3: redirect to dashboard
             return NextResponse.redirect(new URL('/dashboard', url.origin));

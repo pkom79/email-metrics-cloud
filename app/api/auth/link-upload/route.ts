@@ -6,10 +6,16 @@ export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
     try {
+        console.log('link-upload: Starting single upload link process');
         const user = await getServerUser();
-        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (!user) {
+            console.log('link-upload: No authenticated user');
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        console.log('link-upload: User authenticated:', user.id);
 
         const { uploadId, label, pendingUploadIds } = await request.json();
+        console.log('link-upload: Request payload:', { uploadId, label, pendingUploadIds });
         if (!uploadId) return NextResponse.json({ error: 'uploadId required' }, { status: 400 });
 
         const supabase = createServiceClient();

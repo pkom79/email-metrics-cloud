@@ -98,6 +98,24 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [selectedAccountId, setSelectedAccountId] = useState<string>('');
     // Human readable label for currently selected admin account
     const [selectedAccountLabel, setSelectedAccountLabel] = useState<string>('');
+    // Debug state for link errors
+    const [linkDebugInfo, setLinkDebugInfo] = useState<string | null>(null);
+
+    // Check for link error parameters on load
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const urlParams = new URLSearchParams(window.location.search);
+            const linkError = urlParams.get('link_error');
+            const status = urlParams.get('status');
+            if (linkError) {
+                const message = linkError === '1' ?
+                    `Link failed with status ${status || 'unknown'}` :
+                    'Link error during processing';
+                setLinkDebugInfo(message);
+                console.warn('Dashboard: Link error detected:', message);
+            }
+        }
+    }, []);
 
     // Determine admin status early and (if admin) load accounts list before any hydration
     useEffect(() => {
@@ -418,6 +436,28 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             )}
             {/* Header */}
             <div className="pt-4 sm:pt-6"><div className="max-w-7xl mx-auto"><div className="p-6 sm:p-8 mb-4"><div className="flex items-start justify-between gap-4"><div><h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>{businessName && <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>}</div><div className="flex items-center gap-3 relative">{!isAdmin && (<button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"><UploadIcon className="h-4 w-4" />Upload New Reports</button>)}{isAdmin && (<div className="relative"><select value={selectedAccountId} onChange={e => { const val = e.target.value; setSelectedAccountId(val); const a = (allAccounts || []).find(x => x.id === val); setSelectedAccountLabel(a?.label || a?.businessName || a?.id || ''); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="appearance-none px-3 py-2 pr-10 rounded-md border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm min-w-[240px] focus:ring-2 focus:ring-purple-500 focus:border-transparent">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</select><ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400 pointer-events-none" /></div>)}</div></div></div></div></div>
+
+            {/* Debug panel for link errors */}
+            {linkDebugInfo && (
+                <div className="max-w-7xl mx-auto px-4 mb-4">
+                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                            <div className="text-amber-600 dark:text-amber-400 font-medium text-sm">
+                                ⚠️ Debug: {linkDebugInfo}
+                            </div>
+                            <button
+                                onClick={() => setLinkDebugInfo(null)}
+                                className="ml-auto text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <div className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                            This may indicate an issue with linking your uploaded data. Check the console for more details.
+                        </div>
+                    </div>
+                </div>
+            )}
             {showUploadModal && !isAdmin && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center">
                     <div className="absolute inset-0 bg-black/50" onClick={() => setShowUploadModal(false)} />
