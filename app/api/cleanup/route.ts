@@ -107,9 +107,12 @@ export async function POST(request: Request) {
 
         // Calculate summary
         const summary = {
-            totalExpiredPreauth: results.operations.expiredPreauth?.expiredPreauth || 0,
+            totalExpiredPreauth: results.operations.expiredPreauth?.orphanedPreauth || 0,
             totalOldUploads: results.operations.oldUploads?.removedUploads || 0,
             totalDeletedAccounts: results.operations.deletedAccounts?.removedAccounts || 0,
+            totalOrphanedSnapshots: results.operations.expiredPreauth?.orphanedSnapshots || 0,
+            totalProtected: (results.operations.expiredPreauth?.protected || 0) + 
+                           (results.operations.oldUploads?.protected || 0),
             totalErrors: [
                 ...(results.operations.expiredPreauth?.errors || []),
                 ...(results.operations.oldUploads?.errors || []),
