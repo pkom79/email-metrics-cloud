@@ -17,7 +17,7 @@ export default function DashboardClient({ businessName, userId }: Props) {
     const [isMobile, setIsMobile] = useState<boolean>(() => {
         if (typeof window === 'undefined') return false; // assume desktop during SSR
         const ua = navigator.userAgent;
-        return window.innerWidth < 768 || /Android(?!.*Tablet)|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+        return window.innerWidth < 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
     });
 
     // Allow force desktop override for debugging via localStorage or query param
@@ -29,7 +29,7 @@ export default function DashboardClient({ businessName, userId }: Props) {
     useEffect(() => {
         const update = () => {
             const ua = navigator.userAgent;
-            const mobileNow = window.innerWidth < 768 || /Android(?!.*Tablet)|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+            const mobileNow = window.innerWidth < 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
             setIsMobile(prev => prev === mobileNow ? prev : mobileNow);
         };
         window.addEventListener('resize', update, { passive: true });
@@ -59,7 +59,7 @@ export default function DashboardClient({ businessName, userId }: Props) {
                         <span className="font-semibold">This application performs advanced in‑browser data processing and multi‑dimensional performance modeling across large email datasets.</span>
                         <br />
                         <br />
-                        For the full experience: Please access from a desktop, laptop, or high-end tablet (iPad Pro or similar) with 8GB+ RAM, modern processor (Intel i5, AMD Ryzen 5, Apple M1 or better), and screen width of at least 768px. Chrome/Safari recommended.
+                        For the full experience: Please access from a desktop or laptop with 8GB+ RAM, modern processor (Intel i5, AMD Ryzen 5, Apple M1 or better), and screen width of at least 768px. Chrome/Safari recommended.
                     </p>
                 </div>
             </main>
