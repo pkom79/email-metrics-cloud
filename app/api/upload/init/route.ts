@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { createServiceClient } from '../../../../lib/supabase/server';
+import { cookies } from 'next/headers';
 
 export const runtime = 'nodejs';
 
@@ -17,6 +18,39 @@ export async function POST() {
             .from('uploads')
             .insert({ id: uploadId, status: 'preauth', expires_at: expiresAt, updated_at: new Date().toISOString() });
         if (insertErr) throw insertErr;
+
+        // Store upload ID in cookie for later linking during email confirmation
+        const cookieStore = cookies();
+        const existingCookie = cookieStore.get('pending-upload-ids')?.value;
+        let pendingIds: string[] = [];
+        
+        if (existingCookie) {
+            try {
+                const parsed = JSON.parse(existingCookie);
+                pendingIds = Array.isArray(parsed) ? parsed : [parsed];
+            } catch {
+                pendingIds = [existingCookie];
+            }
+        }
+        
+        // Add new upload ID if not already present
+        if (!pendingIds.includes(uploadId)) {
+            pendingIds.push(uploadId);
+        }
+        
+        // Keep only the last 5 upload IDs to prevent cookie bloat
+        if (pendingIds.length > 5) {
+            pendingIds = pendingIds.slice(-5);
+        }
+        
+        cookieStore.set('pending-upload-ids', JSON.stringify(pendingIds), {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 24 * 60 * 60 // 24 hours
+        });
+
+        console.log(`upload/init: Created upload ${uploadId}, updated pending cookie:`, pendingIds);
 
         const paths = {
             subscribers: `${uploadId}/subscribers.csv`,

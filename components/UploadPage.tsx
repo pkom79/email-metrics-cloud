@@ -88,14 +88,26 @@ export default function UploadPage() {
             const v = await vRes.json();
             if (!vRes.ok || !v.ok) throw new Error(`Validation failed${v?.missing ? `: missing ${v.missing.join(', ')}` : ''}`);
 
-            // 4) Best-effort: if logged in, link upload to account and create snapshot
+            // 4) Link upload to account and create snapshot (critical step)
+            let linkingSucceeded = false;
             try {
-                await fetch('/api/auth/link-upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uploadId }) });
-            } catch {
-                // ignore
-            }
+                const linkRes = await fetch('/api/auth/link-upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uploadId, label: 'Dashboard Import' })
+                });
 
-            // 5) also process locally for instant dashboard
+                if (!linkRes.ok) {
+                    const linkError = await linkRes.json();
+                    console.error('Failed to link upload to account:', linkError);
+                    setErrors([`Upload successful but account linking failed: ${linkError.error || 'Unknown error'}. Files were uploaded but may not appear in your dashboard. Please contact support or try uploading again.`]);
+                } else {
+                    linkingSucceeded = true;
+                }
+            } catch (linkErr) {
+                console.error('Error during upload linking:', linkErr);
+                setErrors([`Upload successful but account linking failed: ${linkErr}. Files were uploaded but may not appear in your dashboard. Please contact support or try uploading again.`]);
+            }            // 5) also process locally for instant dashboard
             const dm = DataManager.getInstance();
             const result = await dm.loadCSVFiles(files, () => { });
             if (!result.success) {

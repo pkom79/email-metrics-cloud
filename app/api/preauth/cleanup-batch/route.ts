@@ -34,6 +34,50 @@ export async function POST() {
 
         console.log('cleanup-batch: Starting SAFE cleanup with guardrails at', now.toISOString());
 
+        // 0. SAFE: Clean up very old expired records (audit retention cleanup)
+        try {
+            console.log('cleanup-batch: Phase 0 - Old expired records cleanup');
+            
+            // Delete expired records older than 7 days (keep recent ones for audit)
+            const expiredCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            
+            const { data: oldExpired, error: oldExpiredError } = await supabase
+                .from('uploads')
+                .select('id')
+                .eq('status', 'expired')
+                .lt('updated_at', expiredCutoff.toISOString())
+                .limit(50);
+            
+            if (oldExpiredError) throw oldExpiredError;
+            
+            console.log(`cleanup-batch: Found ${oldExpired?.length || 0} old expired records to remove`);
+            
+            for (const record of oldExpired || []) {
+                try {
+                    // These are already expired and storage files should be gone, just remove the record
+                    const { error: deleteError } = await supabase
+                        .from('uploads')
+                        .delete()
+                        .eq('id', record.id);
+                    
+                    if (deleteError) {
+                        console.error(`cleanup-batch: Failed to delete old expired record ${record.id}:`, deleteError);
+                        results.errors.push(`Failed to delete old expired record ${record.id}: ${deleteError.message}`);
+                        continue;
+                    }
+                    
+                    results.orphanedPreauth++;
+                    console.log(`cleanup-batch: Removed old expired record ${record.id}`);
+                } catch (error: any) {
+                    console.error(`cleanup-batch: Error removing old expired record ${record.id}:`, error);
+                    results.errors.push(`Failed to remove old expired record ${record.id}: ${error.message || 'Unknown error'}`);
+                }
+            }
+        } catch (error: any) {
+            console.error('cleanup-batch: Error cleaning old expired records:', error);
+            results.errors.push(`Failed to clean old expired records: ${error.message || 'Unknown error'}`);
+        }
+
         // 1. SAFE: Clean up orphaned preauth uploads (never linked to account, expired)
         try {
             console.log('cleanup-batch: Phase 1 - Orphaned preauth uploads');
