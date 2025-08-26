@@ -9,24 +9,35 @@ export const runtime = 'nodejs';
 // Idempotent: rows already bound or missing required files are skipped.
 export async function POST(request: Request) {
   try {
-    console.log('link-pending-uploads: Starting process');
+    console.log('=== LINK-PENDING-UPLOADS START ===');
     const user = await getServerUser();
     if (!user) {
       console.log('link-pending-uploads: No authenticated user');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    console.log('link-pending-uploads: User authenticated:', user.id);
+    console.log('link-pending-uploads: User authenticated:', { id: user.id, email: user.email });
 
     const cookieStore = cookies();
     const raw = cookieStore.get('pending-upload-ids')?.value;
     console.log('link-pending-uploads: Raw cookie value:', raw);
-    if (!raw) return NextResponse.json({ processedCount: 0, message: 'No pending uploads' });
+    
+    // Also log all cookies for debugging
+    const allCookies = Array.from(cookieStore.getAll()).map(c => ({ name: c.name, value: c.value.substring(0, 50) + '...' }));
+    console.log('link-pending-uploads: All cookies:', allCookies);
+    
+    if (!raw) {
+      console.log('link-pending-uploads: No pending-upload-ids cookie found');
+      return NextResponse.json({ processedCount: 0, message: 'No pending uploads' });
+    }
 
     let ids: string[] = [];
     try { ids = JSON.parse(raw); } catch { ids = [raw]; }
     ids = (Array.isArray(ids) ? ids : [ids]).filter(Boolean);
     console.log('link-pending-uploads: Parsed upload IDs:', ids);
-    if (!ids.length) return NextResponse.json({ processedCount: 0, message: 'No valid IDs' });
+    if (!ids.length) {
+      console.log('link-pending-uploads: No valid upload IDs found');
+      return NextResponse.json({ processedCount: 0, message: 'No valid IDs' });
+    }
 
     const supabase = createServiceClient();
     const bucket = process.env.PREAUTH_BUCKET || 'preauth-uploads';
