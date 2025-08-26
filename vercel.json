@@ -1,0 +1,13 @@
+{
+    "functions": {
+        "app/api/cleanup/route.ts": {
+            "maxDuration": 300
+        }
+    },
+    "crons": [
+        {
+            "path": "/api/cleanup",
+            "schedule": "0 2 * * *"
+        }
+    ]
+}
