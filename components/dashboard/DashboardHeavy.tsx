@@ -7,6 +7,7 @@ import HourOfDayPerformance from './HourOfDayPerformance';
 import AudienceCharts from './AudienceCharts';
 import FlowStepAnalysis from './FlowStepAnalysis';
 import CustomSegmentBlock from './CustomSegmentBlock';
+import DataAgeNotice from './DataAgeNotice';
 import { BarChart3, Calendar, ChevronDown, GitCompare, Mail, Send, Zap, Star, Upload as UploadIcon, X } from 'lucide-react';
 import UploadWizard from '../../components/UploadWizard';
 import { usePendingUploadsLinker } from '../../lib/utils/usePendingUploadsLinker';
@@ -527,6 +528,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             )}
             {/* Data coverage notice */}
             {hasData && (<div className="py-3"><div className="max-w-7xl mx-auto"><div className="mx-4 sm:mx-6"><div className="p-0 text-purple-700 dark:text-purple-200"><span className="text-xs"><span className="font-medium">Data Coverage Notice:</span>{(() => { const dates = [...defCampaigns, ...defFlows].map(e => e.sentDate.getTime()); const lastVisible = dates.length ? new Date(Math.max(...dates)) : dm.getLastEmailDate(); return ` All dashboard metrics reflect email channel performance only and exclude SMS-attributed revenue through ${lastVisible.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.`; })()}</span></div></div></div></div>)}
+            {/* Data age notice */}
+            {hasData && <DataAgeNotice dataManager={dm} onUploadClick={() => setShowUploadModal(true)} />}
             {/* Main content */}
             <div className="p-6"><div className="max-w-7xl mx-auto space-y-8">
                 {overviewMetrics && (

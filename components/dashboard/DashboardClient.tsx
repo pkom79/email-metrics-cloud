@@ -17,7 +17,7 @@ export default function DashboardClient({ businessName, userId }: Props) {
     const [isMobile, setIsMobile] = useState<boolean>(() => {
         if (typeof window === 'undefined') return false; // assume desktop during SSR
         const ua = navigator.userAgent;
-        return window.innerWidth < 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+        return window.innerWidth < 768 || /Android(?!.*Tablet)|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
     });
 
     // Allow force desktop override for debugging via localStorage or query param
@@ -29,7 +29,7 @@ export default function DashboardClient({ businessName, userId }: Props) {
     useEffect(() => {
         const update = () => {
             const ua = navigator.userAgent;
-            const mobileNow = window.innerWidth < 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+            const mobileNow = window.innerWidth < 768 || /Android(?!.*Tablet)|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
             setIsMobile(prev => prev === mobileNow ? prev : mobileNow);
         };
         window.addEventListener('resize', update, { passive: true });
