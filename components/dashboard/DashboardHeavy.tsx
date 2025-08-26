@@ -74,6 +74,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [dashboardError, setDashboardError] = useState<string | null>(null);
     const [dataVersion, setDataVersion] = useState(0);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
+    // Additional readiness flag to avoid rendering charts before hydration attempts complete
+    const [initialLoadComplete, setInitialLoadComplete] = useState(false);
     const [dateRange, setDateRange] = useState<'30d' | '60d' | '90d' | '120d' | '180d' | '365d' | 'all' | 'custom'>('30d');
     const [customFrom, setCustomFrom] = useState<string | undefined>();
     const [customTo, setCustomTo] = useState<string | undefined>();
@@ -199,6 +201,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 await new Promise(r => setTimeout(r, 150));
             }
             if (active && !DataManager.getInstance().hasRealData()) setIsInitialLoading(false);
+            if (active) setInitialLoadComplete(true);
         })();
         return () => {
             active = false;
@@ -393,6 +396,15 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const showOverlay = isInitialLoading && !noAccounts;
 
     if (dashboardError) { return <div className="min-h-screen flex items-center justify-center p-6"><div className="max-w-md mx-auto text-center"><h2 className="text-lg font-semibold text-red-600 mb-4">Dashboard Error</h2><p className="text-gray-600 dark:text-gray-300 mb-6">{dashboardError}</p><div className="space-x-4"><button onClick={() => { setDashboardError(null); setDataVersion(v => v + 1); }} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Retry</button><button onClick={() => window.location.reload()} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Reload Page</button></div></div></div>; }
+
+    // Unified loading gate: ensure initial hydration attempts (or fallback) ran
+    if ((!initialLoadComplete && !isAdmin) || (isAdmin && isInitialLoading)) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-gray-500 dark:text-gray-400 text-sm">Loading your metrics...</div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen relative">

@@ -112,7 +112,13 @@ export default function UploadWizard() {
                     const arr: string[] = existingRaw ? JSON.parse(existingRaw) : [];
                     if (!arr.includes(uploadId)) arr.push(uploadId);
                     localStorage.setItem('pending-upload-ids', JSON.stringify(arr));
-                } catch { /* fallback to legacy key */ localStorage.setItem('pending-upload-id', uploadId); }
+                    // Mirror to cookie so server auth callback can read & link immediately
+                    document.cookie = `pending-upload-ids=${encodeURIComponent(JSON.stringify(arr))}; path=/; max-age=86400; SameSite=Lax`;
+                } catch {
+                    /* fallback to legacy key */
+                    localStorage.setItem('pending-upload-id', uploadId);
+                    document.cookie = `pending-upload-ids=${encodeURIComponent(uploadId)}; path=/; max-age=86400; SameSite=Lax`;
+                }
                 // Continue with local data loading for immediate preview
             } else if (!linkRes.ok || !linkJson?.ok) {
                 throw new Error(linkJson?.error || 'Failed to finalize upload');
