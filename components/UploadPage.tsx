@@ -88,25 +88,43 @@ export default function UploadPage() {
             const v = await vRes.json();
             if (!vRes.ok || !v.ok) throw new Error(`Validation failed${v?.missing ? `: missing ${v.missing.join(', ')}` : ''}`);
 
-            // 4) Link upload to account and create snapshot (critical step)
+            // 4) Link upload to account and create snapshot (only if user is authenticated)
             let linkingSucceeded = false;
             try {
-                const linkRes = await fetch('/api/auth/link-upload', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ uploadId, label: 'Dashboard Import' })
-                });
+                // Check if user is authenticated before attempting to link
+                const { data: { user } } = await supabase.auth.getUser();
 
-                if (!linkRes.ok) {
-                    const linkError = await linkRes.json();
-                    console.error('Failed to link upload to account:', linkError);
-                    setErrors([`Upload successful but account linking failed: ${linkError.error || 'Unknown error'}. Files were uploaded but may not appear in your dashboard. Please contact support or try uploading again.`]);
+                if (user) {
+                    console.log('User is authenticated, attempting to link upload to account...');
+                    const linkRes = await fetch('/api/auth/link-upload', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ uploadId, label: 'Dashboard Import' })
+                    });
+
+                    if (!linkRes.ok) {
+                        const linkError = await linkRes.json();
+                        console.error('Failed to link upload to account:', linkError);
+                        setErrors([`Upload successful but account linking failed: ${linkError.error || 'Unknown error'}. Files were uploaded but may not appear in your dashboard. Please contact support or try uploading again.`]);
+                    } else {
+                        linkingSucceeded = true;
+                        console.log('Successfully linked upload to account');
+                    }
                 } else {
-                    linkingSucceeded = true;
+                    console.log('User not authenticated, upload will be linked during email confirmation via cookie');
+                    // Upload is stored with cookie for later linking during email confirmation
+                    linkingSucceeded = true; // Consider this successful since it will be linked later
                 }
             } catch (linkErr) {
                 console.error('Error during upload linking:', linkErr);
-                setErrors([`Upload successful but account linking failed: ${linkErr}. Files were uploaded but may not appear in your dashboard. Please contact support or try uploading again.`]);
+                // Only show error if user was actually authenticated (otherwise it's expected)
+                const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+                if (user) {
+                    setErrors([`Upload successful but account linking failed: ${linkErr}. Files were uploaded but may not appear in your dashboard. Please contact support or try uploading again.`]);
+                } else {
+                    console.log('Upload linking error expected for unauthenticated user, will be handled during email confirmation');
+                    linkingSucceeded = true;
+                }
             }            // 5) also process locally for instant dashboard
             const dm = DataManager.getInstance();
             const result = await dm.loadCSVFiles(files, () => { });
