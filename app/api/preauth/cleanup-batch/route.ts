@@ -4,8 +4,8 @@ import { getServerUser } from '../../../../lib/supabase/auth';
 
 export const runtime = 'nodejs';
 
-// Enhanced batch cleanup for expired preauth uploads and general housekeeping
-// - Cleans up expired preauth uploads (>24h or past expires_at)
+// Enhanced batch cleanup for expired uploads and general housekeeping
+// - Cleans up expired uploads (preauth and bound uploads past expires_at)
 // - Cleans up old uploads for active accounts (keeps only most recent per account)
 // - Cleans up soft-deleted accounts older than 30 days
 export async function POST() {
@@ -21,7 +21,7 @@ export async function POST() {
         const now = new Date();
         
         const results = {
-            expiredPreauth: 0,
+            expiredUploads: 0,
             oldUploads: 0,
             deletedAccounts: 0,
             errors: [] as string[]
@@ -29,12 +29,12 @@ export async function POST() {
 
         console.log('cleanup-batch: Starting comprehensive cleanup at', now.toISOString());
 
-        // 1. Clean up expired preauth uploads (older than expires_at or >24h)
+        // 1. Clean up expired uploads (preauth and bound uploads past expires_at)
         try {
             const { data: expiredRows, error: expiredError } = await supabase
                 .from('uploads')
-                .select('id,expires_at,created_at')
-                .eq('status', 'preauth')
+                .select('id,expires_at,created_at,status')
+                .in('status', ['preauth', 'bound'])
                 .lt('expires_at', now.toISOString())
                 .limit(100);
             
@@ -42,7 +42,7 @@ export async function POST() {
 
             for (const row of expiredRows || []) {
                 try {
-                    console.log(`cleanup-batch: Cleaning expired preauth upload ${row.id}`);
+                    console.log(`cleanup-batch: Cleaning expired upload ${row.id} (status: ${row.status})`);
                     
                     // Remove storage files
                     const { data: list } = await supabase.storage.from(bucket).list(row.id, { limit: 100 });
@@ -56,20 +56,31 @@ export async function POST() {
                         }
                     }
                     
-                    // Mark as expired
-                    const { error: updateError } = await supabase
-                        .from('uploads')
-                        .update({ status: 'expired' })
-                        .eq('id', row.id);
+                    // For bound uploads, also remove snapshots and related data
+                    if (row.status === 'bound') {
+                        const { error: snapshotError } = await supabase
+                            .from('snapshots')
+                            .delete()
+                            .eq('upload_id', row.id);
+                        if (snapshotError) {
+                            console.error(`cleanup-batch: Snapshot cleanup failed for ${row.id}:`, snapshotError);
+                            results.errors.push(`Snapshot cleanup failed for ${row.id}: ${snapshotError.message}`);
+                        }
+                    }
+                    
+                    // Mark as expired (or delete if it was bound)
+                    const { error: updateError } = row.status === 'bound' 
+                        ? await supabase.from('uploads').delete().eq('id', row.id)
+                        : await supabase.from('uploads').update({ status: 'expired' }).eq('id', row.id);
                     
                     if (updateError) {
-                        console.error(`cleanup-batch: Status update failed for ${row.id}:`, updateError);
-                        results.errors.push(`Status update failed for ${row.id}: ${updateError.message}`);
+                        console.error(`cleanup-batch: Database update failed for ${row.id}:`, updateError);
+                        results.errors.push(`Database update failed for ${row.id}: ${updateError.message}`);
                         continue;
                     }
                     
-                    results.expiredPreauth++;
-                    console.log(`cleanup-batch: Successfully cleaned expired preauth upload ${row.id}`);
+                    results.expiredUploads++;
+                    console.log(`cleanup-batch: Successfully cleaned expired upload ${row.id}`);
                 } catch (error: any) {
                     console.error(`cleanup-batch: Error processing expired upload ${row.id}:`, error);
                     results.errors.push(`Failed to process expired upload ${row.id}: ${error.message || 'Unknown error'}`);
