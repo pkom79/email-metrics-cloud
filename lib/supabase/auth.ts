@@ -5,8 +5,12 @@ import type { SupabaseClient, User } from '@supabase/supabase-js';
 export function getServerSupabase(): SupabaseClient {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    // During static generation (or misconfiguration), we may be missing env vars.
+    // Instead of throwing (which breaks the entire build), return a proxy client
+    // that will throw only if actually used. This lets purely static pages build.
     if (!url || !anon) {
-        throw new Error('Supabase env not set. Define NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+        const err = new Error('Supabase env not set. Define NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+        return new Proxy({}, { get() { throw err; } }) as unknown as SupabaseClient;
     }
     return createServerComponentClient({ cookies });
 }
