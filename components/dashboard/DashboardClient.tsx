@@ -45,6 +45,37 @@ export default function DashboardClient({ businessName, userId }: Props) {
         return () => window.removeEventListener('resize', update);
     }, []);
 
+    useEffect(() => {
+        // Debug URL parameters for auth callback issues
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const linkError = params.get('link_error');
+            const status = params.get('status');
+
+            if (linkError) {
+                console.error('Auth callback link error detected:', { linkError, status });
+                // Show a temporary alert for debugging
+                const message = linkError === '1'
+                    ? `Failed to link uploads (HTTP ${status || 'unknown'})`
+                    : 'Error during upload linking process';
+
+                // Display error in UI temporarily
+                setTimeout(() => {
+                    if (confirm(`DEBUG: ${message}\n\nThis means your uploaded files weren't linked to your account during email confirmation. Would you like to see the console logs?`)) {
+                        console.log('Check the server logs for "link-pending-uploads" messages to debug further.');
+                    }
+                    // Clean up URL after showing error
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('link_error');
+                    url.searchParams.delete('status');
+                    window.history.replaceState({}, '', url.toString());
+                }, 1000);
+            }
+        } catch (error) {
+            console.error('Error checking URL params:', error);
+        }
+    }, []);
+
     const mobileNotice = useMemo(() => (
         <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
             <main className="flex-1 flex items-start justify-center p-6">

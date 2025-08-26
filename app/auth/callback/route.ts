@@ -31,16 +31,28 @@ export async function GET(request: NextRequest) {
             }
 
             // Step 2: attempt to link any pending uploads server-side before redirecting.
-            // We forward any set-cookie header so the subsequent request has session (important
-            // for some hosting environments where internal fetch may not automatically share it).
+            // We need to forward both the original request cookies (which contain pending-upload-ids)
+            // and any new session cookies from the auth response.
             try {
                 console.log('Auth callback: Attempting to link pending uploads...');
+                
+                // Combine original request cookies with new session cookies
+                const originalCookies = request.headers.get('cookie') || '';
+                const newCookies = authResp.headers.get('set-cookie') || '';
+                const combinedCookies = [originalCookies, newCookies].filter(Boolean).join('; ');
+                
+                console.log('Auth callback: Forwarding cookies for link-pending-uploads:', { 
+                    originalCookies: originalCookies.substring(0, 100) + '...', 
+                    hasPendingUploads: originalCookies.includes('pending-upload-ids'),
+                    hasNewSession: newCookies.length > 0 
+                });
+                
                 const linkResponse = await fetch(new URL('/api/auth/link-pending-uploads', url.origin), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        // Some platforms strip Set-Cookie from fetch response; fallback relies on implicit cookie jar.
-                        ...(authResp.headers.get('set-cookie') ? { 'Cookie': authResp.headers.get('set-cookie') as string } : {})
+                        // Forward all cookies: original request + new session
+                        ...(combinedCookies ? { 'Cookie': combinedCookies } : {})
                     },
                     body: JSON.stringify({})
                 });
