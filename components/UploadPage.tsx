@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Upload, CheckCircle, FileText, Zap, Send, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 import { DataManager } from '../lib/data/dataManager';
@@ -10,6 +10,18 @@ export default function UploadPage() {
     const [hoveredZone, setHoveredZone] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [errors, setErrors] = useState<string[]>([]);
+
+    // Text animation state
+    const words = ['Simple', 'Useful', 'Valuable', 'Truthful', 'Actionable'];
+    const [currentWordIndex, setCurrentWordIndex] = useState(0);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setCurrentWordIndex((prev) => (prev + 1) % words.length);
+        }, 2000); // Change word every 2 seconds
+
+        return () => clearInterval(interval);
+    }, [words.length]);
 
     // Files selected
     const fileRefs = useRef<{ campaigns?: File; flows?: File; subscribers?: File }>({});
@@ -205,7 +217,19 @@ export default function UploadPage() {
                         <div className="text-center mb-8">
                             <h1 className="text-4xl md:text-5xl font-bold mb-3 tracking-tight text-gray-900 dark:text-gray-100">
                                 Klaviyo Metrics
-                                <span className="block bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Made Simple</span>
+                                <span className="block bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                                    Made{' '}
+                                    <span
+                                        key={currentWordIndex}
+                                        className="inline-block transition-all duration-500 ease-in-out"
+                                        style={{
+                                            minWidth: '150px',
+                                            textAlign: 'left'
+                                        }}
+                                    >
+                                        {words[currentWordIndex]}
+                                    </span>
+                                </span>
                             </h1>
                             <p className="text-lg md:text-xl leading-relaxed max-w-3xl mx-auto text-gray-600 dark:text-gray-300">
                                 See what drives sales and what wastes money. Upload your Klaviyo exports today and get free insights that show the truth about your campaigns, flows, and subscribers.
