@@ -208,7 +208,7 @@ export default function UploadPage() {
                                 <span className="block bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Made Simple</span>
                             </h1>
                             <p className="text-lg md:text-xl leading-relaxed max-w-3xl mx-auto text-gray-600 dark:text-gray-300">
-                                Get insights Klaviyo won&apos;t show you. Upload your export files and see which campaigns, flows, and subscribers make you money and which ones waste it.
+                                See what drives sales and what wastes money. Upload your Klaviyo exports today and get free insights that show the truth about your campaigns, flows, and subscribers.
                             </p>
                             <div className="mt-4 flex justify-center">
                                 <a
