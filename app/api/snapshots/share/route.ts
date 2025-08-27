@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 import { createServiceClient } from '../../../../lib/supabase/server';
 
 export async function POST(request: NextRequest) {
     try {
-        const supabase = createServiceClient();
+        const supabase = createRouteHandlerClient({ cookies });
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -16,6 +18,9 @@ export async function POST(request: NextRequest) {
 
         // If we need to create a snapshot from current data
         if (createSnapshot && (!snapshotId || snapshotId === 'temp-snapshot')) {
+            // Use service client for snapshot creation (requires higher privileges)
+            const serviceClient = createServiceClient();
+            
             // First, get or create the user's account
             const { data: account, error: accountError } = await supabase
                 .from('accounts')
@@ -44,15 +49,15 @@ export async function POST(request: NextRequest) {
             }
 
             // Create a snapshot
-            const { data: newSnapshot, error: snapshotError } = await supabase
+            // Create a new snapshot with current timestamp
+            const { data: newSnapshot, error: snapshotError } = await serviceClient
                 .from('snapshots')
                 .insert({
                     account_id: accountId,
-                    label: title || 'Shared Dashboard',
-                    last_email_date: new Date().toISOString().split('T')[0],
-                    created_at: new Date().toISOString()
+                    label: `Dashboard Share - ${new Date().toLocaleDateString()}`,
+                    last_email_date: new Date().toISOString().split('T')[0]
                 })
-                .select('id')
+                .select()
                 .single();
 
             if (snapshotError || !newSnapshot) {
@@ -159,7 +164,7 @@ export async function POST(request: NextRequest) {
 // Get list of shares for current user
 export async function GET(request: NextRequest) {
     try {
-        const supabase = createServiceClient();
+        const supabase = createRouteHandlerClient({ cookies });
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -222,7 +227,7 @@ export async function GET(request: NextRequest) {
 // Update or delete share
 export async function PATCH(request: NextRequest) {
     try {
-        const supabase = createServiceClient();
+        const supabase = createRouteHandlerClient({ cookies });
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
