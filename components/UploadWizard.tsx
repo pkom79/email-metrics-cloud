@@ -195,6 +195,20 @@ export default function UploadWizard() {
                 >
                     {loading ? 'Uploading…' : 'Upload & Analyze'}
                 </button>
+
+                <div className="text-center">
+                    <a
+                        href="/report-export-guide"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
+                    >
+                        Report Export Guide
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                            <path fillRule="evenodd" d="M5 4a1 1 0 011-1h9a1 1 0 011 1v9a1 1 0 11-2 0V6.414l-9.293 9.293a1 1 0 01-1.414-1.414L12.586 5H6a1 1 0 01-1-1z" clipRule="evenodd" />
+                        </svg>
+                    </a>
+                </div>
             </div>
         </div>
     );

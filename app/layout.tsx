@@ -27,6 +27,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     return (
         <html lang="en">
             <head>
+                {/* Google tag (gtag.js) */}
+                <script async src="https://www.googletagmanager.com/gtag/js?id=G-GV00VP8JZV"></script>
+                <script
+                    dangerouslySetInnerHTML={{
+                        __html: `
+                            window.dataLayer = window.dataLayer || [];
+                            function gtag(){dataLayer.push(arguments);}
+                            gtag('js', new Date());
+                            gtag('config', 'G-GV00VP8JZV');
+                        `
+                    }}
+                />
                 <script
                     dangerouslySetInnerHTML={{
                         __html: `!function(){try{var t=localStorage.getItem("theme");if(!t){var e=window.matchMedia("(prefers-color-scheme: dark)");t=e.matches?"dark":"light"}("dark"===t)&&document.documentElement.classList.add("dark")}catch(n){}}();`

@@ -7,6 +7,7 @@ export default function Footer() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                     <span className="font-medium text-gray-700 dark:text-gray-300">© {year} Email Metrics</span>
+                    <Link href="/report-export-guide" className="hover:text-gray-900 dark:hover:text-gray-200 underline-offset-4 hover:underline transition-colors">Report Export Guide</Link>
                     <Link href="/terms" className="hover:text-gray-900 dark:hover:text-gray-200 underline-offset-4 hover:underline transition-colors">Terms & Conditions</Link>
                     <Link href="/privacy" className="hover:text-gray-900 dark:hover:text-gray-200 underline-offset-4 hover:underline transition-colors">Privacy Policy</Link>
                 </div>
