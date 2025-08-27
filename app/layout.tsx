@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import './globals.css';
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import ThemeToggle from '../components/ThemeToggle';
 import Link from 'next/link';
 import { getServerUser } from '../lib/supabase/auth';
@@ -27,18 +28,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     return (
         <html lang="en">
             <head>
-                {/* Google tag (gtag.js) */}
-                <script async src="https://www.googletagmanager.com/gtag/js?id=G-GV00VP8JZV"></script>
-                <script
-                    dangerouslySetInnerHTML={{
-                        __html: `
-                            window.dataLayer = window.dataLayer || [];
-                            function gtag(){dataLayer.push(arguments);}
-                            gtag('js', new Date());
-                            gtag('config', 'G-GV00VP8JZV');
-                        `
-                    }}
-                />
                 <script
                     dangerouslySetInnerHTML={{
                         __html: `!function(){try{var t=localStorage.getItem("theme");if(!t){var e=window.matchMedia("(prefers-color-scheme: dark)");t=e.matches?"dark":"light"}("dark"===t)&&document.documentElement.classList.add("dark")}catch(n){}}();`
@@ -48,6 +37,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
             </head>
             <body className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+                {/* Google Analytics */}
+                <Script src="https://www.googletagmanager.com/gtag/js?id=G-GV00VP8JZV" />
+                <Script id="google-analytics">
+                    {`
+                        window.dataLayer = window.dataLayer || [];
+                        function gtag(){dataLayer.push(arguments);}
+                        gtag('js', new Date());
+                        gtag('config', 'G-GV00VP8JZV');
+                    `}
+                </Script>
+
                 <SupabaseAuthListener />
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
                     <Link href="/" className="flex items-center gap-2 text-lg font-semibold hover:opacity-90 transition-opacity">
