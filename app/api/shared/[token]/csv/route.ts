@@ -25,7 +25,6 @@ async function getShareContext(token: string): Promise<ShareRow | null> {
   return data
 }
 
-
 export async function GET(req: Request, { params }: { params: { token: string } }) {
   const url = new URL(req.url)
   const file = sanitizeCsvFilename(url.searchParams.get('file'))
@@ -34,7 +33,7 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   const ctx = await getShareContext(params.token)
   if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 403 })
 
-  // Find actual path supporting different per-file subfolders
+  // Locate file across buckets and arbitrary folder depths (snapshot-first).
   const hit = await findCsvPath(
     supabaseAdmin,
     CSV_BUCKETS,
