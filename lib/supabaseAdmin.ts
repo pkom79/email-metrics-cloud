@@ -10,7 +10,7 @@ export const supabaseAdmin = createClient(
 );
 
 // Preferred order when probing buckets for canonical CSVs
-export const CSV_BUCKETS = ['uploads', 'csv-uploads'] as const;
+export const CSV_BUCKETS = ['uploads', 'csv-uploads', 'preauth-uploads'] as const;
 export type CsvBucket = typeof CSV_BUCKETS[number];
 
 // (Legacy sharing helpers removed – new snapshot approach does not expose per-file CSV fetching)

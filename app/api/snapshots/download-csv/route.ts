@@ -74,20 +74,19 @@ export async function GET(request: Request) {
                 return NextResponse.json({ error: 'No upload data available' }, { status: 404 });
             }
 
-            // Download the CSV file from storage
+            // Download the CSV file from storage (probe buckets & path variations)
             const fileName = `${type}.csv`;
-            const filePath = `${snap.account_id}/${snap.upload_id}/${fileName}`;
-
-            const { data: fileData, error: downloadError } = await supabase.storage
-                .from('uploads')
-                .download(filePath);
-
-            if (downloadError) {
-                console.error(`Download error for ${filePath}:`, downloadError);
-                return NextResponse.json({ error: 'File not found' }, { status: 404 });
+            const probe = [
+                { bucket: 'uploads', path: `${snap.account_id}/${snap.upload_id}/${fileName}` },
+                { bucket: 'csv-uploads', path: `${snap.account_id}/${snap.upload_id}/${fileName}` },
+                { bucket: (process.env.PREAUTH_BUCKET || 'preauth-uploads'), path: `${snap.upload_id}/${fileName}` },
+            ];
+            let csvText: string | null = null;
+            for (const p of probe) {
+                const { data: blob, error: dlErr } = await supabase.storage.from(p.bucket).download(p.path);
+                if (blob && !dlErr) { csvText = await (blob as Blob).text(); break; }
             }
-
-            const csvText = await fileData.text();
+            if (!csvText) return NextResponse.json({ error: 'File not found' }, { status: 404 });
             
             return new NextResponse(csvText, {
                 status: 200,
@@ -131,23 +130,19 @@ export async function GET(request: Request) {
         if (!snap) return NextResponse.json({ error: 'No data found' }, { status: 404 });
         if (!snap.upload_id) return NextResponse.json({ error: 'No upload data available' }, { status: 404 });
 
-        // Download the CSV file from storage
+        // Download the CSV file from storage (probe buckets & path variations)
         const fileName = `${type}.csv`;
-        const filePath = `${snap.account_id}/${snap.upload_id}/${fileName}`;
-
-        const { data: file, error: downloadErr } = await supabase.storage
-            .from('uploads')
-            .download(filePath);
-
-        if (downloadErr) {
-            console.error(`Download error for ${filePath}:`, downloadErr);
-            return NextResponse.json({ error: 'File not found' }, { status: 404 });
+        const probe = [
+            { bucket: 'uploads', path: `${snap.account_id}/${snap.upload_id}/${fileName}` },
+            { bucket: 'csv-uploads', path: `${snap.account_id}/${snap.upload_id}/${fileName}` },
+            { bucket: (process.env.PREAUTH_BUCKET || 'preauth-uploads'), path: `${snap.upload_id}/${fileName}` },
+        ];
+        let csvText: string | null = null;
+        for (const p of probe) {
+            const { data: blob, error: dlErr } = await supabase.storage.from(p.bucket).download(p.path);
+            if (blob && !dlErr) { csvText = await (blob as Blob).text(); break; }
         }
-        
-        if (!file) return NextResponse.json({ error: 'File not found' }, { status: 404 });
-
-        // Return the CSV file content as text
-        const csvText = await file.text();
+        if (!csvText) return NextResponse.json({ error: 'File not found' }, { status: 404 });
         return new NextResponse(csvText, {
             status: 200,
             headers: {
