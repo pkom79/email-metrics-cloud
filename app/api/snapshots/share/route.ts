@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
         const serviceClient = createServiceClient();
 
         const body = await request.json();
-        const { title, name, description, expiresIn, snapshotId, csvData } = body;
+    const { title, name, description, expiresIn, snapshotId, csvData, rangeStart, rangeEnd } = body;
         console.log('📝 Request body:', { title, name, description, expiresIn, snapshotId, hasCsvData: !!csvData });
 
         let finalSnapshotId = snapshotId;
@@ -106,14 +106,16 @@ export async function POST(request: NextRequest) {
 
             // Create a snapshot with the upload_id from existing data
             // Use the source account that actually has the data
-            const { data: newSnapshot, error: snapshotError } = await serviceClient
+        const { data: newSnapshot, error: snapshotError } = await serviceClient
                 .from('snapshots')
                 .insert({
                     account_id: sourceAccountId, // Use the account that has the actual data
                     label: `Dashboard Share - ${new Date().toLocaleDateString()}`,
                     last_email_date: new Date().toISOString().split('T')[0],
                     upload_id: uploadId, // Link to existing data
-                    status: uploadId ? 'ready' : 'pending' // Set status based on whether we have data
+            status: uploadId ? 'ready' : 'pending', // Set status based on whether we have data
+            range_start: rangeStart || null,
+            range_end: rangeEnd || null
                 })
                 .select()
                 .single();
@@ -127,6 +129,15 @@ export async function POST(request: NextRequest) {
             finalSnapshotId = newSnapshot.id;
         } else {
             console.log('✅ Using existing snapshot:', finalSnapshotId);
+        }
+
+        // If using existing snapshot and a date range was supplied, update snapshot window (overwrite allowed)
+        if (finalSnapshotId && rangeStart && rangeEnd) {
+            try {
+                await serviceClient.from('snapshots').update({ range_start: rangeStart, range_end: rangeEnd }).eq('id', finalSnapshotId);
+            } catch (e) {
+                console.warn('Failed to update snapshot date range', e);
+            }
         }
 
         if (!finalSnapshotId) {

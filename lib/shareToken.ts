@@ -6,6 +6,8 @@ export interface ShareResolution {
   accountId: string;
   uploadId: string;
   expiresAt: string | null;
+  rangeStart?: string;
+  rangeEnd?: string;
 }
 
 type ShareRow = {
@@ -13,13 +15,13 @@ type ShareRow = {
   share_token: string;
   is_active: boolean;
   expires_at: string | null;
-  snapshots: { id: string; account_id: string; upload_id: string | null } | null;
+  snapshots: { id: string; account_id: string; upload_id: string | null; range_start?: string | null; range_end?: string | null } | null;
 };
 
 export async function resolveShareTokenStrict(token: string): Promise<ShareResolution> {
   const { data, error } = await supabaseAdmin
     .from('snapshot_shares')
-    .select('snapshot_id, share_token, is_active, expires_at, snapshots!inner(id,account_id,upload_id)')
+  .select('snapshot_id, share_token, is_active, expires_at, snapshots!inner(id,account_id,upload_id,range_start,range_end)')
     .eq('share_token', token)
     .limit(1)
     .maybeSingle<ShareRow>();
@@ -35,7 +37,10 @@ export async function resolveShareTokenStrict(token: string): Promise<ShareResol
     token,
     snapshotId: data.snapshot_id,
     accountId: data.snapshots.account_id,
-    uploadId: data.snapshots.upload_id,
+  uploadId: data.snapshots.upload_id,
     expiresAt: data.expires_at,
+  // Pass through date range if present (optional usage downstream)
+  rangeStart: (data.snapshots as any).range_start || undefined,
+  rangeEnd: (data.snapshots as any).range_end || undefined,
   };
 }

@@ -665,6 +665,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     onClose={() => setShowShareModal(false)}
                     snapshotId={getCurrentSnapshotId() || 'temp-snapshot'}
                     snapshotLabel={getCurrentSnapshotLabel()}
+                    dateRange={dateRange}
+                    customFrom={customFrom}
+                    customTo={customTo}
                 />
             )}
         </div>

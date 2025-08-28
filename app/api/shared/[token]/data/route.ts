@@ -12,6 +12,8 @@ export async function GET(_req: Request, { params }: { params: { token: string }
       snapshotId: resolved.snapshotId,
       accountId: resolved.accountId,
       uploadId: resolved.uploadId,
+      rangeStart: (resolved as any).rangeStart,
+      rangeEnd: (resolved as any).rangeEnd,
     });
     return NextResponse.json(json, {
       status: 200,

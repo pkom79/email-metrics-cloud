@@ -177,10 +177,27 @@ function aggregate(snapshotId: string, accountId: string, uploadId: string, camp
   return { meta: { snapshotId, generatedAt: new Date().toISOString(), accountId, uploadId, dateRange: { start: isoDate(minDate), end: isoDate(maxDate) }, granularity: 'daily', compareRange: null, sections }, audienceOverview, emailPerformance: allEmails.length ? { totals, derived } : undefined, flows: flows.length ? { totalFlowEmails: flows.length, flowNames: [...flowsByName.entries()].map(([name, v]) => ({ name, emails: v.emails, revenue: v.revenue })).sort((a, b) => b.revenue - a.revenue) } : undefined, campaigns: campaigns.length ? { totalCampaigns: campaigns.length, topByRevenue: topCampaigns } : undefined, dow: allEmails.length ? dowMap : undefined, hour: allEmails.length ? hourMap : undefined };
 }
 
-export async function buildSnapshotJSON(opts: { snapshotId: string; accountId: string; uploadId: string; }): Promise<SnapshotJSON> {
+export async function buildSnapshotJSON(opts: { snapshotId: string; accountId: string; uploadId: string; rangeStart?: string; rangeEnd?: string; }): Promise<SnapshotJSON> {
   const raw = await downloadAll(opts.accountId, opts.uploadId);
-  const campaigns = parseCampaigns(raw.campaigns);
-  const flows = parseFlows(raw.flows);
+  let campaigns = parseCampaigns(raw.campaigns);
+  let flows = parseFlows(raw.flows);
   const subscribers = parseSubscribers(raw.subscribers);
-  return aggregate(opts.snapshotId, opts.accountId, opts.uploadId, campaigns, flows, subscribers);
+
+  let overrideRange: { start: string; end: string } | undefined;
+  if (opts.rangeStart && opts.rangeEnd) {
+    overrideRange = { start: opts.rangeStart, end: opts.rangeEnd };
+    try {
+      const start = new Date(opts.rangeStart + 'T00:00:00');
+      const end = new Date(opts.rangeEnd + 'T23:59:59');
+      // Filter to stored window so metrics match original dashboard view
+      campaigns = campaigns.filter(c => c.sentAt && c.sentAt >= start && c.sentAt <= end);
+      flows = flows.filter(f => f.sentAt && f.sentAt >= start && f.sentAt <= end);
+    } catch { /* swallow filtering errors */ }
+  }
+
+  const json = aggregate(opts.snapshotId, opts.accountId, opts.uploadId, campaigns, flows, subscribers);
+  if (overrideRange) {
+    json.meta.dateRange = overrideRange; // preserve explicit window even if empty filtered sets
+  }
+  return json;
 }

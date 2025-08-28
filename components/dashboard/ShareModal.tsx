@@ -9,6 +9,9 @@ interface ShareModalProps {
     onClose: () => void;
     snapshotId: string;
     snapshotLabel: string;
+    dateRange: string; // e.g. '30d' | 'all' | 'custom'
+    customFrom?: string | null;
+    customTo?: string | null;
 }
 
 interface Share {
@@ -24,7 +27,7 @@ interface Share {
     lastAccessedAt?: string;
 }
 
-export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel }: ShareModalProps) {
+export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel, dateRange, customFrom, customTo }: ShareModalProps) {
     const [shares, setShares] = useState<Share[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
@@ -65,6 +68,28 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel 
             setExpiresIn('1hour');
         }
     }, [isOpen, snapshotId, snapshotLabel, loadShares]);
+
+    const computeWindow = () => {
+        try {
+            const dm = DataManager.getInstance();
+            const all = [...dm.getCampaigns(), ...dm.getFlowEmails()].filter(e => e.sentDate instanceof Date && !isNaN(e.sentDate.getTime()));
+            if (!all.length) return { start: null, end: null };
+            let endDate = new Date(Math.max(...all.map(e => e.sentDate.getTime())));
+            endDate.setHours(0, 0, 0, 0);
+            let startDate: Date;
+            if (dateRange === 'custom' && customFrom && customTo) {
+                startDate = new Date(customFrom + 'T00:00:00');
+                endDate = new Date(customTo + 'T00:00:00');
+            } else if (dateRange === 'all') {
+                startDate = new Date(Math.min(...all.map(e => e.sentDate.getTime())));
+                startDate.setHours(0, 0, 0, 0);
+            } else {
+                const days = parseInt(dateRange.replace('d', '')) || 30;
+                startDate = new Date(endDate); startDate.setDate(startDate.getDate() - days + 1);
+            }
+            return { start: startDate.toISOString().slice(0, 10), end: endDate.toISOString().slice(0, 10) };
+        } catch { return { start: null, end: null }; }
+    };
 
     const createShare = async () => {
         if (!title.trim()) {
@@ -210,6 +235,7 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel 
                 console.warn('Could not extract CSV data:', dataError);
             }
 
+            const window = computeWindow();
             const response = await fetch('/api/snapshots/share', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -220,6 +246,7 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel 
                     description: description.trim() || null,
                     expiresIn: expiresIn || null,
                     createSnapshot: !snapshotId || snapshotId === 'temp-snapshot'
+                    , rangeStart: window.start, rangeEnd: window.end
                     // Note: csvData temporarily removed to avoid 413 Request Too Large errors
                     // TODO: Implement chunked CSV upload for large datasets
                 })
