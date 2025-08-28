@@ -55,44 +55,28 @@ export async function POST(request: NextRequest) {
             console.log('Creating new snapshot for sharing...');
             
             // First, find ANY snapshot with data that the user can access
-            // (not just limited to the current account)
+            // For now, use a simpler approach - just look for snapshots with upload_id
             const { data: existingSnapshots, error: existingError } = await serviceClient
                 .from('snapshots')
                 .select('upload_id, id, created_at, account_id')
                 .eq('status', 'ready')
                 .not('upload_id', 'is', null)
                 .order('created_at', { ascending: false })
-                .limit(10); // Get more results to find any with data
+                .limit(1);
 
             let uploadId = null;
             let sourceAccountId = accountId; // Default to current account
 
             if (existingSnapshots && existingSnapshots.length > 0) {
-                // Check each snapshot to see if it has actual files in storage
-                for (const snapshot of existingSnapshots) {
-                    const testPath = `${snapshot.account_id}/${snapshot.upload_id}/campaigns.csv`;
-                    const { error: testError } = await serviceClient.storage
-                        .from('csv-uploads')
-                        .download(testPath);
-                        
-                    if (!testError) {
-                        // Found a snapshot with actual files!
-                        uploadId = snapshot.upload_id;
-                        sourceAccountId = snapshot.account_id;
-                        console.log('Found existing snapshot with data:', { 
-                            upload_id: uploadId, 
-                            account_id: sourceAccountId,
-                            snapshot_id: snapshot.id 
-                        });
-                        break;
-                    }
-                }
-                
-                if (!uploadId) {
-                    console.log('No existing snapshots with accessible data found');
-                }
+                uploadId = existingSnapshots[0].upload_id;
+                sourceAccountId = existingSnapshots[0].account_id;
+                console.log('Found existing snapshot with data:', { 
+                    upload_id: uploadId, 
+                    account_id: sourceAccountId,
+                    snapshot_id: existingSnapshots[0].id 
+                });
             } else {
-                console.log('No existing snapshots found at all');
+                console.log('No existing snapshots with data found');
             }
 
             // Create a snapshot with the upload_id from existing data
