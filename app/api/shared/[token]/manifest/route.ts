@@ -8,17 +8,18 @@ export async function GET(_req: Request, { params }: { params: { token: string }
   const token = params.token;
   try {
     const resolved = await resolveShareStrict(token);
-    const files = await listAvailableFiles(resolved.accountId, resolved.uploadId);
+  const { found, listings } = await listAvailableFiles(resolved.accountId, resolved.uploadId);
 
     return NextResponse.json(
       {
         snapshot_id: resolved.snapshotId,
         account_id: resolved.accountId,
         upload_id: resolved.uploadId,
-        files,
+        files: found,
         debug: {
           looked_up_prefix: `${resolved.accountId}/${resolved.uploadId}/`,
           buckets_tried: ['uploads', 'csv-uploads'],
+          listings,
           duration_ms: Date.now() - t0,
         },
       },

@@ -4,7 +4,7 @@
  */
 import { NextResponse } from 'next/server';
 import { supabaseAdmin, sanitizeFileParam } from '../../../../../lib/supabaseAdmin';
-import { resolveShareStrict, findBucketWithFile } from '../../../../../lib/sharedCsv';
+import { resolveShareStrict, locateFile } from '../../../../../lib/sharedCsv';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,16 +21,17 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   try {
     const resolved = await resolveShareStrict(token);
 
-    const located = await findBucketWithFile(resolved.accountId, resolved.uploadId, file);
+  const located = await locateFile(resolved.accountId, resolved.uploadId, file);
     if (!located) {
       return NextResponse.json(
         {
           error: 'CSV not found',
           debug: {
-            tried_paths: [
+            tried_exact: [
               `uploads/${resolved.accountId}/${resolved.uploadId}/${file}`,
               `csv-uploads/${resolved.accountId}/${resolved.uploadId}/${file}`,
             ],
+            note: 'Also tried fuzzy matching via bucket listings; nothing matched .csv under the resolved prefix.',
             duration_ms: Date.now() - t0,
           },
         },
@@ -49,7 +50,8 @@ export async function GET(req: Request, { params }: { params: { token: string } 
         'Cache-Control': 'no-store, private',
         'X-CSV-Bucket': located.bucket,
         'X-CSV-Path': located.path,
-        'X-CSV-Resolved-Prefix': `${resolved.accountId}/${resolved.uploadId}/`,
+  'X-CSV-Resolved-Prefix': `${resolved.accountId}/${resolved.uploadId}/`,
+  'X-CSV-Hit': located.hit,
         'X-CSV-Duration': String(Date.now() - t0),
       },
     });

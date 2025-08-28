@@ -1,31 +1,34 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js';
+
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL) throw new Error('NEXT_PUBLIC_SUPABASE_URL missing');
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('SUPABASE_SERVICE_ROLE_KEY missing');
 
 export const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.SUPABASE_SERVICE_ROLE_KEY as string,
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false, // stop noisy refresh_token calls in logs
-    },
-    global: {
-      headers: { 'X-Client-Info': 'shared-api/locator-debug' },
-    },
-  }
-)
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { persistSession: false, autoRefreshToken: false } }
+);
 
-// buckets we’ll check, in order
+// order matters (first is preferred)
 export const CSV_BUCKETS = ['uploads', 'csv-uploads'] as const;
 export type CsvBucket = typeof CSV_BUCKETS[number];
 
-// only these files are allowed to be requested
+// canonical filenames the UI asks for
 export const ALLOWED_FILES = ['campaigns.csv', 'flows.csv', 'subscribers.csv'] as const;
 export type AllowedFile = typeof ALLOWED_FILES[number];
 
 export function sanitizeFileParam(raw: string | null): AllowedFile | null {
   if (!raw) return null;
   const lowered = raw.trim().toLowerCase();
-  const ok = (ALLOWED_FILES as readonly string[]).find(f => f === lowered);
-  return (ok as AllowedFile) ?? null;
+  return (ALLOWED_FILES as readonly string[]).includes(lowered as AllowedFile)
+    ? (lowered as AllowedFile)
+    : null;
 }
+
+// keywords per canonical file to allow fuzzy detection
+export const KEYWORDS: Record<AllowedFile, string[]> = {
+  'campaigns.csv': ['campaign', 'send', 'blast'],
+  'flows.csv': ['flow', 'automation', 'sequence'],
+  'subscribers.csv': ['subscriber', 'list', 'contact', 'people'],
+};
 
