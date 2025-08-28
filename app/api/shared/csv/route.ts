@@ -31,6 +31,7 @@ export async function GET(request: Request) {
                 snapshots!inner(
                     id,
                     account_id,
+                    upload_id,
                     label
                 )
             `)
@@ -58,14 +59,20 @@ export async function GET(request: Request) {
         const snapshot = share.snapshots as any;
         console.log('✅ Valid share found, fetching CSV for snapshot:', snapshot.id, 'label:', snapshot.label);
 
-        // Get the CSV file from storage
+        // Check if snapshot has upload_id
+        if (!snapshot.upload_id) {
+            console.log('❌ Snapshot has no upload_id');
+            return NextResponse.json({ error: 'No data available for this snapshot' }, { status: 404 });
+        }
+
+        // Get the CSV file from storage using upload_id (like regular download API)
         const fileName = `${type}.csv`;
-        const filePath = `${snapshot.account_id}/${snapshot.id}/${fileName}`;
+        const filePath = `${snapshot.account_id}/${snapshot.upload_id}/${fileName}`;
 
         console.log('📁 Looking for file:', filePath);
 
         const { data: fileData, error: downloadError } = await supabase.storage
-            .from('csv-uploads')
+            .from('uploads')
             .download(filePath);
 
         if (downloadError) {
