@@ -68,10 +68,9 @@ function chooseBest(canonical: AllowedFile, list: { name: string }[]) {
 type StorageObjectRow = { name: string; bucket_id: string };
 
 async function dbSearchBySubstr(substr: string): Promise<StorageObjectRow[]> {
-  // IMPORTANT: storage tables live in the "storage" schema, not "public".
+  // Query internal storage.objects via fully-qualified table name allowed by PostgREST.
   const { data, error } = await supabaseAdmin
-    .schema('storage')
-    .from('objects')
+    .from('storage.objects')
     .select('name,bucket_id')
     .in('bucket_id', [...CSV_BUCKETS])
     .ilike('name', `%${substr}%`)
@@ -145,8 +144,7 @@ export async function locateFile(
     for (const b of CSV_BUCKETS) {
       // pattern search limited to 25 rows to avoid large responses
       const { data: spill1 } = await supabaseAdmin
-        .schema('storage')
-        .from('objects')
+        .from('storage.objects')
         .select('name,bucket_id')
         .eq('bucket_id', b)
         .ilike('name', `%${uploadId}%csv`)
@@ -154,8 +152,7 @@ export async function locateFile(
       if (spill1 && spill1.length) spillSamples.push({ bucket: b, upload_pattern: true, results: spill1 });
       if (snapshotId) {
         const { data: spill2 } = await supabaseAdmin
-          .schema('storage')
-          .from('objects')
+          .from('storage.objects')
           .select('name,bucket_id')
           .eq('bucket_id', b)
           .ilike('name', `%${snapshotId}%csv`)
