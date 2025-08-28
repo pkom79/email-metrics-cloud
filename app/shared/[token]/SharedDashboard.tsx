@@ -169,7 +169,7 @@ export default function SharedDashboard({ snapshotId, shareTitle, shareDescripti
                 <div className="max-w-md mx-auto p-6 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
                     <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-4">No Data Available</h2>
                     <p className="text-gray-600 dark:text-gray-400">
-                        This shared dashboard doesn't contain any data to display.
+                        This shared dashboard doesn&apos;t contain any data to display.
                     </p>
                 </div>
             </div>
