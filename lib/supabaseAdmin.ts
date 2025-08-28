@@ -14,6 +14,18 @@ export const supabaseAdmin = createClient(
   }
 )
 
-// Buckets we’ll search in order
-export const CSV_BUCKETS = ['csv-uploads', 'uploads'] as const
+// buckets we’ll check, in order
+export const CSV_BUCKETS = ['uploads', 'csv-uploads'] as const;
+export type CsvBucket = typeof CSV_BUCKETS[number];
+
+// only these files are allowed to be requested
+export const ALLOWED_FILES = ['campaigns.csv', 'flows.csv', 'subscribers.csv'] as const;
+export type AllowedFile = typeof ALLOWED_FILES[number];
+
+export function sanitizeFileParam(raw: string | null): AllowedFile | null {
+  if (!raw) return null;
+  const lowered = raw.trim().toLowerCase();
+  const ok = (ALLOWED_FILES as readonly string[]).find(f => f === lowered);
+  return (ok as AllowedFile) ?? null;
+}
 

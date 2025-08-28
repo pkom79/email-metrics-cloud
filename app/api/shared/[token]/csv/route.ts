@@ -2,72 +2,67 @@
  * GET /api/shared/[token]/csv?file=<name>.csv
  * Streams a single whitelisted CSV file to anonymous visitors.
  */
-import { NextResponse } from 'next/server'
-import { supabaseAdmin, CSV_BUCKETS } from '../../../../../lib/supabaseAdmin'
-import { sanitizeCsvFilename, deepLocateOne } from '../../../../../lib/storageLocator'
+import { NextResponse } from 'next/server';
+import { supabaseAdmin, sanitizeFileParam } from '../../../../../lib/supabaseAdmin';
+import { resolveShareStrict, findBucketWithFile } from '../../../../../lib/sharedCsv';
 
-export const runtime = 'nodejs'
-export const dynamic = 'force-dynamic'
-
-type ShareRow = {
-  snapshot_id: string
-  expires_at: string | null
-  is_active: boolean | null
-}
-
-async function getShareContext(token: string): Promise<ShareRow | null> {
-  const { data, error } = await supabaseAdmin
-    .from('snapshot_shares')
-    .select('snapshot_id, expires_at, is_active')
-    .eq('share_token', token)
-    .maybeSingle<ShareRow>()
-  if (error || !data) return null
-  if (data.is_active === false) return null
-  if (data.expires_at && new Date(data.expires_at) < new Date()) return null
-  return data
-}
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request, { params }: { params: { token: string } }) {
+  const t0 = Date.now();
+  const token = params.token;
+  const url = new URL(req.url);
+  const file = sanitizeFileParam(url.searchParams.get('file'));
+
+  if (!file) {
+    return NextResponse.json({ error: 'Missing or invalid file param' }, { status: 400 });
+  }
+
   try {
-    const url = new URL(req.url)
-  const filename = sanitizeCsvFilename(url.searchParams.get('file'))
-  if (!filename) return NextResponse.json({ error: 'Invalid file' }, { status: 400 })
+    const resolved = await resolveShareStrict(token);
 
-  const ctx = await getShareContext(params.token)
-  if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 403 })
-
-  const hit = await deepLocateOne(supabaseAdmin, CSV_BUCKETS, ctx.snapshot_id, filename)
-    if (!hit) {
-      console.warn('[shared/csv] not found', {
-        token: params.token.slice(0, 6) + '…',
-        snap: ctx.snapshot_id,
-        filename,
-        buckets: CSV_BUCKETS,
-      })
-      return NextResponse.json({ error: 'CSV not found' }, { status: 404 })
+    const located = await findBucketWithFile(resolved.accountId, resolved.uploadId, file);
+    if (!located) {
+      return NextResponse.json(
+        {
+          error: 'CSV not found',
+          debug: {
+            tried_paths: [
+              `uploads/${resolved.accountId}/${resolved.uploadId}/${file}`,
+              `csv-uploads/${resolved.accountId}/${resolved.uploadId}/${file}`,
+            ],
+            duration_ms: Date.now() - t0,
+          },
+        },
+        { status: 404 }
+      );
     }
 
-    const { data: blob, error } = await supabaseAdmin.storage.from(hit.bucket).download(hit.path)
-    if (error || !blob) {
-      console.warn('[shared/csv] download failed', { hit, error })
-      return NextResponse.json({ error: 'CSV not found' }, { status: 404 })
-    }
+    const { data, error } = await supabaseAdmin.storage.from(located.bucket).download(located.path);
+    if (error || !data) throw new Error(`Storage download failed: ${error?.message || 'no data'}`);
 
-    const body: any =
-      typeof (blob as any).stream === 'function' ? (blob as any).stream() : await (blob as any).text()
-
-    return new NextResponse(body, {
+    const buf = Buffer.from(await data.arrayBuffer());
+    return new Response(buf, {
       status: 200,
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Cache-Control': 'private, max-age=60',
-        'Content-Disposition': `inline; filename="${filename}"`,
-        'X-CSV-Bucket': hit.bucket,
-        'X-CSV-Path': hit.path,
+        'Cache-Control': 'no-store, private',
+        'X-CSV-Bucket': located.bucket,
+        'X-CSV-Path': located.path,
+        'X-CSV-Resolved-Prefix': `${resolved.accountId}/${resolved.uploadId}/`,
+        'X-CSV-Duration': String(Date.now() - t0),
       },
-    })
-  } catch (err: any) {
-  console.error('[shared/csv] unexpected', err?.message || err)
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    });
+  } catch (e: any) {
+    const msg = String(e?.message ?? e);
+    const status =
+      /not found/i.test(msg) ? 404 :
+      /inactive|expired/i.test(msg) ? 403 : 500;
+    return NextResponse.json(
+      { error: msg, debug: { token, file, duration_ms: Date.now() - t0 } },
+      { status }
+    );
   }
 }
+
+// Removed legacy wide locator implementation block.
