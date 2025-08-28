@@ -1,210 +1,241 @@
-'use client';
+"use client";
 
 import { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
-import { DataManager } from '../../../lib/data/dataManager';
+import type { SnapshotJSON } from '../../../lib/snapshotBuilder';
+import MetricCard from '../../../components/dashboard/MetricCard';
 
-const DashboardHeavy = dynamic(() => import('../../../components/dashboard/DashboardHeavy'), {
-    loading: () => (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-            <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
-                <p className="text-gray-600 dark:text-gray-400">Loading dashboard...</p>
-            </div>
-        </div>
-    ),
-    ssr: false
-});
+interface SharedDashboardProps { snapshotId: string; shareTitle: string; shareDescription: string | null; lastEmailDate: string; shareToken: string; }
 
-interface SharedDashboardProps {
-    snapshotId: string;
-    shareTitle: string;
-    shareDescription: string | null;
-    lastEmailDate: string;
-    shareToken: string;
-}
+type State = { loading: true; data?: undefined; error?: undefined } | { loading: false; data: SnapshotJSON; error?: undefined } | { loading: false; data?: undefined; error: string };
 
 export default function SharedDashboard({ snapshotId, shareTitle, shareDescription, lastEmailDate, shareToken }: SharedDashboardProps) {
-    const [isLoading, setIsLoading] = useState(true);
-    const [hasData, setHasData] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [state, setState] = useState<State>({ loading: true });
 
     useEffect(() => {
         let cancelled = false;
-
-        const loadData = async () => {
+        (async () => {
             try {
-                setIsLoading(true);
-                setError(null);
-
-                console.log('Loading shared dashboard data...');
-
-                if (cancelled) return;
-
-                // Create a new DataManager instance for this shared view
-                const dm = DataManager.getInstance();
-
-                // Try to load CSV data using the public shared endpoint
-                const csvTypes = ['campaigns', 'flows', 'subscribers'];
-                const files: Record<string, File> = {};
-                let shareTokenError: string | null = null;
-
-                for (const type of csvTypes) {
-                    try {
-                        console.log(`Fetching ${type} CSV for shared token...`);
-
-                        const response = await fetch(`/api/shared/csv?token=${shareToken}&type=${type}`, {
-                            cache: 'no-store'
-                        });
-
-                        console.log(`${type} CSV response:`, response.status, response.statusText);
-
-                        if (response.ok) {
-                            const text = await response.text();
-                            if (text.trim()) {
-                                console.log(`${type} CSV loaded successfully, length:`, text.length);
-                                const blob = new Blob([text], { type: 'text/csv' });
-                                files[type] = new File([blob], `${type}.csv`, { type: 'text/csv' });
-                            } else {
-                                console.log(`${type} CSV is empty`);
-                            }
-                        } else {
-                            const errorText = await response.text();
-                            console.warn(`Failed to load ${type} CSV: ${response.status} ${response.statusText}`, errorText);
-
-                            // Check if this is a share token error (applies to all file types)
-                            if (response.status === 404) {
-                                try {
-                                    const errorData = JSON.parse(errorText);
-                                    if (errorData.error?.includes('Invalid or expired share token') ||
-                                        errorData.error?.includes('Share link')) {
-                                        shareTokenError = errorData.error;
-                                        break; // No point checking other file types
-                                    }
-                                } catch (e) {
-                                    // Error parsing response, continue
-                                }
-                            }
-                        }
-                    } catch (err) {
-                        console.warn(`Failed to load ${type} CSV:`, err);
-                    }
-                }
-
-                if (cancelled) return;
-
-                // Check if we have a share token error that affects all requests
-                if (shareTokenError) {
-                    setError(shareTokenError);
+                setState({ loading: true });
+                const res = await fetch(`/api/shared/${shareToken}/data`, { cache: 'no-store' });
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    if (!cancelled) setState({ loading: false, error: body.error || `Request failed (${res.status})` });
                     return;
                 }
-
-                if (Object.keys(files).length > 0) {
-                    // Load the CSV data into DataManager
-                    const result = await dm.loadCSVFiles({
-                        campaigns: files.campaigns,
-                        flows: files.flows,
-                        subscribers: files.subscribers
-                    });
-
-                    if (cancelled) return;
-
-                    if (result.success) {
-                        setHasData(true);
-                    } else {
-                        console.error('Failed to process CSV data:', result.errors);
-                        setError('Failed to process dashboard data');
-                    }
-                } else {
-                    console.log('No CSV files loaded successfully');
-                    setError('No data files are available for this shared dashboard. The dashboard share exists, but the CSV data files may not have been uploaded to storage properly.');
-                }
-            } catch (err) {
-                if (!cancelled) {
-                    console.error('Error loading shared dashboard:', err);
-                    setError('Failed to load dashboard data');
-                }
-            } finally {
-                if (!cancelled) {
-                    setIsLoading(false);
-                }
+                const json: SnapshotJSON = await res.json();
+                if (!cancelled) setState({ loading: false, data: json });
+            } catch (e: any) {
+                if (!cancelled) setState({ loading: false, error: String(e?.message || e) });
             }
-        };
-
-        loadData();
-
-        return () => {
-            cancelled = true;
-        };
+        })();
+        return () => { cancelled = true; };
     }, [shareToken]);
 
-    if (isLoading) {
+    if (state.loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+            <div className="py-16 flex justify-center">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600 dark:text-gray-400">Loading shared dashboard...</p>
+                    <p className="text-gray-600 dark:text-gray-400">Building snapshot…</p>
                 </div>
             </div>
         );
     }
-
-    if (error) {
+    if (state.error) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                <div className="max-w-md mx-auto p-6 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-                    <h2 className="text-xl font-semibold text-red-600 dark:text-red-400 mb-4">Unable to Load Dashboard</h2>
-                    <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-500">
-                        Please contact the person who shared this dashboard for assistance.
-                    </p>
+            <div className="py-16 flex justify-center">
+                <div className="max-w-md mx-auto p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
+                    <h2 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-2">Unable to load snapshot</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">{state.error}</p>
+                    <p className="text-xs text-gray-500">If this persists the share may be expired or data files are missing.</p>
                 </div>
             </div>
         );
     }
 
-    if (!hasData) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                <div className="max-w-md mx-auto p-6 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-                    <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-4">No Data Available</h2>
-                    <p className="text-gray-600 dark:text-gray-400">
-                        This shared dashboard doesn&apos;t contain any data to display.
-                    </p>
-                </div>
-            </div>
+    const snap = state.data!;
+    const dateRangeLabel = `${snap.meta.dateRange.start} → ${snap.meta.dateRange.end}`;
+
+    function fmt(n: number, opts: Intl.NumberFormatOptions = {}) { return new Intl.NumberFormat('en-US', opts).format(n); }
+    const pct = (v: number) => `${v.toFixed(1)}%`;
+    const money = (v: number) => fmt(v, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const cards: Array<{ key: string; title: string; value: string; isPct?: boolean; }> = [];
+    if (snap.emailPerformance) {
+        const t = snap.emailPerformance.totals; const d = snap.emailPerformance.derived;
+        cards.push(
+            { key: 'revenue', title: 'Total Revenue', value: money(t.revenue) },
+            { key: 'avgOrderValue', title: 'Avg Order Value', value: money(d.avgOrderValue) },
+            { key: 'emailsSent', title: 'Emails Sent', value: fmt(t.emailsSent) },
+            { key: 'totalOrders', title: 'Total Orders', value: fmt(t.totalOrders) },
+            { key: 'openRate', title: 'Open Rate', value: pct(d.openRate) },
+            { key: 'clickRate', title: 'Click Rate', value: pct(d.clickRate) },
+            { key: 'clickToOpenRate', title: 'Click-To-Open', value: pct(d.clickToOpenRate) },
+            { key: 'conversionRate', title: 'Conversion Rate', value: pct(d.conversionRate) },
+            { key: 'revenuePerEmail', title: 'Revenue / Email', value: money(d.revenuePerEmail) },
+            { key: 'unsubscribeRate', title: 'Unsub Rate', value: pct(d.unsubscribeRate) },
+            { key: 'spamRate', title: 'Spam Rate', value: pct(d.spamRate) },
+            { key: 'bounceRate', title: 'Bounce Rate', value: pct(d.bounceRate) },
         );
     }
 
-    // Render the full DashboardHeavy component with shared data
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-            {/* Header with share info */}
-            <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-                                {shareTitle}
-                            </h1>
-                            {shareDescription && (
-                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                    {shareDescription}
-                                </p>
-                            )}
-                            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                Shared Dashboard • Data from {lastEmailDate}
-                            </p>
+        <div className="space-y-10">
+            {/* Audience Overview */}
+            {snap.audienceOverview && (
+                <section>
+                    <h3 className="text-lg font-semibold mb-4">Audience Overview</h3>
+                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
+                        <div className="p-4 rounded-lg border bg-white dark:bg-gray-900 dark:border-gray-700">
+                            <p className="text-xs uppercase text-gray-500 mb-1">Total Subscribers</p>
+                            <p className="text-xl font-semibold">{fmt(snap.audienceOverview.totalSubscribers)}</p>
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-500">
-                            Data through {lastEmailDate}
+                        <div className="p-4 rounded-lg border bg-white dark:bg-gray-900 dark:border-gray-700">
+                            <p className="text-xs uppercase text-gray-500 mb-1">Subscribed</p>
+                            <p className="text-xl font-semibold">{fmt(snap.audienceOverview.subscribedCount)}</p>
+                        </div>
+                        <div className="p-4 rounded-lg border bg-white dark:bg-gray-900 dark:border-gray-700">
+                            <p className="text-xs uppercase text-gray-500 mb-1">Unsubscribed</p>
+                            <p className="text-xl font-semibold">{fmt(snap.audienceOverview.unsubscribedCount)}</p>
+                        </div>
+                        <div className="p-4 rounded-lg border bg-white dark:bg-gray-900 dark:border-gray-700">
+                            <p className="text-xs uppercase text-gray-500 mb-1">% Subscribed</p>
+                            <p className="text-xl font-semibold">{pct(snap.audienceOverview.percentSubscribed)}</p>
                         </div>
                     </div>
-                </div>
-            </div>
+                </section>
+            )}
 
-            {/* Dashboard Content */}
-            <DashboardHeavy />
+            {/* Email Performance Cards */}
+            {cards.length > 0 && (
+                <section>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold">Email Performance</h3>
+                        <span className="text-xs text-gray-500">{dateRangeLabel}</span>
+                    </div>
+                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                        {cards.map(c => (
+                            <MetricCard key={c.key} title={c.title} value={c.value} change={0} isPositive={true} dateRange={snap.meta.dateRange.start} />
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {/* Flows */}
+            {snap.flows && (
+                <section>
+                    <h3 className="text-lg font-semibold mb-3">Flows</h3>
+                    <div className="overflow-x-auto border rounded-lg bg-white dark:bg-gray-900 dark:border-gray-700">
+                        <table className="min-w-full text-sm">
+                            <thead className="bg-gray-50 dark:bg-gray-800">
+                                <tr>
+                                    <th className="px-3 py-2 text-left font-medium">Flow</th>
+                                    <th className="px-3 py-2 text-right font-medium">Emails</th>
+                                    <th className="px-3 py-2 text-right font-medium">Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {snap.flows.flowNames.slice(0, 25).map(f => (
+                                    <tr key={f.name} className="border-t dark:border-gray-800">
+                                        <td className="px-3 py-1.5 whitespace-nowrap max-w-xs truncate">{f.name}</td>
+                                        <td className="px-3 py-1.5 text-right">{fmt(f.emails)}</td>
+                                        <td className="px-3 py-1.5 text-right">{money(f.revenue)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            )}
+
+            {/* Campaigns */}
+            {snap.campaigns && (
+                <section>
+                    <h3 className="text-lg font-semibold mb-3">Top Campaigns (by Revenue)</h3>
+                    <div className="overflow-x-auto border rounded-lg bg-white dark:bg-gray-900 dark:border-gray-700">
+                        <table className="min-w-full text-sm">
+                            <thead className="bg-gray-50 dark:bg-gray-800">
+                                <tr>
+                                    <th className="px-3 py-2 text-left font-medium">Campaign</th>
+                                    <th className="px-3 py-2 text-right font-medium">Emails Sent</th>
+                                    <th className="px-3 py-2 text-right font-medium">Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {snap.campaigns.topByRevenue.map(c => (
+                                    <tr key={c.name} className="border-t dark:border-gray-800">
+                                        <td className="px-3 py-1.5 whitespace-nowrap max-w-xs truncate">{c.name}</td>
+                                        <td className="px-3 py-1.5 text-right">{fmt(c.emailsSent)}</td>
+                                        <td className="px-3 py-1.5 text-right">{money(c.revenue)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            )}
+
+            {/* Day of Week & Hour */}
+            {(snap.dow || snap.hour) && (
+                <section className="grid gap-6 md:grid-cols-2">
+                    {snap.dow && (
+                        <div>
+                            <h3 className="text-lg font-semibold mb-3">Performance by Day of Week</h3>
+                            <div className="overflow-x-auto border rounded-lg bg-white dark:bg-gray-900 dark:border-gray-700">
+                                <table className="min-w-full text-sm">
+                                    <thead className="bg-gray-50 dark:bg-gray-800">
+                                        <tr>
+                                            <th className="px-3 py-2 text-left font-medium">Day</th>
+                                            <th className="px-3 py-2 text-right font-medium">Emails</th>
+                                            <th className="px-3 py-2 text-right font-medium">Orders</th>
+                                            <th className="px-3 py-2 text-right font-medium">Revenue</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {snap.dow.map(r => (
+                                            <tr key={r.dow} className="border-t dark:border-gray-800">
+                                                <td className="px-3 py-1.5">{"SunMonTueWedThuFriSat".slice(r.dow * 3, r.dow * 3 + 3)}</td>
+                                                <td className="px-3 py-1.5 text-right">{fmt(r.emailsSent)}</td>
+                                                <td className="px-3 py-1.5 text-right">{fmt(r.orders)}</td>
+                                                <td className="px-3 py-1.5 text-right">{money(r.revenue)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                    {snap.hour && (
+                        <div>
+                            <h3 className="text-lg font-semibold mb-3">Performance by Hour</h3>
+                            <div className="overflow-x-auto border rounded-lg bg-white dark:bg-gray-900 dark:border-gray-700 max-h-96">
+                                <table className="min-w-full text-sm">
+                                    <thead className="bg-gray-50 dark:bg-gray-800">
+                                        <tr>
+                                            <th className="px-3 py-2 text-left font-medium">Hour</th>
+                                            <th className="px-3 py-2 text-right font-medium">Emails</th>
+                                            <th className="px-3 py-2 text-right font-medium">Orders</th>
+                                            <th className="px-3 py-2 text-right font-medium">Revenue</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {snap.hour.map(r => (
+                                            <tr key={r.hour} className="border-t dark:border-gray-800">
+                                                <td className="px-3 py-1.5">{r.hour}:00</td>
+                                                <td className="px-3 py-1.5 text-right">{fmt(r.emailsSent)}</td>
+                                                <td className="px-3 py-1.5 text-right">{fmt(r.orders)}</td>
+                                                <td className="px-3 py-1.5 text-right">{money(r.revenue)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                </section>
+            )}
+
+            <p className="text-[10px] text-gray-400 text-right">Snapshot generated {new Date(snap.meta.generatedAt).toLocaleString()}</p>
         </div>
     );
 }
