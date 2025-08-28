@@ -8,7 +8,11 @@ export async function GET(_req: Request, { params }: { params: { token: string }
   const token = params.token;
   try {
     const resolved = await resolveShareStrict(token);
-  const { found, listings } = await listAvailableFiles(resolved.accountId, resolved.uploadId);
+  const { found, listings, db_hits } = await listAvailableFiles(
+    resolved.accountId,
+    resolved.uploadId,
+    resolved.snapshotId
+  );
 
     return NextResponse.json(
       {
@@ -20,6 +24,7 @@ export async function GET(_req: Request, { params }: { params: { token: string }
           looked_up_prefix: `${resolved.accountId}/${resolved.uploadId}/`,
           buckets_tried: ['uploads', 'csv-uploads'],
           listings,
+          db_hits_summary: db_hits.map(h => ({ term: h.term, count: h.results.length, sample: h.results.slice(0, 5) })),
           duration_ms: Date.now() - t0,
         },
       },

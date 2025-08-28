@@ -9,11 +9,11 @@ export const supabaseAdmin = createClient(
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
 
-// order matters (first is preferred)
+// Order matters (first is preferred)
 export const CSV_BUCKETS = ['uploads', 'csv-uploads'] as const;
 export type CsvBucket = typeof CSV_BUCKETS[number];
 
-// canonical filenames the UI asks for
+// Canonical filenames the UI asks for
 export const ALLOWED_FILES = ['campaigns.csv', 'flows.csv', 'subscribers.csv'] as const;
 export type AllowedFile = typeof ALLOWED_FILES[number];
 
@@ -25,7 +25,7 @@ export function sanitizeFileParam(raw: string | null): AllowedFile | null {
     : null;
 }
 
-// keywords per canonical file to allow fuzzy detection
+// Keywords per canonical file to allow fuzzy detection
 export const KEYWORDS: Record<AllowedFile, string[]> = {
   'campaigns.csv': ['campaign', 'send', 'blast'],
   'flows.csv': ['flow', 'automation', 'sequence'],

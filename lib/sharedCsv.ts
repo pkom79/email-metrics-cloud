@@ -63,41 +63,108 @@ function chooseBest(canonical: AllowedFile, list: { name: string }[]) {
   return anyCsv ?? null;
 }
 
+// ---------- NEW: DB search fallback against storage.objects ----------
+
+type StorageObjectRow = { name: string; bucket_id: string };
+
+async function dbSearchBySubstr(substr: string): Promise<StorageObjectRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from('storage.objects')
+    .select('name,bucket_id')
+    .in('bucket_id', [...CSV_BUCKETS])
+    .ilike('name', `%${substr}%`)
+    .limit(500);
+  if (error) throw new Error(`storage.objects search failed: ${error.message}`);
+  return data ?? [];
+}
+
+function scoreObjectName(name: string, canonical: AllowedFile): number {
+  const n = name.toLowerCase();
+  let s = 0;
+  if (n.endsWith(`/${canonical}`) || n.endsWith(canonical)) s += 100;
+  if (KEYWORDS[canonical].some(w => n.includes(w))) s += 20;
+  if (n.endsWith('.csv')) s += 5;
+  return s;
+}
+
+function pickBestFromDbHits(hits: StorageObjectRow[], canonical: AllowedFile, uploadId?: string, snapshotId?: string) {
+  const filtered = hits.filter(h => h.name.toLowerCase().endsWith('.csv'));
+  if (filtered.length === 0) return null;
+  const withUpload = uploadId ? filtered.filter(h => h.name.includes(uploadId)) : [];
+  const withSnap = snapshotId ? filtered.filter(h => h.name.includes(snapshotId)) : [];
+  const pool = (withUpload.length ? withUpload : (withSnap.length ? withSnap : filtered));
+  let best: StorageObjectRow | null = null;
+  let bestScore = -1;
+  for (const h of pool) {
+    const sc = scoreObjectName(h.name, canonical);
+    if (sc > bestScore) { best = h; bestScore = sc; }
+  }
+  return best;
+}
+
 export async function locateFile(
   accountId: string,
   uploadId: string,
-  file: AllowedFile
-): Promise<{ bucket: string; path: string; hit: 'exact' | 'fuzzy' } | null> {
+  file: AllowedFile,
+  snapshotId?: string
+): Promise<{
+  bucket: string;
+  path: string;
+  hit: 'exact' | 'fuzzy' | 'db-search';
+  debug: Record<string, any>;
+} | null> {
+  const debug: Record<string, any> = { tried_exact: [], tried_list: [], tried_db_search: [] };
   for (const bucket of CSV_BUCKETS) {
+    debug.tried_exact.push(`${bucket}/${accountId}/${uploadId}/${file}`);
     const exact = await tryExact(bucket, accountId, uploadId, file);
-    if (exact) return exact;
+    if (exact) return { ...exact, debug };
   }
-  for (const bucket of CSV_BUCKETS) {
-    const listing = await listUnder(bucket, accountId, uploadId);
-    const chosen = chooseBest(file, listing.items);
-    if (chosen) return { bucket, path: `${listing.prefix}/${chosen}`, hit: 'fuzzy' };
+  const listings = await Promise.all(CSV_BUCKETS.map(b => listUnder(b, accountId, uploadId)));
+  debug.tried_list = listings.map(l => ({ bucket: l.bucket, prefix: l.prefix, count: l.items.length, error: (l as any).error }));
+  for (const l of listings) {
+    const chosen = chooseBest(file, l.items);
+    if (chosen) {
+      const path = `${l.prefix}/${chosen}`;
+      return { bucket: l.bucket, path, hit: 'fuzzy', debug };
+    }
   }
+  const uploadHits = await dbSearchBySubstr(uploadId);
+  debug.tried_db_search.push({ term: uploadId, hitCount: uploadHits.length, sample: uploadHits.slice(0, 5) });
+  let picked = pickBestFromDbHits(uploadHits, file, uploadId, snapshotId);
+  if (!picked && snapshotId) {
+    const snapHits = await dbSearchBySubstr(snapshotId);
+    debug.tried_db_search.push({ term: snapshotId, hitCount: snapHits.length, sample: snapHits.slice(0, 5) });
+    picked = pickBestFromDbHits(snapHits, file, uploadId, snapshotId);
+  }
+  if (picked) return { bucket: picked.bucket_id, path: picked.name, hit: 'db-search', debug };
   return null;
 }
 
 export async function listAvailableFiles(
   accountId: string,
-  uploadId: string
+  uploadId: string,
+  snapshotId?: string
 ): Promise<{
-  found: Record<string, { bucket: string; path: string; hit: 'exact' | 'fuzzy' }>;
+  found: Record<string, { bucket: string; path: string; hit: 'exact' | 'fuzzy' | 'db-search' }>;
   listings: Array<{ bucket: string; prefix: string; items: string[]; error?: string }>;
+  db_hits: Array<{ term: string; results: Array<{ bucket_id: string; name: string }> }>;
 }> {
-  const found: Record<string, { bucket: string; path: string; hit: 'exact' | 'fuzzy' }> = {};
+  const found: Record<string, { bucket: string; path: string; hit: 'exact' | 'fuzzy' | 'db-search' }> = {};
   const listings: Array<{ bucket: string; prefix: string; items: string[]; error?: string }> = [];
+  const db_hits: Array<{ term: string; results: Array<{ bucket_id: string; name: string }> }> = [];
   const perBucket = await Promise.all(CSV_BUCKETS.map(b => listUnder(b, accountId, uploadId)));
   for (const lb of perBucket) {
     listings.push({ bucket: lb.bucket, prefix: lb.prefix, items: lb.items.map(i => i.name), error: (lb as any).error });
   }
+  const hitsUpload = await dbSearchBySubstr(uploadId);
+  db_hits.push({ term: uploadId, results: hitsUpload.slice(0, 50) });
+  const hitsSnap = snapshotId ? await dbSearchBySubstr(snapshotId) : [];
+  if (snapshotId) db_hits.push({ term: snapshotId, results: hitsSnap.slice(0, 50) });
   for (const name of ALLOWED_FILES) {
-    let located: { bucket: string; path: string; hit: 'exact' | 'fuzzy' } | null = null;
+    let located: { bucket: string; path: string; hit: 'exact' | 'fuzzy' | 'db-search' } | null = null;
     for (const bucket of CSV_BUCKETS) {
       const exact = await tryExact(bucket, accountId, uploadId, name);
-      if (exact) { located = exact; break; }
+      if (exact) { located = { ...exact }; break; }
     }
     if (!located) {
       for (const lb of perBucket) {
@@ -105,8 +172,12 @@ export async function listAvailableFiles(
         if (chosen) { located = { bucket: lb.bucket, path: `${lb.prefix}/${chosen}`, hit: 'fuzzy' }; break; }
       }
     }
+    if (!located) {
+      const candidate = pickBestFromDbHits(hitsUpload, name, uploadId, snapshotId) ?? pickBestFromDbHits(hitsSnap, name, uploadId, snapshotId);
+      if (candidate) located = { bucket: candidate.bucket_id, path: candidate.name, hit: 'db-search' };
+    }
     if (located) found[name] = located;
   }
-  return { found, listings };
+  return { found, listings, db_hits };
 }
 

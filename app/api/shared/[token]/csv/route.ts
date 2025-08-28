@@ -21,7 +21,7 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   try {
     const resolved = await resolveShareStrict(token);
 
-  const located = await locateFile(resolved.accountId, resolved.uploadId, file);
+  const located = await locateFile(resolved.accountId, resolved.uploadId, file, resolved.snapshotId);
     if (!located) {
       return NextResponse.json(
         {
@@ -31,7 +31,7 @@ export async function GET(req: Request, { params }: { params: { token: string } 
               `uploads/${resolved.accountId}/${resolved.uploadId}/${file}`,
               `csv-uploads/${resolved.accountId}/${resolved.uploadId}/${file}`,
             ],
-            note: 'Also tried fuzzy matching via bucket listings; nothing matched .csv under the resolved prefix.',
+            note: 'Also listed under the computed prefix and searched storage.objects by upload_id and snapshot_id; no matches ended with .csv.',
             duration_ms: Date.now() - t0,
           },
         },
@@ -52,6 +52,7 @@ export async function GET(req: Request, { params }: { params: { token: string } 
         'X-CSV-Path': located.path,
   'X-CSV-Resolved-Prefix': `${resolved.accountId}/${resolved.uploadId}/`,
   'X-CSV-Hit': located.hit,
+  'X-CSV-Resolution-Debug': JSON.stringify(located.debug ?? {}),
         'X-CSV-Duration': String(Date.now() - t0),
       },
     });
