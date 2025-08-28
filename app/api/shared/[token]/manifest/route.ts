@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin, CSV_BUCKET } from '../../../../../lib/supabaseAdmin'
+import { supabaseAdmin, CSV_BUCKETS } from '../../../../../lib/supabaseAdmin'
 import { ALLOWED_CSV_FILES, discoverCsvPaths } from '../../../../../lib/sharedCsv'
 
 type ShareRow = {
@@ -30,7 +30,7 @@ export async function GET(_req: Request, { params }: { params: { token: string }
   // Build a map of discovered CSV paths (handles per-file subfolders)
   const paths = await discoverCsvPaths(
     supabaseAdmin,
-    CSV_BUCKET,
+    CSV_BUCKETS,
     ctx.snapshots.account_id,
     ctx.snapshots.upload_id,
     ctx.snapshot_id

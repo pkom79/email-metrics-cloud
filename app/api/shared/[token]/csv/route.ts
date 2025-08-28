@@ -3,7 +3,7 @@
  * Streams a single whitelisted CSV file to anonymous visitors.
  */
 import { NextResponse } from 'next/server'
-import { supabaseAdmin, CSV_BUCKET } from '../../../../../lib/supabaseAdmin'
+import { supabaseAdmin, CSV_BUCKETS } from '../../../../../lib/supabaseAdmin'
 import { sanitizeCsvFilename, findCsvPath } from '../../../../../lib/sharedCsv'
 
 type ShareRow = {
@@ -25,18 +25,6 @@ async function getShareContext(token: string): Promise<ShareRow | null> {
   return data
 }
 
-async function resolveStoragePrefix(accountId: string, uploadId: string | null, snapshotId: string) {
-  const candidates = [
-    `${accountId}/${uploadId}/`,
-    `${accountId}/${snapshotId}/`,
-  ].filter(Boolean) as string[]
-
-  for (const prefix of candidates) {
-    const { data, error } = await supabaseAdmin.storage.from(CSV_BUCKET).list(prefix, { limit: 1 })
-    if (!error && data && data.length > 0) return prefix
-  }
-  return candidates[0] ?? `${accountId}/${snapshotId}/`
-}
 
 export async function GET(req: Request, { params }: { params: { token: string } }) {
   const url = new URL(req.url)
@@ -47,17 +35,17 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 403 })
 
   // Find actual path supporting different per-file subfolders
-  const path = await findCsvPath(
+  const hit = await findCsvPath(
     supabaseAdmin,
-    CSV_BUCKET,
+    CSV_BUCKETS,
     ctx.snapshots.account_id,
     ctx.snapshots.upload_id,
     ctx.snapshot_id,
     file
   )
-  if (!path) return NextResponse.json({ error: 'CSV not found' }, { status: 404 })
+  if (!hit) return NextResponse.json({ error: 'CSV not found' }, { status: 404 })
 
-  const { data: blob, error } = await supabaseAdmin.storage.from(CSV_BUCKET).download(path)
+  const { data: blob, error } = await supabaseAdmin.storage.from(hit.bucket).download(hit.path)
   if (error || !blob) return NextResponse.json({ error: 'CSV not found' }, { status: 404 })
 
   return new NextResponse(blob as any, {

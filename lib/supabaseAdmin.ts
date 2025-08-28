@@ -17,5 +17,9 @@ export const supabaseAdmin = createClient(
   { auth: { persistSession: false, autoRefreshToken: false } }
 )
 
-// Canonical private bucket for exported CSVs
-export const CSV_BUCKET = 'csv-uploads'
+/**
+ * We’ll try these buckets in order. This handles envs where data landed
+ * in "csv-uploads" vs "uploads".
+ */
+export const CSV_BUCKETS = ['csv-uploads', 'uploads'] as const
+

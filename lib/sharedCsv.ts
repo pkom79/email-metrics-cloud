@@ -2,15 +2,13 @@
  * Shared CSV utilities:
  *  - Allowed file set
  *  - Filename sanitizers
- *  - Helpers to locate CSVs in Storage even if each is in a different folder
+ *  - Robust helpers to locate CSVs even when each file sits in a different folder
  *
- * We assume structure like:
- *   csv-uploads/{accountId}/{uploadId? or snapshotId? or randomId}/<file>.csv
- *
- * For robustness, we:
- *   1) Try {accountId}/{uploadId}/<file>
- *   2) Try {accountId}/{snapshotId}/<file>
- *   3) Scan one level deeper under pattern {accountId}/<any single folder>/<file>
+ * We search across candidate buckets, trying:
+ *   1) {accountId}/{uploadId}/{file}
+ *   2) {accountId}/{snapshotId}/{file}
+ *   3) one-level scan under {accountId}/
+ *   4) DB fallback: SELECT name FROM storage.objects WHERE bucket_id = ? AND name ILIKE 'accountId/%file'
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -38,65 +36,105 @@ export function normalizeTypeToFile(typeParam: string | null): string | null {
   return sanitizeCsvFilename(name)
 }
 
-type StorageItem = { name: string; id?: string; metadata?: any }
+type StorageItem = { name: string }
 
 /**
- * Try to locate a specific CSV path under a handful of prefixes.
+ * List names in a path and check if filename exists.
+ */
+async function containsFile(
+  client: SupabaseClient,
+  bucket: string,
+  parentPath: string,
+  filename: string,
+  limit = 200
+): Promise<boolean> {
+  const { data, error } = await client.storage.from(bucket).list(parentPath, { limit })
+  if (error || !data) return false
+  return data.some((it: StorageItem) => it?.name === filename)
+}
+
+/**
+ * DB fallback: search storage.objects for any depth under accountId.
+ * Requires service role (we use supabaseAdmin when calling).
+ */
+async function dbSearchForFile(
+  client: SupabaseClient,
+  bucket: string,
+  accountId: string,
+  filename: string
+): Promise<string | null> {
+  // name examples: "acc123/xyz/campaigns.csv" or "acc123/2024/08/xyz/flows.csv"
+  // We match anything that starts with "accountId/" and ends with filename.
+  const pattern = `${accountId}/%${filename}`
+  // @ts-ignore - storage.objects is a real table accessible with service role
+  const { data, error } = await (client as any)
+    .from('storage.objects')
+    .select('name')
+    .eq('bucket_id', bucket)
+    .ilike('name', pattern)
+    .limit(1)
+  if (error || !data || data.length === 0) return null
+  return data[0].name as string
+}
+
+/**
+ * Try to locate a specific CSV path across candidate buckets.
  */
 export async function findCsvPath(
   client: SupabaseClient,
-  bucket: string,
+  buckets: readonly string[],
   accountId: string,
   uploadId: string | null,
   snapshotId: string,
   filename: string
-): Promise<string | null> {
-  // 1) Direct candidates (common case)
-  const directCandidates = [
-    uploadId ? `${accountId}/${uploadId}/${filename}` : null,
-    snapshotId ? `${accountId}/${snapshotId}/${filename}` : null,
+): Promise<{ bucket: string; path: string } | null> {
+  const directParents = [
+    uploadId ? `${accountId}/${uploadId}/` : null,
+    snapshotId ? `${accountId}/${snapshotId}/` : null,
   ].filter(Boolean) as string[]
 
-  for (const full of directCandidates) {
-    const parent = full.slice(0, full.lastIndexOf('/') + 1)
-    const base = full.slice(full.lastIndexOf('/') + 1)
-    const { data, error } = await client.storage.from(bucket).list(parent, { limit: 50 })
-    if (!error && data?.some((it: StorageItem) => it.name === base)) return full
-  }
-
-  // 2) One-level deep scan under the account folder
-  const root = `${accountId}/`
-  const { data: lvl1, error: e1 } = await client.storage.from(bucket).list(root, { limit: 1000 })
-  if (e1 || !lvl1) return null
-
-  // We look into first-level folders only (good balance of coverage and cost)
-  for (const dir of lvl1) {
-    const maybeDir = (dir as StorageItem)?.name
-    if (!maybeDir) continue
-    const prefix = `${root}${maybeDir}/`
-    const { data: items, error: e2 } = await client.storage.from(bucket).list(prefix, { limit: 100 })
-    if (!e2 && items?.some((it: StorageItem) => it.name === filename)) {
-      return `${prefix}${filename}`
+  for (const bucket of buckets) {
+    // 1) Direct candidates
+    for (const parent of directParents) {
+      const exists = await containsFile(client, bucket, parent, filename)
+      if (exists) return { bucket, path: `${parent}${filename}` }
     }
+
+    // 2) One-level scan under account root
+    const root = `${accountId}/`
+    const { data: lvl1, error: e1 } = await client.storage.from(bucket).list(root, { limit: 1000 })
+    if (!e1 && lvl1?.length) {
+      for (const entry of lvl1) {
+        const dir = entry?.name
+        if (!dir) continue
+        const exists = await containsFile(client, bucket, `${root}${dir}/`, filename)
+        if (exists) return { bucket, path: `${root}${dir}/${filename}` }
+      }
+    }
+
+    // 3) DB fallback: any depth
+    const dbPath = await dbSearchForFile(client, bucket, accountId, filename)
+    if (dbPath) return { bucket, path: dbPath }
   }
 
   return null
 }
 
 /**
- * Discover CSV paths for all allowed files. Returns a map: { "campaigns.csv": "account/.../campaigns.csv", ... }
+ * Discover CSV paths for all allowed files. Returns map of filename -> {bucket, path}
  */
 export async function discoverCsvPaths(
   client: SupabaseClient,
-  bucket: string,
+  buckets: readonly string[],
   accountId: string,
   uploadId: string | null,
   snapshotId: string
-): Promise<Record<string, string>> {
-  const out: Record<string, string> = {}
+): Promise<Record<string, { bucket: string; path: string }>> {
+  const out: Record<string, { bucket: string; path: string }> = {}
   for (const name of ALLOWED_CSV_FILES) {
-    const path = await findCsvPath(client, bucket, accountId, uploadId, snapshotId, name)
-    if (path) out[name] = path
+    const hit = await findCsvPath(client, buckets, accountId, uploadId, snapshotId, name)
+    if (hit) out[name] = hit
   }
   return out
 }
+
