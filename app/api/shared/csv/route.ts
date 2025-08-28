@@ -3,13 +3,21 @@
  * Back-compat redirect to the new endpoint.
  */
 import { NextResponse } from 'next/server'
-import { normalizeTypeToFile } from '../../../../lib/sharedCsv'
+import { sanitizeFileParam } from '../../../../lib/supabaseAdmin'
+
+// Local helper replicating previous normalizeTypeToFile logic for legacy "type" param.
+function normalizeCompatType(raw: string | null): string | null {
+    if (!raw) return null
+    let t = raw.trim().toLowerCase()
+    if (!t.endsWith('.csv')) t += '.csv'
+    return sanitizeFileParam(t)
+}
 
 export async function GET(req: Request) {
     try {
         const url = new URL(req.url)
         const token = url.searchParams.get('token')
-        const file = normalizeTypeToFile(url.searchParams.get('type'))
+    const file = normalizeCompatType(url.searchParams.get('type'))
         if (!token || !file) {
             return NextResponse.json({ error: 'Missing or invalid token/type' }, { status: 400 })
         }
