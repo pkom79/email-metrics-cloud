@@ -30,7 +30,7 @@ export async function GET() {
 
         return NextResponse.json({ 
             shares: shares?.map((share: any) => ({
-                token: share.share_token?.substring(0, 8) + '...',
+                token: share.share_token, // Show full token for debugging
                 title: share.title,
                 created: share.created_at,
                 expires: share.expires_at,
