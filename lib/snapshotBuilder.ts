@@ -63,10 +63,80 @@ function parseCSV(text: string): Array<Record<string, string>> {
 }
 
 function toNumber(v: any): number { const s = String(v ?? '').replace(/[$,%]/g, '').trim(); const n = Number(s); return Number.isFinite(n) ? n : 0; }
-function parseDateFlexible(raw: string): Date | null { if (!raw) return null; const d = new Date(raw); return isNaN(d.getTime()) ? null : d; }
+function parseDateFlexible(raw: string): Date | null {
+  if (!raw) return null;
+  let s = String(raw).trim();
+  if (!s) return null;
+  // Remove common timezone / label suffixes
+  s = s.replace(/\b(UTC|GMT|EST|EDT|CST|CDT|PST|PDT)\b/i, '').trim();
+  // If looks like MM/DD/YYYY or MM/DD/YY
+  if (/^\d{1,2}\/\d{1,2}\/\d{2,4}(?:\s+\d{1,2}:\d{2}(:\d{2})?)?$/ .test(s)) {
+    const [datePart, timePart] = s.split(/\s+/);
+    const [mm, dd, yyyy] = datePart.split('/');
+    const year = Number(yyyy.length === 2 ? (Number(yyyy) > 70 ? '19' + yyyy : '20' + yyyy) : yyyy);
+    const month = Number(mm) - 1;
+    const day = Number(dd);
+    let hours = 0, mins = 0, secs = 0;
+    if (timePart) {
+      const tParts = timePart.split(':');
+      hours = Number(tParts[0] || 0);
+      mins = Number(tParts[1] || 0);
+      secs = Number(tParts[2] || 0);
+    }
+    const d = new Date(Date.UTC(year, month, day, hours, mins, secs));
+    if (!isNaN(d.getTime())) return d;
+  }
+  // Fallback: native Date parse
+  const d2 = new Date(s);
+  if (!isNaN(d2.getTime())) return d2;
+  return null;
+}
 
-function parseCampaigns(text?: string): ParsedCampaign[] { if (!text) return []; return parseCSV(text).map(r => ({ name: r['Campaign Name'] || r['Name'] || 'Untitled', sentAt: parseDateFlexible(r['Send Time'] || r['Send Date'] || r['Sent At']), recipients: toNumber(r['Total Recipients'] || r['Recipients']), revenue: toNumber(r['Revenue']), uniqueOpens: toNumber(r['Unique Opens']), uniqueClicks: toNumber(r['Unique Clicks']), totalOrders: toNumber(r['Total Placed Orders'] || r['Placed Orders']), unsubscribes: toNumber(r['Unsubscribes']), spamComplaints: toNumber(r['Spam Complaints']), bounces: toNumber(r['Bounces']), })); }
-function parseFlows(text?: string): ParsedFlow[] { if (!text) return []; return parseCSV(text).map(r => ({ name: r['Flow Message Name'] || r['Flow Name'] || 'Flow Email', sentAt: parseDateFlexible(r['Day'] || r['Send Time']), delivered: toNumber(r['Delivered']), revenue: toNumber(r['Revenue']), uniqueOpens: toNumber(r['Unique Opens']), uniqueClicks: toNumber(r['Unique Clicks']), totalOrders: toNumber(r['Total Placed Orders'] || r['Placed Orders']), unsubscribes: toNumber(r['Unsubscribes']), spamComplaints: toNumber(r['Spam Complaints']), bounces: toNumber(r['Bounces']), })); }
+function extractFirstDate(record: Record<string,string>, preferred: string[]): Date | null {
+  for (const key of preferred) {
+    if (record[key]) { const d = parseDateFlexible(record[key]); if (d) return d; }
+  }
+  // Fallback: scan for any key containing 'send' or 'date' or exactly 'Day'
+  for (const k of Object.keys(record)) {
+    if (/day$/i.test(k) || /send|date/i.test(k)) {
+      const d = parseDateFlexible(record[k]);
+      if (d) return d;
+    }
+  }
+  return null;
+}
+
+function parseCampaigns(text?: string): ParsedCampaign[] {
+  if (!text) return [];
+  return parseCSV(text).map(r => ({
+    name: r['Campaign Name'] || r['Name'] || 'Untitled',
+    sentAt: extractFirstDate(r, ['Send Time','Send Date','Sent At','Send Date (UTC)','Send Date (GMT)','Date']),
+    recipients: toNumber(r['Total Recipients'] || r['Recipients']),
+    revenue: toNumber(r['Revenue']),
+    uniqueOpens: toNumber(r['Unique Opens']),
+    uniqueClicks: toNumber(r['Unique Clicks']),
+    totalOrders: toNumber(r['Total Placed Orders'] || r['Placed Orders']),
+    unsubscribes: toNumber(r['Unsubscribes']),
+    spamComplaints: toNumber(r['Spam Complaints']),
+    bounces: toNumber(r['Bounces']),
+  }));
+}
+
+function parseFlows(text?: string): ParsedFlow[] {
+  if (!text) return [];
+  return parseCSV(text).map(r => ({
+    name: r['Flow Message Name'] || r['Flow Name'] || 'Flow Email',
+    sentAt: extractFirstDate(r, ['Day','Send Time','Send Date','Send Date (UTC)']),
+    delivered: toNumber(r['Delivered']),
+    revenue: toNumber(r['Revenue']),
+    uniqueOpens: toNumber(r['Unique Opens']),
+    uniqueClicks: toNumber(r['Unique Clicks']),
+    totalOrders: toNumber(r['Total Placed Orders'] || r['Placed Orders']),
+    unsubscribes: toNumber(r['Unsubscribes']),
+    spamComplaints: toNumber(r['Spam Complaints']),
+    bounces: toNumber(r['Bounces']),
+  }));
+}
 function parseSubscribers(text?: string): ParsedSubscriber[] { if (!text) return []; return parseCSV(text).map(r => ({ email: r['Email'] || r['email'] || '', consent: r['Email Marketing Consent'] || r['Consent'] || '', createdAt: parseDateFlexible(r['Created At'] || r['Signup Date']), })).filter(r => r.email); }
 
 function isoDate(d: Date) { return d.toISOString().slice(0, 10); }
