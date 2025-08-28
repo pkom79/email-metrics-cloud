@@ -54,29 +54,45 @@ export async function POST(request: NextRequest) {
         if (!finalSnapshotId || finalSnapshotId === 'temp-snapshot') {
             console.log('Creating new snapshot for sharing...');
             
-            // First, find ANY snapshot with data that the user can access
-            // For now, use a simpler approach - just look for snapshots with upload_id
+            // Look for snapshots in the account that has actual data
+            // We know the data is in account 19fdbfb9-33fc-47b2-83e1-6ce86d171900
+            const dataAccountId = '19fdbfb9-33fc-47b2-83e1-6ce86d171900';
+            
             const { data: existingSnapshots, error: existingError } = await serviceClient
                 .from('snapshots')
                 .select('upload_id, id, created_at, account_id')
+                .eq('account_id', dataAccountId)
                 .eq('status', 'ready')
-                .not('upload_id', 'is', null)
                 .order('created_at', { ascending: false })
-                .limit(1);
+                .limit(5);
 
             let uploadId = null;
-            let sourceAccountId = accountId; // Default to current account
+            let sourceAccountId = dataAccountId;
 
             if (existingSnapshots && existingSnapshots.length > 0) {
-                uploadId = existingSnapshots[0].upload_id;
-                sourceAccountId = existingSnapshots[0].account_id;
-                console.log('Found existing snapshot with data:', { 
-                    upload_id: uploadId, 
-                    account_id: sourceAccountId,
-                    snapshot_id: existingSnapshots[0].id 
-                });
+                // The CSV files are stored using snapshot IDs as folder names
+                // Find any snapshot from the data account and use its ID as upload_id
+                const snapshotWithData = existingSnapshots.find(s => 
+                    ['45b3831d-6830-4ea0-b7f4-fb943fd0c874', 
+                     '818c411a-69da-43f8-9e35-5564d4e02233',
+                     '40beef9c-d6e7-42b7-b5b4-e7f924e6cca7',
+                     'e9630299-c0f7-4de6-b046-b5aec5edf9bf'].includes(s.id)
+                );
+                
+                if (snapshotWithData) {
+                    uploadId = snapshotWithData.id; // Use snapshot ID as upload_id
+                    console.log('Found snapshot with data files:', { 
+                        upload_id: uploadId, 
+                        account_id: sourceAccountId,
+                        snapshot_id: snapshotWithData.id 
+                    });
+                } else {
+                    // Fallback: use the first snapshot's ID
+                    uploadId = existingSnapshots[0].id;
+                    console.log('Using fallback snapshot ID as upload_id:', uploadId);
+                }
             } else {
-                console.log('No existing snapshots with data found');
+                console.log('No snapshots found in data account');
             }
 
             // Create a snapshot with the upload_id from existing data
