@@ -68,8 +68,10 @@ function chooseBest(canonical: AllowedFile, list: { name: string }[]) {
 type StorageObjectRow = { name: string; bucket_id: string };
 
 async function dbSearchBySubstr(substr: string): Promise<StorageObjectRow[]> {
+  // IMPORTANT: storage tables live in the "storage" schema, not "public".
   const { data, error } = await supabaseAdmin
-    .from('storage.objects')
+    .schema('storage')
+    .from('objects')
     .select('name,bucket_id')
     .in('bucket_id', [...CSV_BUCKETS])
     .ilike('name', `%${substr}%`)
