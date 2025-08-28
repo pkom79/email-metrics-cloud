@@ -77,7 +77,7 @@ export async function GET(request: Request) {
 
         if (downloadError) {
             console.log('❌ File download error:', downloadError.message);
-            console.log('❌ Full download error:', downloadError);
+            console.log('❌ Full download error:', JSON.stringify(downloadError, null, 2));
             if (downloadError.message?.includes('not found') || downloadError.message?.includes('object not found')) {
                 return NextResponse.json({ 
                     error: 'No data available for this snapshot',
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
             }
             return NextResponse.json({ 
                 error: 'Error accessing file data', 
-                details: downloadError.message 
+                details: `${downloadError.message || 'Unknown error'} (Full error: ${JSON.stringify(downloadError)})` 
             }, { status: 500 });
         }
 
