@@ -70,6 +70,31 @@ export async function GET(request: Request) {
         const filePath = `${snapshot.account_id}/${snapshot.upload_id}/${fileName}`;
 
         console.log('📁 Looking for file:', filePath);
+        console.log('📊 Account ID:', snapshot.account_id);
+        console.log('📊 Upload ID:', snapshot.upload_id);
+
+        // Debug: List contents of the account folder
+        const { data: folderList, error: listError } = await supabase.storage
+            .from('uploads')
+            .list(snapshot.account_id, { limit: 100 });
+
+        if (listError) {
+            console.log('❌ Error listing account folder:', listError);
+        } else {
+            console.log('📁 Account folder contents:', folderList?.map(f => f.name));
+        }
+
+        // Debug: List contents of the upload folder
+        const uploadFolderPath = `${snapshot.account_id}/${snapshot.upload_id}`;
+        const { data: uploadList, error: uploadListError } = await supabase.storage
+            .from('uploads')
+            .list(uploadFolderPath, { limit: 100 });
+
+        if (uploadListError) {
+            console.log('❌ Error listing upload folder:', uploadListError);
+        } else {
+            console.log('📁 Upload folder contents:', uploadList?.map(f => f.name));
+        }
 
         const { data: fileData, error: downloadError } = await supabase.storage
             .from('uploads')
