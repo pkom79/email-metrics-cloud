@@ -9,9 +9,11 @@ interface ShareModalProps {
     onClose: () => void;
     snapshotId: string;
     snapshotLabel: string;
-    dateRange: string; // e.g. '30d' | 'all' | 'custom'
+    dateRange: string; // '30d' | 'all' | 'custom'
     customFrom?: string | null;
     customTo?: string | null;
+    granularity: string;
+    compareMode: string; // 'prev-period' | 'prev-year'
 }
 
 interface Share {
@@ -27,7 +29,7 @@ interface Share {
     lastAccessedAt?: string;
 }
 
-export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel, dateRange, customFrom, customTo }: ShareModalProps) {
+export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel, dateRange, customFrom, customTo, granularity, compareMode }: ShareModalProps) {
     const [shares, setShares] = useState<Share[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
@@ -247,6 +249,7 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel,
                     expiresIn: expiresIn || null,
                     createSnapshot: !snapshotId || snapshotId === 'temp-snapshot'
                     , rangeStart: window.start, rangeEnd: window.end
+                    , granularity, compareMode
                     // Note: csvData temporarily removed to avoid 413 Request Too Large errors
                     // TODO: Implement chunked CSV upload for large datasets
                 })

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { resolveShareTokenStrict } from '../../../../../lib/shareToken';
 import { buildSnapshotJSON } from '../../../../../lib/snapshotBuilder';
+import { supabaseAdmin } from '../../../../../lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,13 +9,26 @@ export async function GET(_req: Request, { params }: { params: { token: string }
   const t0 = Date.now();
   try {
     const resolved = await resolveShareTokenStrict(params.token);
-    const json = await buildSnapshotJSON({
-      snapshotId: resolved.snapshotId,
-      accountId: resolved.accountId,
-      uploadId: resolved.uploadId,
-      rangeStart: (resolved as any).rangeStart,
-      rangeEnd: (resolved as any).rangeEnd,
-    });
+    // First attempt: static JSON stored on share row
+    const { data: shareRow } = await supabaseAdmin
+      .from('snapshot_shares')
+      .select('snapshot_json')
+      .eq('share_token', params.token)
+      .maybeSingle();
+    let json;
+    if (shareRow?.snapshot_json) {
+      json = shareRow.snapshot_json;
+    } else {
+      json = await buildSnapshotJSON({
+        snapshotId: resolved.snapshotId,
+        accountId: resolved.accountId,
+        uploadId: resolved.uploadId,
+        rangeStart: (resolved as any).rangeStart,
+        rangeEnd: (resolved as any).rangeEnd,
+      });
+      // prune extra sections for legacy shares (optional)
+      json = { meta: { ...json.meta, sections: json.meta.sections.filter((s: string) => ['audienceOverview','emailPerformance','flows','campaigns'].includes(s)) }, audienceOverview: json.audienceOverview, emailPerformance: json.emailPerformance, flows: json.flows, campaigns: json.campaigns };
+    }
     return NextResponse.json(json, {
       status: 200,
       headers: {

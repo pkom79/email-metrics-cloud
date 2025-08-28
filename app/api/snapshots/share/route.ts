@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
         const serviceClient = createServiceClient();
 
         const body = await request.json();
-    const { title, name, description, expiresIn, snapshotId, csvData, rangeStart, rangeEnd } = body;
+    const { title, name, description, expiresIn, snapshotId, csvData, rangeStart, rangeEnd, granularity, compareMode } = body;
         console.log('📝 Request body:', { title, name, description, expiresIn, snapshotId, hasCsvData: !!csvData });
 
         let finalSnapshotId = snapshotId;
@@ -259,7 +259,7 @@ export async function POST(request: NextRequest) {
             expires_at: expiresAt 
         });
 
-        const { data: share, error: shareError } = await supabase
+    const { data: share, error: shareError } = await supabase
             .from('snapshot_shares')
             .insert({
                 snapshot_id: finalSnapshotId,
@@ -279,6 +279,31 @@ export async function POST(request: NextRequest) {
         }
 
         console.log('✅ Share created successfully:', share.id);
+
+        // Build reduced static snapshot JSON (audience, email performance, campaigns, flows only)
+        try {
+            // Fetch snapshot to get upload/account data
+            const { data: snapFull, error: snapFullErr } = await serviceClient
+                .from('snapshots')
+                .select('id, account_id, upload_id, range_start, range_end')
+                .eq('id', finalSnapshotId)
+                .single();
+            if (!snapFullErr && snapFull?.upload_id) {
+                const { buildReducedSnapshot } = await import('../../../../lib/shareStaticBuilder');
+                const reduced = await buildReducedSnapshot({
+                    snapshotId: snapFull.id,
+                    accountId: snapFull.account_id,
+                    uploadId: snapFull.upload_id,
+                    rangeStart: snapFull.range_start || rangeStart,
+                    rangeEnd: snapFull.range_end || rangeEnd,
+                    granularity: granularity || 'daily',
+                    compareMode: compareMode || 'prev-period'
+                });
+                await supabase.from('snapshot_shares').update({ snapshot_json: reduced }).eq('id', share.id);
+            }
+        } catch (err) {
+            console.warn('Failed to build static snapshot JSON', err);
+        }
 
         const shareUrl = `${request.nextUrl.origin}/shared/${shareToken}`;
 

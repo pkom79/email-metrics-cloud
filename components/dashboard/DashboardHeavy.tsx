@@ -668,6 +668,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     dateRange={dateRange}
                     customFrom={customFrom}
                     customTo={customTo}
+                    granularity={granularity}
+                    compareMode={compareMode}
                 />
             )}
         </div>
