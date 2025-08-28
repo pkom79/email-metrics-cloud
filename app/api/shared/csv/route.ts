@@ -59,6 +59,17 @@ export async function GET(request: Request) {
         const snapshot = share.snapshots as any;
         console.log('✅ Valid share found, fetching CSV for snapshot:', snapshot.id, 'label:', snapshot.label);
 
+        // Test basic storage connectivity first
+        try {
+            const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+            console.log('🪣 Storage bucket test:', bucketsError ? 'FAILED' : 'SUCCESS', bucketsError?.message);
+            if (buckets) {
+                console.log('🪣 Available buckets:', buckets.map(b => b.name));
+            }
+        } catch (storageTestError) {
+            console.log('🪣 Storage connectivity test failed:', storageTestError);
+        }
+
         // Check if snapshot has upload_id
         if (!snapshot.upload_id) {
             console.log('❌ Snapshot has no upload_id');
@@ -72,6 +83,20 @@ export async function GET(request: Request) {
         console.log('📁 Looking for file:', filePath);
         console.log('📊 Account ID:', snapshot.account_id);
         console.log('📊 Upload ID:', snapshot.upload_id);
+
+        // Try getting a signed URL first to test if the file exists
+        try {
+            const { data: signedUrl, error: urlError } = await supabase.storage
+                .from('uploads')
+                .createSignedUrl(filePath, 60); // 1 minute expiry
+
+            console.log('🔗 Signed URL test:', urlError ? 'FAILED' : 'SUCCESS', urlError?.message);
+            if (signedUrl) {
+                console.log('🔗 File exists, signed URL created');
+            }
+        } catch (urlTestError) {
+            console.log('🔗 Signed URL test error:', urlTestError);
+        }
 
         // Debug: List contents of the account folder
         const { data: folderList, error: listError } = await supabase.storage
