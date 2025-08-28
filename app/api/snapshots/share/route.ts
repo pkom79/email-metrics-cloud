@@ -216,17 +216,30 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Generate share token (simple approach)
-        const generateShareToken = () => {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-            let result = '';
-            for (let i = 0; i < 32; i++) {
-                result += chars.charAt(Math.floor(Math.random() * chars.length));
+        // Generate a collision-resistant share token (retry on rare collision)
+        async function generateUniqueShareToken(maxAttempts = 5): Promise<string> {
+            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+            function randomToken() {
+                let out = '';
+                for (let i = 0; i < 32; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
+                return out;
             }
-            return result;
-        };
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                const token = randomToken();
+                // Best-effort preflight: see if token exists already (not transactional, but reduces collisions)
+                const { data: existing } = await supabase
+                    .from('snapshot_shares')
+                    .select('id')
+                    .eq('share_token', token)
+                    .maybeSingle();
+                if (!existing) return token;
+                console.warn(`⚠️ Share token collision detected (attempt ${attempt}) – regenerating`);
+            }
+            // Fallback: last generated token (even if collision risk remains)
+            return randomToken();
+        }
 
-        const shareToken = generateShareToken();
+        const shareToken = await generateUniqueShareToken();
 
         // Calculate expiration if specified
         let expiresAt = null;
@@ -259,11 +272,17 @@ export async function POST(request: NextRequest) {
             expires_at: expiresAt 
         });
 
-    const { data: share, error: shareError } = await supabase
+    // Insert share with lightweight collision retry loop (handles race where token created between preflight & insert)
+    let shareInsertAttempts = 0;
+    let share: any = null;
+    let shareError: any = null;
+    let tokenForInsert = shareToken;
+    while (shareInsertAttempts < 5) {
+        const { data: inserted, error: err } = await supabase
             .from('snapshot_shares')
             .insert({
                 snapshot_id: finalSnapshotId,
-                share_token: shareToken,
+                share_token: tokenForInsert,
                 title: title || `${snapshot.label} - Dashboard`,
                 description: description || null,
                 shared_by_name: name || null,
@@ -272,10 +291,21 @@ export async function POST(request: NextRequest) {
             })
             .select()
             .single();
+        if (!err) { share = inserted; break; }
+        shareError = err;
+        // 23505 = unique violation
+        if (err?.code === '23505') {
+            console.warn('⚠️ Unique constraint violation on share_token – regenerating');
+            tokenForInsert = await generateUniqueShareToken();
+            shareInsertAttempts++;
+            continue;
+        }
+        break; // Non-collision error – abort loop
+    }
 
         if (shareError) {
             console.error('❌ Failed to create share:', shareError);
-            return NextResponse.json({ error: 'Failed to create share' }, { status: 500 });
+            return NextResponse.json({ error: 'Failed to create share', details: shareError.message || shareError }, { status: 500 });
         }
 
         console.log('✅ Share created successfully:', share.id);
