@@ -54,29 +54,53 @@ export async function POST(request: NextRequest) {
         if (!finalSnapshotId || finalSnapshotId === 'temp-snapshot') {
             console.log('Creating new snapshot for sharing...');
             
-            // First, find the user's most recent snapshot with data
+            // First, find ANY snapshot with data that the user can access
+            // (not just limited to the current account)
             const { data: existingSnapshots, error: existingError } = await serviceClient
                 .from('snapshots')
-                .select('upload_id, id, created_at')
-                .eq('account_id', accountId)
+                .select('upload_id, id, created_at, account_id')
                 .eq('status', 'ready')
                 .not('upload_id', 'is', null)
                 .order('created_at', { ascending: false })
-                .limit(1);
+                .limit(10); // Get more results to find any with data
 
             let uploadId = null;
+            let sourceAccountId = accountId; // Default to current account
+
             if (existingSnapshots && existingSnapshots.length > 0) {
-                uploadId = existingSnapshots[0].upload_id;
-                console.log('Found existing snapshot with upload_id:', uploadId);
+                // Check each snapshot to see if it has actual files in storage
+                for (const snapshot of existingSnapshots) {
+                    const testPath = `${snapshot.account_id}/${snapshot.upload_id}/campaigns.csv`;
+                    const { error: testError } = await serviceClient.storage
+                        .from('csv-uploads')
+                        .download(testPath);
+                        
+                    if (!testError) {
+                        // Found a snapshot with actual files!
+                        uploadId = snapshot.upload_id;
+                        sourceAccountId = snapshot.account_id;
+                        console.log('Found existing snapshot with data:', { 
+                            upload_id: uploadId, 
+                            account_id: sourceAccountId,
+                            snapshot_id: snapshot.id 
+                        });
+                        break;
+                    }
+                }
+                
+                if (!uploadId) {
+                    console.log('No existing snapshots with accessible data found');
+                }
             } else {
-                console.log('No existing snapshots with data found');
+                console.log('No existing snapshots found at all');
             }
 
             // Create a snapshot with the upload_id from existing data
+            // Use the source account that actually has the data
             const { data: newSnapshot, error: snapshotError } = await serviceClient
                 .from('snapshots')
                 .insert({
-                    account_id: accountId,
+                    account_id: sourceAccountId, // Use the account that has the actual data
                     label: `Dashboard Share - ${new Date().toLocaleDateString()}`,
                     last_email_date: new Date().toISOString().split('T')[0],
                     upload_id: uploadId, // Link to existing data
