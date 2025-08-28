@@ -139,6 +139,34 @@ export async function locateFile(
     picked = pickBestFromDbHits(snapHits, file, uploadId, snapshotId);
   }
   if (picked) return { bucket: picked.bucket_id, path: picked.name, hit: 'db-search', debug };
+  // Forensic spill: gather sample csv-looking objects containing the uploadId (and snapshotId) for troubleshooting.
+  try {
+    const spillSamples: any[] = [];
+    for (const b of CSV_BUCKETS) {
+      // pattern search limited to 25 rows to avoid large responses
+      const { data: spill1 } = await supabaseAdmin
+        .schema('storage')
+        .from('objects')
+        .select('name,bucket_id')
+        .eq('bucket_id', b)
+        .ilike('name', `%${uploadId}%csv`)
+        .limit(25);
+      if (spill1 && spill1.length) spillSamples.push({ bucket: b, upload_pattern: true, results: spill1 });
+      if (snapshotId) {
+        const { data: spill2 } = await supabaseAdmin
+          .schema('storage')
+          .from('objects')
+          .select('name,bucket_id')
+          .eq('bucket_id', b)
+          .ilike('name', `%${snapshotId}%csv`)
+          .limit(25);
+        if (spill2 && spill2.length) spillSamples.push({ bucket: b, snapshot_pattern: true, results: spill2 });
+      }
+    }
+    if (spillSamples.length) debug.spills = spillSamples;
+  } catch (e: any) {
+    debug.spills_error = String(e?.message || e);
+  }
   return null;
 }
 
