@@ -6,12 +6,19 @@ export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
     try {
+        console.log('CSV Download - Starting request');
         const user = await getServerUser();
+        
+        console.log('CSV Download - User:', user ? `${user.id} (anonymous: ${user.is_anonymous})` : 'none');
+        
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const { searchParams } = new URL(request.url);
         const type = searchParams.get('type'); // 'campaigns', 'flows', or 'subscribers'
+        const snapshotId = searchParams.get('snapshot_id');
         const overrideAccountId = searchParams.get('account_id');
+
+        console.log('CSV Download - Params:', { type, snapshotId, overrideAccountId });
 
         if (!type || !['campaigns', 'flows', 'subscribers'].includes(type)) {
             return NextResponse.json({ error: 'Invalid type parameter' }, { status: 400 });
@@ -19,7 +26,78 @@ export async function GET(request: Request) {
 
         const supabase = createServiceClient();
 
-        // Find the user's account
+        // Check if user is anonymous and accessing a specific snapshot
+        const isAnonymous = user.is_anonymous;
+        console.log('CSV Download - Is anonymous:', isAnonymous);
+        
+        if (isAnonymous && snapshotId) {
+            // For anonymous users, verify they can access this specific snapshot via sharing
+            const { data: share, error: shareError } = await supabase
+                .from('snapshot_shares')
+                .select('snapshot_id')
+                .eq('snapshot_id', snapshotId)
+                .eq('is_active', true)
+                .single();
+
+            if (shareError || !share) {
+                console.log('Share not found or error:', shareError);
+                return NextResponse.json({ error: 'Access denied to this snapshot' }, { status: 403 });
+            }
+
+            // Check expiration separately to handle null expires_at
+            const { data: shareWithExpiry, error: expiryError } = await supabase
+                .from('snapshot_shares')
+                .select('expires_at')
+                .eq('snapshot_id', snapshotId)
+                .eq('is_active', true)
+                .single();
+
+            if (shareWithExpiry?.expires_at && new Date(shareWithExpiry.expires_at) < new Date()) {
+                console.log('Share has expired:', shareWithExpiry.expires_at);
+                return NextResponse.json({ error: 'Share has expired' }, { status: 410 });
+            }
+
+            // Get the snapshot data
+            const { data: snap, error: snapErr } = await supabase
+                .from('snapshots')
+                .select('upload_id, account_id')
+                .eq('id', snapshotId)
+                .eq('status', 'ready')
+                .single();
+            
+            if (snapErr || !snap) {
+                return NextResponse.json({ error: 'Snapshot not found' }, { status: 404 });
+            }
+            
+            if (!snap.upload_id) {
+                return NextResponse.json({ error: 'No upload data available' }, { status: 404 });
+            }
+
+            // Download the CSV file from storage
+            const fileName = `${type}.csv`;
+            const filePath = `${snap.account_id}/${snap.upload_id}/${fileName}`;
+
+            const { data: fileData, error: downloadError } = await supabase.storage
+                .from('uploads')
+                .download(filePath);
+
+            if (downloadError) {
+                console.error(`Download error for ${filePath}:`, downloadError);
+                return NextResponse.json({ error: 'File not found' }, { status: 404 });
+            }
+
+            const csvText = await fileData.text();
+            
+            return new NextResponse(csvText, {
+                status: 200,
+                headers: {
+                    'Content-Type': 'text/csv',
+                    'Content-Disposition': `attachment; filename="${fileName}"`,
+                },
+            });
+        }
+
+        // Regular authenticated user flow (existing logic)
         let targetAccountId: string | null = null;
         if (overrideAccountId && /^[0-9a-fA-F-]{36}$/.test(overrideAccountId)) {
             targetAccountId = overrideAccountId;
@@ -34,31 +112,43 @@ export async function GET(request: Request) {
             targetAccountId = acct.id;
         }
 
-        // Get the latest snapshot for this account
-        const { data: snap, error: snapErr } = await supabase
+        // Get the latest snapshot for this account (or specific snapshot if provided)
+        let snapQuery = supabase
             .from('snapshots')
-            .select('upload_id')
+            .select('upload_id, account_id')
             .eq('account_id', targetAccountId)
-            .eq('status', 'ready')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+            .eq('status', 'ready');
+        
+        if (snapshotId) {
+            snapQuery = snapQuery.eq('id', snapshotId);
+        } else {
+            snapQuery = snapQuery.order('created_at', { ascending: false }).limit(1);
+        }
+
+        const { data: snap, error: snapErr } = await snapQuery.maybeSingle();
         if (snapErr) throw snapErr;
         if (!snap) return NextResponse.json({ error: 'No data found' }, { status: 404 });
+        if (!snap.upload_id) return NextResponse.json({ error: 'No upload data available' }, { status: 404 });
 
         // Download the CSV file from storage
-        const bucket = process.env.PREAUTH_BUCKET || 'preauth-uploads';
         const fileName = `${type}.csv`;
-        const { data: file, error: downloadErr } = await supabase.storage
-            .from(bucket)
-            .download(`${snap.upload_id}/${fileName}`);
+        const filePath = `${snap.account_id}/${snap.upload_id}/${fileName}`;
 
-        if (downloadErr) throw downloadErr;
+        const { data: file, error: downloadErr } = await supabase.storage
+            .from('uploads')
+            .download(filePath);
+
+        if (downloadErr) {
+            console.error(`Download error for ${filePath}:`, downloadErr);
+            return NextResponse.json({ error: 'File not found' }, { status: 404 });
+        }
+        
         if (!file) return NextResponse.json({ error: 'File not found' }, { status: 404 });
 
         // Return the CSV file content as text
         const csvText = await file.text();
-        return new Response(csvText, {
+        return new NextResponse(csvText, {
+            status: 200,
             headers: {
                 'Content-Type': 'text/csv',
                 'Content-Disposition': `attachment; filename="${fileName}"`,

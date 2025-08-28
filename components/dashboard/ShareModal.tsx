@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Share2, Copy, Link, Calendar, Eye, Trash2, ExternalLink } from 'lucide-react';
+import { X, Share2, Copy, Link, Calendar, Eye, Trash2, ExternalLink, ChevronDown, AlertTriangle } from 'lucide-react';
+import { DataManager } from '../../lib/data/dataManager';
 
 interface ShareModalProps {
     isOpen: boolean;
@@ -14,6 +15,7 @@ interface Share {
     id: string;
     title: string;
     description?: string;
+    sharedByName?: string;
     shareUrl: string;
     createdAt: string;
     expiresAt?: string;
@@ -31,8 +33,9 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel 
 
     // Form state for creating new share
     const [title, setTitle] = useState('');
+    const [name, setName] = useState('');
     const [description, setDescription] = useState('');
-    const [expiresIn, setExpiresIn] = useState<string>('');
+    const [expiresIn, setExpiresIn] = useState<string>('1hour');
 
     const loadShares = useCallback(async () => {
         try {
@@ -57,8 +60,9 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel 
         if (isOpen) {
             loadShares();
             setTitle(`${snapshotLabel} - Dashboard`);
+            setName('');
             setDescription('');
-            setExpiresIn('');
+            setExpiresIn('1hour');
         }
     }, [isOpen, snapshotId, snapshotLabel, loadShares]);
 
@@ -68,9 +72,143 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel 
             return;
         }
 
+        if (!name.trim()) {
+            setError('Name is required');
+            return;
+        }
+
         try {
             setIsCreating(true);
             setError(null);
+
+            // Get current CSV data from DataManager
+            const dm = DataManager.getInstance();
+            const csvData: Record<string, string> = {};
+
+            try {
+                // Helper function to convert data to CSV
+                const arrayToCSV = (data: any[]) => {
+                    if (data.length === 0) return '';
+
+                    const headers = Object.keys(data[0]);
+                    const csvRows = [headers.join(',')];
+
+                    for (const row of data) {
+                        const values = headers.map(header => {
+                            const value = row[header];
+                            // Escape CSV values that contain commas, quotes, or newlines
+                            if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
+                                return `"${value.replace(/"/g, '""')}"`;
+                            }
+                            return value;
+                        });
+                        csvRows.push(values.join(','));
+                    }
+
+                    return csvRows.join('\n');
+                };
+
+                // Helper function to convert processed campaigns back to raw CSV format
+                const processedCampaignsToRawCSV = (campaigns: any[]) => {
+                    return campaigns.map(campaign => ({
+                        'Campaign Name': campaign.campaignName || '',
+                        'Subject': campaign.subject || '',
+                        'Send Time': campaign.sentDate ? new Date(campaign.sentDate).toISOString() : '',
+                        'Send Weekday': campaign.sentDate ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(campaign.sentDate).getDay()] : '',
+                        'Total Recipients': campaign.emailsSent || 0,
+                        'Unique Placed Order': campaign.totalOrders || 0,
+                        'Placed Order Rate': campaign.conversionRate ? (campaign.conversionRate / 100).toFixed(4) : '0',
+                        'Revenue': campaign.revenue || 0,
+                        'Unique Opens': campaign.uniqueOpens || 0,
+                        'Open Rate': campaign.openRate ? (campaign.openRate / 100).toFixed(4) : '0',
+                        'Total Opens': campaign.uniqueOpens || 0, // Approximate with unique opens
+                        'Unique Clicks': campaign.uniqueClicks || 0,
+                        'Click Rate': campaign.clickRate ? (campaign.clickRate / 100).toFixed(4) : '0',
+                        'Total Clicks': campaign.uniqueClicks || 0, // Approximate with unique clicks
+                        'Unsubscribes': campaign.unsubscribesCount || 0,
+                        'Spam Complaints': campaign.spamComplaintsCount || 0,
+                        'Spam Complaints Rate': campaign.spamRate ? (campaign.spamRate / 100).toFixed(4) : '0',
+                        'Successful Deliveries': campaign.emailsSent || 0,
+                        'Bounces': campaign.bouncesCount || 0,
+                        'Bounce Rate': campaign.bounceRate ? (campaign.bounceRate / 100).toFixed(4) : '0',
+                        'Campaign ID': campaign.id?.toString() || '',
+                        'Campaign Channel': 'Email'
+                    }));
+                };
+
+                // Helper function to convert processed flows back to raw CSV format
+                const processedFlowsToRawCSV = (flows: any[]) => {
+                    return flows.map(flow => ({
+                        'Day': flow.sentDate ? new Date(flow.sentDate).toISOString().split('T')[0] : '',
+                        'Flow ID': flow.flowId || '',
+                        'Flow Name': flow.flowName || '',
+                        'Flow Message ID': flow.flowMessageId || '',
+                        'Flow Message Name': flow.emailName || '',
+                        'Flow Message Channel': 'Email',
+                        'Status': flow.status || 'Sent',
+                        'Delivered': flow.emailsSent || 0,
+                        'Bounced': flow.bouncesCount || 0,
+                        'Bounce Rate': flow.bounceRate ? (flow.bounceRate / 100).toFixed(4) : '0',
+                        'Unique Opens': flow.uniqueOpens || 0,
+                        'Open Rate': flow.openRate ? (flow.openRate / 100).toFixed(4) : '0',
+                        'Total Opens': flow.uniqueOpens || 0,
+                        'Unique Clicks': flow.uniqueClicks || 0,
+                        'Click Rate': flow.clickRate ? (flow.clickRate / 100).toFixed(4) : '0',
+                        'Total Clicks': flow.uniqueClicks || 0,
+                        'Unique Placed Order': flow.totalOrders || 0,
+                        'Placed Order': flow.totalOrders || 0,
+                        'Placed Order Rate': flow.conversionRate ? (flow.conversionRate / 100).toFixed(4) : '0',
+                        'Revenue': flow.revenue || 0
+                    }));
+                };
+
+                // Helper function to convert processed subscribers back to raw CSV format  
+                const processedSubscribersToRawCSV = (subscribers: any[]) => {
+                    return subscribers.map(subscriber => ({
+                        'Email': subscriber.email || '',
+                        'Klaviyo ID': subscriber.id?.toString() || '',
+                        'First Name': subscriber.firstName || '',
+                        'Last Name': subscriber.lastName || '',
+                        'City': subscriber.city || '',
+                        'State / Region': subscriber.region || '',
+                        'Country': subscriber.country || '',
+                        'Zip Code': subscriber.zipCode || '',
+                        'Source': subscriber.source || '',
+                        'Email Marketing Consent': 'subscribed',
+                        'Profile Created On': subscriber.subscribedAt ? new Date(subscriber.subscribedAt).toISOString() : '',
+                        'Date Added': subscriber.subscribedAt ? new Date(subscriber.subscribedAt).toISOString() : ''
+                    }));
+                };
+
+                // Export current data as CSV strings
+                const campaigns = dm.getCampaigns();
+                const flows = dm.getFlowEmails();
+                const subscribers = dm.getSubscribers();
+
+                if (campaigns.length > 0) {
+                    const rawCampaigns = processedCampaignsToRawCSV(campaigns);
+                    csvData.campaigns = arrayToCSV(rawCampaigns);
+                }
+
+                if (flows.length > 0) {
+                    const rawFlows = processedFlowsToRawCSV(flows);
+                    csvData.flows = arrayToCSV(rawFlows);
+                }
+
+                if (subscribers.length > 0) {
+                    const rawSubscribers = processedSubscribersToRawCSV(subscribers);
+                    csvData.subscribers = arrayToCSV(rawSubscribers);
+                }
+
+                console.log('Extracted CSV data:', {
+                    campaigns: csvData.campaigns ? `${csvData.campaigns.split('\n').length} rows` : 'none',
+                    flows: csvData.flows ? `${csvData.flows.split('\n').length} rows` : 'none',
+                    subscribers: csvData.subscribers ? `${csvData.subscribers.split('\n').length} rows` : 'none'
+                });
+
+            } catch (dataError) {
+                console.warn('Could not extract CSV data:', dataError);
+            }
 
             const response = await fetch('/api/snapshots/share', {
                 method: 'POST',
@@ -78,9 +216,11 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel 
                 body: JSON.stringify({
                     snapshotId,
                     title: title.trim(),
+                    name: name.trim(),
                     description: description.trim() || null,
                     expiresIn: expiresIn || null,
-                    createSnapshot: !snapshotId || snapshotId === 'temp-snapshot'
+                    createSnapshot: !snapshotId || snapshotId === 'temp-snapshot',
+                    csvData: csvData
                 })
             });
 
@@ -93,8 +233,9 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel 
 
             // Reset form
             setTitle(`${snapshotLabel} - Dashboard`);
+            setName('');
             setDescription('');
-            setExpiresIn('');
+            setExpiresIn('1hour');
 
             // Reload shares
             await loadShares();
@@ -197,6 +338,19 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel 
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Your Name *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                                    placeholder="Your name (will be shown to recipients)"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Description (optional)
                                 </label>
                                 <textarea
@@ -212,17 +366,37 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel 
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Expires
                                 </label>
-                                <select
-                                    value={expiresIn}
-                                    onChange={(e) => setExpiresIn(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                                >
-                                    <option value="">Never expires</option>
-                                    <option value="1hour">1 hour</option>
-                                    <option value="1day">1 day</option>
-                                    <option value="7days">7 days</option>
-                                    <option value="30days">30 days</option>
-                                </select>
+                                <div className="relative">
+                                    <select
+                                        value={expiresIn}
+                                        onChange={(e) => setExpiresIn(e.target.value)}
+                                        className="appearance-none w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                                    >
+                                        <option value="1hour">1 hour</option>
+                                        <option value="1day">1 day</option>
+                                        <option value="7days">7 days</option>
+                                        <option value="30days">30 days</option>
+                                        <option value="">Never expires (not recommended)</option>
+                                    </select>
+                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400 pointer-events-none" />
+                                </div>
+                            </div>
+
+                            {/* Security Disclaimer */}
+                            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                                <div className="flex items-start gap-3">
+                                    <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                        <h4 className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
+                                            Sharing Sensitive Information
+                                        </h4>
+                                        <p className="text-sm text-amber-700 dark:text-amber-300">
+                                            You are about to share potentially sensitive business data including email metrics,
+                                            subscriber information, and performance analytics. Please ensure you trust the recipients
+                                            and consider using shorter expiration times for better security.
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
 
                             {error && (
@@ -233,7 +407,7 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel 
 
                             <button
                                 onClick={createShare}
-                                disabled={isCreating || !title.trim()}
+                                disabled={isCreating || !title.trim() || !name.trim()}
                                 className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
                                 {isCreating ? 'Creating...' : 'Create Share Link'}
@@ -279,10 +453,6 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel 
 
                                                 <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
                                                     <div className="flex items-center gap-1">
-                                                        <Eye className="w-3 h-3" />
-                                                        <span>{share.accessCount} views</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-1">
                                                         <Calendar className="w-3 h-3" />
                                                         <span>Created {formatDate(share.createdAt)}</span>
                                                     </div>
@@ -291,6 +461,13 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel 
                                                             }`}>
                                                             <span>
                                                                 {isExpired(share.expiresAt) ? 'Expired' : 'Expires'} {formatDate(share.expiresAt)}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                    {isExpired(share.expiresAt) && (
+                                                        <div className="flex items-center gap-1 text-red-500">
+                                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400">
+                                                                Expired
                                                             </span>
                                                         </div>
                                                     )}

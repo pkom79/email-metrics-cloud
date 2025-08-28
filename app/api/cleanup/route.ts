@@ -105,18 +105,45 @@ export async function POST(request: Request) {
             }
         }
 
+        // 4. Clean up expired shares
+        if (!body.skipExpiredShares) {
+            try {
+                console.log('cleanup-master: Running expired shares cleanup');
+                const response = await fetch(new URL('/api/cleanup/expired-shares', baseUrl), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (response.ok) {
+                    results.operations.expiredShares = await response.json();
+                } else {
+                    const error = await response.text().catch(() => 'Unknown error');
+                    results.operations.expiredShares = { 
+                        error: `HTTP ${response.status}: ${error}` 
+                    };
+                }
+            } catch (error: any) {
+                console.error('cleanup-master: Expired shares cleanup failed:', error);
+                results.operations.expiredShares = { 
+                    error: error.message || 'Cleanup failed' 
+                };
+            }
+        }
+
         // Calculate summary
         const summary = {
             totalExpiredPreauth: results.operations.expiredPreauth?.orphanedPreauth || 0,
             totalOldUploads: results.operations.oldUploads?.removedUploads || 0,
             totalDeletedAccounts: results.operations.deletedAccounts?.removedAccounts || 0,
+            totalExpiredShares: results.operations.expiredShares?.cleaned || 0,
             totalOrphanedSnapshots: results.operations.expiredPreauth?.orphanedSnapshots || 0,
             totalProtected: (results.operations.expiredPreauth?.protected || 0) + 
                            (results.operations.oldUploads?.protected || 0),
             totalErrors: [
                 ...(results.operations.expiredPreauth?.errors || []),
                 ...(results.operations.oldUploads?.errors || []),
-                ...(results.operations.deletedAccounts?.errors || [])
+                ...(results.operations.deletedAccounts?.errors || []),
+                ...(results.operations.expiredShares?.error ? [results.operations.expiredShares.error] : [])
             ]
         };
 
@@ -130,6 +157,7 @@ export async function POST(request: Request) {
                 skipExpiredPreauth,
                 skipOldUploads,
                 skipDeletedAccounts,
+                skipExpiredShares: body.skipExpiredShares,
                 retentionDays
             }
         });
@@ -152,7 +180,8 @@ export async function GET() {
             'POST /api/cleanup - Master cleanup (all operations)',
             'POST /api/preauth/cleanup-batch - Expired preauth uploads',
             'POST /api/uploads/cleanup-old - Old uploads for active accounts', 
-            'POST /api/accounts/cleanup-deleted - Soft-deleted accounts'
+            'POST /api/accounts/cleanup-deleted - Soft-deleted accounts',
+            'POST /api/cleanup/expired-shares - Expired dashboard shares'
         ],
         timestamp: new Date().toISOString()
     });
