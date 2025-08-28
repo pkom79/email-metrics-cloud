@@ -4,7 +4,7 @@
  */
 import { NextResponse } from 'next/server'
 import { supabaseAdmin, CSV_BUCKETS } from '../../../../../lib/supabaseAdmin'
-import { sanitizeCsvFilename, locateCsvPath } from '../../../../../lib/storageLocator'
+import { sanitizeCsvFilename, deepLocateOne } from '../../../../../lib/storageLocator'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -33,10 +33,10 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   const filename = sanitizeCsvFilename(url.searchParams.get('file'))
   if (!filename) return NextResponse.json({ error: 'Invalid file' }, { status: 400 })
 
-    const ctx = await getShareContext(params.token)
-    if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 403 })
+  const ctx = await getShareContext(params.token)
+  if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 403 })
 
-    const hit = await locateCsvPath(supabaseAdmin, CSV_BUCKETS, ctx.snapshot_id, filename)
+  const hit = await deepLocateOne(supabaseAdmin, CSV_BUCKETS, ctx.snapshot_id, filename)
     if (!hit) {
       console.warn('[shared/csv] not found', {
         token: params.token.slice(0, 6) + '…',
@@ -53,13 +53,18 @@ export async function GET(req: Request, { params }: { params: { token: string } 
       return NextResponse.json({ error: 'CSV not found' }, { status: 404 })
     }
 
-    return new NextResponse(blob as any, {
+    const body: any =
+      typeof (blob as any).stream === 'function' ? (blob as any).stream() : await (blob as any).text()
+
+    return new NextResponse(body, {
       status: 200,
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
         'Cache-Control': 'private, max-age=60',
         'Content-Disposition': `inline; filename="${filename}"`,
-      }
+        'X-CSV-Bucket': hit.bucket,
+        'X-CSV-Path': hit.path,
+      },
     })
   } catch (err: any) {
   console.error('[shared/csv] unexpected', err?.message || err)

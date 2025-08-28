@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin, CSV_BUCKETS } from '../../../../../lib/supabaseAdmin'
-import { discoverAllCsvs } from '../../../../../lib/storageLocator'
+import { deepDiscoverAllCsvs } from '../../../../../lib/storageLocator'
 
 type ShareRow = {
   snapshot_id: string
@@ -21,13 +21,23 @@ async function getShareContext(token: string): Promise<ShareRow | null> {
   return data
 }
 
-export async function GET(_req: Request, { params }: { params: { token: string } }) {
+export async function GET(req: Request, { params }: { params: { token: string } }) {
+  const debugMode = new URL(req.url).searchParams.get('debug') === '1'
   try {
     const ctx = await getShareContext(params.token)
     if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 403 })
 
-    const files = await discoverAllCsvs(supabaseAdmin, CSV_BUCKETS, ctx.snapshot_id)
-    return NextResponse.json({ snapshot_id: ctx.snapshot_id, files }, { status: 200 })
+    const result = await deepDiscoverAllCsvs(supabaseAdmin, CSV_BUCKETS, ctx.snapshot_id)
+
+    if (debugMode) {
+      // Return full forensic detail (DO NOT enable by default)
+      return NextResponse.json(
+        { snapshot_id: ctx.snapshot_id, ...result },
+        { status: 200, headers: { 'x-debug': '1' } }
+      )
+    }
+
+    return NextResponse.json({ snapshot_id: ctx.snapshot_id, files: result.files }, { status: 200 })
   } catch (err: any) {
     console.error('[shared/manifest] unexpected', err?.message || err)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })

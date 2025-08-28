@@ -1,25 +1,19 @@
-/**
- * Server-only Supabase admin client.
- * Uses SERVICE ROLE key; never import this in client components.
- */
 import { createClient } from '@supabase/supabase-js'
 
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-  throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set')
-}
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set')
-}
-
 export const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { persistSession: false, autoRefreshToken: false } }
+  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+  process.env.SUPABASE_SERVICE_ROLE_KEY as string,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false, // stop noisy refresh_token calls in logs
+    },
+    global: {
+      headers: { 'X-Client-Info': 'shared-api/locator-debug' },
+    },
+  }
 )
 
-/**
- * We’ll try these buckets in order. This handles envs where data landed
- * in "csv-uploads" vs "uploads".
- */
+// Buckets we’ll search in order
 export const CSV_BUCKETS = ['csv-uploads', 'uploads'] as const
 
