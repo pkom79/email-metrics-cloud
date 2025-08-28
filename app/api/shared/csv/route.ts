@@ -19,6 +19,19 @@ export async function GET(request: Request) {
 
         const supabase = createServiceClient();
 
+        // Debug: Check if service role key is available
+        console.log('🔑 Service role key available:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+        console.log('🔑 Service role key length:', process.env.SUPABASE_SERVICE_ROLE_KEY?.length || 0);
+        console.log('🌐 Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+
+        // Test database connection first
+        try {
+            const { data: testData, error: testError } = await supabase.from('snapshots').select('count').limit(1);
+            console.log('🗄️ Database connectivity test:', testError ? 'FAILED' : 'SUCCESS', testError?.message);
+        } catch (dbTestError) {
+            console.log('🗄️ Database connectivity test failed:', dbTestError);
+        }
+
         // Validate the share token with more detailed logging
         console.log('🔍 Looking up share token in database...');
         const { data: share, error: shareError } = await supabase
@@ -63,12 +76,28 @@ export async function GET(request: Request) {
         try {
             const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
             console.log('🪣 Storage bucket test:', bucketsError ? 'FAILED' : 'SUCCESS', bucketsError?.message);
+            if (bucketsError) {
+                console.log('🪣 Full bucket error:', JSON.stringify(bucketsError, null, 2));
+            }
             if (buckets) {
                 console.log('🪣 Available buckets:', buckets.map(b => b.name));
             }
         } catch (storageTestError) {
             console.log('🪣 Storage connectivity test failed:', storageTestError);
         }
+
+        // Try alternative client creation for storage
+        const { createClient } = require('@supabase/supabase-js');
+        const alternativeClient = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            { 
+                auth: { persistSession: false },
+                global: { headers: { 'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` } }
+            }
+        );
+
+        console.log('🔄 Testing alternative client configuration...');
 
         // Check if snapshot has upload_id
         if (!snapshot.upload_id) {
@@ -121,9 +150,26 @@ export async function GET(request: Request) {
             console.log('📁 Upload folder contents:', uploadList?.map(f => f.name));
         }
 
-        const { data: fileData, error: downloadError } = await supabase.storage
+        let fileData, downloadError;
+
+        // Try download with original client first
+        console.log('🔄 Attempting download with original client...');
+        const result1 = await supabase.storage
             .from('uploads')
             .download(filePath);
+        
+        fileData = result1.data;
+        downloadError = result1.error;
+
+        if (downloadError) {
+            console.log('❌ Original client failed, trying alternative client...');
+            const result2 = await alternativeClient.storage
+                .from('uploads')
+                .download(filePath);
+            
+            fileData = result2.data;
+            downloadError = result2.error;
+        }
 
         if (downloadError) {
             console.log('❌ File download error from uploads bucket:', downloadError.message);
