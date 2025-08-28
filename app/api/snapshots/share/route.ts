@@ -69,36 +69,26 @@ export async function POST(request: NextRequest) {
                 .from('snapshots')
                 .select('upload_id, id, created_at, account_id')
                 .eq('status', 'ready')
+                .eq('account_id', accountId) // enforce same account to avoid ownership/RLS issues
                 .order('created_at', { ascending: false })
                 .limit(10);
 
             console.log('📊 Found candidate snapshots:', candidateSnapshots?.length || 0);
 
             let uploadId = null;
-            let sourceAccountId = accountId; // Default to current account
 
             if (candidateSnapshots && candidateSnapshots.length > 0) {
                 // Look for snapshots with upload_id first (these are more likely to have data)
                 let snapshotWithUploadId = candidateSnapshots.find(s => s.upload_id !== null);
                 
                 if (snapshotWithUploadId) {
-                    uploadId = snapshotWithUploadId.upload_id;
-                    sourceAccountId = snapshotWithUploadId.account_id;
-                    console.log('Using snapshot with upload_id:', { 
-                        upload_id: uploadId, 
-                        account_id: sourceAccountId,
-                        snapshot_id: snapshotWithUploadId.id 
-                    });
+                    uploadId = snapshotWithUploadId.upload_id; // upload belongs to this account
+                    console.log('Using snapshot with upload_id:', { upload_id: uploadId, account_id: accountId, snapshot_id: snapshotWithUploadId.id });
                 } else {
                     // Fallback: use the most recent snapshot's ID as upload_id
                     const recent = candidateSnapshots[0];
-                    uploadId = recent.id;
-                    sourceAccountId = recent.account_id;
-                    console.log('Using snapshot ID as upload_id:', { 
-                        upload_id: uploadId, 
-                        account_id: sourceAccountId,
-                        snapshot_id: recent.id 
-                    });
+                    uploadId = recent.id; // fallback
+                    console.log('Using snapshot ID as upload_id:', { upload_id: uploadId, account_id: accountId, snapshot_id: recent.id });
                 }
             } else {
                 console.log('No snapshots found');
@@ -106,10 +96,10 @@ export async function POST(request: NextRequest) {
 
             // Create a snapshot with the upload_id from existing data
             // Use the source account that actually has the data
-        const { data: newSnapshot, error: snapshotError } = await serviceClient
+            const { data: newSnapshot, error: snapshotError } = await serviceClient
                 .from('snapshots')
                 .insert({
-                    account_id: sourceAccountId, // Use the account that has the actual data
+                    account_id: accountId, // Always use the requesting user's account for ownership
                     label: `Dashboard Share - ${new Date().toLocaleDateString()}`,
                     last_email_date: new Date().toISOString().split('T')[0],
                     upload_id: uploadId, // Link to existing data
@@ -119,6 +109,11 @@ export async function POST(request: NextRequest) {
                 })
                 .select()
                 .single();
+
+            if (!uploadId) {
+                console.warn('No existing upload data for account; rejecting share creation without data');
+                return NextResponse.json({ error: 'No dataset available to share yet. Upload reports first.' }, { status: 400 });
+            }
 
             if (snapshotError || !newSnapshot) {
                 console.error('❌ Failed to create snapshot:', snapshotError);
