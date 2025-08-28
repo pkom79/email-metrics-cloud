@@ -126,18 +126,43 @@ export async function GET(request: Request) {
             .download(filePath);
 
         if (downloadError) {
-            console.log('❌ File download error:', downloadError.message);
+            console.log('❌ File download error from uploads bucket:', downloadError.message);
             console.log('❌ Full download error:', JSON.stringify(downloadError, null, 2));
-            if (downloadError.message?.includes('not found') || downloadError.message?.includes('object not found')) {
+            
+            // Try the csv-uploads bucket as fallback
+            console.log('🔄 Trying csv-uploads bucket as fallback...');
+            const { data: fallbackData, error: fallbackError } = await supabase.storage
+                .from('csv-uploads')
+                .download(filePath);
+                
+            if (fallbackError) {
+                console.log('❌ Fallback download also failed:', fallbackError.message);
+                if (downloadError.message?.includes('not found') || downloadError.message?.includes('object not found')) {
+                    return NextResponse.json({ 
+                        error: 'No data available for this snapshot',
+                        details: `The ${type} data file was not found. This snapshot may not have ${type} data uploaded.`
+                    }, { status: 404 });
+                }
                 return NextResponse.json({ 
-                    error: 'No data available for this snapshot',
-                    details: `The ${type} data file was not found. This snapshot may not have ${type} data uploaded.`
-                }, { status: 404 });
+                    error: 'Error accessing file data', 
+                    details: `${downloadError.message || 'Unknown error'} (Full error: ${JSON.stringify(downloadError)})` 
+                }, { status: 500 });
+            } else {
+                console.log('✅ Found file in csv-uploads bucket!');
+                const csvText = await fallbackData.text();
+                if (!csvText.trim()) {
+                    console.log('❌ File is empty');
+                    return NextResponse.json({ error: 'Data file is empty' }, { status: 404 });
+                }
+                console.log('✅ Returning CSV data from csv-uploads, length:', csvText.length);
+                return new NextResponse(csvText, {
+                    status: 200,
+                    headers: {
+                        'Content-Type': 'text/csv',
+                        'Content-Disposition': `attachment; filename="${fileName}"`
+                    }
+                });
             }
-            return NextResponse.json({ 
-                error: 'Error accessing file data', 
-                details: `${downloadError.message || 'Unknown error'} (Full error: ${JSON.stringify(downloadError)})` 
-            }, { status: 500 });
         }
 
         if (!fileData) {
