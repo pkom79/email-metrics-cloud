@@ -86,19 +86,6 @@ export async function GET(request: Request) {
             console.log('🪣 Storage connectivity test failed:', storageTestError);
         }
 
-        // Try alternative client creation for storage
-        const { createClient } = require('@supabase/supabase-js');
-        const alternativeClient = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!,
-            { 
-                auth: { persistSession: false },
-                global: { headers: { 'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` } }
-            }
-        );
-
-        console.log('🔄 Testing alternative client configuration...');
-
         // Check if snapshot has upload_id
         if (!snapshot.upload_id) {
             console.log('❌ Snapshot has no upload_id');
@@ -113,47 +100,11 @@ export async function GET(request: Request) {
         console.log('📊 Account ID:', snapshot.account_id);
         console.log('📊 Upload ID:', snapshot.upload_id);
 
-        // Try getting a signed URL first to test if the file exists
-        try {
-            const { data: signedUrl, error: urlError } = await supabase.storage
-                .from('uploads')
-                .createSignedUrl(filePath, 60); // 1 minute expiry
-
-            console.log('🔗 Signed URL test:', urlError ? 'FAILED' : 'SUCCESS', urlError?.message);
-            if (signedUrl) {
-                console.log('🔗 File exists, signed URL created');
-            }
-        } catch (urlTestError) {
-            console.log('🔗 Signed URL test error:', urlTestError);
-        }
-
-        // Debug: List contents of the account folder
-        const { data: folderList, error: listError } = await supabase.storage
-            .from('uploads')
-            .list(snapshot.account_id, { limit: 100 });
-
-        if (listError) {
-            console.log('❌ Error listing account folder:', listError);
-        } else {
-            console.log('📁 Account folder contents:', folderList?.map(f => f.name));
-        }
-
-        // Debug: List contents of the upload folder
-        const uploadFolderPath = `${snapshot.account_id}/${snapshot.upload_id}`;
-        const { data: uploadList, error: uploadListError } = await supabase.storage
-            .from('uploads')
-            .list(uploadFolderPath, { limit: 100 });
-
-        if (uploadListError) {
-            console.log('❌ Error listing upload folder:', uploadListError);
-        } else {
-            console.log('📁 Upload folder contents:', uploadList?.map(f => f.name));
-        }
-
+        // Since regular download works, let's try both buckets systematically
         let fileData, downloadError;
 
-        // Try download with original client first
-        console.log('🔄 Attempting download with csv-uploads bucket...');
+        // First try: csv-uploads bucket
+        console.log('� Trying csv-uploads bucket...');
         const result1 = await supabase.storage
             .from('csv-uploads')
             .download(filePath);
@@ -162,17 +113,28 @@ export async function GET(request: Request) {
         downloadError = result1.error;
 
         if (downloadError) {
-            console.log('❌ CSV-uploads bucket failed, trying alternative client...');
-            const result2 = await alternativeClient.storage
-                .from('csv-uploads')
+            console.log('❌ csv-uploads failed:', downloadError.message);
+            
+            // Second try: uploads bucket (like regular download API)
+            console.log('🔄 Trying uploads bucket (like regular download API)...');
+            const result2 = await supabase.storage
+                .from('uploads')
                 .download(filePath);
             
             fileData = result2.data;
             downloadError = result2.error;
+            
+            if (downloadError) {
+                console.log('❌ uploads bucket also failed:', downloadError.message);
+            } else {
+                console.log('✅ Found file in uploads bucket!');
+            }
+        } else {
+            console.log('✅ Found file in csv-uploads bucket!');
         }
 
         if (downloadError) {
-            console.log('❌ File download error from csv-uploads bucket:', downloadError.message);
+            console.log('❌ Both buckets failed. Error details:', downloadError.message);
             console.log('❌ Full download error:', JSON.stringify(downloadError, null, 2));
             
             if (downloadError.message?.includes('not found') || downloadError.message?.includes('object not found')) {
