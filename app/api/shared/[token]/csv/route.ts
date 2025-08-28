@@ -26,32 +26,48 @@ async function getShareContext(token: string): Promise<ShareRow | null> {
 }
 
 export async function GET(req: Request, { params }: { params: { token: string } }) {
-  const url = new URL(req.url)
-  const file = sanitizeCsvFilename(url.searchParams.get('file'))
-  if (!file) return NextResponse.json({ error: 'Invalid file' }, { status: 400 })
+  try {
+    const url = new URL(req.url)
+    const file = sanitizeCsvFilename(url.searchParams.get('file'))
+    if (!file) return NextResponse.json({ error: 'Invalid file' }, { status: 400 })
 
-  const ctx = await getShareContext(params.token)
-  if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 403 })
+    const ctx = await getShareContext(params.token)
+    if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 403 })
 
-  // Locate file across buckets and arbitrary folder depths (snapshot-first).
-  const hit = await findCsvPath(
-    supabaseAdmin,
-    CSV_BUCKETS,
-    ctx.snapshots.account_id,
-    ctx.snapshots.upload_id,
-    ctx.snapshot_id,
-    file
-  )
-  if (!hit) return NextResponse.json({ error: 'CSV not found' }, { status: 404 })
+    // Widened discovery includes root direct and global DB search.
+    const hit = await findCsvPath(
+      supabaseAdmin,
+      CSV_BUCKETS,
+      ctx.snapshots.account_id,
+      ctx.snapshots.upload_id,
+      ctx.snapshot_id,
+      file
+    )
 
-  const { data: blob, error } = await supabaseAdmin.storage.from(hit.bucket).download(hit.path)
-  if (error || !blob) return NextResponse.json({ error: 'CSV not found' }, { status: 404 })
-
-  return new NextResponse(blob as any, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Cache-Control': 'private, max-age=60'
+    if (!hit) {
+      console.warn('[shared-csv] not-found', {
+        token: params.token.slice(0, 6) + '…',
+        file,
+        account_id: ctx.snapshots.account_id,
+        upload_id: ctx.snapshots.upload_id,
+        snapshot_id: ctx.snapshot_id,
+        buckets: CSV_BUCKETS,
+      })
+      return NextResponse.json({ error: 'CSV not found' }, { status: 404 })
     }
-  })
+
+    const { data: blob, error } = await supabaseAdmin.storage.from(hit.bucket).download(hit.path)
+    if (error || !blob) return NextResponse.json({ error: 'CSV not found' }, { status: 404 })
+
+    return new NextResponse(blob as any, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Cache-Control': 'private, max-age=60'
+      }
+    })
+  } catch (err: any) {
+    console.error('[shared-csv] unexpected error', err?.message || err)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
 }
