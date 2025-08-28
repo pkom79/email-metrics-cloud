@@ -219,8 +219,9 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel 
                     name: name.trim(),
                     description: description.trim() || null,
                     expiresIn: expiresIn || null,
-                    createSnapshot: !snapshotId || snapshotId === 'temp-snapshot',
-                    csvData: csvData
+                    createSnapshot: !snapshotId || snapshotId === 'temp-snapshot'
+                    // Note: csvData temporarily removed to avoid 413 Request Too Large errors
+                    // TODO: Implement chunked CSV upload for large datasets
                 })
             });
 
