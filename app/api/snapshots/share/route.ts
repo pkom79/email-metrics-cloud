@@ -53,14 +53,34 @@ export async function POST(request: NextRequest) {
         // If no specific snapshot provided, create a temporary one
         if (!finalSnapshotId || finalSnapshotId === 'temp-snapshot') {
             console.log('Creating new snapshot for sharing...');
-            // Create a snapshot
-            // Create a new snapshot with current timestamp
+            
+            // First, find the user's most recent snapshot with data
+            const { data: existingSnapshots, error: existingError } = await serviceClient
+                .from('snapshots')
+                .select('upload_id, id, created_at')
+                .eq('account_id', accountId)
+                .eq('status', 'ready')
+                .not('upload_id', 'is', null)
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+            let uploadId = null;
+            if (existingSnapshots && existingSnapshots.length > 0) {
+                uploadId = existingSnapshots[0].upload_id;
+                console.log('Found existing snapshot with upload_id:', uploadId);
+            } else {
+                console.log('No existing snapshots with data found');
+            }
+
+            // Create a snapshot with the upload_id from existing data
             const { data: newSnapshot, error: snapshotError } = await serviceClient
                 .from('snapshots')
                 .insert({
                     account_id: accountId,
                     label: `Dashboard Share - ${new Date().toLocaleDateString()}`,
-                    last_email_date: new Date().toISOString().split('T')[0]
+                    last_email_date: new Date().toISOString().split('T')[0],
+                    upload_id: uploadId, // Link to existing data
+                    status: uploadId ? 'ready' : 'pending' // Set status based on whether we have data
                 })
                 .select()
                 .single();
@@ -70,7 +90,7 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ error: 'Failed to create snapshot for sharing' }, { status: 500 });
             }
 
-            console.log('✅ Created new snapshot:', newSnapshot.id);
+            console.log('✅ Created new snapshot:', newSnapshot.id, 'with upload_id:', uploadId);
             finalSnapshotId = newSnapshot.id;
         }
 

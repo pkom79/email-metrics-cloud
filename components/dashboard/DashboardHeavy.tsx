@@ -204,9 +204,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     // Helper to get current snapshot ID for sharing
     const getCurrentSnapshotId = (): string | null => {
-        // For this implementation, we'll create a snapshot when sharing is requested
-        // In a full implementation, you might track the current snapshot ID differently
-        return null; // Will be handled in the share creation flow
+        // Return null to let the API handle snapshot creation properly
+        // The API will create a snapshot with the user's actual data
+        return null;
     };
 
     const getCurrentSnapshotLabel = (): string => {
