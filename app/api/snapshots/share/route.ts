@@ -54,45 +54,78 @@ export async function POST(request: NextRequest) {
         if (!finalSnapshotId || finalSnapshotId === 'temp-snapshot') {
             console.log('Creating new snapshot for sharing...');
             
-            // Look for snapshots in the account that has actual data
-            // We know the data is in account 19fdbfb9-33fc-47b2-83e1-6ce86d171900
-            const dataAccountId = '19fdbfb9-33fc-47b2-83e1-6ce86d171900';
-            
-            const { data: existingSnapshots, error: existingError } = await serviceClient
+            // Find snapshots with actual data by checking storage
+            // This works for any user by testing which snapshots have real files
+            const { data: candidateSnapshots, error: existingError } = await serviceClient
                 .from('snapshots')
                 .select('upload_id, id, created_at, account_id')
-                .eq('account_id', dataAccountId)
                 .eq('status', 'ready')
                 .order('created_at', { ascending: false })
-                .limit(5);
+                .limit(20); // Check more snapshots to find one with data
 
             let uploadId = null;
-            let sourceAccountId = dataAccountId;
+            let sourceAccountId = accountId; // Default to current account
 
-            if (existingSnapshots && existingSnapshots.length > 0) {
-                // The CSV files are stored using snapshot IDs as folder names
-                // Find any snapshot from the data account and use its ID as upload_id
-                const snapshotWithData = existingSnapshots.find(s => 
-                    ['45b3831d-6830-4ea0-b7f4-fb943fd0c874', 
-                     '818c411a-69da-43f8-9e35-5564d4e02233',
-                     '40beef9c-d6e7-42b7-b5b4-e7f924e6cca7',
-                     'e9630299-c0f7-4de6-b046-b5aec5edf9bf'].includes(s.id)
-                );
+            if (candidateSnapshots && candidateSnapshots.length > 0) {
+                // Test each snapshot to see if it has actual files in storage
+                for (const snapshot of candidateSnapshots) {
+                    // Try using the snapshot ID as upload_id (common pattern)
+                    const testPath = `${snapshot.account_id}/${snapshot.id}/campaigns.csv`;
+                    
+                    try {
+                        const { error: testError } = await serviceClient.storage
+                            .from('csv-uploads')
+                            .download(testPath);
+                            
+                        if (!testError) {
+                            // Found a snapshot with actual files!
+                            uploadId = snapshot.id; // Use snapshot ID as upload_id
+                            sourceAccountId = snapshot.account_id;
+                            console.log('Found snapshot with data files:', { 
+                                upload_id: uploadId, 
+                                account_id: sourceAccountId,
+                                snapshot_id: snapshot.id 
+                            });
+                            break;
+                        }
+                    } catch (storageError) {
+                        // Continue to next snapshot if storage test fails
+                        continue;
+                    }
+                    
+                    // Also try with the upload_id if it exists
+                    if (snapshot.upload_id) {
+                        const testPath2 = `${snapshot.account_id}/${snapshot.upload_id}/campaigns.csv`;
+                        try {
+                            const { error: testError2 } = await serviceClient.storage
+                                .from('csv-uploads')
+                                .download(testPath2);
+                                
+                            if (!testError2) {
+                                uploadId = snapshot.upload_id;
+                                sourceAccountId = snapshot.account_id;
+                                console.log('Found snapshot with data via upload_id:', { 
+                                    upload_id: uploadId, 
+                                    account_id: sourceAccountId,
+                                    snapshot_id: snapshot.id 
+                                });
+                                break;
+                            }
+                        } catch (storageError2) {
+                            continue;
+                        }
+                    }
+                }
                 
-                if (snapshotWithData) {
-                    uploadId = snapshotWithData.id; // Use snapshot ID as upload_id
-                    console.log('Found snapshot with data files:', { 
-                        upload_id: uploadId, 
-                        account_id: sourceAccountId,
-                        snapshot_id: snapshotWithData.id 
-                    });
-                } else {
-                    // Fallback: use the first snapshot's ID
-                    uploadId = existingSnapshots[0].id;
-                    console.log('Using fallback snapshot ID as upload_id:', uploadId);
+                if (!uploadId) {
+                    console.log('No snapshots with accessible data found, using fallback');
+                    // Fallback: use the most recent snapshot's data
+                    const recent = candidateSnapshots[0];
+                    uploadId = recent.upload_id || recent.id;
+                    sourceAccountId = recent.account_id;
                 }
             } else {
-                console.log('No snapshots found in data account');
+                console.log('No snapshots found at all');
             }
 
             // Create a snapshot with the upload_id from existing data
