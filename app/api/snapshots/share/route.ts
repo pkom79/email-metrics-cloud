@@ -5,17 +5,23 @@ import { createServiceClient } from '../../../../lib/supabase/server';
 
 export async function POST(request: NextRequest) {
     try {
+        console.log('🔄 Share creation started');
+        
         const supabase = createRouteHandlerClient({ cookies });
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError || !user) {
+            console.log('❌ Authentication failed:', authError?.message);
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+
+        console.log('✅ User authenticated:', user.id);
 
         // Create service client for snapshot creation if needed
         const serviceClient = createServiceClient();
 
         const body = await request.json();
         const { title, name, description, expiresIn, snapshotId, csvData } = body;
+        console.log('📝 Request body:', { title, name, description, expiresIn, snapshotId, hasCsvData: !!csvData });
 
         let finalSnapshotId = snapshotId;
 
@@ -27,7 +33,7 @@ export async function POST(request: NextRequest) {
             .single();
 
         if (accountError || !account) {
-            console.log('No account found for user, creating one...');
+            console.log('⚠️ No account found for user, creating one...');
             // Create account if it doesn't exist
             const { data: newAccount, error: createError } = await supabase
                 .from('accounts')
@@ -41,18 +47,21 @@ export async function POST(request: NextRequest) {
                 .single();
 
             if (createError || !newAccount) {
-                console.error('Failed to create account:', createError);
+                console.error('❌ Failed to create account:', createError);
                 return NextResponse.json({ error: 'Failed to create account' }, { status: 500 });
             }
             
+            console.log('✅ Account created:', newAccount.id);
             account = newAccount;
+        } else {
+            console.log('✅ Account found:', account.id);
         }
 
         const accountId = account.id;
 
         // If no specific snapshot provided, create a temporary one
         if (!finalSnapshotId || finalSnapshotId === 'temp-snapshot') {
-            console.log('Creating new snapshot for sharing...');
+            console.log('🔄 Creating new snapshot for sharing...');
             
             // Find the most recent snapshot with data
             // Use a simpler approach that doesn't test storage during creation
@@ -62,6 +71,8 @@ export async function POST(request: NextRequest) {
                 .eq('status', 'ready')
                 .order('created_at', { ascending: false })
                 .limit(10);
+
+            console.log('📊 Found candidate snapshots:', candidateSnapshots?.length || 0);
 
             let uploadId = null;
             let sourceAccountId = accountId; // Default to current account
@@ -108,20 +119,22 @@ export async function POST(request: NextRequest) {
                 .single();
 
             if (snapshotError || !newSnapshot) {
-                console.error('Failed to create snapshot:', snapshotError);
+                console.error('❌ Failed to create snapshot:', snapshotError);
                 return NextResponse.json({ error: 'Failed to create snapshot for sharing' }, { status: 500 });
             }
 
             console.log('✅ Created new snapshot:', newSnapshot.id, 'with upload_id:', uploadId);
             finalSnapshotId = newSnapshot.id;
+        } else {
+            console.log('✅ Using existing snapshot:', finalSnapshotId);
         }
 
         if (!finalSnapshotId) {
-            console.error('Snapshot ID is still null after creation');
+            console.error('❌ Snapshot ID is still null after creation');
             return NextResponse.json({ error: 'Snapshot ID is required' }, { status: 400 });
         }
 
-        console.log('Verifying snapshot ownership for:', finalSnapshotId);
+        console.log('🔍 Verifying snapshot ownership for:', finalSnapshotId);
         // Verify user owns the snapshot - simplified query
         const { data: snapshot, error: snapError } = await supabase
             .from('snapshots')
@@ -233,6 +246,13 @@ export async function POST(request: NextRequest) {
         }
 
         // Create share record
+        console.log('🔄 Creating share record with token:', shareToken);
+        console.log('📊 Share details:', { 
+            snapshot_id: finalSnapshotId, 
+            title: title || `${snapshot.label} - Dashboard`,
+            expires_at: expiresAt 
+        });
+
         const { data: share, error: shareError } = await supabase
             .from('snapshot_shares')
             .insert({
@@ -248,8 +268,11 @@ export async function POST(request: NextRequest) {
             .single();
 
         if (shareError) {
+            console.error('❌ Failed to create share:', shareError);
             return NextResponse.json({ error: 'Failed to create share' }, { status: 500 });
         }
+
+        console.log('✅ Share created successfully:', share.id);
 
         const shareUrl = `${request.nextUrl.origin}/shared/${shareToken}`;
 
