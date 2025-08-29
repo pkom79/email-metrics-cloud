@@ -378,7 +378,18 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel,
                     const flows = dm.getFlowEmails().filter(f => f.sentDate && inRange(f.sentDate));
                     if (!campaigns.length && !flows.length) return null;
                     const all = [...campaigns, ...flows];
-                    const sum = (rows: any[]) => rows.reduce((acc, e) => { acc.revenue += e.revenue; acc.emailsSent += e.emailsSent; acc.totalOrders += e.totalOrders; acc.uniqueOpens += e.uniqueOpens; acc.uniqueClicks += e.uniqueClicks; acc.unsubscribes += e.unsubscribesCount; acc.spamComplaints += e.spamComplaintsCount; acc.bounces += e.bouncesCount; return acc; }, { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribes: 0, spamComplaints: 0, bounces: 0 });
+                    const num = (v: any) => (typeof v === 'number' && Number.isFinite(v)) ? v : 0;
+                    const sum = (rows: any[]) => rows.reduce((acc, e) => {
+                        acc.revenue += num(e.revenue);
+                        acc.emailsSent += num(e.emailsSent);
+                        acc.totalOrders += num(e.totalOrders);
+                        acc.uniqueOpens += num(e.uniqueOpens);
+                        acc.uniqueClicks += num(e.uniqueClicks);
+                        acc.unsubscribes += num(e.unsubscribesCount ?? e.unsubscribes);
+                        acc.spamComplaints += num(e.spamComplaintsCount ?? e.spamComplaints);
+                        acc.bounces += num(e.bouncesCount ?? e.bounces);
+                        return acc;
+                    }, { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribes: 0, spamComplaints: 0, bounces: 0 });
                     const mkDerived = (t: any) => ({
                         avgOrderValue: t.totalOrders ? t.revenue / t.totalOrders : 0,
                         revenuePerEmail: t.emailsSent ? t.revenue / t.emailsSent : 0,
@@ -408,7 +419,19 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel,
                     const prevTotalsFlow = sum(previousPeriod.prevFlow);
                     const dailyMap = new Map<string, any>();
                     const dayKey = (d: Date) => d.toISOString().slice(0, 10);
-                    for (const e of all) { const k = dayKey(e.sentDate); const cur = dailyMap.get(k) || { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribes: 0, spamComplaints: 0, bounces: 0 }; cur.revenue += e.revenue; cur.emailsSent += e.emailsSent; cur.totalOrders += e.totalOrders; cur.uniqueOpens += e.uniqueOpens; cur.uniqueClicks += e.uniqueClicks; cur.unsubscribes += e.unsubscribesCount; cur.spamComplaints += e.spamComplaintsCount; cur.bounces += e.bouncesCount; dailyMap.set(k, cur); }
+                    for (const e of all) {
+                        const k = dayKey(e.sentDate);
+                        const cur = dailyMap.get(k) || { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribes: 0, spamComplaints: 0, bounces: 0 };
+                        cur.revenue += num(e.revenue);
+                        cur.emailsSent += num(e.emailsSent);
+                        cur.totalOrders += num(e.totalOrders);
+                        cur.uniqueOpens += num(e.uniqueOpens);
+                        cur.uniqueClicks += num(e.uniqueClicks);
+                        cur.unsubscribes += num(e.unsubscribesCount);
+                        cur.spamComplaints += num(e.spamComplaintsCount);
+                        cur.bounces += num(e.bouncesCount);
+                        dailyMap.set(k, cur);
+                    }
                     const daily = [...dailyMap.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1).map(([date, v]) => ({ date, ...v }));
                     const changePct = (cur: number, prev: number) => prev ? ((cur - prev) / prev) * 100 : 0;
                     const metricBundle = (totals: any, prev: any) => {
