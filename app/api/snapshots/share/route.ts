@@ -328,7 +328,39 @@ export async function POST(request: NextRequest) {
         // Store provided static snapshot JSON (preferred for accuracy) else build from CSV fallback
         try {
             if (staticSnapshotJson && typeof staticSnapshotJson === 'object') {
-                const { error: updErr } = await supabase.from('snapshot_shares').update({ snapshot_json: staticSnapshotJson }).eq('id', share.id);
+                // Accept either canonical bundle (schemaVersion present) or legacy wrapper { sharedBundle }
+                let bundle = staticSnapshotJson as any;
+                if (bundle.sharedBundle && !bundle.schemaVersion) {
+                    bundle = bundle.sharedBundle; // unwrap legacy wrapper
+                }
+                // Basic validation
+                const issues: string[] = [];
+                if (typeof bundle !== 'object') issues.push('not an object');
+                if (!bundle.meta) issues.push('missing meta');
+                if (bundle.meta) {
+                    if (!bundle.meta.start || !bundle.meta.end) issues.push('missing meta.start/end');
+                    if (isNaN(Date.parse(bundle.meta.start))) issues.push('invalid meta.start');
+                    if (isNaN(Date.parse(bundle.meta.end))) issues.push('invalid meta.end');
+                }
+                const numericFieldCheck = (obj: any, path: string) => {
+                    if (!obj) return;
+                    for (const [k,v] of Object.entries(obj)) {
+                        if (typeof v === 'number' && !Number.isFinite(v)) issues.push(`NaN/inf at ${path}.${k}`);
+                    }
+                };
+                ['emailPerformance','campaignPerformance','flowPerformance'].forEach(section => {
+                    const sec = bundle[section];
+                    if (sec) { numericFieldCheck(sec.totals, section+'.totals'); numericFieldCheck(sec.derived, section+'.derived'); }
+                });
+                if (issues.length) {
+                    console.warn('Provided static snapshot failed validation, storing anyway but flagged:', issues);
+                    bundle.__validationIssues = issues;
+                }
+                const size = Buffer.byteLength(JSON.stringify(bundle),'utf8');
+                if (size > 2_000_000) {
+                    console.warn('Snapshot bundle larger than 2MB, may be rejected by downstream consumers:', size);
+                }
+                const { error: updErr } = await supabase.from('snapshot_shares').update({ snapshot_json: bundle }).eq('id', share.id);
                 if (updErr) console.warn('Failed to store client-provided static snapshot JSON:', updErr.message || updErr);
             } else {
                 // Fallback server build

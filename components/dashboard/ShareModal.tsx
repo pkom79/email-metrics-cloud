@@ -451,10 +451,27 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel,
                     console.warn('buildSharedBundle failed', e); return null;
                 }
             };
-            const sharedBundle = buildSharedBundle();
-            if (staticSnapshot && sharedBundle) {
-                (staticSnapshot as any).sharedBundle = sharedBundle;
+            let sharedBundle = buildSharedBundle();
+            if (sharedBundle) {
+                // Canonicalize: add schemaVersion + meta.granularity + compareMode; if original had meta merge them
+                const originalMeta = (sharedBundle as any).meta || {};
+                sharedBundle = {
+                    ...sharedBundle,
+                    schemaVersion: 1,
+                    meta: {
+                        ...originalMeta,
+                        start: window.start,
+                        end: window.end,
+                        granularity,
+                        compareMode,
+                        generatedAt: new Date().toISOString()
+                    }
+                } as any;
             }
+            // Legacy compatibility path: if we also built a broader staticSnapshot (server-style) keep it only if needed for fallbacks.
+            // Preferred path: store just sharedBundle (smallest accurate representation)
+            let snapshotPayload: any = null;
+            if (sharedBundle) snapshotPayload = sharedBundle; else if (staticSnapshot) snapshotPayload = staticSnapshot; // fallback
             const response = await fetch('/api/snapshots/share', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -467,7 +484,7 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel,
                     createSnapshot: !snapshotId || snapshotId === 'temp-snapshot'
                     , rangeStart: window.start, rangeEnd: window.end
                     , granularity, compareMode
-                    , staticSnapshotJson: staticSnapshot || (sharedBundle ? { sharedBundle } : undefined)
+                    , staticSnapshotJson: snapshotPayload || undefined
                     // Note: csvData temporarily removed to avoid 413 Request Too Large errors
                     // TODO: Implement chunked CSV upload for large datasets
                 })

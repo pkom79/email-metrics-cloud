@@ -18,6 +18,10 @@ export async function GET(_req: Request, { params }: { params: { token: string }
     let json;
     if (shareRow?.snapshot_json) {
       json = shareRow.snapshot_json;
+      // Unwrap legacy wrapper style { sharedBundle } if present
+      if (json && json.sharedBundle && !json.schemaVersion) {
+        json = json.sharedBundle;
+      }
     } else {
       json = await buildSnapshotJSON({
         snapshotId: resolved.snapshotId,
@@ -37,7 +41,7 @@ export async function GET(_req: Request, { params }: { params: { token: string }
         campaigns: json.campaigns
       } as any;
     }
-    return NextResponse.json(json, {
+  return NextResponse.json(json, {
       status: 200,
       headers: {
         'Cache-Control': 'no-store',
