@@ -96,19 +96,34 @@ export async function POST(request: NextRequest) {
 
             // Create a snapshot with the upload_id from existing data
             // Use the source account that actually has the data
-            const { data: newSnapshot, error: snapshotError } = await serviceClient
-                .from('snapshots')
-                .insert({
-                    account_id: accountId, // Always use the requesting user's account for ownership
-                    label: `Dashboard Share - ${new Date().toLocaleDateString()}`,
-                    last_email_date: new Date().toISOString().split('T')[0],
-                    upload_id: uploadId, // Link to existing data
-            status: uploadId ? 'ready' : 'pending', // Set status based on whether we have data
-            range_start: rangeStart || null,
-            range_end: rangeEnd || null
-                })
-                .select()
-                .single();
+            // Build insert payload (include range fields if migrations applied)
+            const basePayload: any = {
+                account_id: accountId,
+                label: `Dashboard Share - ${new Date().toLocaleDateString()}`,
+                last_email_date: new Date().toISOString().split('T')[0],
+                upload_id: uploadId,
+                status: uploadId ? 'ready' : 'pending'
+            };
+            if (rangeStart) basePayload.range_start = rangeStart;
+            if (rangeEnd) basePayload.range_end = rangeEnd;
+
+            let newSnapshot: any = null; let snapshotError: any = null;
+            const attemptInsert = async (payload: any) => {
+                return await serviceClient
+                    .from('snapshots')
+                    .insert(payload)
+                    .select()
+                    .single();
+            };
+            let firstTry = await attemptInsert(basePayload);
+            newSnapshot = firstTry.data; snapshotError = firstTry.error;
+            // If undefined_column (42703) likely range_start/range_end migrations missing on remote DB. Retry without them.
+            if (snapshotError && snapshotError.code === '42703' && (basePayload.range_start || basePayload.range_end)) {
+                console.warn('⚠️ snapshots table missing range_start / range_end. Retrying insert without range columns. Run migrations to enable date range persistence.');
+                delete basePayload.range_start; delete basePayload.range_end;
+                const retry = await attemptInsert(basePayload);
+                newSnapshot = retry.data; snapshotError = retry.error;
+            }
 
             if (!uploadId) {
                 console.warn('No existing upload data for account; rejecting share creation without data');
@@ -117,7 +132,7 @@ export async function POST(request: NextRequest) {
 
             if (snapshotError || !newSnapshot) {
                 console.error('❌ Failed to create snapshot:', snapshotError);
-                return NextResponse.json({ error: 'Failed to create snapshot for sharing' }, { status: 500 });
+                return NextResponse.json({ error: 'Failed to create snapshot for sharing', details: snapshotError?.message || snapshotError }, { status: 500 });
             }
 
             console.log('✅ Created new snapshot:', newSnapshot.id, 'with upload_id:', uploadId);
