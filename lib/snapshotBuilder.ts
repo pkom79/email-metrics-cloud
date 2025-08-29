@@ -30,10 +30,17 @@ export interface SnapshotJSON {
 
 async function downloadIfExists(accountId: string, uploadId: string, filename: CanonicalFile): Promise<{ bucket: string; text: string } | null> {
   const rel = `${accountId}/${uploadId}/${filename}`;
+  const legacyRel = `${uploadId}/${filename}`; // older preauth layout (no accountId prefix)
   for (const bucket of CSV_BUCKETS) {
-    const { data, error } = await supabaseAdmin.storage.from(bucket).download(rel);
+    // First try canonical path
+    let { data, error } = await supabaseAdmin.storage.from(bucket).download(rel);
     if (data && !error) {
-      // Supabase returns Blob; convert directly to text
+      const text = await (data as Blob).text();
+      return { bucket, text };
+    }
+    // Fallback: legacy path (primarily for preauth-uploads but harmless to try once per bucket)
+    ({ data, error } = await supabaseAdmin.storage.from(bucket).download(legacyRel));
+    if (data && !error) {
       const text = await (data as Blob).text();
       return { bucket, text };
     }
