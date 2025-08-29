@@ -102,50 +102,76 @@ export default function SharedDashboard({ snapshotId, shareTitle, shareDescripti
             )
         }));
     };
-    const usingBundle = !!snap.sharedBundle;
-    const bundle = snap.sharedBundle;
+    // Detect canonical bundle (schemaVersion=1) or legacy wrapper sharedBundle or legacy snapshot schema
+    const canonical = snap.schemaVersion === 1 ? snap : (snap.sharedBundle && snap.sharedBundle.schemaVersion === 1 ? snap.sharedBundle : null);
+    const bundle = canonical || snap.sharedBundle || null;
+    const usingBundle = !!bundle;
     const dateRangeLabel = (() => {
-        if (usingBundle) {
-            const dr = bundle.meta; if (!dr?.start || !dr?.end) return 'custom';
-            const ms = new Date(dr.end).getTime() - new Date(dr.start).getTime();
+        if (canonical) {
+            const { start, end } = canonical.meta || {};
+            if (!start || !end) return 'custom';
+            const ms = new Date(end).getTime() - new Date(start).getTime();
             const days = Math.round(ms / 86400000) + 1; return days + 'd';
         }
-        const dr = snap.meta.dateRange; if (!dr?.start || !dr?.end) return 'custom';
-        const ms = new Date(dr.end).getTime() - new Date(dr.start).getTime();
-        const days = Math.round(ms / 86400000) + 1; return days + 'd';
+        if (snap.meta?.dateRange?.start && snap.meta?.dateRange?.end) {
+            const { start, end } = snap.meta.dateRange;
+            const ms = new Date(end).getTime() - new Date(start).getTime();
+            const days = Math.round(ms / 86400000) + 1; return days + 'd';
+        }
+        return 'custom';
     })();
-    const emailPerfCards = usingBundle ? (() => {
-        const blk = bundle.emailPerformance; if (!blk) return [];
-        const t = blk.totals; const d = blk.derived; const prev = blk.previous?.totals; const pd = blk.previous?.derived; const daily = blk.daily;
-        const val = (k: string, fmtType: 'currency' | 'number' | 'pct') => {
-            const map: any = { revenue: t.revenue, avgOrderValue: d.avgOrderValue, totalOrders: t.totalOrders, conversionRate: d.conversionRate, openRate: d.openRate, clickRate: d.clickRate, clickToOpenRate: d.clickToOpenRate, revenuePerEmail: d.revenuePerEmail, emailsSent: t.emailsSent, unsubscribeRate: d.unsubscribeRate, spamRate: d.spamRate, bounceRate: d.bounceRate };
-            const raw = map[k] || 0;
-            if (fmtType === 'currency') return money(raw);
-            if (fmtType === 'pct') return pct(raw);
-            return fmt(raw);
-        };
-        const prevVal = (k: string) => { const map: any = { revenue: prev?.revenue, avgOrderValue: pd?.avgOrderValue, totalOrders: prev?.totalOrders, conversionRate: pd?.conversionRate, openRate: pd?.openRate, clickRate: pd?.clickRate, clickToOpenRate: pd?.clickToOpenRate, revenuePerEmail: pd?.revenuePerEmail, emailsSent: prev?.emailsSent, unsubscribeRate: pd?.unsubscribeRate, spamRate: pd?.spamRate, bounceRate: pd?.bounceRate }; return map[k]; };
-        const seriesMap: any = { revenue: daily?.map((d: any) => ({ date: d.date, value: d.revenue })) || [], avgOrderValue: daily?.map((d: any) => ({ date: d.date, value: d.totalOrders ? d.revenue / d.totalOrders : 0 })) || [], totalOrders: daily?.map((d: any) => ({ date: d.date, value: d.totalOrders })) || [], conversionRate: daily?.map((d: any) => ({ date: d.date, value: d.uniqueClicks ? (d.totalOrders / d.uniqueClicks) * 100 : 0 })) || [], openRate: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? (d.uniqueOpens / d.emailsSent) * 100 : 0 })) || [], clickRate: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? (d.uniqueClicks / d.emailsSent) * 100 : 0 })) || [], clickToOpenRate: daily?.map((d: any) => ({ date: d.date, value: d.uniqueOpens ? (d.uniqueClicks / d.uniqueOpens) * 100 : 0 })) || [], revenuePerEmail: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? d.revenue / d.emailsSent : 0 })) || [], emailsSent: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent })) || [], unsubscribeRate: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? (d.unsubscribes / d.emailsSent) * 100 : 0 })) || [], spamRate: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? (d.spamComplaints / d.emailsSent) * 100 : 0 })) || [], bounceRate: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? (d.bounces / d.emailsSent) * 100 : 0 })) || [] };
+
+    // Compute previous period date range if canonical bundle present (previous object lacks explicit range)
+    function computePreviousRange(): { startDate: Date; endDate: Date } | undefined {
+        if (!canonical) return undefined;
+        const { start, end, compareMode } = canonical.meta || {} as any;
+        if (!start || !end) return undefined;
+        const startDate = new Date(start + 'T00:00:00');
+        const endDate = new Date(end + 'T23:59:59');
+        const days = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
+        if (compareMode === 'prev-year') {
+            const prevStart = new Date(startDate); prevStart.setFullYear(prevStart.getFullYear() - 1);
+            const prevEnd = new Date(endDate); prevEnd.setFullYear(prevEnd.getFullYear() - 1);
+            return { startDate: prevStart, endDate: prevEnd };
+        }
+        // default prev-period
+        const prevEnd = new Date(startDate); prevEnd.setDate(prevEnd.getDate() - 1); prevEnd.setHours(23, 59, 59, 999);
+        const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - (days - 1)); prevStart.setHours(0, 0, 0, 0);
+        return { startDate: prevStart, endDate: prevEnd };
+    }
+    const canonicalPrevRange = computePreviousRange();
+    const buildCardsFromBundle = (blk: any) => {
+        if (!blk) return [];
+        const t = blk.totals || {}; const d = blk.derived || {}; const prevT = blk.previous?.totals || {}; const prevD = blk.previous?.derived || {}; const daily = blk.daily || [];
         const changeMap = blk.changes || {};
-        const defs = [
-            ['revenue', 'Total Revenue', 'currency'], ['avgOrderValue', 'Average Order Value', 'currency'], ['totalOrders', 'Total Orders', 'number'], ['conversionRate', 'Conversion Rate', 'pct'], ['openRate', 'Open Rate', 'pct'], ['clickRate', 'Click Rate', 'pct'], ['clickToOpenRate', 'Click-to-Open Rate', 'pct'], ['revenuePerEmail', 'Revenue per Email', 'currency'], ['emailsSent', 'Emails Sent', 'number'], ['unsubscribeRate', 'Unsubscribe Rate', 'pct'], ['spamRate', 'Spam Rate', 'pct'], ['bounceRate', 'Bounce Rate', 'pct']
-        ] as const;
-        return defs.map(([k, label, fmtType]) => ({ key: k, title: label, value: val(k, fmtType as any), prev: prevVal(k), change: changeMap[k] ?? 0, spark: seriesMap[k] }));
-    })() : buildCards(snap.emailPerformance);
-    const campaignCards = usingBundle && bundle.campaignPerformance ? (() => {
-        const blk = bundle.campaignPerformance; const t = blk.totals; const d = blk.derived; const prev = blk.previous?.totals; const pd = blk.previous?.derived; const daily = blk.daily;
-        const val = (k: string, fmtType: any) => { const map: any = { revenue: t.revenue, avgOrderValue: d.avgOrderValue, totalOrders: t.totalOrders, conversionRate: d.conversionRate, openRate: d.openRate, clickRate: d.clickRate, clickToOpenRate: d.clickToOpenRate, revenuePerEmail: d.revenuePerEmail, emailsSent: t.emailsSent, unsubscribeRate: d.unsubscribeRate, spamRate: d.spamRate, bounceRate: d.bounceRate }; const raw = map[k] || 0; if (fmtType === 'currency') return money(raw); if (fmtType === 'pct') return pct(raw); return fmt(raw); };
-        const prevVal = (k: string) => { const map: any = { revenue: prev?.revenue, avgOrderValue: pd?.avgOrderValue, totalOrders: prev?.totalOrders, conversionRate: pd?.conversionRate, openRate: pd?.openRate, clickRate: pd?.clickRate, clickToOpenRate: pd?.clickToOpenRate, revenuePerEmail: pd?.revenuePerEmail, emailsSent: prev?.emailsSent, unsubscribeRate: pd?.unsubscribeRate, spamRate: pd?.spamRate, bounceRate: pd?.bounceRate }; return map[k]; };
-        const seriesMap: any = { revenue: daily?.map((d: any) => ({ date: d.date, value: d.revenue })) || [], avgOrderValue: daily?.map((d: any) => ({ date: d.date, value: d.totalOrders ? d.revenue / d.totalOrders : 0 })) || [], totalOrders: daily?.map((d: any) => ({ date: d.date, value: d.totalOrders })) || [], conversionRate: daily?.map((d: any) => ({ date: d.date, value: d.uniqueClicks ? (d.totalOrders / d.uniqueClicks) * 100 : 0 })) || [], openRate: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? (d.uniqueOpens / d.emailsSent) * 100 : 0 })) || [], clickRate: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? (d.uniqueClicks / d.emailsSent) * 100 : 0 })) || [], clickToOpenRate: daily?.map((d: any) => ({ date: d.date, value: d.uniqueOpens ? (d.uniqueClicks / d.uniqueOpens) * 100 : 0 })) || [], revenuePerEmail: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? d.revenue / d.emailsSent : 0 })) || [], emailsSent: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent })) || [], unsubscribeRate: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? (d.unsubscribes / d.emailsSent) * 100 : 0 })) || [], spamRate: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? (d.spamComplaints / d.emailsSent) * 100 : 0 })) || [], bounceRate: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? (d.bounces / d.emailsSent) * 100 : 0 })) || [] };
-        const changeMap = blk.changes || {}; const defs = [['revenue', 'Total Revenue', 'currency'], ['avgOrderValue', 'Average Order Value', 'currency'], ['totalOrders', 'Total Orders', 'number'], ['conversionRate', 'Conversion Rate', 'pct'], ['openRate', 'Open Rate', 'pct'], ['clickRate', 'Click Rate', 'pct'], ['clickToOpenRate', 'Click-to-Open Rate', 'pct'], ['revenuePerEmail', 'Revenue per Email', 'currency'], ['emailsSent', 'Emails Sent', 'number'], ['unsubscribeRate', 'Unsubscribe Rate', 'pct'], ['spamRate', 'Spam Rate', 'pct'], ['bounceRate', 'Bounce Rate', 'pct']] as const; return defs.map(([k, label, fmtType]) => ({ key: k, title: label, value: val(k, fmtType), prev: prevVal(k), change: changeMap[k] ?? 0, spark: seriesMap[k] }));
-    })() : buildCards(snap.campaignPerformance);
-    const flowCards = usingBundle && bundle.flowPerformance ? (() => {
-        const blk = bundle.flowPerformance; const t = blk.totals; const d = blk.derived; const prev = blk.previous?.totals; const pd = blk.previous?.derived; const daily = blk.daily;
-        const val = (k: string, fmtType: any) => { const map: any = { revenue: t.revenue, avgOrderValue: d.avgOrderValue, totalOrders: t.totalOrders, conversionRate: d.conversionRate, openRate: d.openRate, clickRate: d.clickRate, clickToOpenRate: d.clickToOpenRate, revenuePerEmail: d.revenuePerEmail, emailsSent: t.emailsSent, unsubscribeRate: d.unsubscribeRate, spamRate: d.spamRate, bounceRate: d.bounceRate }; const raw = map[k] || 0; if (fmtType === 'currency') return money(raw); if (fmtType === 'pct') return pct(raw); return fmt(raw); };
-        const prevVal = (k: string) => { const map: any = { revenue: prev?.revenue, avgOrderValue: pd?.avgOrderValue, totalOrders: prev?.totalOrders, conversionRate: pd?.conversionRate, openRate: pd?.openRate, clickRate: pd?.clickRate, clickToOpenRate: pd?.clickToOpenRate, revenuePerEmail: pd?.revenuePerEmail, emailsSent: prev?.emailsSent, unsubscribeRate: pd?.unsubscribeRate, spamRate: pd?.spamRate, bounceRate: pd?.bounceRate }; return map[k]; };
-        const seriesMap: any = { revenue: daily?.map((d: any) => ({ date: d.date, value: d.revenue })) || [], avgOrderValue: daily?.map((d: any) => ({ date: d.date, value: d.totalOrders ? d.revenue / d.totalOrders : 0 })) || [], totalOrders: daily?.map((d: any) => ({ date: d.date, value: d.totalOrders })) || [], conversionRate: daily?.map((d: any) => ({ date: d.date, value: d.uniqueClicks ? (d.totalOrders / d.uniqueClicks) * 100 : 0 })) || [], openRate: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? (d.uniqueOpens / d.emailsSent) * 100 : 0 })) || [], clickRate: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? (d.uniqueClicks / d.emailsSent) * 100 : 0 })) || [], clickToOpenRate: daily?.map((d: any) => ({ date: d.date, value: d.uniqueOpens ? (d.uniqueClicks / d.uniqueOpens) * 100 : 0 })) || [], revenuePerEmail: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? d.revenue / d.emailsSent : 0 })) || [], emailsSent: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent })) || [], unsubscribeRate: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? (d.unsubscribes / d.emailsSent) * 100 : 0 })) || [], spamRate: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? (d.spamComplaints / d.emailsSent) * 100 : 0 })) || [], bounceRate: daily?.map((d: any) => ({ date: d.date, value: d.emailsSent ? (d.bounces / d.emailsSent) * 100 : 0 })) || [] };
-        const changeMap = blk.changes || {}; const defs = [['revenue', 'Total Revenue', 'currency'], ['avgOrderValue', 'Average Order Value', 'currency'], ['totalOrders', 'Total Orders', 'number'], ['conversionRate', 'Conversion Rate', 'pct'], ['openRate', 'Open Rate', 'pct'], ['clickRate', 'Click Rate', 'pct'], ['clickToOpenRate', 'Click-to-Open Rate', 'pct'], ['revenuePerEmail', 'Revenue per Email', 'currency'], ['emailsSent', 'Emails Sent', 'number'], ['unsubscribeRate', 'Unsubscribe Rate', 'pct'], ['spamRate', 'Spam Rate', 'pct'], ['bounceRate', 'Bounce Rate', 'pct']] as const; return defs.map(([k, label, fmtType]) => ({ key: k, title: label, value: val(k, fmtType), prev: prevVal(k), change: changeMap[k] ?? 0, spark: seriesMap[k] }));
-    })() : buildCards(snap.flowPerformance);
+        const series = (fn: (row: any) => number) => daily.map((r: any) => ({ date: r.date, value: fn(r) }));
+        const defs: { key: string; label: string; kind: 'currency' | 'pct' | 'number'; current: number; prev: number | undefined; series: any[] }[] = [
+            { key: 'revenue', label: 'Total Revenue', kind: 'currency', current: t.revenue || 0, prev: prevT.revenue, series: series(r => r.revenue || 0) },
+            { key: 'avgOrderValue', label: 'Average Order Value', kind: 'currency', current: d.avgOrderValue || 0, prev: prevD.avgOrderValue, series: series(r => (r.totalOrders ? (r.revenue || 0) / r.totalOrders : 0)) },
+            { key: 'totalOrders', label: 'Total Orders', kind: 'number', current: t.totalOrders || 0, prev: prevT.totalOrders, series: series(r => r.totalOrders || 0) },
+            { key: 'conversionRate', label: 'Conversion Rate', kind: 'pct', current: d.conversionRate || 0, prev: prevD.conversionRate, series: series(r => (r.uniqueClicks ? (r.totalOrders || 0) / r.uniqueClicks * 100 : 0)) },
+            { key: 'openRate', label: 'Open Rate', kind: 'pct', current: d.openRate || 0, prev: prevD.openRate, series: series(r => (r.emailsSent ? (r.uniqueOpens || 0) / r.emailsSent * 100 : 0)) },
+            { key: 'clickRate', label: 'Click Rate', kind: 'pct', current: d.clickRate || 0, prev: prevD.clickRate, series: series(r => (r.emailsSent ? (r.uniqueClicks || 0) / r.emailsSent * 100 : 0)) },
+            { key: 'clickToOpenRate', label: 'Click-to-Open Rate', kind: 'pct', current: d.clickToOpenRate || 0, prev: prevD.clickToOpenRate, series: series(r => (r.uniqueOpens ? (r.uniqueClicks || 0) / r.uniqueOpens * 100 : 0)) },
+            { key: 'revenuePerEmail', label: 'Revenue per Email', kind: 'currency', current: d.revenuePerEmail || 0, prev: prevD.revenuePerEmail, series: series(r => (r.emailsSent ? (r.revenue || 0) / r.emailsSent : 0)) },
+            { key: 'emailsSent', label: 'Emails Sent', kind: 'number', current: t.emailsSent || 0, prev: prevT.emailsSent, series: series(r => r.emailsSent || 0) },
+            { key: 'unsubscribeRate', label: 'Unsubscribe Rate', kind: 'pct', current: d.unsubscribeRate || 0, prev: prevD.unsubscribeRate, series: series(r => (r.emailsSent ? (r.unsubscribes || 0) / r.emailsSent * 100 : 0)) },
+            { key: 'spamRate', label: 'Spam Rate', kind: 'pct', current: d.spamRate || 0, prev: prevD.spamRate, series: series(r => (r.emailsSent ? (r.spamComplaints || 0) / r.emailsSent * 100 : 0)) },
+            { key: 'bounceRate', label: 'Bounce Rate', kind: 'pct', current: d.bounceRate || 0, prev: prevD.bounceRate, series: series(r => (r.emailsSent ? (r.bounces || 0) / r.emailsSent * 100 : 0)) }
+        ];
+        return defs.map(m => ({
+            key: m.key,
+            title: m.label,
+            value: m.kind === 'currency' ? money(m.current) : (m.kind === 'pct' ? pct(m.current) : fmt(m.current)),
+            prev: m.prev,
+            change: changeMap[m.key] != null ? changeMap[m.key] : (m.prev != null && m.prev !== 0 ? ((m.current - m.prev) / m.prev) * 100 : 0),
+            spark: m.series
+        }));
+    };
+
+    const emailPerfCards = usingBundle ? buildCardsFromBundle(bundle.emailPerformance) : buildCards(snap.emailPerformance);
+    const campaignCards = usingBundle ? buildCardsFromBundle(bundle.campaignPerformance) : buildCards(snap.campaignPerformance);
+    const flowCards = usingBundle ? buildCardsFromBundle(bundle.flowPerformance) : buildCards(snap.flowPerformance);
 
     return (
         <div className="space-y-10">
@@ -154,7 +180,7 @@ export default function SharedDashboard({ snapshotId, shareTitle, shareDescripti
                 <section>
                     <div className="flex items-center gap-2 mb-3"><span className="text-purple-600">✉️</span><h2 className="text-xl font-bold">Email Performance Overview</h2></div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {emailPerfCards.map(c => <MetricCard key={c.key} title={c.title} value={c.value} change={c.change || 0} isPositive={(c.change || 0) >= 0} previousValue={c.prev} previousPeriod={snap.emailPerformance?.previous ? { startDate: new Date(snap.emailPerformance.previous.range.start), endDate: new Date(snap.emailPerformance.previous.range.end) } : undefined} dateRange={dateRangeLabel} metricKey={c.key} sparklineData={c.spark} />)}
+                        {emailPerfCards.map(c => <MetricCard key={c.key} title={c.title} value={c.value} change={c.change || 0} isPositive={(c.change || 0) >= 0} previousValue={c.prev} previousPeriod={canonical ? canonicalPrevRange : (snap.emailPerformance?.previous?.range ? { startDate: new Date(snap.emailPerformance.previous.range.start), endDate: new Date(snap.emailPerformance.previous.range.end) } : undefined)} dateRange={dateRangeLabel} metricKey={c.key} sparklineData={c.spark} />)}
                     </div>
                 </section>
             )}
@@ -164,7 +190,7 @@ export default function SharedDashboard({ snapshotId, shareTitle, shareDescripti
                 <section>
                     <div className="flex items-center gap-2 mb-3"><span className="text-purple-600">📨</span><h2 className="text-xl font-bold">Campaign Overview</h2></div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {campaignCards.map(c => <MetricCard key={c.key} title={c.title} value={c.value} change={c.change || 0} isPositive={(c.change || 0) >= 0} previousValue={c.prev} previousPeriod={snap.campaignPerformance?.previous ? { startDate: new Date(snap.campaignPerformance.previous.range.start), endDate: new Date(snap.campaignPerformance.previous.range.end) } : undefined} dateRange={dateRangeLabel} metricKey={c.key} sparklineData={c.spark} />)}
+                        {campaignCards.map(c => <MetricCard key={c.key} title={c.title} value={c.value} change={c.change || 0} isPositive={(c.change || 0) >= 0} previousValue={c.prev} previousPeriod={canonical ? canonicalPrevRange : (snap.campaignPerformance?.previous?.range ? { startDate: new Date(snap.campaignPerformance.previous.range.start), endDate: new Date(snap.campaignPerformance.previous.range.end) } : undefined)} dateRange={dateRangeLabel} metricKey={c.key} sparklineData={c.spark} />)}
                     </div>
                 </section>
             )}
@@ -174,7 +200,7 @@ export default function SharedDashboard({ snapshotId, shareTitle, shareDescripti
                 <section>
                     <div className="flex items-center gap-2 mb-3"><span className="text-purple-600">⚡</span><h2 className="text-xl font-bold">Flow Performance</h2></div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {flowCards.map(c => <MetricCard key={c.key} title={c.title} value={c.value} change={c.change || 0} isPositive={(c.change || 0) >= 0} previousValue={c.prev} previousPeriod={snap.flowPerformance?.previous ? { startDate: new Date(snap.flowPerformance.previous.range.start), endDate: new Date(snap.flowPerformance.previous.range.end) } : undefined} dateRange={dateRangeLabel} metricKey={c.key} sparklineData={c.spark} />)}
+                        {flowCards.map(c => <MetricCard key={c.key} title={c.title} value={c.value} change={c.change || 0} isPositive={(c.change || 0) >= 0} previousValue={c.prev} previousPeriod={canonical ? canonicalPrevRange : (snap.flowPerformance?.previous?.range ? { startDate: new Date(snap.flowPerformance.previous.range.start), endDate: new Date(snap.flowPerformance.previous.range.end) } : undefined)} dateRange={dateRangeLabel} metricKey={c.key} sparklineData={c.spark} />)}
                     </div>
                 </section>
             )}
@@ -191,7 +217,7 @@ export default function SharedDashboard({ snapshotId, shareTitle, shareDescripti
                     </div>
                 </section>
             )}
-            <p className="text-[10px] text-gray-400 text-right">Snapshot window {usingBundle ? bundle.meta.start : snap.meta.dateRange.start} → {usingBundle ? bundle.meta.end : snap.meta.dateRange.end} • Generated {new Date((usingBundle ? bundle.meta.generatedAt : snap.meta.generatedAt)).toLocaleString()}</p>
+            <p className="text-[10px] text-gray-400 text-right">Snapshot window {canonical ? canonical.meta.start : (snap.meta?.dateRange?.start || '???')} → {canonical ? canonical.meta.end : (snap.meta?.dateRange?.end || '???')} • Generated {new Date((canonical ? canonical.meta.generatedAt : (snap.meta?.generatedAt || Date.now()))).toLocaleString()}</p>
         </div>
     );
 }
