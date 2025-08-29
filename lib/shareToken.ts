@@ -19,12 +19,25 @@ type ShareRow = {
 };
 
 export async function resolveShareTokenStrict(token: string): Promise<ShareResolution> {
-  const { data, error } = await supabaseAdmin
+  // Primary query including optional range columns (new migration). Falls back if columns absent.
+  let query = supabaseAdmin
     .from('snapshot_shares')
-  .select('snapshot_id, share_token, is_active, expires_at, snapshots!inner(id,account_id,upload_id,range_start,range_end)')
+    .select('snapshot_id, share_token, is_active, expires_at, snapshots!inner(id,account_id,upload_id,range_start,range_end)')
     .eq('share_token', token)
-    .limit(1)
-    .maybeSingle<ShareRow>();
+    .limit(1);
+
+  let { data, error } = await query.maybeSingle<ShareRow>();
+  if (error && /range_start|range_end/i.test(error.message || '')) {
+    // Fallback without range columns for environments missing migration
+    const fallback = await supabaseAdmin
+      .from('snapshot_shares')
+      .select('snapshot_id, share_token, is_active, expires_at, snapshots!inner(id,account_id,upload_id)')
+      .eq('share_token', token)
+      .limit(1)
+      .maybeSingle<ShareRow>();
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) throw new Error(`share lookup failed: ${error.message}`);
   if (!data) throw new Error('share not found');
@@ -37,10 +50,9 @@ export async function resolveShareTokenStrict(token: string): Promise<ShareResol
     token,
     snapshotId: data.snapshot_id,
     accountId: data.snapshots.account_id,
-  uploadId: data.snapshots.upload_id,
+    uploadId: (data.snapshots as any).upload_id,
     expiresAt: data.expires_at,
-  // Pass through date range if present (optional usage downstream)
-  rangeStart: (data.snapshots as any).range_start || undefined,
-  rangeEnd: (data.snapshots as any).range_end || undefined,
+    rangeStart: (data.snapshots as any).range_start || undefined,
+    rangeEnd: (data.snapshots as any).range_end || undefined,
   };
 }
