@@ -366,6 +366,95 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel,
                 }
             };
             const staticSnapshot = buildClientStaticSnapshot();
+            // Build a minimal sharedBundle using same logic as DashboardHeavy for exact metric parity
+            const buildSharedBundle = () => {
+                try {
+                    const dm = DataManager.getInstance();
+                    if (!window.start || !window.end) return null;
+                    const start = new Date(window.start + 'T00:00:00');
+                    const end = new Date(window.end + 'T23:59:59');
+                    const inRange = (d: Date) => d >= start && d <= end;
+                    const campaigns = dm.getCampaigns().filter(c => c.sentDate && inRange(c.sentDate));
+                    const flows = dm.getFlowEmails().filter(f => f.sentDate && inRange(f.sentDate));
+                    if (!campaigns.length && !flows.length) return null;
+                    const all = [...campaigns, ...flows];
+                    const sum = (rows: any[]) => rows.reduce((acc, e) => { acc.revenue += e.revenue; acc.emailsSent += e.emailsSent; acc.totalOrders += e.totalOrders; acc.uniqueOpens += e.uniqueOpens; acc.uniqueClicks += e.uniqueClicks; acc.unsubscribes += e.unsubscribesCount; acc.spamComplaints += e.spamComplaintsCount; acc.bounces += e.bouncesCount; return acc; }, { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribes: 0, spamComplaints: 0, bounces: 0 });
+                    const mkDerived = (t: any) => ({
+                        avgOrderValue: t.totalOrders ? t.revenue / t.totalOrders : 0,
+                        revenuePerEmail: t.emailsSent ? t.revenue / t.emailsSent : 0,
+                        openRate: t.emailsSent ? (t.uniqueOpens / t.emailsSent) * 100 : 0,
+                        clickRate: t.emailsSent ? (t.uniqueClicks / t.emailsSent) * 100 : 0,
+                        clickToOpenRate: t.uniqueOpens ? (t.uniqueClicks / t.uniqueOpens) * 100 : 0,
+                        conversionRate: t.uniqueClicks ? (t.totalOrders / t.uniqueClicks) * 100 : 0,
+                        unsubscribeRate: t.emailsSent ? (t.unsubscribes / t.emailsSent) * 100 : 0,
+                        spamRate: t.emailsSent ? (t.spamComplaints / t.emailsSent) * 100 : 0,
+                        bounceRate: t.emailsSent ? (t.bounces / t.emailsSent) * 100 : 0,
+                    });
+                    const totalsAll = sum(all);
+                    const totalsCampaigns = sum(campaigns);
+                    const totalsFlows = sum(flows);
+                    const previousPeriod = (() => {
+                        const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+                        const prevEnd = new Date(start); prevEnd.setDate(prevEnd.getDate() - 1); prevEnd.setHours(23, 59, 59, 999);
+                        const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - (days - 1)); prevStart.setHours(0, 0, 0, 0);
+                        const inPrev = (d: Date) => d >= prevStart && d <= prevEnd;
+                        const prevAll = all.filter(e => e.sentDate && inPrev(e.sentDate));
+                        const prevCamp = campaigns.filter(e => e.sentDate && inPrev(e.sentDate));
+                        const prevFlow = flows.filter(e => e.sentDate && inPrev(e.sentDate));
+                        return { prevStart, prevEnd, prevAll, prevCamp, prevFlow };
+                    })();
+                    const prevTotalsAll = sum(previousPeriod.prevAll);
+                    const prevTotalsCamp = sum(previousPeriod.prevCamp);
+                    const prevTotalsFlow = sum(previousPeriod.prevFlow);
+                    const dailyMap = new Map<string, any>();
+                    const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+                    for (const e of all) { const k = dayKey(e.sentDate); const cur = dailyMap.get(k) || { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribes: 0, spamComplaints: 0, bounces: 0 }; cur.revenue += e.revenue; cur.emailsSent += e.emailsSent; cur.totalOrders += e.totalOrders; cur.uniqueOpens += e.uniqueOpens; cur.uniqueClicks += e.uniqueClicks; cur.unsubscribes += e.unsubscribesCount; cur.spamComplaints += e.spamComplaintsCount; cur.bounces += e.bouncesCount; dailyMap.set(k, cur); }
+                    const daily = [...dailyMap.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1).map(([date, v]) => ({ date, ...v }));
+                    const changePct = (cur: number, prev: number) => prev ? ((cur - prev) / prev) * 100 : 0;
+                    const metricBundle = (totals: any, prev: any) => {
+                        const d = mkDerived(totals); const pd = mkDerived(prev);
+                        return {
+                            totals,
+                            derived: d,
+                            previous: { totals: prev, derived: pd },
+                            changes: {
+                                revenue: changePct(totals.revenue, prev.revenue),
+                                avgOrderValue: changePct(d.avgOrderValue, pd.avgOrderValue),
+                                totalOrders: changePct(totals.totalOrders, prev.totalOrders),
+                                conversionRate: changePct(d.conversionRate, pd.conversionRate),
+                                openRate: changePct(d.openRate, pd.openRate),
+                                clickRate: changePct(d.clickRate, pd.clickRate),
+                                clickToOpenRate: changePct(d.clickToOpenRate, pd.clickToOpenRate),
+                                revenuePerEmail: changePct(d.revenuePerEmail, pd.revenuePerEmail),
+                                emailsSent: changePct(totals.emailsSent, prev.emailsSent),
+                                unsubscribeRate: changePct(d.unsubscribeRate, pd.unsubscribeRate),
+                                spamRate: changePct(d.spamRate, pd.spamRate),
+                                bounceRate: changePct(d.bounceRate, pd.bounceRate)
+                            },
+                            daily
+                        };
+                    };
+                    const audience = (() => {
+                        const subs = dm.getSubscribers();
+                        if (!subs.length) return undefined;
+                        const subscribed = subs.filter(s => /subscribed/i.test((s as any).emailMarketingConsent || (s as any).consent || 'subscribed')).length;
+                        return { totalSubscribers: subs.length, subscribedCount: subscribed, unsubscribedCount: subs.length - subscribed, percentSubscribed: subs.length ? (subscribed / subs.length) * 100 : 0 };
+                    })();
+                    return {
+                        meta: { start: window.start, end: window.end, generatedAt: new Date().toISOString() },
+                        audienceOverview: audience,
+                        emailPerformance: metricBundle(totalsAll, prevTotalsAll),
+                        campaignPerformance: totalsCampaigns.emailsSent ? metricBundle(totalsCampaigns, prevTotalsCamp) : undefined,
+                        flowPerformance: totalsFlows.emailsSent ? metricBundle(totalsFlows, prevTotalsFlow) : undefined
+                    };
+                } catch (e) {
+                    console.warn('buildSharedBundle failed', e); return null;
+                }
+            };
+            const sharedBundle = buildSharedBundle();
+            if (staticSnapshot && sharedBundle) {
+                (staticSnapshot as any).sharedBundle = sharedBundle;
+            }
             const response = await fetch('/api/snapshots/share', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -378,7 +467,7 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel,
                     createSnapshot: !snapshotId || snapshotId === 'temp-snapshot'
                     , rangeStart: window.start, rangeEnd: window.end
                     , granularity, compareMode
-                    , staticSnapshotJson: staticSnapshot || undefined
+                    , staticSnapshotJson: staticSnapshot || (sharedBundle ? { sharedBundle } : undefined)
                     // Note: csvData temporarily removed to avoid 413 Request Too Large errors
                     // TODO: Implement chunked CSV upload for large datasets
                 })
