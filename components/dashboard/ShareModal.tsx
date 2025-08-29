@@ -238,6 +238,134 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel,
             }
 
             const window = computeWindow();
+
+            // Build reduced static snapshot JSON directly from DataManager to ensure parity with main dashboard metrics
+            const buildClientStaticSnapshot = () => {
+                try {
+                    const dm = DataManager.getInstance();
+                    const allCampaigns = dm.getCampaigns();
+                    const allFlows = dm.getFlowEmails();
+                    const subscribers = dm.getSubscribers();
+                    if (!allCampaigns.length && !allFlows.length) return null;
+                    if (!window.start || !window.end) return null;
+                    const start = new Date(window.start + 'T00:00:00Z');
+                    const end = new Date(window.end + 'T23:59:59Z');
+
+                    const inRange = (d: Date) => d >= start && d <= end;
+                    const campaigns = allCampaigns.filter(c => c.sentDate && inRange(c.sentDate));
+                    const flows = allFlows.filter(f => f.sentDate && inRange(f.sentDate));
+
+                    // Helper to sum metrics on a collection (campaign + flow email objects share field names used below)
+                    const zero = { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribes: 0, spamComplaints: 0, bounces: 0 };
+                    const sumGeneric = (rows: any[]) => rows.reduce((acc, e) => {
+                        acc.revenue += e.revenue || 0;
+                        acc.emailsSent += e.emailsSent || 0;
+                        acc.totalOrders += e.totalOrders || 0;
+                        acc.uniqueOpens += e.uniqueOpens || 0;
+                        acc.uniqueClicks += e.uniqueClicks || 0;
+                        acc.unsubscribes += e.unsubscribesCount || e.unsubscribes || 0;
+                        acc.spamComplaints += e.spamComplaintsCount || e.spamComplaints || 0;
+                        acc.bounces += e.bouncesCount || e.bounces || 0;
+                        return acc;
+                    }, { ...zero });
+
+                    const allEmails = [...campaigns.map(c => ({ category: 'campaign', ...c })), ...flows.map(f => ({ category: 'flow', ...f }))];
+                    const totalsAll = sumGeneric(allEmails);
+                    const totalsCampaigns = sumGeneric(allEmails.filter(e => e.category === 'campaign'));
+                    const totalsFlows = sumGeneric(allEmails.filter(e => e.category === 'flow'));
+
+                    const mkDerived = (t: typeof totalsAll) => ({
+                        openRate: t.emailsSent ? Math.min(100, (t.uniqueOpens / t.emailsSent) * 100) : 0,
+                        clickRate: t.emailsSent ? Math.min(100, (t.uniqueClicks / t.emailsSent) * 100) : 0,
+                        clickToOpenRate: t.uniqueOpens ? Math.min(100, (t.uniqueClicks / t.uniqueOpens) * 100) : 0,
+                        conversionRate: t.uniqueClicks ? Math.min(100, (t.totalOrders / t.uniqueClicks) * 100) : 0,
+                        revenuePerEmail: t.emailsSent ? t.revenue / t.emailsSent : 0,
+                        avgOrderValue: t.totalOrders ? t.revenue / t.totalOrders : 0,
+                        unsubscribeRate: t.emailsSent ? Math.min(100, (t.unsubscribes / t.emailsSent) * 100) : 0,
+                        spamRate: t.emailsSent ? Math.min(100, (t.spamComplaints / t.emailsSent) * 100) : 0,
+                        bounceRate: t.emailsSent ? Math.min(100, (t.bounces / t.emailsSent) * 100) : 0,
+                    });
+
+                    // Daily aggregation
+                    const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+                    const dailyMapAll = new Map<string, typeof zero>();
+                    const dailyMapCampaigns = new Map<string, typeof zero>();
+                    const dailyMapFlows = new Map<string, typeof zero>();
+                    const addDaily = (map: Map<string, typeof zero>, e: any) => {
+                        const k = dayKey(e.sentDate);
+                        const cur = map.get(k) || { ...zero };
+                        cur.revenue += e.revenue || 0;
+                        cur.emailsSent += e.emailsSent || 0;
+                        cur.totalOrders += e.totalOrders || 0;
+                        cur.uniqueOpens += e.uniqueOpens || 0;
+                        cur.uniqueClicks += e.uniqueClicks || 0;
+                        cur.unsubscribes += e.unsubscribesCount || e.unsubscribes || 0;
+                        cur.spamComplaints += e.spamComplaintsCount || e.spamComplaints || 0;
+                        cur.bounces += e.bouncesCount || e.bounces || 0;
+                        map.set(k, cur);
+                    };
+                    for (const e of allEmails) { if (!e.sentDate) continue; addDaily(dailyMapAll, e); if (e.category === 'campaign') addDaily(dailyMapCampaigns, e); else addDaily(dailyMapFlows, e); }
+                    const toDaily = (map: Map<string, typeof zero>) => [...map.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1).map(([date, v]) => ({ date, ...v }));
+
+                    // Previous period
+                    const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+                    const prevEnd = new Date(start); prevEnd.setDate(prevEnd.getDate() - 1); prevEnd.setHours(23, 59, 59, 999);
+                    const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - (days - 1)); prevStart.setHours(0, 0, 0, 0);
+                    const inPrev = (d: Date) => d >= prevStart && d <= prevEnd;
+                    const prevEmails = ([] as any[]).concat(allCampaigns as any[], allFlows as any[]).filter(e => e.sentDate && inPrev(e.sentDate));
+                    const prevAll = sumGeneric(prevEmails);
+                    const prevCampaigns = sumGeneric(prevEmails.filter(e => (e as any).campaignName));
+                    const prevFlows = sumGeneric(prevEmails.filter(e => (e as any).flowName || (e as any).flowMessageId));
+
+                    const subscribed = subscribers.filter((s: any) => /subscribed/i.test(s.emailMarketingConsent || s.consent || 'subscribed')).length;
+                    const audienceOverview = subscribers.length ? {
+                        totalSubscribers: subscribers.length,
+                        subscribedCount: subscribed,
+                        unsubscribedCount: subscribers.length - subscribed,
+                        percentSubscribed: subscribers.length ? (subscribed / subscribers.length) * 100 : 0,
+                    } : undefined;
+
+                    const snapshot = {
+                        meta: {
+                            snapshotId: 'client-static',
+                            generatedAt: new Date().toISOString(),
+                            accountId: 'local',
+                            uploadId: 'local',
+                            dateRange: { start: window.start, end: window.end },
+                            granularity: 'daily' as const,
+                            compareRange: { start: prevStart.toISOString().slice(0, 10), end: prevEnd.toISOString().slice(0, 10) },
+                            sections: [
+                                ...(audienceOverview ? ['audienceOverview'] : []),
+                                'emailPerformance', 'campaignPerformance', 'flowPerformance'
+                            ]
+                        },
+                        audienceOverview,
+                        emailPerformance: {
+                            totals: totalsAll,
+                            derived: mkDerived(totalsAll),
+                            previous: prevEmails.length ? { totals: prevAll, derived: mkDerived(prevAll), range: { start: prevStart.toISOString().slice(0, 10), end: prevEnd.toISOString().slice(0, 10) } } : undefined,
+                            daily: toDaily(dailyMapAll)
+                        },
+                        campaignPerformance: totalsCampaigns.emailsSent ? {
+                            totals: totalsCampaigns,
+                            derived: mkDerived(totalsCampaigns),
+                            previous: prevCampaigns.emailsSent ? { totals: prevCampaigns, derived: mkDerived(prevCampaigns), range: { start: prevStart.toISOString().slice(0, 10), end: prevEnd.toISOString().slice(0, 10) } } : undefined,
+                            daily: toDaily(dailyMapCampaigns)
+                        } : undefined,
+                        flowPerformance: totalsFlows.emailsSent ? {
+                            totals: totalsFlows,
+                            derived: mkDerived(totalsFlows),
+                            previous: prevFlows.emailsSent ? { totals: prevFlows, derived: mkDerived(prevFlows), range: { start: prevStart.toISOString().slice(0, 10), end: prevEnd.toISOString().slice(0, 10) } } : undefined,
+                            daily: toDaily(dailyMapFlows)
+                        } : undefined
+                    };
+                    return snapshot;
+                } catch (e) {
+                    console.warn('Failed building client static snapshot', e);
+                    return null;
+                }
+            };
+            const staticSnapshot = buildClientStaticSnapshot();
             const response = await fetch('/api/snapshots/share', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -250,6 +378,7 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel,
                     createSnapshot: !snapshotId || snapshotId === 'temp-snapshot'
                     , rangeStart: window.start, rangeEnd: window.end
                     , granularity, compareMode
+                    , staticSnapshotJson: staticSnapshot || undefined
                     // Note: csvData temporarily removed to avoid 413 Request Too Large errors
                     // TODO: Implement chunked CSV upload for large datasets
                 })
