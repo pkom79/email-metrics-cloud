@@ -54,184 +54,77 @@ export default function SharedDashboard({ snapshotId, shareTitle, shareDescripti
     }
 
     const snap = state.data!;
-    const dateRangeLabel = `${snap.meta.dateRange.start} → ${snap.meta.dateRange.end}`;
-
     function fmt(n: number, opts: Intl.NumberFormatOptions = {}) { return new Intl.NumberFormat('en-US', opts).format(n); }
-    const pct = (v: number) => `${v.toFixed(1)}%`;
+    const pct = (v: number) => `${(Number.isFinite(v) ? v : 0).toFixed(2)}%`;
     const money = (v: number) => fmt(v, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-    const cards: Array<{ key: string; title: string; value: string; isPct?: boolean; }> = [];
-    if (snap.emailPerformance) {
-        const t = snap.emailPerformance.totals; const d = snap.emailPerformance.derived;
-        cards.push(
-            { key: 'revenue', title: 'Total Revenue', value: money(t.revenue) },
-            { key: 'avgOrderValue', title: 'Avg Order Value', value: money(d.avgOrderValue) },
-            { key: 'emailsSent', title: 'Emails Sent', value: fmt(t.emailsSent) },
-            { key: 'totalOrders', title: 'Total Orders', value: fmt(t.totalOrders) },
-            { key: 'openRate', title: 'Open Rate', value: pct(d.openRate) },
-            { key: 'clickRate', title: 'Click Rate', value: pct(d.clickRate) },
-            { key: 'clickToOpenRate', title: 'Click-To-Open', value: pct(d.clickToOpenRate) },
-            { key: 'conversionRate', title: 'Conversion Rate', value: pct(d.conversionRate) },
-            { key: 'revenuePerEmail', title: 'Revenue / Email', value: money(d.revenuePerEmail) },
-            { key: 'unsubscribeRate', title: 'Unsub Rate', value: pct(d.unsubscribeRate) },
-            { key: 'spamRate', title: 'Spam Rate', value: pct(d.spamRate) },
-            { key: 'bounceRate', title: 'Bounce Rate', value: pct(d.bounceRate) },
-        );
-    }
+    const makeSeries = (daily?: any[]) => daily?.map(p => ({ date: p.date, value: p.revenue })) || [];
+    const makeRateSeries = (numer: keyof any, denom: keyof any, daily?: any[]) => (daily || []).map(p => ({ date: p.date, value: p[denom] ? (p[numer] / p[denom]) * 100 : 0 }));
+    // Helper to build card props from a block (emailPerformance / campaignPerformance / flowPerformance)
+    const buildCards = (block: any) => {
+        if (!block) return [] as any[];
+        const t = block.totals; const d = block.derived;
+        const daily = block.daily as any[] | undefined;
+        return [
+            { key: 'revenue', title: 'Total Revenue', value: money(t.revenue), spark: makeSeries(daily) },
+            { key: 'avgOrderValue', title: 'Average Order Value', value: money(d.avgOrderValue), spark: makeSeries(daily) },
+            { key: 'totalOrders', title: 'Total Orders', value: fmt(t.totalOrders), spark: (daily || []).map(p => ({ date: p.date, value: p.totalOrders })) },
+            { key: 'conversionRate', title: 'Conversion Rate', value: pct(d.conversionRate), spark: makeRateSeries('totalOrders', 'uniqueClicks', daily) },
+            { key: 'openRate', title: 'Open Rate', value: pct(d.openRate), spark: makeRateSeries('uniqueOpens', 'emailsSent', daily) },
+            { key: 'clickRate', title: 'Click Rate', value: pct(d.clickRate), spark: makeRateSeries('uniqueClicks', 'emailsSent', daily) },
+            { key: 'clickToOpenRate', title: 'Click-to-Open Rate', value: pct(d.clickToOpenRate), spark: makeRateSeries('uniqueClicks', 'uniqueOpens', daily) },
+            { key: 'revenuePerEmail', title: 'Revenue per Email', value: money(d.revenuePerEmail), spark: (daily || []).map(p => ({ date: p.date, value: p.emailsSent ? p.revenue / p.emailsSent : 0 })) },
+            { key: 'emailsSent', title: 'Emails Sent', value: fmt(t.emailsSent), spark: (daily || []).map(p => ({ date: p.date, value: p.emailsSent })) },
+            { key: 'unsubscribeRate', title: 'Unsubscribe Rate', value: pct(d.unsubscribeRate), spark: makeRateSeries('unsubscribes', 'emailsSent', daily) },
+            { key: 'spamRate', title: 'Spam Rate', value: pct(d.spamRate), spark: makeRateSeries('spamComplaints', 'emailsSent', daily) },
+            { key: 'bounceRate', title: 'Bounce Rate', value: pct(d.bounceRate), spark: makeRateSeries('bounces', 'emailsSent', daily) },
+        ];
+    };
+    const emailPerfCards = buildCards(snap.emailPerformance);
+    const campaignCards = buildCards(snap.campaignPerformance);
+    const flowCards = buildCards(snap.flowPerformance);
 
     return (
         <div className="space-y-10">
+            {/* Email Performance Overview */}
+            {emailPerfCards.length > 0 && (
+                <section>
+                    <div className="flex items-center gap-2 mb-3"><span className="text-purple-600">✉️</span><h2 className="text-xl font-bold">Email Performance Overview</h2></div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {emailPerfCards.map(c => <MetricCard key={c.key} title={c.title} value={c.value} change={0} isPositive={true} dateRange={'30d'} metricKey={c.key} sparklineData={c.spark} />)}
+                    </div>
+                </section>
+            )}
+
+            {/* Campaign Overview */}
+            {campaignCards.length > 0 && (
+                <section>
+                    <div className="flex items-center gap-2 mb-3"><span className="text-purple-600">📨</span><h2 className="text-xl font-bold">Campaign Overview</h2></div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {campaignCards.map(c => <MetricCard key={c.key} title={c.title} value={c.value} change={0} isPositive={true} dateRange={'30d'} metricKey={c.key} sparklineData={c.spark} />)}
+                    </div>
+                </section>
+            )}
+
+            {/* Flow Performance (all flows) */}
+            {flowCards.length > 0 && (
+                <section>
+                    <div className="flex items-center gap-2 mb-3"><span className="text-purple-600">⚡</span><h2 className="text-xl font-bold">Flow Performance</h2></div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {flowCards.map(c => <MetricCard key={c.key} title={c.title} value={c.value} change={0} isPositive={true} dateRange={'30d'} metricKey={c.key} sparklineData={c.spark} />)}
+                    </div>
+                </section>
+            )}
+
             {/* Audience Overview */}
             {snap.audienceOverview && (
                 <section>
-                    <h3 className="text-lg font-semibold mb-4">Audience Overview</h3>
-                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
-                        <div className="p-4 rounded-lg border bg-white dark:bg-gray-900 dark:border-gray-700">
-                            <p className="text-xs uppercase text-gray-500 mb-1">Total Subscribers</p>
-                            <p className="text-xl font-semibold">{fmt(snap.audienceOverview.totalSubscribers)}</p>
-                        </div>
-                        <div className="p-4 rounded-lg border bg-white dark:bg-gray-900 dark:border-gray-700">
-                            <p className="text-xs uppercase text-gray-500 mb-1">Subscribed</p>
-                            <p className="text-xl font-semibold">{fmt(snap.audienceOverview.subscribedCount)}</p>
-                        </div>
-                        <div className="p-4 rounded-lg border bg-white dark:bg-gray-900 dark:border-gray-700">
-                            <p className="text-xs uppercase text-gray-500 mb-1">Unsubscribed</p>
-                            <p className="text-xl font-semibold">{fmt(snap.audienceOverview.unsubscribedCount)}</p>
-                        </div>
-                        <div className="p-4 rounded-lg border bg-white dark:bg-gray-900 dark:border-gray-700">
-                            <p className="text-xs uppercase text-gray-500 mb-1">% Subscribed</p>
-                            <p className="text-xl font-semibold">{pct(snap.audienceOverview.percentSubscribed)}</p>
-                        </div>
+                    <div className="flex items-center gap-2 mb-3"><span className="text-purple-600">👥</span><h2 className="text-xl font-bold">Audience Overview</h2></div>
+                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="p-4 rounded-lg border bg-white dark:bg-gray-900 dark:border-gray-800"><p className="text-xs uppercase text-gray-500 mb-1">Total Subscribers</p><p className="text-2xl font-semibold">{fmt(snap.audienceOverview.totalSubscribers)}</p></div>
+                        <div className="p-4 rounded-lg border bg-white dark:bg-gray-900 dark:border-gray-800"><p className="text-xs uppercase text-gray-500 mb-1">Subscribed</p><p className="text-2xl font-semibold">{fmt(snap.audienceOverview.subscribedCount)}</p></div>
+                        <div className="p-4 rounded-lg border bg-white dark:bg-gray-900 dark:border-gray-800"><p className="text-xs uppercase text-gray-500 mb-1">Unsubscribed</p><p className="text-2xl font-semibold">{fmt(snap.audienceOverview.unsubscribedCount)}</p></div>
+                        <div className="p-4 rounded-lg border bg-white dark:bg-gray-900 dark:border-gray-800"><p className="text-xs uppercase text-gray-500 mb-1">% Subscribed</p><p className="text-2xl font-semibold">{pct(snap.audienceOverview.percentSubscribed)}</p></div>
                     </div>
-                </section>
-            )}
-
-            {/* Email Performance Cards */}
-            {cards.length > 0 && (
-                <section>
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold">Email Performance</h3>
-                        <span className="text-xs text-gray-500">{dateRangeLabel}</span>
-                    </div>
-                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                        {cards.map(c => (
-                            <MetricCard key={c.key} title={c.title} value={c.value} change={0} isPositive={true} dateRange={snap.meta.dateRange.start} />
-                        ))}
-                    </div>
-                </section>
-            )}
-
-            {/* Flows */}
-            {snap.flows && (
-                <section>
-                    <h3 className="text-lg font-semibold mb-3">Flows</h3>
-                    <div className="overflow-x-auto border rounded-lg bg-white dark:bg-gray-900 dark:border-gray-700">
-                        <table className="min-w-full text-sm">
-                            <thead className="bg-gray-50 dark:bg-gray-800">
-                                <tr>
-                                    <th className="px-3 py-2 text-left font-medium">Flow</th>
-                                    <th className="px-3 py-2 text-right font-medium">Emails</th>
-                                    <th className="px-3 py-2 text-right font-medium">Revenue</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {snap.flows.flowNames.slice(0, 25).map(f => (
-                                    <tr key={f.name} className="border-t dark:border-gray-800">
-                                        <td className="px-3 py-1.5 whitespace-nowrap max-w-xs truncate">{f.name}</td>
-                                        <td className="px-3 py-1.5 text-right">{fmt(f.emails)}</td>
-                                        <td className="px-3 py-1.5 text-right">{money(f.revenue)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-            )}
-
-            {/* Campaigns */}
-            {snap.campaigns && (
-                <section>
-                    <h3 className="text-lg font-semibold mb-3">Top Campaigns (by Revenue)</h3>
-                    <div className="overflow-x-auto border rounded-lg bg-white dark:bg-gray-900 dark:border-gray-700">
-                        <table className="min-w-full text-sm">
-                            <thead className="bg-gray-50 dark:bg-gray-800">
-                                <tr>
-                                    <th className="px-3 py-2 text-left font-medium">Campaign</th>
-                                    <th className="px-3 py-2 text-right font-medium">Emails Sent</th>
-                                    <th className="px-3 py-2 text-right font-medium">Revenue</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {snap.campaigns.topByRevenue.map(c => (
-                                    <tr key={c.name} className="border-t dark:border-gray-800">
-                                        <td className="px-3 py-1.5 whitespace-nowrap max-w-xs truncate">{c.name}</td>
-                                        <td className="px-3 py-1.5 text-right">{fmt(c.emailsSent)}</td>
-                                        <td className="px-3 py-1.5 text-right">{money(c.revenue)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-            )}
-
-            {/* Day of Week & Hour */}
-            {(snap.dow || snap.hour) && (
-                <section className="grid gap-6 md:grid-cols-2">
-                    {snap.dow && (
-                        <div>
-                            <h3 className="text-lg font-semibold mb-3">Performance by Day of Week</h3>
-                            <div className="overflow-x-auto border rounded-lg bg-white dark:bg-gray-900 dark:border-gray-700">
-                                <table className="min-w-full text-sm">
-                                    <thead className="bg-gray-50 dark:bg-gray-800">
-                                        <tr>
-                                            <th className="px-3 py-2 text-left font-medium">Day</th>
-                                            <th className="px-3 py-2 text-right font-medium">Emails</th>
-                                            <th className="px-3 py-2 text-right font-medium">Orders</th>
-                                            <th className="px-3 py-2 text-right font-medium">Revenue</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {snap.dow.map(r => (
-                                            <tr key={r.dow} className="border-t dark:border-gray-800">
-                                                <td className="px-3 py-1.5">{"SunMonTueWedThuFriSat".slice(r.dow * 3, r.dow * 3 + 3)}</td>
-                                                <td className="px-3 py-1.5 text-right">{fmt(r.emailsSent)}</td>
-                                                <td className="px-3 py-1.5 text-right">{fmt(r.orders)}</td>
-                                                <td className="px-3 py-1.5 text-right">{money(r.revenue)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-                    {snap.hour && (
-                        <div>
-                            <h3 className="text-lg font-semibold mb-3">Performance by Hour</h3>
-                            <div className="overflow-x-auto border rounded-lg bg-white dark:bg-gray-900 dark:border-gray-700 max-h-96">
-                                <table className="min-w-full text-sm">
-                                    <thead className="bg-gray-50 dark:bg-gray-800">
-                                        <tr>
-                                            <th className="px-3 py-2 text-left font-medium">Hour</th>
-                                            <th className="px-3 py-2 text-right font-medium">Emails</th>
-                                            <th className="px-3 py-2 text-right font-medium">Orders</th>
-                                            <th className="px-3 py-2 text-right font-medium">Revenue</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {snap.hour.map(r => (
-                                            <tr key={r.hour} className="border-t dark:border-gray-800">
-                                                <td className="px-3 py-1.5">{r.hour}:00</td>
-                                                <td className="px-3 py-1.5 text-right">{fmt(r.emailsSent)}</td>
-                                                <td className="px-3 py-1.5 text-right">{fmt(r.orders)}</td>
-                                                <td className="px-3 py-1.5 text-right">{money(r.revenue)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
                 </section>
             )}
 

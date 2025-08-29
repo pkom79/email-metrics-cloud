@@ -21,12 +21,35 @@ export interface SnapshotJSON {
     sections: string[];
   };
   audienceOverview?: { totalSubscribers: number; subscribedCount: number; unsubscribedCount: number; percentSubscribed: number; };
-  emailPerformance?: { totals: { revenue: number; emailsSent: number; totalOrders: number; uniqueOpens: number; uniqueClicks: number; unsubscribes: number; spamComplaints: number; bounces: number; }; derived: { openRate: number; clickRate: number; clickToOpenRate: number; conversionRate: number; revenuePerEmail: number; avgOrderValue: number; unsubscribeRate: number; spamRate: number; bounceRate: number; } };
-  flows?: { totalFlowEmails: number; flowNames: Array<{ name: string; emails: number; revenue: number }>; };
+  emailPerformance?: {
+    totals: BaseTotals;
+    derived: DerivedTotals;
+    previous?: { totals: BaseTotals; derived: DerivedTotals; range: { start: string; end: string } };
+    daily?: DailyPoint[];
+  };
+  // Campaign-only (broadcast) metrics
+  campaignPerformance?: {
+    totals: BaseTotals;
+    derived: DerivedTotals;
+    previous?: { totals: BaseTotals; derived: DerivedTotals; range: { start: string; end: string } };
+    daily?: DailyPoint[];
+  };
+  // Flow-only metrics (all flows combined)
+  flowPerformance?: {
+    totals: BaseTotals;
+    derived: DerivedTotals;
+    previous?: { totals: BaseTotals; derived: DerivedTotals; range: { start: string; end: string } };
+    daily?: DailyPoint[];
+  };
+  flows?: { totalFlowEmails: number; flowNames: Array<{ name: string; emails: number; revenue: number }> ; };
   campaigns?: { totalCampaigns: number; topByRevenue: Array<{ name: string; revenue: number; emailsSent: number }>; };
   dow?: Array<{ dow: number; revenue: number; emailsSent: number; orders: number }>;
   hour?: Array<{ hour: number; revenue: number; emailsSent: number; orders: number }>;
 }
+
+interface BaseTotals { revenue: number; emailsSent: number; totalOrders: number; uniqueOpens: number; uniqueClicks: number; unsubscribes: number; spamComplaints: number; bounces: number; }
+interface DerivedTotals { openRate: number; clickRate: number; clickToOpenRate: number; conversionRate: number; revenuePerEmail: number; avgOrderValue: number; unsubscribeRate: number; spamRate: number; bounceRate: number; }
+interface DailyPoint { date: string; revenue: number; emailsSent: number; totalOrders: number; uniqueOpens: number; uniqueClicks: number; unsubscribes: number; spamComplaints: number; bounces: number; }
 
 async function downloadIfExists(accountId: string, uploadId: string, filename: CanonicalFile): Promise<{ bucket: string; text: string } | null> {
   const rel = `${accountId}/${uploadId}/${filename}`;
@@ -158,9 +181,68 @@ function aggregate(snapshotId: string, accountId: string, uploadId: string, camp
   for (const e of allEmails) { if (e.sentAt! < minDate) minDate = e.sentAt!; if (e.sentAt! > maxDate) maxDate = e.sentAt!; }
   if (!allEmails.length) { const now = new Date(); minDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()); maxDate = minDate; }
 
-  const totals = allEmails.reduce((acc, e) => { acc.revenue += e.revenue; acc.emailsSent += e.emailsSent; acc.totalOrders += e.totalOrders; acc.uniqueOpens += e.uniqueOpens; acc.uniqueClicks += e.uniqueClicks; acc.unsubscribes += e.unsubscribes; acc.spamComplaints += e.spam; acc.bounces += e.bounces; return acc; }, { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribes: 0, spamComplaints: 0, bounces: 0 });
+  const mkDerived = (t: BaseTotals): DerivedTotals => ({
+    openRate: t.emailsSent ? (t.uniqueOpens / t.emailsSent) * 100 : 0,
+    clickRate: t.emailsSent ? (t.uniqueClicks / t.emailsSent) * 100 : 0,
+    clickToOpenRate: t.uniqueOpens ? (t.uniqueClicks / t.uniqueOpens) * 100 : 0,
+    conversionRate: t.uniqueClicks ? (t.totalOrders / t.uniqueClicks) * 100 : 0,
+    revenuePerEmail: t.emailsSent ? t.revenue / t.emailsSent : 0,
+    avgOrderValue: t.totalOrders ? t.revenue / t.totalOrders : 0,
+    unsubscribeRate: t.emailsSent ? (t.unsubscribes / t.emailsSent) * 100 : 0,
+    spamRate: t.emailsSent ? (t.spamComplaints / t.emailsSent) * 100 : 0,
+    bounceRate: t.emailsSent ? (t.bounces / t.emailsSent) * 100 : 0,
+  });
 
-  const derived = { openRate: totals.emailsSent ? (totals.uniqueOpens / totals.emailsSent) * 100 : 0, clickRate: totals.emailsSent ? (totals.uniqueClicks / totals.emailsSent) * 100 : 0, clickToOpenRate: totals.uniqueOpens ? (totals.uniqueClicks / totals.uniqueOpens) * 100 : 0, conversionRate: totals.uniqueClicks ? (totals.totalOrders / totals.uniqueClicks) * 100 : 0, revenuePerEmail: totals.emailsSent ? totals.revenue / totals.emailsSent : 0, avgOrderValue: totals.totalOrders ? totals.revenue / totals.totalOrders : 0, unsubscribeRate: totals.emailsSent ? (totals.unsubscribes / totals.emailsSent) * 100 : 0, spamRate: totals.emailsSent ? (totals.spamComplaints / totals.emailsSent) * 100 : 0, bounceRate: totals.emailsSent ? (totals.bounces / totals.emailsSent) * 100 : 0 };
+  const zeroTotals: BaseTotals = { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribes: 0, spamComplaints: 0, bounces: 0 };
+
+  const sum = (rows: typeof allEmails) => rows.reduce((acc, e) => { acc.revenue += e.revenue; acc.emailsSent += e.emailsSent; acc.totalOrders += e.totalOrders; acc.uniqueOpens += e.uniqueOpens; acc.uniqueClicks += e.uniqueClicks; acc.unsubscribes += e.unsubscribes; acc.spamComplaints += e.spam; acc.bounces += e.bounces; return acc; }, { ...zeroTotals });
+
+  const totals = sum(allEmails);
+  const campaignTotals = sum(allEmails.filter(e => e.category === 'campaign'));
+  const flowTotals = sum(allEmails.filter(e => e.category === 'flow'));
+  const derived = mkDerived(totals);
+  const campaignDerived = mkDerived(campaignTotals);
+  const flowDerived = mkDerived(flowTotals);
+
+  // Daily series (per date YYYY-MM-DD)
+  const dailyMapAll = new Map<string, BaseTotals>();
+  const dailyMapCampaigns = new Map<string, BaseTotals>();
+  const dailyMapFlows = new Map<string, BaseTotals>();
+  const addDaily = (map: Map<string, BaseTotals>, date: string, e: typeof allEmails[number]) => {
+    const cur = map.get(date) || { ...zeroTotals }; cur.revenue += e.revenue; cur.emailsSent += e.emailsSent; cur.totalOrders += e.totalOrders; cur.uniqueOpens += e.uniqueOpens; cur.uniqueClicks += e.uniqueClicks; cur.unsubscribes += e.unsubscribes; cur.spamComplaints += e.spam; cur.bounces += e.bounces; map.set(date, cur);
+  };
+  for (const e of allEmails) {
+    const d = isoDate(e.sentAt!);
+    addDaily(dailyMapAll, d, e);
+    if (e.category === 'campaign') addDaily(dailyMapCampaigns, d, e);
+    else addDaily(dailyMapFlows, d, e);
+  }
+  const toDaily = (map: Map<string, BaseTotals>): DailyPoint[] => [...map.entries()].sort((a,b) => a[0] < b[0] ? -1 : 1).map(([date, v]) => ({ date, ...v }));
+  const dailyAll = toDaily(dailyMapAll);
+  const dailyCampaigns = toDaily(dailyMapCampaigns);
+  const dailyFlows = toDaily(dailyMapFlows);
+
+  // Previous period (prev-period only) for change %
+  let previousRange: { start: string; end: string } | null = null;
+  if (allEmails.length) {
+    const startDate = new Date(isoDate(minDate) + 'T00:00:00Z');
+    const endDate = new Date(isoDate(maxDate) + 'T23:59:59Z');
+    const days = Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
+    const prevEnd = new Date(startDate); prevEnd.setDate(prevEnd.getDate() - 1);
+    const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - (days - 1));
+    previousRange = { start: isoDate(prevStart), end: isoDate(prevEnd) };
+  }
+  let previousTotals: BaseTotals | null = null;
+  let previousCampaignTotals: BaseTotals | null = null;
+  let previousFlowTotals: BaseTotals | null = null;
+  if (previousRange) {
+    const prevStart = new Date(previousRange.start + 'T00:00:00Z');
+    const prevEnd = new Date(previousRange.end + 'T23:59:59Z');
+    const prevRows = allEmails.filter(e => e.sentAt! >= prevStart && e.sentAt! <= prevEnd);
+    previousTotals = sum(prevRows);
+    previousCampaignTotals = sum(prevRows.filter(e => e.category === 'campaign'));
+    previousFlowTotals = sum(prevRows.filter(e => e.category === 'flow'));
+  }
 
   const subscribed = subscribers.filter(s => /subscribed/i.test(s.consent)).length;
   const audienceOverview = subscribers.length ? { totalSubscribers: subscribers.length, subscribedCount: subscribed, unsubscribedCount: subscribers.length - subscribed, percentSubscribed: subscribers.length ? (subscribed / subscribers.length) * 100 : 0 } : undefined;
@@ -176,12 +258,34 @@ function aggregate(snapshotId: string, accountId: string, uploadId: string, camp
 
   const sections: string[] = [];
   if (audienceOverview) sections.push('audienceOverview');
-  if (allEmails.length) sections.push('emailPerformance');
+  if (allEmails.length) sections.push('emailPerformance', 'campaignPerformance', 'flowPerformance');
   if (flows.length) sections.push('flows');
   if (campaigns.length) sections.push('campaigns');
   if (allEmails.length) sections.push('dow', 'hour');
 
-  return { meta: { snapshotId, generatedAt: new Date().toISOString(), accountId, uploadId, dateRange: { start: isoDate(minDate), end: isoDate(maxDate) }, granularity: 'daily', compareRange: null, sections }, audienceOverview, emailPerformance: allEmails.length ? { totals, derived } : undefined, flows: flows.length ? { totalFlowEmails: flows.length, flowNames: [...flowsByName.entries()].map(([name, v]) => ({ name, emails: v.emails, revenue: v.revenue })).sort((a, b) => b.revenue - a.revenue) } : undefined, campaigns: campaigns.length ? { totalCampaigns: campaigns.length, topByRevenue: topCampaigns } : undefined, dow: allEmails.length ? dowMap : undefined, hour: allEmails.length ? hourMap : undefined };
+  return {
+    meta: { snapshotId, generatedAt: new Date().toISOString(), accountId, uploadId, dateRange: { start: isoDate(minDate), end: isoDate(maxDate) }, granularity: 'daily', compareRange: previousRange, sections },
+    audienceOverview,
+    emailPerformance: allEmails.length ? {
+      totals, derived,
+      previous: previousTotals ? { totals: previousTotals, derived: mkDerived(previousTotals), range: previousRange! } : undefined,
+      daily: dailyAll
+    } : undefined,
+    campaignPerformance: campaignTotals.emailsSent ? {
+      totals: campaignTotals, derived: campaignDerived,
+      previous: previousCampaignTotals ? { totals: previousCampaignTotals, derived: mkDerived(previousCampaignTotals), range: previousRange! } : undefined,
+      daily: dailyCampaigns
+    } : undefined,
+    flowPerformance: flowTotals.emailsSent ? {
+      totals: flowTotals, derived: flowDerived,
+      previous: previousFlowTotals ? { totals: previousFlowTotals, derived: mkDerived(previousFlowTotals), range: previousRange! } : undefined,
+      daily: dailyFlows
+    } : undefined,
+    flows: flows.length ? { totalFlowEmails: flows.length, flowNames: [...flowsByName.entries()].map(([name, v]) => ({ name, emails: v.emails, revenue: v.revenue })).sort((a, b) => b.revenue - a.revenue) } : undefined,
+    campaigns: campaigns.length ? { totalCampaigns: campaigns.length, topByRevenue: topCampaigns } : undefined,
+    dow: allEmails.length ? dowMap : undefined,
+    hour: allEmails.length ? hourMap : undefined
+  };
 }
 
 export async function buildSnapshotJSON(opts: { snapshotId: string; accountId: string; uploadId: string; rangeStart?: string; rangeEnd?: string; }): Promise<SnapshotJSON> {

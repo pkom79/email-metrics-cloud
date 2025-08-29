@@ -6,7 +6,8 @@ interface BuildOpts { snapshotId: string; accountId: string; uploadId: string; r
 // Reuse existing builder then prune to required sections and embed filter metadata
 export async function buildReducedSnapshot(opts: BuildOpts) {
   const full = await buildSnapshotJSON({ snapshotId: opts.snapshotId, accountId: opts.accountId, uploadId: opts.uploadId, rangeStart: opts.rangeStart, rangeEnd: opts.rangeEnd });
-  const { audienceOverview, emailPerformance, flows, campaigns } = full;
+  // Only include requested modules: Email Performance Overview (emailPerformance), Campaign Overview (campaignPerformance), Flow Performance (flowPerformance), Audience Overview (audienceOverview)
+  const { audienceOverview, emailPerformance, campaignPerformance, flowPerformance } = full as any;
   const reduced = {
     meta: {
       snapshotId: full.meta.snapshotId,
@@ -20,14 +21,14 @@ export async function buildReducedSnapshot(opts: BuildOpts) {
       sections: [
         ...(audienceOverview ? ['audienceOverview'] : []),
         ...(emailPerformance ? ['emailPerformance'] : []),
-        ...(flows ? ['flows'] : []),
-        ...(campaigns ? ['campaigns'] : []),
+        ...(campaignPerformance ? ['campaignPerformance'] : []),
+        ...(flowPerformance ? ['flowPerformance'] : []),
       ]
     },
     audienceOverview,
     emailPerformance,
-    flows,
-    campaigns
+    campaignPerformance,
+    flowPerformance
   };
   return reduced;
 }
