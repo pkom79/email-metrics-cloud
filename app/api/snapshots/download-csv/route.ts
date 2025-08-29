@@ -30,71 +30,8 @@ export async function GET(request: Request) {
         // Check if user is anonymous and accessing a specific snapshot
         const isAnonymous = user.is_anonymous;
         console.log('CSV Download - Is anonymous:', isAnonymous);
-        
-        if (isAnonymous && snapshotId) {
-            // For anonymous users, verify they can access this specific snapshot via sharing
-            const { data: share, error: shareError } = await supabase
-                .from('snapshot_shares')
-                .select('snapshot_id')
-                .eq('snapshot_id', snapshotId)
-                .eq('is_active', true)
-                .single();
-
-            if (shareError || !share) {
-                console.log('Share not found or error:', shareError);
-                return NextResponse.json({ error: 'Access denied to this snapshot' }, { status: 403 });
-            }
-
-            // Check expiration separately to handle null expires_at
-            const { data: shareWithExpiry, error: expiryError } = await supabase
-                .from('snapshot_shares')
-                .select('expires_at')
-                .eq('snapshot_id', snapshotId)
-                .eq('is_active', true)
-                .single();
-
-            if (shareWithExpiry?.expires_at && new Date(shareWithExpiry.expires_at) < new Date()) {
-                console.log('Share has expired:', shareWithExpiry.expires_at);
-                return NextResponse.json({ error: 'Share has expired' }, { status: 410 });
-            }
-
-            // Get the snapshot data
-            const { data: snap, error: snapErr } = await supabase
-                .from('snapshots')
-                .select('upload_id, account_id')
-                .eq('id', snapshotId)
-                .eq('status', 'ready')
-                .single();
-            
-            if (snapErr || !snap) {
-                return NextResponse.json({ error: 'Snapshot not found' }, { status: 404 });
-            }
-            
-            if (!snap.upload_id) {
-                return NextResponse.json({ error: 'No upload data available' }, { status: 404 });
-            }
-
-            // Download the CSV file from storage (probe buckets & path variations)
-            const fileName = `${type}.csv`;
-            const probe = [
-                { bucket: 'uploads', path: `${snap.account_id}/${snap.upload_id}/${fileName}` },
-                { bucket: 'csv-uploads', path: `${snap.account_id}/${snap.upload_id}/${fileName}` },
-                { bucket: (process.env.PREAUTH_BUCKET || 'preauth-uploads'), path: `${snap.upload_id}/${fileName}` },
-            ];
-            let csvText: string | null = null;
-            for (const p of probe) {
-                const { data: blob, error: dlErr } = await supabase.storage.from(p.bucket).download(p.path);
-                if (blob && !dlErr) { csvText = await (blob as Blob).text(); break; }
-            }
-            if (!csvText) return NextResponse.json({ error: 'File not found' }, { status: 404 });
-            
-            return new NextResponse(csvText, {
-                status: 200,
-                headers: {
-                    'Content-Type': 'text/csv',
-                    'Content-Disposition': `attachment; filename="${fileName}"`,
-                },
-            });
+        if (isAnonymous) {
+            return NextResponse.json({ error: 'Anonymous access disabled (sharing removed)' }, { status: 403 });
         }
 
         // Regular authenticated user flow (existing logic)

@@ -20,20 +20,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       supabase.from('snapshot_series').select('snapshot_id', { count: 'exact', head: true }).eq('snapshot_id', snapshotId)
     ]);
 
-    // Check if any share has stored static JSON for this snapshot
-    const { data: shareRows } = await supabase
-      .from('snapshot_shares')
-      .select('id, share_token, snapshot_json')
-      .eq('snapshot_id', snapshotId)
-      .limit(5);
-
-  type ShareRowLite = { id: string; share_token: string; snapshot_json?: any };
-  const shares = (shareRows as ShareRowLite[] | null | undefined || []).map(r => ({ id: r.id, token: r.share_token, hasStaticJson: !!r.snapshot_json }));
-
     return NextResponse.json({
       snapshot: snap,
       derived: { totalsCount, seriesCount },
-      shares,
+  shares: [],
       hints: buildHints({ snap, totalsCount, seriesCount })
     });
   } catch (e: any) {
