@@ -39,37 +39,7 @@ USING (
     )
 );
 
--- Policy 4: Allow shared access to csv-uploads via valid share tokens
-DROP POLICY IF EXISTS "shared_csv_uploads_access" ON storage.objects;
-CREATE POLICY "shared_csv_uploads_access" ON storage.objects
-FOR SELECT
-TO public
-USING (
-    bucket_id = 'csv-uploads' AND
-    (storage.foldername(name))[1] IN (
-        SELECT s.account_id::text 
-        FROM snapshots s
-        JOIN snapshot_shares ss ON s.id = ss.snapshot_id
-        WHERE ss.is_active = true
-        AND (ss.expires_at IS NULL OR ss.expires_at > NOW())
-    )
-);
-
--- Policy 5: Allow shared access to uploads bucket via valid share tokens  
-DROP POLICY IF EXISTS "shared_uploads_access" ON storage.objects;
-CREATE POLICY "shared_uploads_access" ON storage.objects
-FOR SELECT
-TO public
-USING (
-    bucket_id = 'uploads' AND
-    (storage.foldername(name))[1] IN (
-        SELECT s.account_id::text 
-        FROM snapshots s
-        JOIN snapshot_shares ss ON s.id = ss.snapshot_id
-        WHERE ss.is_active = true
-        AND (ss.expires_at IS NULL OR ss.expires_at > NOW())
-    )
-);
+-- (Removed shared access policies formerly referencing snapshot_shares)
 
 -- Policy 6: Allow service role to manage all files (for backend operations)
 DROP POLICY IF EXISTS "service_role_all_access" ON storage.objects;

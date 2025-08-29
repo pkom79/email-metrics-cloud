@@ -60,25 +60,4 @@ WITH CHECK (
     )
 );
 
--- Policy 5: Allow anonymous access to shared files via valid share tokens
--- This is for the shared dashboard functionality
-CREATE POLICY "anonymous_shared_access" ON storage.objects
-FOR SELECT
-TO anon
-USING (
-    bucket_id IN ('csv-uploads', 'uploads') AND
-    EXISTS (
-        SELECT 1 
-        FROM snapshot_shares ss
-        JOIN snapshots s ON ss.snapshot_id = s.id
-        WHERE ss.is_active = true
-        AND (ss.expires_at IS NULL OR ss.expires_at > now())
-        AND (
-            -- Match by account_id/upload_id pattern
-            (s.upload_id IS NOT NULL AND (storage.foldername(name))[1] = s.account_id::text AND (storage.foldername(name))[2] = s.upload_id::text)
-            OR
-            -- Match by account_id/snapshot_id pattern  
-            ((storage.foldername(name))[1] = s.account_id::text AND (storage.foldername(name))[2] = s.id::text)
-        )
-    )
-);
+-- (Removed anonymous_shared_access policy referencing snapshot_shares)

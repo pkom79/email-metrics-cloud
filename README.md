@@ -82,21 +82,15 @@ curl -X POST https://your-domain.com/api/cleanup
 - `snapshot_series` - Daily time series data
 
 ### Removed Features
-The legacy public dashboard sharing feature (snapshot_shares table, /shared/* pages, share APIs) has been deprecated and neutralized. Current state:
+The legacy public dashboard sharing feature (snapshot_shares table, `/shared/*` pages, share APIs) was removed on 2025-08-29.
 
-Removed / Neutralized:
-* API endpoints: replaced with 410 Gone stubs (including legacy compat CSV redirect `/api/shared/csv`).
-* Helper libs: `shareToken.ts`, `shareStaticBuilder.ts` now throw to prevent accidental reuse.
-* UI: `ShareModal` replaced with inert stub component.
-* Database: table `snapshot_shares` slated for drop via migration `20250829000000_drop_snapshot_sharing.sql`.
+Summary:
+* All share-related API routes now return 410 Gone.
+* Helper libs (`shareToken.ts`, `shareStaticBuilder.ts`) throw on import.
+* UI sharing surface (ShareModal, shared pages) deleted.
+* Migration `20250829000000_drop_snapshot_sharing.sql` drops `snapshot_shares` and related objects.
 
-Residual Inert Stubs (safe to delete):
-* `app/shared/[token]/page.tsx` (returns null)
-* `app/shared/[token]/SharedDashboard.tsx` (returns placeholder/null)
-
-These stubs exist only because automated file deletion attempts in the current environment did not persist; they have zero runtime effect and are excluded from indexing (metadata robots noindex). Do not extend or import them. Once filesystem operations allow, physically delete the `app/shared/[token]` directory.
-
-Any HTTP request to former sharing endpoints now yields 410. Reintroduction of sharing requires a fresh architectural and privacy/security review.
+All former sharing code paths are inert or deleted. Reintroduction would require a fresh privacy & security review.
 
 ## Region
 Deploy Vercel Functions in US East (iad1). Align Supabase project to US East.
