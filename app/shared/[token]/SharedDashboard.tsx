@@ -59,26 +59,54 @@ export default function SharedDashboard({ snapshotId, shareTitle, shareDescripti
     const money = (v: number) => fmt(v, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const makeSeries = (daily?: any[]) => daily?.map(p => ({ date: p.date, value: p.revenue })) || [];
     const makeRateSeries = (numer: keyof any, denom: keyof any, daily?: any[]) => (daily || []).map(p => ({ date: p.date, value: p[denom] ? (p[numer] / p[denom]) * 100 : 0 }));
+
+    const calcChange = (current: number, previous?: number) => {
+        if (previous == null || previous === 0) return 0;
+        return ((current - previous) / previous) * 100;
+    };
+    const getPrevDerivedValue = (prev: any, key: string) => {
+        if (!prev) return undefined;
+        if (prev.derived && key in prev.derived) return prev.derived[key];
+        if (prev.totals && key in prev.totals) return prev.totals[key];
+        return undefined;
+    };
     // Helper to build card props from a block (emailPerformance / campaignPerformance / flowPerformance)
     const buildCards = (block: any) => {
         if (!block) return [] as any[];
         const t = block.totals; const d = block.derived;
+        const prev = block.previous;
         const daily = block.daily as any[] | undefined;
         return [
-            { key: 'revenue', title: 'Total Revenue', value: money(t.revenue), spark: makeSeries(daily) },
-            { key: 'avgOrderValue', title: 'Average Order Value', value: money(d.avgOrderValue), spark: makeSeries(daily) },
-            { key: 'totalOrders', title: 'Total Orders', value: fmt(t.totalOrders), spark: (daily || []).map(p => ({ date: p.date, value: p.totalOrders })) },
-            { key: 'conversionRate', title: 'Conversion Rate', value: pct(d.conversionRate), spark: makeRateSeries('totalOrders', 'uniqueClicks', daily) },
-            { key: 'openRate', title: 'Open Rate', value: pct(d.openRate), spark: makeRateSeries('uniqueOpens', 'emailsSent', daily) },
-            { key: 'clickRate', title: 'Click Rate', value: pct(d.clickRate), spark: makeRateSeries('uniqueClicks', 'emailsSent', daily) },
-            { key: 'clickToOpenRate', title: 'Click-to-Open Rate', value: pct(d.clickToOpenRate), spark: makeRateSeries('uniqueClicks', 'uniqueOpens', daily) },
-            { key: 'revenuePerEmail', title: 'Revenue per Email', value: money(d.revenuePerEmail), spark: (daily || []).map(p => ({ date: p.date, value: p.emailsSent ? p.revenue / p.emailsSent : 0 })) },
-            { key: 'emailsSent', title: 'Emails Sent', value: fmt(t.emailsSent), spark: (daily || []).map(p => ({ date: p.date, value: p.emailsSent })) },
-            { key: 'unsubscribeRate', title: 'Unsubscribe Rate', value: pct(d.unsubscribeRate), spark: makeRateSeries('unsubscribes', 'emailsSent', daily) },
-            { key: 'spamRate', title: 'Spam Rate', value: pct(d.spamRate), spark: makeRateSeries('spamComplaints', 'emailsSent', daily) },
-            { key: 'bounceRate', title: 'Bounce Rate', value: pct(d.bounceRate), spark: makeRateSeries('bounces', 'emailsSent', daily) },
-        ];
+            { key: 'revenue', title: 'Total Revenue', value: money(t.revenue), prev: prev?.totals?.revenue, spark: makeSeries(daily) },
+            { key: 'avgOrderValue', title: 'Average Order Value', value: money(d.avgOrderValue), prev: getPrevDerivedValue(prev, 'avgOrderValue'), spark: makeSeries(daily) },
+            { key: 'totalOrders', title: 'Total Orders', value: fmt(t.totalOrders), prev: prev?.totals?.totalOrders, spark: (daily || []).map(p => ({ date: p.date, value: p.totalOrders })) },
+            { key: 'conversionRate', title: 'Conversion Rate', value: pct(d.conversionRate), prev: getPrevDerivedValue(prev, 'conversionRate'), spark: makeRateSeries('totalOrders', 'uniqueClicks', daily) },
+            { key: 'openRate', title: 'Open Rate', value: pct(d.openRate), prev: getPrevDerivedValue(prev, 'openRate'), spark: makeRateSeries('uniqueOpens', 'emailsSent', daily) },
+            { key: 'clickRate', title: 'Click Rate', value: pct(d.clickRate), prev: getPrevDerivedValue(prev, 'clickRate'), spark: makeRateSeries('uniqueClicks', 'emailsSent', daily) },
+            { key: 'clickToOpenRate', title: 'Click-to-Open Rate', value: pct(d.clickToOpenRate), prev: getPrevDerivedValue(prev, 'clickToOpenRate'), spark: makeRateSeries('uniqueClicks', 'uniqueOpens', daily) },
+            { key: 'revenuePerEmail', title: 'Revenue per Email', value: money(d.revenuePerEmail), prev: getPrevDerivedValue(prev, 'revenuePerEmail'), spark: (daily || []).map(p => ({ date: p.date, value: p.emailsSent ? p.revenue / p.emailsSent : 0 })) },
+            { key: 'emailsSent', title: 'Emails Sent', value: fmt(t.emailsSent), prev: prev?.totals?.emailsSent, spark: (daily || []).map(p => ({ date: p.date, value: p.emailsSent })) },
+            { key: 'unsubscribeRate', title: 'Unsubscribe Rate', value: pct(d.unsubscribeRate), prev: getPrevDerivedValue(prev, 'unsubscribeRate'), spark: makeRateSeries('unsubscribes', 'emailsSent', daily) },
+            { key: 'spamRate', title: 'Spam Rate', value: pct(d.spamRate), prev: getPrevDerivedValue(prev, 'spamRate'), spark: makeRateSeries('spamComplaints', 'emailsSent', daily) },
+            { key: 'bounceRate', title: 'Bounce Rate', value: pct(d.bounceRate), prev: getPrevDerivedValue(prev, 'bounceRate'), spark: makeRateSeries('bounces', 'emailsSent', daily) },
+        ].map(c => ({
+            ...c,
+            change: calcChange(
+                (() => {
+                    // Extract numeric portion from formatted value
+                    const raw = c.value.replace(/[$,%]/g, '');
+                    const num = parseFloat(raw);
+                    return Number.isFinite(num) ? num : 0;
+                })(),
+                c.prev
+            )
+        }));
     };
+    const dateRangeLabel = (() => {
+        const dr = snap.meta.dateRange; if (!dr?.start || !dr?.end) return 'custom';
+        const ms = new Date(dr.end).getTime() - new Date(dr.start).getTime();
+        const days = Math.round(ms / 86400000) + 1; return days + 'd';
+    })();
     const emailPerfCards = buildCards(snap.emailPerformance);
     const campaignCards = buildCards(snap.campaignPerformance);
     const flowCards = buildCards(snap.flowPerformance);
@@ -90,7 +118,7 @@ export default function SharedDashboard({ snapshotId, shareTitle, shareDescripti
                 <section>
                     <div className="flex items-center gap-2 mb-3"><span className="text-purple-600">✉️</span><h2 className="text-xl font-bold">Email Performance Overview</h2></div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {emailPerfCards.map(c => <MetricCard key={c.key} title={c.title} value={c.value} change={0} isPositive={true} dateRange={'30d'} metricKey={c.key} sparklineData={c.spark} />)}
+                        {emailPerfCards.map(c => <MetricCard key={c.key} title={c.title} value={c.value} change={c.change || 0} isPositive={(c.change || 0) >= 0} previousValue={c.prev} previousPeriod={snap.emailPerformance?.previous ? { startDate: new Date(snap.emailPerformance.previous.range.start), endDate: new Date(snap.emailPerformance.previous.range.end) } : undefined} dateRange={dateRangeLabel} metricKey={c.key} sparklineData={c.spark} />)}
                     </div>
                 </section>
             )}
@@ -100,7 +128,7 @@ export default function SharedDashboard({ snapshotId, shareTitle, shareDescripti
                 <section>
                     <div className="flex items-center gap-2 mb-3"><span className="text-purple-600">📨</span><h2 className="text-xl font-bold">Campaign Overview</h2></div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {campaignCards.map(c => <MetricCard key={c.key} title={c.title} value={c.value} change={0} isPositive={true} dateRange={'30d'} metricKey={c.key} sparklineData={c.spark} />)}
+                        {campaignCards.map(c => <MetricCard key={c.key} title={c.title} value={c.value} change={c.change || 0} isPositive={(c.change || 0) >= 0} previousValue={c.prev} previousPeriod={snap.campaignPerformance?.previous ? { startDate: new Date(snap.campaignPerformance.previous.range.start), endDate: new Date(snap.campaignPerformance.previous.range.end) } : undefined} dateRange={dateRangeLabel} metricKey={c.key} sparklineData={c.spark} />)}
                     </div>
                 </section>
             )}
@@ -110,7 +138,7 @@ export default function SharedDashboard({ snapshotId, shareTitle, shareDescripti
                 <section>
                     <div className="flex items-center gap-2 mb-3"><span className="text-purple-600">⚡</span><h2 className="text-xl font-bold">Flow Performance</h2></div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {flowCards.map(c => <MetricCard key={c.key} title={c.title} value={c.value} change={0} isPositive={true} dateRange={'30d'} metricKey={c.key} sparklineData={c.spark} />)}
+                        {flowCards.map(c => <MetricCard key={c.key} title={c.title} value={c.value} change={c.change || 0} isPositive={(c.change || 0) >= 0} previousValue={c.prev} previousPeriod={snap.flowPerformance?.previous ? { startDate: new Date(snap.flowPerformance.previous.range.start), endDate: new Date(snap.flowPerformance.previous.range.end) } : undefined} dateRange={dateRangeLabel} metricKey={c.key} sparklineData={c.spark} />)}
                     </div>
                 </section>
             )}
@@ -128,7 +156,7 @@ export default function SharedDashboard({ snapshotId, shareTitle, shareDescripti
                 </section>
             )}
 
-            <p className="text-[10px] text-gray-400 text-right">Snapshot generated {new Date(snap.meta.generatedAt).toLocaleString()}</p>
+            <p className="text-[10px] text-gray-400 text-right">Snapshot window {snap.meta.dateRange.start} → {snap.meta.dateRange.end} • Generated {new Date(snap.meta.generatedAt).toLocaleString()}</p>
         </div>
     );
 }

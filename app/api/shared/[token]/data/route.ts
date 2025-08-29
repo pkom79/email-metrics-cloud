@@ -26,8 +26,16 @@ export async function GET(_req: Request, { params }: { params: { token: string }
         rangeStart: (resolved as any).rangeStart,
         rangeEnd: (resolved as any).rangeEnd,
       });
-      // prune extra sections for legacy shares (optional)
-      json = { meta: { ...json.meta, sections: json.meta.sections.filter((s: string) => ['audienceOverview','emailPerformance','flows','campaigns'].includes(s)) }, audienceOverview: json.audienceOverview, emailPerformance: json.emailPerformance, flows: json.flows, campaigns: json.campaigns };
+      // Prune to supported sections but include aggregated campaign/flow performance blocks
+      json = {
+        meta: { ...json.meta, sections: json.meta.sections.filter((s: string) => ['audienceOverview','emailPerformance','campaignPerformance','flowPerformance','flows','campaigns'].includes(s)) },
+        audienceOverview: json.audienceOverview,
+        emailPerformance: json.emailPerformance,
+        campaignPerformance: (json as any).campaignPerformance,
+        flowPerformance: (json as any).flowPerformance,
+        flows: json.flows,
+        campaigns: json.campaigns
+      } as any;
     }
     return NextResponse.json(json, {
       status: 200,

@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
         const serviceClient = createServiceClient();
 
         const body = await request.json();
-    const { title, name, description, expiresIn, snapshotId, csvData, rangeStart, rangeEnd, granularity, compareMode } = body;
+    const { title, name, description, expiresIn, snapshotId, csvData, rangeStart, rangeEnd, granularity, compareMode, staticSnapshotJson } = body;
         console.log('📝 Request body:', { title, name, description, expiresIn, snapshotId, hasCsvData: !!csvData });
 
         let finalSnapshotId = snapshotId;
@@ -325,38 +325,43 @@ export async function POST(request: NextRequest) {
 
         console.log('✅ Share created successfully:', share.id);
 
-        // Build reduced static snapshot JSON (audience, email performance, campaigns, flows only)
+        // Store provided static snapshot JSON (preferred for accuracy) else build from CSV fallback
         try {
-            // Fetch snapshot to get upload/account data
-            const { data: snapFull, error: snapFullErr } = await serviceClient
-                .from('snapshots')
-                .select('id, account_id, upload_id, range_start, range_end')
-                .eq('id', finalSnapshotId)
-                .single();
-            if (!snapFullErr && snapFull?.upload_id) {
-                const { buildReducedSnapshot } = await import('../../../../lib/shareStaticBuilder');
-                const reduced = await buildReducedSnapshot({
-                    snapshotId: snapFull.id,
-                    accountId: snapFull.account_id,
-                    uploadId: snapFull.upload_id,
-                    rangeStart: snapFull.range_start || rangeStart,
-                    rangeEnd: snapFull.range_end || rangeEnd,
-                    granularity: granularity || 'daily',
-                    compareMode: compareMode || 'prev-period'
-                });
-                try {
-                    const { error: updErr } = await supabase.from('snapshot_shares').update({ snapshot_json: reduced }).eq('id', share.id);
-                    if (updErr && /snapshot_json/i.test(updErr.message || '')) {
-                        console.warn('⚠️ snapshot_shares missing snapshot_json column. Run migration 20250828001000_snapshot_share_static_json.sql to enable static snapshots. Continuing without stored JSON.');
-                    } else if (updErr) {
-                        console.warn('Failed to store static snapshot_json:', updErr);
+            if (staticSnapshotJson && typeof staticSnapshotJson === 'object') {
+                const { error: updErr } = await supabase.from('snapshot_shares').update({ snapshot_json: staticSnapshotJson }).eq('id', share.id);
+                if (updErr) console.warn('Failed to store client-provided static snapshot JSON:', updErr.message || updErr);
+            } else {
+                // Fallback server build
+                const { data: snapFull, error: snapFullErr } = await serviceClient
+                    .from('snapshots')
+                    .select('id, account_id, upload_id, range_start, range_end')
+                    .eq('id', finalSnapshotId)
+                    .single();
+                if (!snapFullErr && snapFull?.upload_id) {
+                    const { buildReducedSnapshot } = await import('../../../../lib/shareStaticBuilder');
+                    const reduced = await buildReducedSnapshot({
+                        snapshotId: snapFull.id,
+                        accountId: snapFull.account_id,
+                        uploadId: snapFull.upload_id,
+                        rangeStart: snapFull.range_start || rangeStart,
+                        rangeEnd: snapFull.range_end || rangeEnd,
+                        granularity: granularity || 'daily',
+                        compareMode: compareMode || 'prev-period'
+                    });
+                    try {
+                        const { error: updErr } = await supabase.from('snapshot_shares').update({ snapshot_json: reduced }).eq('id', share.id);
+                        if (updErr && /snapshot_json/i.test(updErr.message || '')) {
+                            console.warn('⚠️ snapshot_shares missing snapshot_json column. Run migration to enable static snapshots. Continuing without stored JSON.');
+                        } else if (updErr) {
+                            console.warn('Failed to store static snapshot_json:', updErr);
+                        }
+                    } catch (e:any) {
+                        console.warn('snapshot_json update threw unexpectedly:', e?.message || e);
                     }
-                } catch (e:any) {
-                    console.warn('snapshot_json update threw unexpectedly:', e?.message || e);
                 }
             }
         } catch (err) {
-            console.warn('Failed to build static snapshot JSON', err);
+            console.warn('Failed to prepare static snapshot JSON', err);
         }
 
         const shareUrl = `${request.nextUrl.origin}/shared/${shareToken}`;
