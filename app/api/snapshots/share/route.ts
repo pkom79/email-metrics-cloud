@@ -118,8 +118,8 @@ export async function POST(request: NextRequest) {
             let firstTry = await attemptInsert(basePayload);
             newSnapshot = firstTry.data; snapshotError = firstTry.error;
             // If undefined_column (42703) likely range_start/range_end migrations missing on remote DB. Retry without them.
-            if (snapshotError && snapshotError.code === '42703' && (basePayload.range_start || basePayload.range_end)) {
-                console.warn('⚠️ snapshots table missing range_start / range_end. Retrying insert without range columns. Run migrations to enable date range persistence.');
+            if (snapshotError && (snapshotError.code === '42703' || /range_(start|end)/i.test(snapshotError.message || '')) && (basePayload.range_start || basePayload.range_end)) {
+                console.warn('⚠️ snapshots table appears to be missing range_start / range_end (', snapshotError.message, '). Retrying insert without range columns. Run migrations to enable date range persistence.');
                 delete basePayload.range_start; delete basePayload.range_end;
                 const retry = await attemptInsert(basePayload);
                 newSnapshot = retry.data; snapshotError = retry.error;
@@ -344,7 +344,16 @@ export async function POST(request: NextRequest) {
                     granularity: granularity || 'daily',
                     compareMode: compareMode || 'prev-period'
                 });
-                await supabase.from('snapshot_shares').update({ snapshot_json: reduced }).eq('id', share.id);
+                try {
+                    const { error: updErr } = await supabase.from('snapshot_shares').update({ snapshot_json: reduced }).eq('id', share.id);
+                    if (updErr && /snapshot_json/i.test(updErr.message || '')) {
+                        console.warn('⚠️ snapshot_shares missing snapshot_json column. Run migration 20250828001000_snapshot_share_static_json.sql to enable static snapshots. Continuing without stored JSON.');
+                    } else if (updErr) {
+                        console.warn('Failed to store static snapshot_json:', updErr);
+                    }
+                } catch (e:any) {
+                    console.warn('snapshot_json update threw unexpectedly:', e?.message || e);
+                }
             }
         } catch (err) {
             console.warn('Failed to build static snapshot JSON', err);
