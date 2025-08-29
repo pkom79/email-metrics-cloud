@@ -145,7 +145,8 @@ function parseCampaigns(text?: string): ParsedCampaign[] {
     revenue: toNumber(r['Revenue']),
     uniqueOpens: toNumber(r['Unique Opens']),
     uniqueClicks: toNumber(r['Unique Clicks']),
-    totalOrders: toNumber(r['Total Placed Orders'] || r['Placed Orders']),
+    // Accept alternate field label 'Unique Placed Order'
+    totalOrders: toNumber(r['Total Placed Orders'] || r['Placed Orders'] || r['Unique Placed Order']),
     unsubscribes: toNumber(r['Unsubscribes']),
     spamComplaints: toNumber(r['Spam Complaints']),
     bounces: toNumber(r['Bounces']),
@@ -161,7 +162,7 @@ function parseFlows(text?: string): ParsedFlow[] {
     revenue: toNumber(r['Revenue']),
     uniqueOpens: toNumber(r['Unique Opens']),
     uniqueClicks: toNumber(r['Unique Clicks']),
-    totalOrders: toNumber(r['Total Placed Orders'] || r['Placed Orders']),
+    totalOrders: toNumber(r['Total Placed Orders'] || r['Placed Orders'] || r['Unique Placed Order']),
     unsubscribes: toNumber(r['Unsubscribes']),
     spamComplaints: toNumber(r['Spam Complaints']),
     bounces: toNumber(r['Bounces']),
@@ -182,15 +183,15 @@ function aggregate(snapshotId: string, accountId: string, uploadId: string, camp
   if (!allEmails.length) { const now = new Date(); minDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()); maxDate = minDate; }
 
   const mkDerived = (t: BaseTotals): DerivedTotals => ({
-    openRate: t.emailsSent ? (t.uniqueOpens / t.emailsSent) * 100 : 0,
-    clickRate: t.emailsSent ? (t.uniqueClicks / t.emailsSent) * 100 : 0,
-    clickToOpenRate: t.uniqueOpens ? (t.uniqueClicks / t.uniqueOpens) * 100 : 0,
-    conversionRate: t.uniqueClicks ? (t.totalOrders / t.uniqueClicks) * 100 : 0,
+    openRate: t.emailsSent ? Math.min(100, (t.uniqueOpens / t.emailsSent) * 100) : 0,
+    clickRate: t.emailsSent ? Math.min(100, (t.uniqueClicks / t.emailsSent) * 100) : 0,
+    clickToOpenRate: t.uniqueOpens ? Math.min(100, (t.uniqueClicks / t.uniqueOpens) * 100) : 0,
+    conversionRate: t.uniqueClicks ? Math.min(100, (t.totalOrders / t.uniqueClicks) * 100) : 0,
     revenuePerEmail: t.emailsSent ? t.revenue / t.emailsSent : 0,
     avgOrderValue: t.totalOrders ? t.revenue / t.totalOrders : 0,
-    unsubscribeRate: t.emailsSent ? (t.unsubscribes / t.emailsSent) * 100 : 0,
-    spamRate: t.emailsSent ? (t.spamComplaints / t.emailsSent) * 100 : 0,
-    bounceRate: t.emailsSent ? (t.bounces / t.emailsSent) * 100 : 0,
+    unsubscribeRate: t.emailsSent ? Math.min(100, (t.unsubscribes / t.emailsSent) * 100) : 0,
+    spamRate: t.emailsSent ? Math.min(100, (t.spamComplaints / t.emailsSent) * 100) : 0,
+    bounceRate: t.emailsSent ? Math.min(100, (t.bounces / t.emailsSent) * 100) : 0,
   });
 
   const zeroTotals: BaseTotals = { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribes: 0, spamComplaints: 0, bounces: 0 };
