@@ -406,8 +406,15 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel,
                     const totalsFlows = sum(flows);
                     const previousPeriod = (() => {
                         const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
-                        const prevEnd = new Date(start); prevEnd.setDate(prevEnd.getDate() - 1); prevEnd.setHours(23, 59, 59, 999);
-                        const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - (days - 1)); prevStart.setHours(0, 0, 0, 0);
+                        let prevStart: Date; let prevEnd: Date;
+                        if (compareMode === 'prev-year') {
+                            prevStart = new Date(start); prevStart.setFullYear(prevStart.getFullYear() - 1);
+                            prevEnd = new Date(prevStart); prevEnd.setDate(prevEnd.getDate() + (days - 1));
+                            prevEnd.setHours(23, 59, 59, 999);
+                        } else { // default prev-period
+                            prevEnd = new Date(start); prevEnd.setDate(prevEnd.getDate() - 1); prevEnd.setHours(23, 59, 59, 999);
+                            prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - (days - 1)); prevStart.setHours(0, 0, 0, 0);
+                        }
                         const inPrev = (d: Date) => d >= prevStart && d <= prevEnd;
                         const prevAll = all.filter(e => e.sentDate && inPrev(e.sentDate));
                         const prevCamp = campaigns.filter(e => e.sentDate && inPrev(e.sentDate));
@@ -464,7 +471,7 @@ export default function ShareModal({ isOpen, onClose, snapshotId, snapshotLabel,
                         return { totalSubscribers: subs.length, subscribedCount: subscribed, unsubscribedCount: subs.length - subscribed, percentSubscribed: subs.length ? (subscribed / subs.length) * 100 : 0 };
                     })();
                     return {
-                        meta: { start: window.start, end: window.end, generatedAt: new Date().toISOString() },
+                        meta: { start: window.start, end: window.end, generatedAt: new Date().toISOString(), granularity, compareMode },
                         audienceOverview: audience,
                         emailPerformance: metricBundle(totalsAll, prevTotalsAll),
                         campaignPerformance: totalsCampaigns.emailsSent ? metricBundle(totalsCampaigns, prevTotalsCamp) : undefined,
