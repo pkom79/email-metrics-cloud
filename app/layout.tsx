@@ -13,9 +13,9 @@ export const metadata: Metadata = {
     title: 'Email Metrics',
     description: 'Upload CSVs. Get snapshots.',
     icons: {
-        // Use brand logo PNG as favicon
+        // Primary favicon (SVG)
         icon: [
-            { url: '/brand/logo-email.png', type: 'image/png' }
+            { url: '/icon.svg', type: 'image/svg+xml' }
         ],
         apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
     }
@@ -34,6 +34,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                     }}
                 />
                 <link rel="icon" href="/brand/logo-email.png" type="image/png" />
+                {/* Override link tag to ensure browsers pick up new SVG favicon immediately */}
+                <link rel="icon" href="/icon.svg" type="image/svg+xml" />
                 <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
             </head>
             <body className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">

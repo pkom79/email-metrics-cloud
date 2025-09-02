@@ -195,7 +195,7 @@ export default function CampaignSendFrequency({ campaigns }: Props) {
                 </div>
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mb-5">Bars show {selectedMeta.label.toLowerCase()} across weeks grouped by how many campaigns were sent. Toggle to view averages per week or per campaign. Rates and efficiency metrics are weighted using total emails/events.</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className={`grid gap-6 ${buckets.length === 1 ? 'grid-cols-1 max-w-xs mx-auto' : buckets.length === 2 ? 'grid-cols-2 max-w-md mx-auto' : buckets.length === 3 ? 'grid-cols-3 max-w-3xl mx-auto' : 'grid-cols-2 md:grid-cols-4'}`}>
                 {buckets.map(b => {
                     const val = getValue(b);
                     const heightPct = (val / maxVal) * 100;
