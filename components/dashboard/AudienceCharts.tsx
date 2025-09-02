@@ -8,6 +8,7 @@ export default function AudienceCharts() {
     const audienceInsights = dataManager.getAudienceInsights();
     const subscribers = dataManager.getSubscribers();
     const hasData = subscribers.length > 0;
+    const [showDeadWeightGuide, setShowDeadWeightGuide] = React.useState(false);
 
     const formatCurrency = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
     const formatPercent = (value: number) => {
@@ -425,6 +426,68 @@ export default function AudienceCharts() {
                         )}
                     </div>
                     <p className="mt-6 text-xs text-gray-500 dark:text-gray-500">Estimation only. Klaviyo pricing may change at any time; actual savings may vary.</p>
+                    <div className="mt-3">
+                        <button
+                            type="button"
+                            onClick={() => setShowDeadWeightGuide(true)}
+                            className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:underline"
+                        >How to suppress dead-weight subscribers in Klaviyo?</button>
+                    </div>
+                    {showDeadWeightGuide && (
+                        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto">
+                            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowDeadWeightGuide(false)}></div>
+                            <div className="relative w-full max-w-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-xl p-6 animate-fade-in">
+                                <div className="flex items-start justify-between mb-4">
+                                    <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                                        <Trash2 className="w-5 h-5 text-purple-600" /> Suppress Dead‑Weight Subscribers
+                                    </h4>
+                                    <button onClick={() => setShowDeadWeightGuide(false)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" aria-label="Close">
+                                        ✕
+                                    </button>
+                                </div>
+                                <div className="space-y-6 text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                                    <div>
+                                        <p className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Create two Klaviyo segments:</p>
+                                        <div className="space-y-4">
+                                            <div className="bg-gray-50 dark:bg-gray-800/60 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                                                <p className="text-xs uppercase tracking-wide font-semibold text-gray-500 dark:text-gray-400 mb-1">Segment 1</p>
+                                                <p className="font-medium mb-2">Inactive but emailable for 90+ days</p>
+                                                <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
+                                                    <li>Person can receive email marketing</li>
+                                                    <li>Opened Email equals 0 times in the last 90 days</li>
+                                                    <li>Clicked Email equals 0 times in the last 90 days</li>
+                                                    <li>Created at least 90 days ago</li>
+                                                </ul>
+                                            </div>
+                                            <div className="bg-gray-50 dark:bg-gray-800/60 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                                                <p className="text-xs uppercase tracking-wide font-semibold text-gray-500 dark:text-gray-400 mb-1">Segment 2</p>
+                                                <p className="font-medium mb-2">Never active and older than 30 days</p>
+                                                <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
+                                                    <li>Person can receive email marketing</li>
+                                                    <li>First Active is not set</li>
+                                                    <li>Last Active is not set</li>
+                                                    <li>Created at least 30 days ago</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Then suppress both segments:</p>
+                                        <ol className="list-decimal list-inside space-y-1 text-gray-700 dark:text-gray-300">
+                                            <li>Go to <span className="font-medium">Lists & Segments</span>.</li>
+                                            <li>For each segment, click the three vertical dots.</li>
+                                            <li>Select <span className="font-medium">“Suppress current members.”</span></li>
+                                            <li>Confirm with <span className="font-medium">“Bulk suppress.”</span></li>
+                                        </ol>
+                                    </div>
+                                    <div className="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 rounded-lg p-4 text-xs text-purple-800 dark:text-purple-200">
+                                        After suppression, Klaviyo usually adjusts billing automatically. If it doesn’t update, go to <span className="font-medium">Billing → Change plan</span> and select the plan matching your new active subscriber count.
+                                    </div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-500">Tip: Keep a short re‑engagement flow before suppressing to attempt last‑chance activation.</div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </section>
