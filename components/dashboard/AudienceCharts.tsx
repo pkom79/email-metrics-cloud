@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { Users, UserCheck, DollarSign, TrendingUp, Calendar, AlertCircle } from 'lucide-react';
+import { Users, UserCheck, DollarSign, TrendingUp, Calendar, AlertCircle, Trash2, PiggyBank } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 
 export default function AudienceCharts() {
@@ -82,6 +82,135 @@ export default function AudienceCharts() {
             }
         });
         return counters.map(c => ({ label: c.label, count: c.count, percent: total > 0 ? (c.count / total) * 100 : 0 }));
+    }, [hasData, subscribers, dataManager]);
+
+    // Dead Weight Subscribers & Savings module
+    const deadWeight = React.useMemo(() => {
+        if (!hasData) return null as null | {
+            segment1: string[]; // emails
+            segment2: string[];
+            combined: string[];
+            currentPrice: number | null;
+            newPrice: number | null;
+            monthlySavings: number | null;
+            annualSavings: number | null;
+        };
+
+        const anchor = dataManager.getLastEmailDate();
+        const daysDiff = (a: Date, b: Date) => Math.floor((a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24));
+
+        // Pricing tiers (min, max, price)
+        const pricing: { min: number; max: number; price: number }[] = [
+            { min: 0, max: 250, price: 0 },
+            { min: 251, max: 500, price: 20 },
+            { min: 501, max: 1000, price: 30 },
+            { min: 1001, max: 1500, price: 45 },
+            { min: 1501, max: 2500, price: 60 },
+            { min: 2501, max: 3000, price: 70 },
+            { min: 3001, max: 3500, price: 80 },
+            { min: 3501, max: 5000, price: 100 },
+            { min: 5001, max: 5500, price: 110 },
+            { min: 5501, max: 6000, price: 130 },
+            { min: 6001, max: 6500, price: 140 },
+            { min: 6501, max: 10000, price: 150 },
+            { min: 10001, max: 10500, price: 175 },
+            { min: 10501, max: 11000, price: 200 },
+            { min: 11001, max: 11500, price: 225 },
+            { min: 11501, max: 12000, price: 250 },
+            { min: 12001, max: 12500, price: 275 },
+            { min: 12501, max: 13000, price: 300 },
+            { min: 13001, max: 13500, price: 325 },
+            { min: 13501, max: 15000, price: 350 },
+            { min: 15001, max: 20000, price: 375 },
+            { min: 20001, max: 25000, price: 400 },
+            { min: 25001, max: 26000, price: 425 },
+            { min: 26001, max: 27000, price: 450 },
+            { min: 27001, max: 28000, price: 475 },
+            { min: 28001, max: 30000, price: 500 },
+            { min: 30001, max: 35000, price: 550 },
+            { min: 35001, max: 40000, price: 600 },
+            { min: 40001, max: 45000, price: 650 },
+            { min: 45001, max: 50000, price: 720 },
+            { min: 50001, max: 55000, price: 790 },
+            { min: 55001, max: 60000, price: 860 },
+            { min: 60001, max: 65000, price: 930 },
+            { min: 65001, max: 70000, price: 1000 },
+            { min: 70001, max: 75000, price: 1070 },
+            { min: 75001, max: 80000, price: 1140 },
+            { min: 80001, max: 85000, price: 1205 },
+            { min: 85001, max: 90000, price: 1265 },
+            { min: 90001, max: 95000, price: 1325 },
+            { min: 95001, max: 100000, price: 1380 },
+            { min: 100001, max: 105000, price: 1440 },
+            { min: 105001, max: 110000, price: 1495 },
+            { min: 110001, max: 115000, price: 1555 },
+            { min: 115001, max: 120000, price: 1610 },
+            { min: 120001, max: 125000, price: 1670 },
+            { min: 125001, max: 130000, price: 1725 },
+            { min: 130001, max: 135000, price: 1785 },
+            { min: 135001, max: 140000, price: 1840 },
+            { min: 140001, max: 145000, price: 1900 },
+            { min: 145001, max: 150000, price: 1955 },
+            { min: 150001, max: 200000, price: 2070 },
+            { min: 200001, max: 250000, price: 2300 },
+        ];
+
+        const priceFor = (count: number): number | null => {
+            if (count > 250000) return null; // custom pricing
+            const tier = pricing.find(t => count >= t.min && count <= t.max);
+            return tier ? tier.price : null;
+        };
+
+        // Segment 1: First Active not set AND Last Active not set AND Created at least 30 days ago
+        const seg1Emails: string[] = [];
+        // Segment 2: Last Click >= 90 days ago AND Last Open >= 90 days ago AND Created >= 90 days ago
+        const seg2Emails: string[] = [];
+
+        subscribers.forEach(sub => {
+            const created = sub.profileCreated instanceof Date ? sub.profileCreated : null;
+            const createdAge = created ? daysDiff(anchor, created) : 0;
+            const lastOpen = sub.lastOpen instanceof Date ? sub.lastOpen : null;
+            const lastClick = sub.lastClick instanceof Date ? sub.lastClick : null;
+
+            // Segment 1 condition (using firstActiveRaw to detect unset)
+            const firstActiveUnset = !sub.firstActiveRaw; // raw missing
+            const lastActiveUnset = !sub.lastActive;
+            if (firstActiveUnset && lastActiveUnset && createdAge >= 30) {
+                seg1Emails.push(sub.email.toLowerCase());
+            }
+
+            // Segment 2 condition
+            if (createdAge >= 90) {
+                const openAge = lastOpen ? daysDiff(anchor, lastOpen) : Infinity; // if missing treat as very old
+                const clickAge = lastClick ? daysDiff(anchor, lastClick) : Infinity;
+                if (openAge >= 90 && clickAge >= 90) {
+                    seg2Emails.push(sub.email.toLowerCase());
+                }
+            }
+        });
+
+        // Combine & dedupe
+        const combinedSet = new Set<string>([...seg1Emails, ...seg2Emails]);
+        const combined = Array.from(combinedSet);
+
+        const currentCount = subscribers.length;
+        const deadWeightCount = combined.length;
+        const projectedCount = Math.max(0, currentCount - deadWeightCount);
+
+        const currentPrice = priceFor(currentCount);
+        const newPrice = priceFor(projectedCount);
+        const monthlySavings = currentPrice !== null && newPrice !== null ? currentPrice - newPrice : null;
+        const annualSavings = monthlySavings !== null ? monthlySavings * 12 : null;
+
+        return {
+            segment1: seg1Emails,
+            segment2: seg2Emails,
+            combined,
+            currentPrice,
+            newPrice,
+            monthlySavings,
+            annualSavings,
+        };
     }, [hasData, subscribers, dataManager]);
 
     if (!hasData) {
@@ -234,6 +363,65 @@ export default function AudienceCharts() {
                     ))}
                 </div>
             </div>
+
+            {/* Dead Weight Subscribers & Potential Savings */}
+            {deadWeight && (
+                <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                        <Trash2 className="w-5 h-5 text-purple-600" />
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Dead Weight Subscribers</h3>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
+                            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Segment 1</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-300">Never Active &gt;= 30d</p>
+                            <p className="mt-2 text-xl font-semibold text-gray-900 dark:text-gray-100">{deadWeight.segment1.length.toLocaleString()}</p>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
+                            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Segment 2</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-300">No Open/Click &gt;= 90d & Created &gt;= 90d</p>
+                            <p className="mt-2 text-xl font-semibold text-gray-900 dark:text-gray-100">{deadWeight.segment2.length.toLocaleString()}</p>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
+                            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Combined (Unique)</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-300">Total Dead Weight</p>
+                            <p className="mt-2 text-xl font-semibold text-gray-900 dark:text-gray-100">{deadWeight.combined.length.toLocaleString()}</p>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
+                            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Projected List</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-300">After Purge</p>
+                            <p className="mt-2 text-xl font-semibold text-gray-900 dark:text-gray-100">{(subscribers.length - deadWeight.combined.length).toLocaleString()}</p>
+                        </div>
+                    </div>
+                    {deadWeight.currentPrice === null ? (
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Custom pricing tier (&gt; 250,000). Savings not calculated.</div>
+                    ) : deadWeight.monthlySavings !== null && deadWeight.monthlySavings > 0 ? (
+                        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+                            <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <PiggyBank className="w-5 h-5 text-purple-600" />
+                                    <h4 className="text-md font-semibold text-gray-900 dark:text-gray-100">Potential Savings</h4>
+                                </div>
+                                <p className="text-3xl font-bold text-green-600 dark:text-green-400">${deadWeight.annualSavings!.toLocaleString('en-US', { minimumFractionDigits: 0 })}<span className="text-lg font-medium text-gray-500 dark:text-gray-400"> / yr</span></p>
+                                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">${deadWeight.monthlySavings!.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })} per month</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <p className="text-gray-500 dark:text-gray-400">Current Monthly</p>
+                                    <p className="font-medium text-gray-900 dark:text-gray-100">${deadWeight.currentPrice?.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}</p>
+                                </div>
+                                <div>
+                                    <p className="text-gray-500 dark:text-gray-400">After Purge</p>
+                                    <p className="font-medium text-gray-900 dark:text-gray-100">${deadWeight.newPrice?.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}</p>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-sm text-gray-600 dark:text-gray-400">No savings identified at current list size.</div>
+                    )}
+                    <p className="mt-4 text-xs text-gray-500 dark:text-gray-500">Definitions: Segment 1 = first active not set, last active not set, created ≥30 days ago. Segment 2 = last open ≥90 days ago AND last click ≥90 days ago AND created ≥90 days ago. Pricing based on provided Klaviyo tiers; no calculation above 250,000 (custom pricing).</p>
+                </div>
+            )}
         </section>
     );
 }
