@@ -33,8 +33,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                         __html: `!function(){try{var t=localStorage.getItem("theme");if(!t){var e=window.matchMedia("(prefers-color-scheme: dark)");t=e.matches?"dark":"light"}("dark"===t)&&document.documentElement.classList.add("dark")}catch(n){}}();`
                     }}
                 />
-                <link rel="icon" href="/brand/logo-email.png" type="image/png" />
-                {/* Override link tag to ensure browsers pick up new SVG favicon immediately */}
                 <link rel="icon" href="/icon.svg" type="image/svg+xml" />
                 <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
             </head>
