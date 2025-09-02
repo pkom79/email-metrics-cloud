@@ -29,6 +29,8 @@ export default function Signup() {
     const [submitting, setSubmitting] = useState(false);
     const [resendBusy, setResendBusy] = useState(false);
     const [resendMsg, setResendMsg] = useState<string | null>(null);
+    const [resetBusy, setResetBusy] = useState(false);
+    const [resetMsg, setResetMsg] = useState<string | null>(null);
 
     useEffect(() => {
         setMode(qpMode);
@@ -175,6 +177,26 @@ export default function Signup() {
         } finally { setResendBusy(false); }
     };
 
+    const onForgotPassword = async () => {
+        if (!email) {
+            setError('Enter your email first.');
+            return;
+        }
+        setResetBusy(true); setResetMsg(null); setError(null);
+        try {
+            const origin = typeof window !== 'undefined' ? window.location.origin : '';
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${origin}/auth/reset-password`
+            });
+            if (error) throw error;
+            setResetMsg('Password reset email sent. Check your inbox.');
+        } catch (e: any) {
+            setError(e?.message || 'Failed to send reset email');
+        } finally {
+            setResetBusy(false);
+        }
+    };
+
     return (
         <div className="max-w-md mx-auto space-y-6">
             <h2 className="text-xl font-semibold">{mode === 'signup' ? 'Create Account' : 'Sign in'}</h2>
@@ -233,6 +255,18 @@ export default function Signup() {
                     {submitting ? 'Please wait…' : (mode === 'signup' ? 'Sign up' : 'Sign in')}
                 </button>
             </form>
+            {mode === 'signin' && (
+                <div className="flex justify-end -mt-2">
+                    <button
+                        type="button"
+                        onClick={onForgotPassword}
+                        disabled={resetBusy}
+                        className="text-xs underline text-purple-600 hover:text-purple-700 disabled:opacity-60"
+                    >
+                        {resetBusy ? 'Sending reset…' : 'Forgot password?'}
+                    </button>
+                </div>
+            )}
             {error && <p className="text-sm text-red-500">{error}</p>}
             {error === 'email rate limit exceeded' && (
                 <div className="space-y-2">
@@ -245,6 +279,7 @@ export default function Signup() {
                     {resendMsg && <p className="text-xs text-gray-600 dark:text-gray-300">{resendMsg}</p>}
                 </div>
             )}
+            {resetMsg && <p className="text-xs text-green-600">{resetMsg}</p>}
             {ok && <p className="text-sm text-green-600">{ok}</p>}
         </div>
     );
