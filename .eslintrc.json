@@ -6,7 +6,8 @@
   "parserOptions": {
     "project": [
       "./tsconfig.json"
-    ],
-    "tsconfigRootDir": "./"
+    ]
+    // tsconfigRootDir removed: ESLint resolves project relative to this config file.
+    // A relative string value caused: parserOptions.tsconfigRootDir must be an absolute path.
   }
 }
