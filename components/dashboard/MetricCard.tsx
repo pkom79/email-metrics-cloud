@@ -76,7 +76,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
         : `Change vs ${label.toLowerCase()}`;
 
     return (
-        <div className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4 hover:shadow-lg transition-all duration-200 hover:-translate-y-1 hover:scale-[1.03]`}>\
+        <div className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4 hover:shadow-lg transition-all duration-300 ease-out hover:-translate-y-2 hover:scale-[1.8] hover:z-20 will-change-transform origin-center`}>
             <div className="flex items-center justify-between mb-2">
                 <div className="flex-1">
                     <p className={`text-sm font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400`}>
