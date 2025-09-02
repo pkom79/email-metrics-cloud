@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { Users, UserCheck, DollarSign, TrendingUp, Calendar, AlertCircle, Trash2, PiggyBank } from 'lucide-react';
+import { Users, UserCheck, DollarSign, TrendingUp, Calendar, AlertCircle, Trash2, PiggyBank, CheckCircle } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 
 export default function AudienceCharts() {
@@ -398,7 +398,15 @@ export default function AudienceCharts() {
 
                     {/* Savings */}
                     <div className="mt-8">
-                        {deadWeight.currentPrice === null ? (
+                        {deadWeight.combined.length === 0 ? (
+                            <div className="flex items-start gap-2 text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                                <CheckCircle className="w-4 h-4 mt-0.5" />
+                                <div>
+                                    <p className="font-medium mb-1 text-green-800 dark:text-green-300">No dead‑weight detected</p>
+                                    <p className="text-xs leading-relaxed text-green-700 dark:text-green-400">Your list is fully active under the current definition, so you’re not overpaying for Klaviyo here. Great job keeping engagement clean.</p>
+                                </div>
+                            </div>
+                        ) : deadWeight.currentPrice === null ? (
                             <div className="text-sm text-gray-600 dark:text-gray-400">Custom pricing tier (&gt; 250,000). Savings not calculated.</div>
                         ) : deadWeight.monthlySavings !== null && deadWeight.monthlySavings > 0 ? (
                             <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
@@ -454,9 +462,9 @@ export default function AudienceCharts() {
                                                 <p className="font-medium mb-2">Inactive but emailable for 90+ days</p>
                                                 <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
                                                     <li>Person can receive email marketing</li>
-                                                    <li>Opened Email equals 0 times in the last 90 days</li>
-                                                    <li>Clicked Email equals 0 times in the last 90 days</li>
-                                                    <li>Created at least 90 days ago</li>
+                                                    <li>AND Opened Email equals 0 times in the last 90 days</li>
+                                                    <li>AND Clicked Email equals 0 times in the last 90 days</li>
+                                                    <li>AND Created at least 90 days ago</li>
                                                 </ul>
                                             </div>
                                             <div className="bg-gray-50 dark:bg-gray-800/60 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
@@ -464,9 +472,9 @@ export default function AudienceCharts() {
                                                 <p className="font-medium mb-2">Never active and older than 30 days</p>
                                                 <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
                                                     <li>Person can receive email marketing</li>
-                                                    <li>First Active is not set</li>
-                                                    <li>Last Active is not set</li>
-                                                    <li>Created at least 30 days ago</li>
+                                                    <li>AND First Active is not set</li>
+                                                    <li>AND Last Active is not set</li>
+                                                    <li>AND Created at least 30 days ago</li>
                                                 </ul>
                                             </div>
                                         </div>
