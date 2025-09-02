@@ -22,11 +22,12 @@ do $$
 declare
   p record;
 begin
+  -- Use policyname (aliased) for Postgres >=14; older catalog sometimes exposed polname
   for p in (
-    select schemaname, tablename, polname
+    select schemaname, tablename, policyname as polname
     from pg_policies
     where schemaname='public' and (
-      polname ilike '%share%' or polname ilike '%token%'
+      policyname ilike '%share%' or policyname ilike '%token%'
     )
   ) loop
     execute format('drop policy if exists %I on %I.%I', p.polname, p.schemaname, p.tablename);
@@ -40,7 +41,8 @@ declare
   drop_stmt text;
 begin
   for f in (
-    select n.nspname as schema_name, p.proname, oidvectortypes(p.proargtypes) as argtypes
+    select n.nspname as schema_name, p.proname,
+           coalesce(nullif(oidvectortypes(p.proargtypes),''),'') as argtypes
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname='public' and p.proname in (
@@ -48,7 +50,11 @@ begin
       'acquire_share_bundle_lock','build_share_bundle','persist_share_bundle'
     )
   ) loop
-    drop_stmt := format('drop function if exists %I.%I(%s) cascade', f.schema_name, f.proname, f.argtypes);
+    if f.argtypes = '' then
+      drop_stmt := format('drop function if exists %I.%I() cascade', f.schema_name, f.proname);
+    else
+      drop_stmt := format('drop function if exists %I.%I(%s) cascade', f.schema_name, f.proname, f.argtypes);
+    end if;
     execute drop_stmt;
   end loop;
 end$$;
