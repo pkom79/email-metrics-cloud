@@ -8,6 +8,7 @@ import AudienceCharts from './AudienceCharts';
 import FlowStepAnalysis from './FlowStepAnalysis';
 import CustomSegmentBlock from './CustomSegmentBlock';
 import DataAgeNotice from './DataAgeNotice';
+import CampaignSendFrequency from './CampaignSendFrequency';
 import { BarChart3, Calendar, ChevronDown, GitCompare, Mail, Send, Zap, Star, Upload as UploadIcon, X, Share2 } from 'lucide-react';
 import UploadWizard from '../../components/UploadWizard';
 import { usePendingUploadsLinker } from '../../lib/utils/usePendingUploadsLinker';
@@ -577,6 +578,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             <MetricCard title="Spam Rate" value={formatPercent(campaignMetrics.spamRate.value)} change={campaignMetrics.spamRate.change} isPositive={campaignMetrics.spamRate.isPositive} previousValue={campaignMetrics.spamRate.previousValue} previousPeriod={campaignMetrics.spamRate.previousPeriod} dateRange={dateRange} metricKey="spamRate" sparklineData={campaignSeries.spamRate} compareMode={compareMode} />
                             <MetricCard title="Bounce Rate" value={formatPercent(campaignMetrics.bounceRate.value)} change={campaignMetrics.bounceRate.change} isPositive={campaignMetrics.bounceRate.isPositive} previousValue={campaignMetrics.bounceRate.previousValue} previousPeriod={campaignMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={campaignSeries.bounceRate} compareMode={compareMode} />
                         </div>
+                        {/* Send Frequency Module */}
+                        <CampaignSendFrequency campaigns={filteredCampaigns} />
                     </section>
                 )}
                 {/* Day & Hour Performance (placed before Top Campaigns to match legacy ordering) */}
