@@ -371,55 +371,60 @@ export default function AudienceCharts() {
                         <Trash2 className="w-5 h-5 text-purple-600" />
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Dead Weight Subscribers</h3>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
-                            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Segment 1</p>
-                            <p className="text-sm text-gray-600 dark:text-gray-300">Never Active &gt;= 30d</p>
-                            <p className="mt-2 text-xl font-semibold text-gray-900 dark:text-gray-100">{deadWeight.segment1.length.toLocaleString()}</p>
+
+                    {/* Summary */}
+                    <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+                        <div>
+                            <p className="text-4xl font-bold text-gray-900 dark:text-gray-100">{deadWeight.combined.length.toLocaleString()}</p>
+                            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Dead weight subscribers ({((deadWeight.combined.length / subscribers.length) * 100).toFixed(1)}% of list)</p>
                         </div>
-                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
-                            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Segment 2</p>
-                            <p className="text-sm text-gray-600 dark:text-gray-300">No Open/Click &gt;= 90d & Created &gt;= 90d</p>
-                            <p className="mt-2 text-xl font-semibold text-gray-900 dark:text-gray-100">{deadWeight.segment2.length.toLocaleString()}</p>
-                        </div>
-                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
-                            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Combined (Unique)</p>
-                            <p className="text-sm text-gray-600 dark:text-gray-300">Total Dead Weight</p>
-                            <p className="mt-2 text-xl font-semibold text-gray-900 dark:text-gray-100">{deadWeight.combined.length.toLocaleString()}</p>
-                        </div>
-                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
-                            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Projected List</p>
-                            <p className="text-sm text-gray-600 dark:text-gray-300">After Purge</p>
-                            <p className="mt-2 text-xl font-semibold text-gray-900 dark:text-gray-100">{(subscribers.length - deadWeight.combined.length).toLocaleString()}</p>
+                        <div>
+                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Projected List After Purge</p>
+                            <p className="text-xl font-semibold text-gray-900 dark:text-gray-100">{(subscribers.length - deadWeight.combined.length).toLocaleString()}</p>
                         </div>
                     </div>
-                    {deadWeight.currentPrice === null ? (
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Custom pricing tier (&gt; 250,000). Savings not calculated.</div>
-                    ) : deadWeight.monthlySavings !== null && deadWeight.monthlySavings > 0 ? (
-                        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-                            <div>
-                                <div className="flex items-center gap-2 mb-2">
-                                    <PiggyBank className="w-5 h-5 text-purple-600" />
-                                    <h4 className="text-md font-semibold text-gray-900 dark:text-gray-100">Potential Savings</h4>
-                                </div>
-                                <p className="text-3xl font-bold text-green-600 dark:text-green-400">${deadWeight.annualSavings!.toLocaleString('en-US', { minimumFractionDigits: 0 })}<span className="text-lg font-medium text-gray-500 dark:text-gray-400"> / yr</span></p>
-                                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">${deadWeight.monthlySavings!.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })} per month</p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                    <p className="text-gray-500 dark:text-gray-400">Current Monthly</p>
-                                    <p className="font-medium text-gray-900 dark:text-gray-100">${deadWeight.currentPrice?.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}</p>
-                                </div>
-                                <div>
-                                    <p className="text-gray-500 dark:text-gray-400">After Purge</p>
-                                    <p className="font-medium text-gray-900 dark:text-gray-100">${deadWeight.newPrice?.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}</p>
-                                </div>
-                            </div>
+
+                    {/* Bar visualization */}
+                    <div className="mt-6">
+                        <div className="flex items-center justify-between text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                            <span>Dead Weight</span>
+                            <span>Total {subscribers.length.toLocaleString()}</span>
                         </div>
-                    ) : (
-                        <div className="text-sm text-gray-600 dark:text-gray-400">No savings identified at current list size.</div>
-                    )}
-                    <p className="mt-4 text-xs text-gray-500 dark:text-gray-500">Definitions: Segment 1 = first active not set, last active not set, created ≥30 days ago. Segment 2 = last open ≥90 days ago AND last click ≥90 days ago AND created ≥90 days ago. Pricing based on provided Klaviyo tiers; no calculation above 250,000 (custom pricing).</p>
+                        <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-3 overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-purple-500 to-purple-600 rounded-full transition-all duration-500" style={{ width: `${(deadWeight.combined.length / subscribers.length) * 100}%` }} />
+                        </div>
+                    </div>
+
+                    {/* Savings */}
+                    <div className="mt-8">
+                        {deadWeight.currentPrice === null ? (
+                            <div className="text-sm text-gray-600 dark:text-gray-400">Custom pricing tier (&gt; 250,000). Savings not calculated.</div>
+                        ) : deadWeight.monthlySavings !== null && deadWeight.monthlySavings > 0 ? (
+                            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <PiggyBank className="w-5 h-5 text-purple-600" />
+                                        <h4 className="text-md font-semibold text-gray-900 dark:text-gray-100">Potential Savings</h4>
+                                    </div>
+                                    <p className="text-3xl font-bold text-green-600 dark:text-green-400">${deadWeight.annualSavings!.toLocaleString('en-US', { minimumFractionDigits: 0 })}<span className="text-lg font-medium text-gray-500 dark:text-gray-400"> / yr</span></p>
+                                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{deadWeight.monthlySavings!.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })} per month</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-6 text-sm">
+                                    <div>
+                                        <p className="text-gray-500 dark:text-gray-400">Current Monthly</p>
+                                        <p className="font-medium text-gray-900 dark:text-gray-100">{deadWeight.currentPrice !== null ? deadWeight.currentPrice.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }) : '—'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-gray-500 dark:text-gray-400">After Purge</p>
+                                        <p className="font-medium text-gray-900 dark:text-gray-100">{deadWeight.newPrice !== null ? deadWeight.newPrice.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }) : '—'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-sm text-gray-600 dark:text-gray-400">No savings identified at current list size.</div>
+                        )}
+                    </div>
+                    <p className="mt-6 text-xs text-gray-500 dark:text-gray-500">Estimation only. Klaviyo pricing may change at any time; actual savings may vary.</p>
                 </div>
             )}
         </section>
