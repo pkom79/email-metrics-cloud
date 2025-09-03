@@ -21,6 +21,8 @@ export interface BenchmarkComputation {
     aboveAvg: number;                  // Above Average lower bound
     exceptional: number;               // Exceptional lower bound
   };
+  provisional?: boolean;               // shown when we have >= minProvisional but < full threshold
+  hiddenReason?: string;               // explanation if tier null
 }
 
 // Direction metadata: metrics where lower is better
@@ -49,22 +51,30 @@ function getHistoricalWeeks(metricKey: string) {
  * Trim: remove lowest 10% and highest 10% of values (floor counts) before baseline calculation.
  */
 export function computeBenchmark(metricKey: string | undefined, currentRangeStart?: Date, currentRangeEnd?: Date): BenchmarkComputation {
-  if (!metricKey) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true };
+  if (!metricKey) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true, hiddenReason: 'No metric key' };
   const weeks = getHistoricalWeeks(metricKey);
-  if (!weeks.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true };
+  if (!weeks.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true, hiddenReason: 'No weekly data' };
 
   // Define anchor: if currentRangeStart supplied, we only look at weeks strictly before it.
   let anchor = currentRangeStart ? new Date(currentRangeStart) : new Date();
   anchor.setHours(0,0,0,0);
 
   // Filter weeks strictly before anchor week start.
-  const usable = weeks.filter(w => w.weekStart < anchor);
+  let usable = weeks.filter(w => w.weekStart < anchor);
+  // Fallback: if none, try using range end (common when viewing 'all' and anchor == earliest week)
+  if (!usable.length && currentRangeEnd) {
+    const altAnchor = new Date(currentRangeEnd); altAnchor.setHours(0,0,0,0); altAnchor.setDate(altAnchor.getDate()+7); // include all weeks up to end
+    usable = weeks.filter(w => w.weekStart < altAnchor);
+  }
   const totalWeeksConsidered = usable.length;
-  if (!usable.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered, insufficient: true };
+  if (!usable.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered, insufficient: true, hiddenReason: 'No historical weeks prior to range' };
 
-  // Take last up to 52 weeks, at least 10 (earlier filtering ensures order)
+  // Take last up to 52 weeks, at least 8 provisional, 12 recommended, 20 full
   const windowWeeks = usable.slice(-52);
-  if (windowWeeks.length < 10) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient: true, note: 'Need more history' };
+  const minProvisional = 8; // show a provisional badge
+  const minShowTier = 12;   // compute tier but mark provisional if < full threshold
+  const minFull = 20;       // mark non-provisional once >=20
+  if (windowWeeks.length < minProvisional) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient: true, note: 'Need more history', hiddenReason: 'Fewer than 8 weeks' };
 
   // Copy values for trimming
   const values = windowWeeks.map(w => w.value).filter(v => Number.isFinite(v));
@@ -84,8 +94,8 @@ export function computeBenchmark(metricKey: string | undefined, currentRangeStar
     current = lastComplete?.value ?? null;
   }
 
-  if (!baseline || !current) {
-    return { tier: null, baseline: baseline || null, current: current || null, percentDelta: null, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient: windowWeeks.length < 20 };
+  if (baseline == null || current == null) {
+    return { tier: null, baseline: baseline ?? null, current: current ?? null, percentDelta: null, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient: windowWeeks.length < minFull, provisional: windowWeeks.length >= minShowTier, hiddenReason: 'Missing current or baseline' };
   }
 
   const lowerIsBetter = LOWER_IS_BETTER.has(metricKey);
@@ -112,15 +122,15 @@ export function computeBenchmark(metricKey: string | undefined, currentRangeStar
     else tier = 'Needs Review';
   }
 
-  const insufficient = windowWeeks.length < 20;
+  const insufficient = windowWeeks.length < minFull;
   const thresholds = {
     typicalLow: baseline * (1 - typicalBand),
     typicalHigh: baseline * (1 + typicalBand),
     aboveAvg: baseline * (1 + typicalBand),
     exceptional: baseline * (1 + aboveBand),
   };
-
-  return { tier: insufficient ? null : tier, baseline, current, percentDelta, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient, thresholds };
+  const provisional = !insufficient && windowWeeks.length < minFull;
+  return { tier, baseline, current, percentDelta, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient, provisional, thresholds };
 }
 
 /** Simple cache per metric + anchor signature (in-memory only) */
@@ -155,6 +165,6 @@ export function useBenchmark(metricKey: string | undefined, anchorStart?: Date, 
       };
     },
     () => getBenchmark(metricKey, anchorStart, anchorEnd),
-    () => ({ tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true })
+  () => ({ tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true, hiddenReason: 'SSR fallback' })
   );
 }

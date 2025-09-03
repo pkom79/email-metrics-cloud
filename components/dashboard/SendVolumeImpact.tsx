@@ -341,14 +341,26 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     // Anchor: current range start/end (use week boundaries implicitly inside benchmark helper)
     let benchmark: any = null;
     try {
-        benchmark = useBenchmark(benchmarkMetricKey, range?.startDate, range?.endDate);
+        // Use range end as anchor for historical window context
+        benchmark = useBenchmark(benchmarkMetricKey, range?.endDate, range?.endDate);
     } catch (e) {
         console.warn('Benchmark hook failed', e);
         benchmark = { insufficient: true };
     }
 
     const tierBadge = (() => {
-        if (!benchmark || benchmark.insufficient || !benchmark.tier) return null;
+        if (!benchmark) return null;
+        if (!benchmark.tier) {
+            return (
+                <span className="group relative inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium border bg-gray-50 text-gray-600 border-gray-200">
+                    Benchmarking
+                    <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-72 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
+                        Benchmark tier hidden. {benchmark.hiddenReason || 'Insufficient history'}.
+                        Weeks available: {benchmark.sampleWeeks}. Need at least 8 for provisional and 12+ for initial tiers.
+                    </span>
+                </span>
+            );
+        }
         const tierColors: Record<string, string> = {
             'Needs Review': 'bg-rose-50 text-rose-700 border-rose-200',
             'Below Average': 'bg-amber-50 text-amber-700 border-amber-200',
@@ -360,7 +372,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         const pct = benchmark.percentDelta != null && benchmark.baseline ? ((benchmark.current || 0) - benchmark.baseline) / benchmark.baseline * 100 : null;
         return (
             <span className={`group relative inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium border ${cls}`}>
-                {benchmark.tier}
+                {benchmark.tier}{benchmark.provisional && <span className="ml-1 text-[9px] uppercase tracking-wide">(Prov.)</span>}
                 {pct != null && <span className="tabular-nums">{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</span>}
                 <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-72 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
                     <span className="font-semibold block mb-1">Benchmarking</span>
@@ -368,7 +380,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     Baseline: {benchmark.baseline != null ? (benchmarkMetricKey === 'revenue' || benchmarkMetricKey === 'revenuePerEmail' ? fmtCurrency(benchmark.baseline) : benchmark.baseline.toFixed(2)) : '—'}<br />
                     Current: {benchmark.current != null ? (benchmarkMetricKey === 'revenue' || benchmarkMetricKey === 'revenuePerEmail' ? fmtCurrency(benchmark.current) : benchmark.current.toFixed(2)) : '—'}<br />
                     {benchmark.percentDelta != null && <>Delta: {benchmark.percentDelta >= 0 ? '+' : ''}{benchmark.percentDelta.toFixed(1)}%</>}<br />
-                    Weeks used: {benchmark.sampleWeeks} (trimmed tails).{benchmark.insufficient ? ' More history needed for stable tiers.' : ''}
+                    Weeks used: {benchmark.sampleWeeks} (trimmed tails). {benchmark.provisional ? 'Provisional tier (stabilizes after 20+ weeks).' : benchmark.insufficient ? 'Once 20+ historical weeks accumulate this tier is fully stable.' : ''}
                 </span>
             </span>
         );
