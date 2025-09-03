@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState } from 'react';
-import { Info, TrendingUp, BarChart3 } from 'lucide-react';
+import { Info, TrendingUp, BarChart3, Activity } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
 
@@ -88,7 +88,7 @@ export default function DeliverabilityRiskPanel({ dateRange, customFrom, customT
     }, [filtered, scope]);
 
     const analysis = useMemo(() => {
-        if (weekly.length < 8) return null; // need 8 weeks for two 4-week windows
+        if (weekly.length < 8) return null;
         const last8 = weekly.slice(-8);
         const agg = (arr: WeeklyAgg[]): WindowStats => {
             const emailsSent = arr.reduce((s, w) => s + w.emailsSent, 0);
@@ -109,42 +109,110 @@ export default function DeliverabilityRiskPanel({ dateRange, customFrom, customT
             spamRate: change(prev.spamRate, curr.spamRate),
             bounceRate: change(prev.bounceRate, curr.bounceRate)
         };
-        const diffEmails = curr.emailsSent - prev.emailsSent;
-        const emailsK = diffEmails / 1000 || 0;
-        const elasticity = {
-            revenuePer1k: emailsK === 0 ? 0 : (curr.revenue - prev.revenue) / emailsK,
-            unsubsPer1k: emailsK === 0 ? 0 : (curr.unsubs - prev.unsubs) / emailsK,
-            spamPer1k: emailsK === 0 ? 0 : (curr.spam - prev.spam) / emailsK,
-            bouncesPer1k: emailsK === 0 ? 0 : (curr.bounces - prev.bounces) / emailsK
+        // --- Regression-based marginal impact (stabilizes against tiny Δ volume) ---
+        const regWeeks = weekly.slice(-12); // use up to 12 weeks for slope stability
+        const xs = regWeeks.map(w => w.emailsSent);
+        const slopeInfo = (ys: number[]) => {
+            const n = Math.min(xs.length, ys.length);
+            if (n < 4) return { slope: 0, r2: 0, unstable: true };
+            const mean = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
+            const mx = mean(xs); const my = mean(ys);
+            let num = 0, den = 0, ssTot = 0;
+            for (let i = 0; i < n; i++) { const dx = xs[i] - mx; const dy = ys[i] - my; num += dx * dy; den += dx * dx; ssTot += dy * dy; }
+            if (den === 0) return { slope: 0, r2: 0, unstable: true };
+            const slope = num / den; // Δy / Δx (per email)
+            // Compute R^2 for simple regression
+            let ssRes = 0; const b = my - slope * mx;
+            for (let i = 0; i < n; i++) { const pred = slope * xs[i] + b; const err = ys[i] - pred; ssRes += err * err; }
+            const r2 = ssTot === 0 ? 0 : 1 - ssRes / ssTot;
+            const coefVar = Math.sqrt(den / n) / (mx || 1); // crude variation signal
+            const unstable = coefVar < 0.05; // <5% variation in volume
+            return { slope, r2, unstable };
         };
-        // Simple quality classification
-        // Good if revenuePer1k positive and (unsubsPer1k <= 0.3 or revenue gain outweighs unsub growth heuristically)
+        const revSlope = slopeInfo(regWeeks.map(w => w.revenue));
+        const unsubSlope = slopeInfo(regWeeks.map(w => w.unsubs));
+        const spamSlope = slopeInfo(regWeeks.map(w => w.spam));
+        const bounceSlope = slopeInfo(regWeeks.map(w => w.bounces));
+        const emailsSlope = slopeInfo(regWeeks.map(w => w.emailsSent));
+
+        const regressionElasticity = {
+            revenuePer1k: revSlope.slope * 1000,
+            unsubsPer1k: unsubSlope.slope * 1000,
+            spamPer1k: spamSlope.slope * 1000,
+            bouncesPer1k: bounceSlope.slope * 1000,
+            r2Revenue: revSlope.r2,
+            unstable: revSlope.unstable || unsubSlope.unstable || emailsSlope.unstable
+        };
+
+        // Clamp obviously absurd negative or positive values to avoid misleading output; keep sign, cap magnitude
+        const clamp = (v: number, cap: number) => Math.abs(v) > cap ? (v > 0 ? cap : -cap) : v;
+        regressionElasticity.revenuePer1k = clamp(regressionElasticity.revenuePer1k, 1000); // $1 per email upper bound
+        regressionElasticity.unsubsPer1k = clamp(regressionElasticity.unsubsPer1k, 50); // 5% unsub upper bound per 1k
+        regressionElasticity.spamPer1k = clamp(regressionElasticity.spamPer1k, 10);
+        regressionElasticity.bouncesPer1k = clamp(regressionElasticity.bouncesPer1k, 50);
+
         const classification = (() => {
-            if (emailsK === 0) return 'No volume change';
-            if (elasticity.revenuePer1k <= 0 && (elasticity.unsubsPer1k > 0 || elasticity.spamPer1k > 0)) return 'Harmful';
-            if (elasticity.revenuePer1k > 0 && elasticity.unsubsPer1k <= 0.3 && elasticity.spamPer1k <= 0.02) return 'Healthy Expansion';
-            if (elasticity.revenuePer1k > 0 && (elasticity.unsubsPer1k > 0.3 || elasticity.spamPer1k > 0.02)) return 'Mixed Efficiency';
-            if (elasticity.revenuePer1k > 0) return 'Marginal Gain';
+            if (regressionElasticity.unstable) return 'Low Signal';
+            if (regressionElasticity.revenuePer1k <= 0 && (regressionElasticity.unsubsPer1k > 0 || regressionElasticity.spamPer1k > 0)) return 'Harmful';
+            if (regressionElasticity.revenuePer1k > 0 && regressionElasticity.unsubsPer1k <= 3 && regressionElasticity.spamPer1k <= 0.2) return 'Healthy Expansion';
+            if (regressionElasticity.revenuePer1k > 0 && (regressionElasticity.unsubsPer1k > 3 || regressionElasticity.spamPer1k > 0.2)) return 'Mixed Efficiency';
+            if (regressionElasticity.revenuePer1k > 0) return 'Marginal Gain';
             return 'Neutral';
         })();
-        // Score (0-100) weighting positive rev vs penalties
         const score = (() => {
-            if (emailsK === 0) return 0;
-            const base = Math.max(0, Math.min(100, elasticity.revenuePer1k / (prev.revenuePerEmail * 1000 || 1) * 60));
-            const penalty = (elasticity.unsubsPer1k * 5) + (elasticity.spamPer1k * 800) + (elasticity.bouncesPer1k * 2);
-            return Math.max(0, Math.min(100, Math.round(base - penalty)));
+            if (regressionElasticity.unstable) return 0;
+            const base = Math.max(0, Math.min(100, (regressionElasticity.revenuePer1k / 1000) * 90)); // scale 0..1000 -> 0..90
+            const penalty = (regressionElasticity.unsubsPer1k * 1.5) + (regressionElasticity.spamPer1k * 20) + (regressionElasticity.bouncesPer1k * 0.5);
+            const adj = base - penalty;
+            return Math.max(0, Math.min(100, Math.round(adj)));
         })();
-        return { prev, curr, deltas, elasticity, classification, score, emailsK, last8 };
+        return { prev, curr, deltas, regressionElasticity, classification, score, weeks: regWeeks, last8 };
     }, [weekly]);
 
     const elasticityRows = useMemo(() => {
         if (!analysis) return [] as { key: string; label: string; value: number; unit: string; invert?: boolean }[];
+        const e = analysis.regressionElasticity;
         return [
-            { key: 'rev', label: 'Incremental Revenue', value: analysis.elasticity.revenuePer1k, unit: '$ / +1K emails' },
-            { key: 'unsub', label: 'Incremental Unsubs', value: analysis.elasticity.unsubsPer1k, unit: 'unsubs / +1K', invert: true },
-            { key: 'spam', label: 'Incremental Spam', value: analysis.elasticity.spamPer1k, unit: 'complaints / +1K', invert: true },
-            { key: 'bounce', label: 'Incremental Bounces', value: analysis.elasticity.bouncesPer1k, unit: 'bounces / +1K', invert: true },
+            { key: 'rev', label: 'Marginal Revenue', value: e.revenuePer1k, unit: '$ / +1K emails' },
+            { key: 'unsub', label: 'Marginal Unsubs', value: e.unsubsPer1k, unit: 'unsubs / +1K', invert: true },
+            { key: 'spam', label: 'Marginal Spam', value: e.spamPer1k, unit: 'complaints / +1K', invert: true },
+            { key: 'bounce', label: 'Marginal Bounces', value: e.bouncesPer1k, unit: 'bounces / +1K', invert: true },
         ];
+    }, [analysis]);
+
+    // Time series chart for weekly metrics (emails as bars, overlay lines for revenue/email & unsub rate)
+    const timeSeries = useMemo(() => {
+        if (!analysis) return null;
+        const weeks = analysis.weeks;
+        if (!weeks.length) return null;
+        const emailsMax = Math.max(...weeks.map(w => w.emailsSent), 1);
+        const rpeMax = Math.max(...weeks.map(w => (w.revenue / (w.emailsSent || 1))), 0.0001);
+        const unsubMax = Math.max(...weeks.map(w => (w.unsubs / (w.emailsSent || 1))), 0.0001);
+        const height = 110; const width = weeks.length * 42; // dynamic width per week
+        const barWidth = 18;
+        const emailBars = weeks.map((w, i) => {
+            const h = (w.emailsSent / emailsMax) * (height - 25);
+            return <rect key={w.weekKey} x={i * 42 + 4} y={height - 5 - h} width={barWidth} height={h} rx={3} className="fill-gray-200 dark:fill-gray-700" />;
+        });
+        const line = (vals: number[], color: string) => {
+            const pts = vals.map((v, i) => {
+                const y = height - 5 - v;
+                const x = i * 42 + barWidth + 8;
+                return `${x},${y}`;
+            }).join(' ');
+            return <polyline key={color} points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />;
+        };
+        const rpeVals = weeks.map(w => ((w.revenue / (w.emailsSent || 1)) / rpeMax) * (height - 25));
+        const unsubVals = weeks.map(w => ((w.unsubs / (w.emailsSent || 1)) / unsubMax) * (height - 25));
+        return {
+            svg: (
+                <svg viewBox={`0 0 ${width} ${height}`} className="w-full overflow-visible" role="img" aria-label="Weekly volume & efficiency">
+                    {emailBars}
+                    {line(rpeVals, '#7e22ce')}
+                    {line(unsubVals, '#dc2626')}
+                </svg>
+            ), legend: [{ label: 'Emails (bars)', color: 'bg-gray-300 dark:bg-gray-600' }, { label: 'Revenue / Email', color: 'bg-purple-600' }, { label: 'Unsub Rate', color: 'bg-rose-600' }]
+        };
     }, [analysis]);
 
     if (!weekly.length) return null;
@@ -184,10 +252,10 @@ export default function DeliverabilityRiskPanel({ dateRange, customFrom, customT
             {analysis && (
                 <>
                     {/* Summary Row */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="space-y-3">
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                        <div className="space-y-4">
                             <div className="text-sm text-gray-700 dark:text-gray-300 leading-snug">
-                                Sent <span className="font-semibold text-gray-900 dark:text-gray-100">{analysis.curr.emailsSent.toLocaleString()}</span> emails ({analysis.deltas.emails >= 0 ? '+' : ''}{(analysis.deltas.emails * 100).toFixed(1)}%) vs prev {analysis.prev.emailsSent.toLocaleString()}. Revenue {(analysis.deltas.revenue >= 0 ? 'increased' : 'decreased')} {(analysis.deltas.revenue * 100).toFixed(1)}% while revenue/email {(analysis.deltas.rpe >= 0 ? 'moved up' : 'slid')} {(Math.abs(analysis.deltas.rpe) * 100).toFixed(1)}%. Unsub rate {analysis.deltas.unsubRate >= 0 ? '↑' : '↓'} {(Math.abs(analysis.deltas.unsubRate) * 100).toFixed(1)}%, spam {analysis.deltas.spamRate >= 0 ? '↑' : '↓'} {(Math.abs(analysis.deltas.spamRate) * 100).toFixed(1)}%, bounce {analysis.deltas.bounceRate >= 0 ? '↑' : '↓'} {(Math.abs(analysis.deltas.bounceRate) * 100).toFixed(1)}%.
+                                Sent <span className="font-semibold text-gray-900 dark:text-gray-100">{analysis.curr.emailsSent.toLocaleString()}</span> emails ({analysis.deltas.emails >= 0 ? '+' : ''}{(analysis.deltas.emails * 100).toFixed(1)}%) vs prev {analysis.prev.emailsSent.toLocaleString()}. Revenue {(analysis.deltas.revenue >= 0 ? 'increased' : 'decreased')} {(analysis.deltas.revenue * 100).toFixed(1)}% while revenue/email {(analysis.deltas.rpe >= 0 ? 'rose' : 'fell')} {(Math.abs(analysis.deltas.rpe) * 100).toFixed(1)}%. Unsub rate {analysis.deltas.unsubRate >= 0 ? '↑' : '↓'} {(Math.abs(analysis.deltas.unsubRate) * 100).toFixed(1)}%, spam {analysis.deltas.spamRate >= 0 ? '↑' : '↓'} {(Math.abs(analysis.deltas.spamRate) * 100).toFixed(1)}%, bounce {analysis.deltas.bounceRate >= 0 ? '↑' : '↓'} {(Math.abs(analysis.deltas.bounceRate) * 100).toFixed(1)}%.
                             </div>
                             <div className="flex items-center gap-3 text-xs">
                                 <span className="px-2 py-1 rounded-md bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 font-medium">{analysis.classification}</span>
@@ -216,33 +284,50 @@ export default function DeliverabilityRiskPanel({ dateRange, customFrom, customT
                                     <TrendBadge value={analysis.deltas.bounceRate} invert />
                                 </div>
                             </div>
-                        </div>
-                        {/* Elasticities */}
-                        <div className="lg:col-span-2">
-                            <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300"><BarChart3 className="w-4 h-4 text-purple-600" />Incremental Impact per +1K Emails</div>
-                            <div className="space-y-3">
-                                {(() => {
-                                    const maxAbs = Math.max(0, ...elasticityRows.map(r => Math.abs(r.value))); return elasticityRows.map(r => (
-                                        <div key={r.key} className="flex items-center gap-4 text-xs">
-                                            <div className="w-40 text-gray-600 dark:text-gray-400 font-medium truncate">{r.label}</div>
-                                            <div className="flex-1"><ElasticBar value={r.value} maxAbs={maxAbs} /></div>
-                                            <div className={`w-32 text-right tabular-nums font-semibold ${r.value === 0 ? 'text-gray-500' : r.value > 0 ? (r.invert ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400') : (r.invert ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}`}>{r.key === 'rev' ? formatCurrency(r.value) : r.value.toFixed(2)}</div>
-                                            <div className="w-28 text-[10px] text-gray-500 dark:text-gray-400 text-right">{r.unit}</div>
-                                        </div>
-                                    ));
-                                })()}
+                            <div className="mt-2 text-[10px] text-gray-500 dark:text-gray-500 leading-snug">
+                                {analysis.regressionElasticity.unstable ? 'Low variation in recent send volume—marginal metrics are provisional.' : `Model fit (R² revenue vs volume): ${(analysis.regressionElasticity.r2Revenue * 100).toFixed(0)}%.`}
                             </div>
-                            <p className="mt-3 text-[11px] text-gray-500 dark:text-gray-400 leading-snug">Positive green values add value; red values indicate rising friction. Revenue bar uses dollars, others use raw counts per 1K incremental sends.</p>
+                        </div>
+                        {/* Time Series + Marginals */}
+                        <div className="xl:col-span-2 space-y-6">
+                            <div>
+                                <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300"><Activity className="w-4 h-4 text-purple-600" />Weekly Volume & Efficiency</div>
+                                <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg p-3 overflow-x-auto">
+                                    {timeSeries?.svg}
+                                </div>
+                                <div className="flex gap-4 mt-2 flex-wrap">
+                                    {timeSeries?.legend.map(l => (
+                                        <div key={l.label} className="flex items-center gap-1 text-[10px] text-gray-600 dark:text-gray-400"><span className={`w-3 h-3 rounded ${l.color}`}></span>{l.label}</div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300"><BarChart3 className="w-4 h-4 text-purple-600" />Marginal Impact (Regression)</div>
+                                <div className="space-y-3">
+                                    {(() => {
+                                        const maxAbs = Math.max(0, ...elasticityRows.map(r => Math.abs(r.value)));
+                                        return elasticityRows.map(r => (
+                                            <div key={r.key} className="flex items-center gap-4 text-xs">
+                                                <div className="w-44 text-gray-600 dark:text-gray-400 font-medium truncate">{r.label}</div>
+                                                <div className="flex-1"><ElasticBar value={r.value} maxAbs={maxAbs} /></div>
+                                                <div className={`w-32 text-right tabular-nums font-semibold ${r.value === 0 ? 'text-gray-500' : r.value > 0 ? (r.invert ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400') : (r.invert ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}`}>{r.key === 'rev' ? formatCurrency(r.value) : r.value.toFixed(2)}</div>
+                                                <div className="w-28 text-[10px] text-gray-500 dark:text-gray-400 text-right">{r.unit}</div>
+                                            </div>
+                                        ));
+                                    })()}
+                                </div>
+                                <p className="mt-3 text-[11px] text-gray-500 dark:text-gray-400 leading-snug">Values are regression slopes (marginal impact) over the last {analysis.weeks.length} weeks. Capped to suppress outliers. If signal is low, treat estimates as directional only.</p>
+                            </div>
                         </div>
                     </div>
                     {/* Guidance */}
                     <div className="mt-6 text-[11px] text-gray-600 dark:text-gray-400 leading-snug">
-                        {analysis.classification === 'Healthy Expansion' && 'Current volume scaling is efficient—consider modest additional sends to test upper bounds while monitoring complaint rates.'}
-                        {analysis.classification === 'Mixed Efficiency' && 'Revenue is growing but friction signals are accelerating. Segment pruning or cadence tuning could preserve gains.'}
-                        {analysis.classification === 'Harmful' && 'Scaling appears value destructive—pause further volume increases and address list quality / targeting.'}
-                        {analysis.classification === 'Marginal Gain' && 'Incremental revenue exists but is modest—optimize content or targeting before pushing more volume.'}
-                        {analysis.classification === 'Neutral' && 'No meaningful efficiency change detected—adjust strategy only after further observation.'}
-                        {analysis.classification === 'No volume change' && 'Volume stable; elasticity metrics will activate when sends shift materially.'}
+                        {analysis.classification === 'Healthy Expansion' && 'Scaling is efficient—test upper bounds gradually and monitor unsub/spam slopes for inflection.'}
+                        {analysis.classification === 'Mixed Efficiency' && 'Revenue lift with rising friction—prune low-engagement cohorts or smooth cadence before further scaling.'}
+                        {analysis.classification === 'Harmful' && 'Marginal value negative—pause volume increases; focus on list quality & re-engagement.'}
+                        {analysis.classification === 'Marginal Gain' && 'Positive but thin margin—optimize content/targeting to thicken value before pushing harder.'}
+                        {analysis.classification === 'Neutral' && 'No clear marginal pattern—await more variation or run controlled tests.'}
+                        {analysis.classification === 'Low Signal' && 'Insufficient volume variation to estimate marginal impact—consider structured A/B volume tests.'}
                     </div>
                 </>
             )}
