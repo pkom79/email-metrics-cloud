@@ -6,6 +6,7 @@ import DayOfWeekPerformance from './DayOfWeekPerformance';
 import HourOfDayPerformance from './HourOfDayPerformance';
 import RevenueSplitBar from './RevenueSplitBar';
 import RevenueReliability from './RevenueReliability';
+import InactivityRevenueDrain from './InactivityRevenueDrain';
 import AudienceCharts from './AudienceCharts';
 import FlowStepAnalysis from './FlowStepAnalysis';
 import CustomSegmentBlock from './CustomSegmentBlock';
@@ -562,6 +563,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         </div>
                         {/* Weekly Revenue Reliability (moved up) */}
                         <RevenueReliability campaigns={filteredCampaigns} flows={filteredFlowEmails} dateRange={dateRange} />
+                        <InactivityRevenueDrain subscribers={dm.getSubscribers()} />
                     </section>
                 )}
                 {campaignMetrics && (
