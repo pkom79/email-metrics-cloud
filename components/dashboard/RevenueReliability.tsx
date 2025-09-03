@@ -131,7 +131,14 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
     const formatCurrency = (v: number) => '$' + Math.round(v).toLocaleString('en-US');
     const formatPct1 = (v: number) => (v * 100).toFixed(1) + '%';
 
-    const fewWeeks = weeks.length > 0 && weeks.length < 10;
+    // Center the chart when it doesn't occupy full target width
+    const centerChart = (() => {
+        const weeksCountLocal = weeks.length;
+        if (!weeksCountLocal) return false;
+        // After width calc we know if we capped below baseMax; recalc with same formula
+        const tentative = Math.min(1100, Math.max(600, weeksCountLocal * 32));
+        return tentative < 1100; // center when not stretching to full max width
+    })();
 
     return (
         <div className="mt-8">
@@ -154,8 +161,8 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                         </div>
                     </div>
                 </div>
-                <div className={`pb-2 overflow-visible ${fewWeeks ? 'flex justify-center' : ''}`}>
-                    <div className="relative" style={{ width: w, marginLeft: fewWeeks ? 'auto' : undefined, marginRight: fewWeeks ? 'auto' : undefined }}>
+                <div className={`pb-2 overflow-visible ${centerChart ? 'flex justify-center' : ''}`}>
+                    <div className="relative" style={{ width: w, marginLeft: centerChart ? 'auto' : undefined, marginRight: centerChart ? 'auto' : undefined }}>
                         <svg width={w} height={h} className="block">
                             <defs>
                                 <linearGradient id="campGrad" x1="0" x2="0" y1="0" y2="1">
@@ -230,18 +237,22 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                         )}
                     </div>
                 </div>
-                {stats && (
-                    <div className={`mt-6 ${fewWeeks ? 'flex flex-wrap justify-center gap-4' : 'grid grid-cols-2 md:grid-cols-6 gap-4'} text-xs`}>
-                        <StatTile label="Avg Weekly Revenue" tooltip="Average weekly combined (campaign + flow) revenue" value={formatCurrency(stats.mean)} />
-                        <StatTile label="Std Dev" tooltip="Standard deviation of weekly totals" value={formatCurrency(stats.std)} />
-                        <StatTile label="Reliability" tooltip="Reliability = 100 - Volatility" value={`${stats.reliabilityDisplay}%`} />
-                        <StatTile label="Volatility" tooltip="Volatility = (Std Dev / Mean) * 100" value={`${stats.volatilityDisplay}%`} />
-                        <StatTile label="Zero Campaign Weeks" tooltip="Weeks with no campaign sends (flows ignored)" value={String(stats.zeroCampaignWeeks)} />
-                        {stats.lostCampaignEstimate > 0 && (
-                            <StatTile label="Est. Lost Camp Rev" tooltip="Estimated lost campaign revenue in zero-campaign weeks (robust median share * flow revenue)" value={formatCurrency(stats.lostCampaignEstimate)} />
-                        )}
-                    </div>
-                )}
+                {stats && (() => {
+                    const reliabilityTooltip = `Reliability = 100 - Volatility. Current volatility ${stats.volatilityDisplay}%. With mean weekly revenue of ${formatCurrency(stats.mean)}, this implies week-to-week swings of about ${stats.volatilityDisplay}% so reliability is ${stats.reliabilityDisplay}%. Higher = steadier.`;
+                    const volatilityTooltip = `Volatility = (Std Dev / Mean) * 100. Std Dev ${formatCurrency(stats.std)} over mean ${formatCurrency(stats.mean)} → ${stats.volatilityDisplay}%. <15% excellent, 15–25% strong, 25–40% needs work, 40%+ unstable.`;
+                    return (
+                        <div className={`mt-6 ${centerChart ? 'flex flex-wrap justify-center gap-4' : 'grid grid-cols-2 md:grid-cols-6 gap-4'} text-xs`}>
+                            <StatTile label="Avg Weekly Revenue" tooltip="Average weekly combined (campaign + flow) revenue" value={formatCurrency(stats.mean)} />
+                            <StatTile label="Std Dev" tooltip="Standard deviation of weekly totals (spread of weekly revenue)" value={formatCurrency(stats.std)} />
+                            <StatTile label="Reliability" tooltip={reliabilityTooltip} value={`${stats.reliabilityDisplay}%`} />
+                            <StatTile label="Volatility" tooltip={volatilityTooltip} value={`${stats.volatilityDisplay}%`} />
+                            <StatTile label="Zero Campaign Weeks" tooltip="Weeks with no campaign sends (flows ignored)" value={String(stats.zeroCampaignWeeks)} />
+                            {stats.lostCampaignEstimate > 0 && (
+                                <StatTile label="Est. Lost Camp Rev" tooltip="Estimated lost campaign revenue in zero-campaign weeks (robust median share * flow revenue)" value={formatCurrency(stats.lostCampaignEstimate)} />
+                            )}
+                        </div>
+                    );
+                })()}
                 {/* Interpretation popover */}
                 <Interpretation trimmed={trimmed} />
                 <div className="mt-3 flex items-center gap-4 text-[10px] text-gray-500 dark:text-gray-400">
