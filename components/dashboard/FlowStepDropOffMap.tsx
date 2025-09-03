@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Flame, Info } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 
@@ -69,6 +69,7 @@ export default function FlowStepDropOffMap({ dateRange, customFrom, customTo }: 
 
     const flows = useMemo(() => Object.keys(data.byFlow || {}).sort(), [data]);
     const maxSeq = useMemo(() => Math.max(0, ...flows.map(f => Math.max(...data.byFlow[f].map(r => r.sequencePosition)))), [flows, data]);
+    const cellBaseSize = maxSeq > 10 ? 'w-16 h-14' : 'w-20 h-14';
 
     if (!flows.length) return null;
 
@@ -76,16 +77,15 @@ export default function FlowStepDropOffMap({ dateRange, customFrom, customTo }: 
     const deltaValues = data.flat.filter(c => c.sequencePosition > 1).map(c => c.deltaRevenuePerEmail);
     const minDelta = Math.min(0, ...deltaValues, 0);
     const maxDelta = Math.max(0, ...deltaValues, 0);
-    const scale = (v: number) => {
+    const scale = (v: number, isFirst: boolean) => {
+        if (isFirst) return 'bg-gray-300 dark:bg-gray-700';
         if (v === 0) return 'bg-gray-200 dark:bg-gray-800';
         if (v < 0) {
-            // stronger negative -> deeper rose
             const pct = maxDelta === 0 ? 1 : Math.min(1, Math.abs(v) / Math.abs(minDelta || -1));
             return pct > 0.66 ? 'bg-rose-600' : pct > 0.33 ? 'bg-rose-500' : 'bg-rose-400';
-        } else {
-            const pct = maxDelta === 0 ? 1 : Math.min(1, v / (maxDelta || 1));
-            return pct > 0.66 ? 'bg-green-600' : pct > 0.33 ? 'bg-green-500' : 'bg-green-400';
         }
+        const pct = maxDelta === 0 ? 1 : Math.min(1, v / (maxDelta || 1));
+        return pct > 0.66 ? 'bg-green-600' : pct > 0.33 ? 'bg-green-500' : 'bg-green-400';
     };
 
     // Identify biggest negative deltas per flow
@@ -110,12 +110,14 @@ export default function FlowStepDropOffMap({ dateRange, customFrom, customTo }: 
                     <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-700 dark:text-gray-500 dark:group-hover:text-gray-300 cursor-pointer" />
                     <div className="absolute left-0 top-6 z-20 hidden group-hover:block w-96 text-[11px] leading-snug bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3 space-y-2">
                         <p className="text-gray-700 dark:text-gray-200 font-semibold">What</p>
-                        <p className="text-gray-600 dark:text-gray-300">Heatmap of per-step performance deltas. Each cell shows Revenue/Email & Open Rate delta vs prior step.</p>
+                        <p className="text-gray-600 dark:text-gray-300">Heatmap of per-step performance vs the previous email in each flow. Top = change in Revenue/Email, Bottom = current Open Rate.</p>
                         <p className="text-gray-700 dark:text-gray-200 font-semibold">Why</p>
                         <p className="text-gray-600 dark:text-gray-300">Quickly isolates weak points where a flow starts leaking value—optimize copy, timing, or branching.</p>
                         <p className="text-gray-700 dark:text-gray-200 font-semibold">Color</p>
-                        <p className="text-gray-600 dark:text-gray-300">Green = lift vs previous step, Rose = drop. Intensity ~ size of Revenue/Email delta.</p>
-                        <p className="text-gray-500 dark:text-gray-400">Largest negative per flow flagged with ⚠.</p>
+                        <p className="text-gray-600 dark:text-gray-300">Green = positive Revenue/Email lift vs prior step. Red = drop. Deeper shade = larger movement. First step is neutral (baseline).</p>
+                        <p className="text-gray-700 dark:text-gray-200 font-semibold">Reading a Cell</p>
+                        <p className="text-gray-600 dark:text-gray-300"><span className="font-medium">Top:</span> Δ Rev/Email (vs prior). <span className="font-medium">Bottom:</span> Open Rate (absolute). Hover for full detail incl. deltas.</p>
+                        <p className="text-gray-500 dark:text-gray-400">⚠ flags the largest negative revenue/email drop in that flow.</p>
                     </div>
                 </div>
             </div>
@@ -141,22 +143,28 @@ export default function FlowStepDropOffMap({ dateRange, customFrom, customTo }: 
                                         const isFlag = biggestNeg[flow] === step && step > 1 && cell.deltaRevenuePerEmail < 0;
                                         return (
                                             <td key={step} className="px-1 py-1 border-b border-gray-100 dark:border-gray-800 align-top">
-                                                <div className={`group relative rounded-md h-14 w-20 flex flex-col justify-center items-center text-center text-[10px] text-white font-medium ${scale(cell.deltaRevenuePerEmail)} transition-colors`}>
-                                                    <div className="leading-tight px-1">
-                                                        <div>{formatCurrency(cell.revenuePerEmail)}</div>
-                                                        {step > 1 && <div className={cell.deltaRevenuePerEmail < 0 ? 'text-rose-50' : 'text-emerald-50'}>{cell.deltaRevenuePerEmail >= 0 ? '+' : ''}{formatCurrency(cell.deltaRevenuePerEmail)}</div>}
-                                                    </div>
+                                                <div className={`group relative rounded-md ${cellBaseSize} flex flex-col justify-between items-center text-center text-[10px] font-medium text-white ${scale(cell.deltaRevenuePerEmail, step === 1)} transition-colors`}>
                                                     {isFlag && <span className="absolute top-0 right-0 text-[9px]">⚠</span>}
+                                                    <div className="flex-1 flex flex-col items-center justify-center leading-tight px-1 pt-1">
+                                                        {step === 1 ? (
+                                                            <div className="text-[9px] font-semibold tracking-tight">Base {formatCurrency(cell.revenuePerEmail)}</div>
+                                                        ) : (
+                                                            <div className={`text-[11px] font-semibold ${cell.deltaRevenuePerEmail < 0 ? 'text-white' : 'text-white'}`}>{cell.deltaRevenuePerEmail >= 0 ? '+' : ''}{formatCurrency(cell.deltaRevenuePerEmail)}</div>
+                                                        )}
+                                                    </div>
+                                                    <div className="pb-1 text-[9px] opacity-95 tracking-tight">
+                                                        {formatPct(cell.openRate)}
+                                                    </div>
                                                     <div className="absolute inset-0 rounded-md ring-1 ring-inset ring-black/5 pointer-events-none" />
-                                                    <div className="absolute left-1/2 top-full mt-1 -translate-x-1/2 z-50 hidden group-hover:block w-56 text-[11px] text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-2">
+                                                    <div className="absolute left-1/2 top-full mt-1 -translate-x-1/2 z-50 hidden group-hover:block w-60 text-[11px] text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-2">
                                                         <p className="font-semibold mb-1 text-gray-800 dark:text-gray-100">{flow} • Step {step}</p>
                                                         <ul className="space-y-0.5">
                                                             <li><span className="text-gray-500 dark:text-gray-400">Revenue/Email:</span> {formatCurrency(cell.revenuePerEmail)}</li>
-                                                            {step > 1 && <li><span className="text-gray-500 dark:text-gray-400">Delta Rev/Email:</span> {cell.deltaRevenuePerEmail >= 0 ? '+' : ''}{formatCurrency(cell.deltaRevenuePerEmail)}</li>}
+                                                            {step > 1 && <li><span className="text-gray-500 dark:text-gray-400">Δ Rev/Email:</span> {cell.deltaRevenuePerEmail >= 0 ? '+' : ''}{formatCurrency(cell.deltaRevenuePerEmail)}</li>}
                                                             <li><span className="text-gray-500 dark:text-gray-400">Open Rate:</span> {formatPct(cell.openRate)}</li>
-                                                            {step > 1 && <li><span className="text-gray-500 dark:text-gray-400">Delta Open Rate:</span> {cell.deltaOpenRate >= 0 ? '+' : ''}{cell.deltaOpenRate.toFixed(2)}pp</li>}
+                                                            {step > 1 && <li><span className="text-gray-500 dark:text-gray-400">Δ Open Rate:</span> {cell.deltaOpenRate >= 0 ? '+' : ''}{cell.deltaOpenRate.toFixed(2)}pp</li>}
                                                         </ul>
-                                                        {isFlag && <p className="mt-1 text-[10px] text-rose-600 dark:text-rose-400">Largest negative revenue/Email drop in this flow.</p>}
+                                                        {isFlag && <p className="mt-1 text-[10px] text-rose-600 dark:text-rose-400">Largest negative revenue/email drop in this flow.</p>}
                                                     </div>
                                                 </div>
                                             </td>
@@ -168,9 +176,12 @@ export default function FlowStepDropOffMap({ dateRange, customFrom, customTo }: 
                     </tbody>
                 </table>
             </div>
-            <div className="mt-4 text-[10px] text-gray-500 dark:text-gray-400 flex flex-wrap gap-4">
-                <div><span className="font-medium text-gray-600 dark:text-gray-300">Legend:</span> Cell color intensity reflects revenue/email delta vs previous step.</div>
-                <div>⚠ largest negative delta in flow</div>
+            <div className="mt-4 text-[10px] text-gray-500 dark:text-gray-400 flex flex-wrap gap-6 items-center">
+                <div><span className="font-medium text-gray-600 dark:text-gray-300">Legend:</span> Top = Δ Rev/Email vs prior; Bottom = Open Rate. First step shows baseline value.</div>
+                <div><span className="inline-block w-3 h-3 rounded-sm bg-green-500 mr-1 align-middle" /> Lift</div>
+                <div><span className="inline-block w-3 h-3 rounded-sm bg-rose-500 mr-1 align-middle" /> Drop</div>
+                <div><span className="inline-block w-3 h-3 rounded-sm bg-gray-300 dark:bg-gray-700 mr-1 align-middle" /> Baseline (Step 1)</div>
+                <div>⚠ largest negative Δ Rev/Email</div>
             </div>
         </div>
     );
