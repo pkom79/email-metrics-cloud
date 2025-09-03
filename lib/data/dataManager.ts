@@ -924,4 +924,52 @@ export class DataManager {
             }
         };
     }
+
+    /**
+     * Build a weekly time series for a given metric across ALL emails (campaigns + flows).
+     * Weeks are Monday-based. Returns an ordered list of weekStart dates (Date at 00:00) with metric values.
+     * For rate metrics, if denominator is zero the value will be 0 (consistent with other helpers) rather than null.
+     * This is exposed publicly to support dynamic benchmarking logic.
+     */
+    getWeeklyMetricSeries(metricKey: string): { weekStart: Date; value: number }[] {
+        try {
+            const dataSig = `${this.campaigns.length}:${this.flowEmails.length}`;
+            if (this._dailyAggVersion !== dataSig) this._rebuildDailyAggregates();
+            // Collect all day keys present in dailyAgg
+            const dayEntries: { date: Date; sums: any }[] = [];
+            for (const [k, sums] of this._dailyAgg.entries()) {
+                const d = new Date(k);
+                if (!(d instanceof Date) || isNaN(d.getTime())) continue;
+                dayEntries.push({ date: d, sums });
+            }
+            if (!dayEntries.length) return [];
+            dayEntries.sort((a, b) => a.date.getTime() - b.date.getTime());
+            const weeks: { weekStart: Date; sums: { revenue: number; emailsSent: number; totalOrders: number; uniqueOpens: number; uniqueClicks: number; unsubscribesCount: number; spamComplaintsCount: number; bouncesCount: number; emailCount: number } }[] = [];
+            let current: any = null; let currentKey = '';
+            for (const d of dayEntries) {
+                const monday = this._mondayOf(d.date);
+                const key = this._dayKey(monday);
+                if (key !== currentKey) {
+                    if (current) weeks.push(current);
+                    currentKey = key;
+                    current = { weekStart: monday, sums: { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } };
+                }
+                const s = current.sums;
+                s.revenue += d.sums.revenue;
+                s.emailsSent += d.sums.emailsSent;
+                s.totalOrders += d.sums.totalOrders;
+                s.uniqueOpens += d.sums.uniqueOpens;
+                s.uniqueClicks += d.sums.uniqueClicks;
+                s.unsubscribesCount += d.sums.unsubscribesCount;
+                s.spamComplaintsCount += d.sums.spamComplaintsCount;
+                s.bouncesCount += d.sums.bouncesCount;
+                s.emailCount += d.sums.emailCount;
+            }
+            if (current) weeks.push(current);
+            return weeks.map(w => ({ weekStart: w.weekStart, value: this._deriveMetricFromSums(metricKey, w.sums) }));
+        } catch (e) {
+            console.warn('getWeeklyMetricSeries failed', e);
+            return [];
+        }
+    }
 }

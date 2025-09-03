@@ -1,0 +1,138 @@
+import { DataManager } from './dataManager';
+
+/**
+ * Benchmark tier labels in ascending performance order (0 = poorest, 4 = strongest)
+ */
+export type BenchmarkTier = 'Needs Review' | 'Below Average' | 'Typical' | 'Above Average' | 'Exceptional';
+
+export interface BenchmarkComputation {
+  tier: BenchmarkTier | null;          // null if insufficient history
+  baseline: number | null;             // trimmed mean baseline
+  current: number | null;              // current period aggregate value
+  percentDelta: number | null;         // (current - baseline)/baseline * 100
+  sampleWeeks: number;                 // weeks actually used for baseline
+  totalWeeksConsidered: number;        // raw weeks in lookback window before exclusions
+  insufficient: boolean;               // true if < 20 usable weeks
+  note?: string;                       // optional UI note (e.g. "Limited history")
+  thresholds?: {                       // numeric cut points to display in tooltip
+    typicalLow: number; typicalHigh: number; // Typical inclusive range
+    aboveAvg: number;                  // Above Average lower bound
+    exceptional: number;               // Exceptional lower bound
+  };
+}
+
+// Direction metadata: metrics where lower is better
+const LOWER_IS_BETTER = new Set(['unsubscribeRate','spamRate','bounceRate']);
+
+// Extract numeric from weekly metric series excluding the most recent partial week (if ongoing)
+function getHistoricalWeeks(metricKey: string) {
+  const dm = DataManager.getInstance();
+  const weeks = dm.getWeeklyMetricSeries(metricKey).sort((a,b)=>a.weekStart.getTime()-b.weekStart.getTime());
+  if (!weeks.length) return [] as { weekStart: Date; value: number }[];
+  // Consider a week partial if it's the latest week and it's not "complete" yet (heuristic: lastEmailDate within this week but < weekStart+6d end-of-day)
+  const lastEmailDate = dm.getLastEmailDate();
+  const last = weeks[weeks.length-1];
+  const weekEnd = new Date(last.weekStart); weekEnd.setDate(weekEnd.getDate()+6); weekEnd.setHours(23,59,59,999);
+  if (lastEmailDate < weekEnd) {
+    // treat as partial and drop
+    weeks.pop();
+  }
+  return weeks;
+}
+
+/**
+ * Compute adaptive benchmark tier for a metric relative to a target (current viewing range ending week).
+ * Window: take up to 52 weeks immediately preceding the current viewed window start (or last complete week),
+ * but at least 10 weeks; require >=20 weeks to show a tier.
+ * Trim: remove lowest 10% and highest 10% of values (floor counts) before baseline calculation.
+ */
+export function computeBenchmark(metricKey: string, currentRangeStart?: Date, currentRangeEnd?: Date): BenchmarkComputation {
+  const weeks = getHistoricalWeeks(metricKey);
+  if (!weeks.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true };
+
+  // Define anchor: if currentRangeStart supplied, we only look at weeks strictly before it.
+  let anchor = currentRangeStart ? new Date(currentRangeStart) : new Date();
+  anchor.setHours(0,0,0,0);
+
+  // Filter weeks strictly before anchor week start.
+  const usable = weeks.filter(w => w.weekStart < anchor);
+  const totalWeeksConsidered = usable.length;
+  if (!usable.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered, insufficient: true };
+
+  // Take last up to 52 weeks, at least 10 (earlier filtering ensures order)
+  const windowWeeks = usable.slice(-52);
+  if (windowWeeks.length < 10) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient: true, note: 'Need more history' };
+
+  // Copy values for trimming
+  const values = windowWeeks.map(w => w.value).filter(v => Number.isFinite(v));
+  const sorted = [...values].sort((a,b)=>a-b);
+  const trimCount = Math.floor(sorted.length * 0.10); // 10% tails
+  const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
+  const baseline = trimmed.length ? trimmed.reduce((s,v)=>s+v,0)/trimmed.length : (values.reduce((s,v)=>s+v,0)/values.length);
+
+  // Current value is aggregate over current viewing period (if provided) else last complete week
+  let current: number | null = null;
+  if (currentRangeStart && currentRangeEnd) {
+    // Approximate: aggregate weekly values whose weekStart within [currentRangeStart, currentRangeEnd]
+    current = weeks.filter(w => w.weekStart >= currentRangeStart && w.weekStart <= currentRangeEnd).reduce((s,w)=>s+w.value,0);
+    if (!Number.isFinite(current)) current = null;
+  } else {
+    const lastComplete = usable[usable.length-1];
+    current = lastComplete?.value ?? null;
+  }
+
+  if (!baseline || !current) {
+    return { tier: null, baseline: baseline || null, current: current || null, percentDelta: null, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient: windowWeeks.length < 20 };
+  }
+
+  const lowerIsBetter = LOWER_IS_BETTER.has(metricKey);
+  const percentDelta = baseline === 0 ? null : ((current - baseline) / baseline) * 100;
+
+  // Determine tier thresholds. Approach: Typical = baseline ±15%; Above Average = +15% to +35%; Exceptional > +35% (or conversely for lower-is-better with inverted logic).
+  const typicalBand = 0.15; const aboveBand = 0.35;
+  let tier: BenchmarkTier;
+  if (lowerIsBetter) {
+    // Invert logic: improvements are decreases.
+    const delta = percentDelta ?? 0;
+    if (delta <= -aboveBand*100) tier = 'Exceptional';
+    else if (delta <= -typicalBand*100) tier = 'Above Average';
+    else if (Math.abs(delta) <= typicalBand*100) tier = 'Typical';
+    else if (delta < 0) tier = 'Typical'; // fallback
+    else if (delta <= aboveBand*100) tier = 'Below Average';
+    else tier = 'Needs Review';
+  } else {
+    const delta = percentDelta ?? 0;
+    if (delta >= aboveBand*100) tier = 'Exceptional';
+    else if (delta >= typicalBand*100) tier = 'Above Average';
+    else if (Math.abs(delta) <= typicalBand*100) tier = 'Typical';
+    else if (delta > -aboveBand*100) tier = 'Below Average';
+    else tier = 'Needs Review';
+  }
+
+  const insufficient = windowWeeks.length < 20;
+  const thresholds = {
+    typicalLow: baseline * (1 - typicalBand),
+    typicalHigh: baseline * (1 + typicalBand),
+    aboveAvg: baseline * (1 + typicalBand),
+    exceptional: baseline * (1 + aboveBand),
+  };
+
+  return { tier: insufficient ? null : tier, baseline, current, percentDelta, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient, thresholds };
+}
+
+/** Simple cache per metric + anchor signature (in-memory only) */
+const _cache = new Map<string, BenchmarkComputation>();
+
+export function getBenchmark(metricKey: string, anchorStart?: Date, anchorEnd?: Date) {
+  const key = `${metricKey}|${anchorStart?.toISOString()||'none'}|${anchorEnd?.toISOString()||'none'}`;
+  const cached = _cache.get(key);
+  if (cached) return cached;
+  const res = computeBenchmark(metricKey, anchorStart, anchorEnd);
+  _cache.set(key, res);
+  return res;
+}
+
+export function useBenchmark(metricKey: string, anchorStart?: Date, anchorEnd?: Date) {
+  // Lightweight hook wrapper (no reactive invalidation on dataset changes yet)
+  return getBenchmark(metricKey, anchorStart, anchorEnd);
+}

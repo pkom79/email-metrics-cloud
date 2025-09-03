@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { Activity, Info } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
+import { useBenchmark } from '../../lib/data/benchmarking';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
 
 interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; compareMode?: 'prev-period' | 'prev-year'; }
@@ -325,6 +326,48 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
 
     // Headroom & marginal modeling removed per simplification request.
 
+    // Benchmark integration
+    // Map internal metric keys to underlying DataManager metric keys for weekly series baseline
+    const benchmarkMetricKey = useMemo(() => {
+        switch (metric) {
+            case 'totalRevenue': return 'revenue';
+            case 'revenuePerEmail': return 'revenuePerEmail';
+            case 'unsubsPer1k': return 'unsubscribeRate';
+            case 'spamPer1k': return 'spamRate';
+            case 'bouncesPer1k': return 'bounceRate';
+        }
+    }, [metric]);
+
+    // Anchor: current range start/end (use week boundaries implicitly inside benchmark helper)
+    const benchmark = useBenchmark(benchmarkMetricKey, range?.startDate, range?.endDate);
+
+    const tierBadge = (() => {
+        if (!benchmark || benchmark.insufficient || !benchmark.tier) return null;
+        const tierColors: Record<string, string> = {
+            'Needs Review': 'bg-rose-50 text-rose-700 border-rose-200',
+            'Below Average': 'bg-amber-50 text-amber-700 border-amber-200',
+            'Typical': 'bg-gray-50 text-gray-700 border-gray-200',
+            'Above Average': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+            'Exceptional': 'bg-purple-50 text-purple-700 border-purple-200',
+        };
+        const cls = tierColors[benchmark.tier] || 'bg-gray-50 text-gray-700 border-gray-200';
+        const pct = benchmark.percentDelta != null && benchmark.baseline ? ((benchmark.current || 0) - benchmark.baseline) / benchmark.baseline * 100 : null;
+        return (
+            <span className={`group relative inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium border ${cls}`}>
+                {benchmark.tier}
+                {pct != null && <span className="tabular-nums">{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</span>}
+                <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-72 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
+                    <span className="font-semibold block mb-1">Benchmarking</span>
+                    This tier compares the current period's performance vs your prior weeks (trimmed mean).<br />
+                    Baseline: {benchmark.baseline != null ? (benchmarkMetricKey === 'revenue' || benchmarkMetricKey === 'revenuePerEmail' ? fmtCurrency(benchmark.baseline) : benchmark.baseline.toFixed(2)) : '—'}<br />
+                    Current: {benchmark.current != null ? (benchmarkMetricKey === 'revenue' || benchmarkMetricKey === 'revenuePerEmail' ? fmtCurrency(benchmark.current) : benchmark.current.toFixed(2)) : '—'}<br />
+                    {benchmark.percentDelta != null && <>Delta: {benchmark.percentDelta >= 0 ? '+' : ''}{benchmark.percentDelta.toFixed(1)}%</>}<br />
+                    Weeks used: {benchmark.sampleWeeks} (trimmed tails).{benchmark.insufficient ? ' More history needed for stable tiers.' : ''}
+                </span>
+            </span>
+        );
+    })();
+
     if (!range) return null;
     const negativeMetric = NEGATIVE_METRICS.includes(metric); // currently unused but may be reintroduced
 
@@ -356,6 +399,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                                 Purple line = selected performance metric. Shaded background = relative send volume (emails). When volume increases while efficiency (e.g. Revenue / Email) stays stable or improves, scaling is healthy. Rising negative rate metrics (unsubs, spam, bounces) with higher volume indicates pressure. Partial period ends are trimmed.
                             </span>
                         </span>
+                        {tierBadge}
                     </h3>
                 </div>
                 <div className="flex gap-4 text-sm">
