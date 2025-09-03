@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Activity, Info } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 import { useBenchmark } from '../../lib/data/benchmarking';
@@ -83,10 +83,10 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
     const PADDING_LEFT = 50; // space for y ticks
     const PADDING_RIGHT = 20;
     const innerW = VIEW_W - PADDING_LEFT - PADDING_RIGHT;
-    const xScale = (i: number) => points.length <= 1 ? PADDING_LEFT + innerW / 2 : PADDING_LEFT + (i / (points.length - 1)) * innerW;
-    const yMetric = (v: number) => {
+    const xScale = useCallback((i: number) => points.length <= 1 ? PADDING_LEFT + innerW / 2 : PADDING_LEFT + (i / (points.length - 1)) * innerW, [points.length, innerW]);
+    const yMetric = useCallback((v: number) => {
         if (metricMax === 0) return GRAPH_H; return GRAPH_H - (v / metricMax) * (GRAPH_H - 10); // add top padding
-    };
+    }, [metricMax]);
     const yEmails = (v: number) => {
         if (emailsMax === 0) return GRAPH_H; return GRAPH_H - (v / emailsMax) * (GRAPH_H - 10);
     };
@@ -339,14 +339,8 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     }, [metric]);
 
     // Anchor: current range start/end (use week boundaries implicitly inside benchmark helper)
-    let benchmark: any = null;
-    try {
-        // Use range end as anchor for historical window context
-        benchmark = useBenchmark(benchmarkMetricKey, range?.endDate, range?.endDate);
-    } catch (e) {
-        console.warn('Benchmark hook failed', e);
-        benchmark = { insufficient: true };
-    }
+    // Unconditional hook usage (no try/catch around hook itself)
+    const benchmark = useBenchmark(benchmarkMetricKey, range?.endDate, range?.endDate);
 
     const tierBadge = (() => {
         if (!benchmark) return null;
@@ -376,7 +370,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                 {pct != null && <span className="tabular-nums">{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</span>}
                 <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-72 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
                     <span className="font-semibold block mb-1">Benchmarking</span>
-                    This tier compares the current period's performance vs your prior weeks (trimmed mean).<br />
+                    This tier compares the current period&#39;s performance vs your prior weeks (trimmed mean).<br />
                     Baseline: {benchmark.baseline != null ? (benchmarkMetricKey === 'revenue' || benchmarkMetricKey === 'revenuePerEmail' ? fmtCurrency(benchmark.baseline) : benchmark.baseline.toFixed(2)) : '—'}<br />
                     Current: {benchmark.current != null ? (benchmarkMetricKey === 'revenue' || benchmarkMetricKey === 'revenuePerEmail' ? fmtCurrency(benchmark.current) : benchmark.current.toFixed(2)) : '—'}<br />
                     {benchmark.percentDelta != null && <>Delta: {benchmark.percentDelta >= 0 ? '+' : ''}{benchmark.percentDelta.toFixed(1)}%</>}<br />
