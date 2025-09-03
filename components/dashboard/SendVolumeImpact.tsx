@@ -109,7 +109,7 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
             res.push({ x: xScale(idx), label: points[idx].label });
         }
         return res;
-    }, [points]);
+    }, [points, xScale]);
     // Y ticks for metric (3)
     const yTicks = useMemo(() => {
         const ticks: { y: number; value: number }[] = [];
@@ -120,7 +120,7 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
         ticks.push({ y: yMetric(metricMax), value: metricMax });
         // ensure unique ordering
         return Array.from(new Map(ticks.map(t => [t.value, t])).values());
-    }, [metricMax]);
+    }, [metricMax, yMetric]);
 
     const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
     const active = hover ? points[hover.idx] : null;

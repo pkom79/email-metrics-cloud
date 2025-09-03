@@ -14,16 +14,84 @@ interface StepAgg {
     orders: number;
     revenue: number;
     revenuePerEmail: number;
-    openRate: number; // %
-    clickRate: number; // CTR % (clicks / sent)
-    conversionRate: number; // CVR % (orders / sent)
-    deltaRevenuePerEmail: number; // vs prev
-    deltaOpenRate: number; // vs prev (p.p.)
-    deltaClickRate: number; // vs prev (p.p.)
-    deltaConversionRate: number; // vs prev (p.p.)
+    openRate: number; // % as 0-100
+    clickRate: number; // %
+    conversionRate: number; // %
+    deltaRevenuePerEmail: number;
+    deltaOpenRate: number; // pp
+    deltaClickRate: number; // pp
+    deltaConversionRate: number; // pp
 }
 
-type MetricKey = 'revenuePerEmail' | 'openRate' | 'clickRate' | 'conversionRate';
+type MetricKey = 'openRate' | 'clickRate' | 'conversionRate' | 'revenuePerEmail';
+
+// Small delta badge
+const DeltaBadge: React.FC<{ value: number; type: 'pp' | 'currency'; ariaLabel: string }> = ({ value, type, ariaLabel }) => {
+    const positive = value > 0;
+    const negative = value < 0;
+    const text = type === 'pp'
+        ? `${value > 0 ? '+' : value < 0 ? '' : ''}${value.toFixed(1)} pp`
+        : `${value > 0 ? '+' : value < 0 ? '' : ''}$${Math.abs(value).toFixed(2)}`;
+    const cls = negative ? 'bg-rose-50 text-rose-700' : positive ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600';
+    return <div aria-label={ariaLabel} className={`mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium ${cls}`}>{text}</div>;
+};
+
+interface StepCellProps {
+    view: 'table' | 'heatmap';
+    metric: MetricKey;
+    value: number;
+    delta: number;
+    reachPct: number; // 0-100
+    revDelta: number; // for secondary display (currency)
+    onHoverData: any;
+    hasClicks: boolean;
+    hasConv: boolean;
+    largestNeg: boolean;
+}
+
+const StepCell: React.FC<StepCellProps> = ({ view, metric, value, delta, reachPct, revDelta, onHoverData, hasClicks, hasConv }) => {
+    const isCurrency = metric === 'revenuePerEmail';
+    const displayValue = isCurrency ? `$${value.toFixed(2)}` : `${value.toFixed(1)}%`;
+    const badgeType: 'pp' | 'currency' = isCurrency ? 'currency' : 'pp';
+    // Heatmap color based on delta sign/magnitude
+    const mag = Math.min(1, Math.abs(delta) / (isCurrency ? 2 : 10));
+    const heat = delta === 0 ? 'rgba(147,51,234,0.05)' : delta > 0 ? `rgba(16,185,129,${0.15 + mag * 0.35})` : `rgba(244,63,94,${0.15 + mag * 0.35})`;
+    return (
+        <div className="relative" role="cell">
+            {view === 'table' ? (
+                <div className="relative rounded-lg bg-white ring-1 ring-gray-200 px-3 py-2">
+                    <div className="text-sm font-medium text-gray-900 leading-tight">{displayValue}</div>
+                    <DeltaBadge value={delta} type={badgeType} ariaLabel={`Delta ${delta.toFixed(2)} ${isCurrency ? 'dollars' : 'percentage points'}`} />
+                    <div className="absolute inset-x-2 bottom-1 h-1 rounded-full bg-purple-200" style={{ width: `${reachPct}%` }} />
+                </div>
+            ) : (
+                <div className="relative rounded-lg px-3 py-2 text-sm font-medium text-gray-900" style={{ background: heat }}>
+                    <div>{displayValue}</div>
+                    <div className="absolute inset-x-2 bottom-1 h-1 rounded-full bg-purple-300" style={{ width: `${reachPct}%` }} />
+                </div>
+            )}
+            {/* Hover popover */}
+            <div className="absolute left-1/2 top-full z-30 hidden -translate-x-1/2 pt-2 group-hover:block">
+                <div className="w-64 rounded-lg border border-gray-200 bg-white shadow-xl p-3 text-[11px] text-gray-800">
+                    <p className="font-semibold mb-1">{onHoverData.flow} • Step {onHoverData.step}</p>
+                    <table className="w-full text-[11px]">
+                        <tbody>
+                            <tr><td className="text-gray-500 pr-2">Sends</td><td className="text-right tabular-nums">{onHoverData.emails.toLocaleString()}</td></tr>
+                            <tr><td className="text-gray-500 pr-2">Reach %</td><td className="text-right tabular-nums">{reachPct.toFixed(1)}%</td></tr>
+                            <tr><td className="text-gray-500 pr-2">Opens</td><td className="text-right tabular-nums">{onHoverData.opens.toLocaleString()}</td></tr>
+                            <tr><td className="text-gray-500 pr-2">Clicks</td><td className="text-right tabular-nums">{onHoverData.clicks.toLocaleString()}</td></tr>
+                            <tr><td className="text-gray-500 pr-2">Conversions</td><td className="text-right tabular-nums">{onHoverData.orders.toLocaleString()}</td></tr>
+                            <tr><td className="text-gray-500 pr-2">Revenue</td><td className="text-right tabular-nums">${onHoverData.revenue.toFixed(2)}</td></tr>
+                            <tr><td className="text-gray-500 pr-2">Rev/Email</td><td className="text-right tabular-nums">${onHoverData.rpe.toFixed(2)}</td></tr>
+                            <tr><td className="text-gray-500 pr-2">Open rate</td><td className="text-right tabular-nums">{onHoverData.openRate.toFixed(2)}%</td></tr>
+                            <tr><td className="text-gray-500 pr-2">CTR</td><td className="text-right tabular-nums">{onHoverData.clickRate.toFixed(2)}%</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Props) {
     const dm = DataManager.getInstance();
@@ -86,31 +154,29 @@ export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Pro
         return { byFlow: map, flows: flowNames, maxSeq: globalMaxSeq, presence: presenceCount };
     }, [filtered]);
 
-    const [metric, setMetric] = useState<MetricKey>('revenuePerEmail');
-    const [view, setView] = useState<'chips' | 'heatmap'>('chips');
+    const [metric, setMetric] = useState<MetricKey>('openRate');
+    const [view, setView] = useState<'table' | 'heatmap'>('table');
 
     if (!flows.length) return null;
 
     // Trim trailing sparse steps (keep first 3 always)
     let effectiveMax = maxSeq;
-    for (let s = maxSeq; s > 3; s--) {
-        if ((presence[s] || 0) < 2) { effectiveMax = s - 1; } else break;
-    }
+    for (let s = maxSeq; s > 3; s--) { if ((presence[s] || 0) < 2) { effectiveMax = s - 1; } else break; }
 
-    // Color scaling based on Δ Rev/Email distribution
-    const allDeltas = flows.flatMap(f => byFlow[f]).filter(c => c.sequencePosition > 1).map(c => c.deltaRevenuePerEmail);
-    const minDelta = Math.min(0, ...allDeltas, 0);
-    const maxDelta = Math.max(0, ...allDeltas, 0);
-    const colorClass = (delta: number, isBase: boolean) => {
-        if (isBase) return 'bg-gray-100 dark:bg-gray-800';
-        if (delta === 0) return 'bg-gray-100 dark:bg-gray-800';
-        if (delta > 0) {
-            const pct = maxDelta === 0 ? 1 : Math.min(1, delta / maxDelta);
-            return pct > 0.66 ? 'bg-emerald-300' : pct > 0.33 ? 'bg-emerald-200' : 'bg-emerald-100';
-        }
-        const pct = minDelta === 0 ? 1 : Math.min(1, Math.abs(delta) / Math.abs(minDelta));
-        return pct > 0.66 ? 'bg-rose-300' : pct > 0.33 ? 'bg-rose-200' : 'bg-rose-100';
-    };
+    // Largest negative delta across selected metric for dot indicator
+    const largestNegPosition: Record<string, number> = {};
+    flows.forEach(f => {
+        const cells = byFlow[f];
+        let minVal = 0; let pos = 0;
+        cells.forEach(c => {
+            if (c.sequencePosition === 1) return;
+            const delta = (metric === 'revenuePerEmail' ? c.deltaRevenuePerEmail
+                : metric === 'openRate' ? c.deltaOpenRate
+                    : metric === 'clickRate' ? c.deltaClickRate : c.deltaConversionRate);
+            if (delta < minVal) { minVal = delta; pos = c.sequencePosition; }
+        });
+        if (pos) largestNegPosition[f] = pos;
+    });
 
     const formatValue = (v: number, key: MetricKey) => {
         if (key === 'revenuePerEmail') return '$' + v.toFixed(2);
@@ -137,10 +203,10 @@ export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Pro
     const hasConv = flows.some(f => byFlow[f].some(c => c.conversionRate > 0));
 
     const metricOptions: { key: MetricKey; label: string; available: boolean }[] = [
-        { key: 'revenuePerEmail', label: 'Rev/Email', available: true },
-        { key: 'openRate', label: 'Open Rate', available: true },
+        { key: 'openRate', label: 'Open rate', available: true },
         { key: 'clickRate', label: 'CTR', available: hasClicks },
         { key: 'conversionRate', label: 'CVR', available: hasConv },
+        { key: 'revenuePerEmail', label: 'Rev/Email', available: true },
     ];
 
     const reachPct = (flow: string, step: number) => {
@@ -162,112 +228,75 @@ export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Pro
     };
 
     return (
-        <div className="mt-8 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-            <div className="flex items-center justify-between mb-4">
+        <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="flex items-start justify-between mb-5">
                 <div className="flex items-center gap-2">
-                    <Flame className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Flow Step Drop-Off</h3>
+                    <Flame className="w-5 h-5 text-purple-600" />
+                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Flow Step Drop-Off</h3>
                 </div>
-                <div className="flex items-center gap-3 text-[11px]">
-                    <div className="flex items-center gap-1">
-                        <label className="text-gray-500 dark:text-gray-400">Metric</label>
-                        <select value={metric} onChange={e => setMetric(e.target.value as MetricKey)} className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md px-1.5 py-1 text-[11px] focus:outline-none">
+                <div className="flex items-center gap-4 text-sm">
+                    <div className="relative">
+                        <select value={metric} onChange={e => setMetric(e.target.value as MetricKey)} className="appearance-none px-3 h-9 pr-8 rounded-lg border bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                             {metricOptions.filter(o => o.available).map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
                         </select>
+                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▼</span>
                     </div>
-                    <div className="flex items-center gap-1">
-                        <button onClick={() => setView('chips')} className={`px-2 py-1 rounded-md border text-[11px] ${view === 'chips' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300'}`}>Chips</button>
-                        <button onClick={() => setView('heatmap')} className={`px-2 py-1 rounded-md border text-[11px] ${view === 'heatmap' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300'}`}>Heatmap</button>
+                    <div className="flex items-center rounded-lg border border-gray-300 overflow-hidden">
+                        <button onClick={() => setView('table')} className={`px-3 h-9 text-xs font-medium ${view === 'table' ? 'bg-purple-600 text-white' : 'text-gray-600'}`}>Table</button>
+                        <button onClick={() => setView('heatmap')} className={`px-3 h-9 text-xs font-medium ${view === 'heatmap' ? 'bg-purple-600 text-white' : 'text-gray-600'}`}>Heatmap</button>
                     </div>
-                    <div className="relative group">
-                        <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:text-gray-500 cursor-pointer" />
-                        <div className="absolute right-0 top-6 z-30 hidden group-hover:block w-80 text-[11px] leading-snug bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3">
-                            <p className="font-semibold mb-1 text-gray-900 dark:text-gray-100">Legend</p>
-                            <p className="text-gray-600 dark:text-gray-300">Color = Δ Rev/Email vs prior step. Width backdrop = reach (% of step1 sends). Chip shows selected metric & its delta (pp for rates). Heatmap view condenses to colored squares with values.</p>
+                    <div className="relative group inline-flex items-center">
+                        <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-600 cursor-pointer" />
+                        <div className="pointer-events-none absolute right-0 top-6 z-30 hidden group-hover:block w-80 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
+                            <span className="font-semibold block mb-1">How to read</span>
+                            Color = Δ vs previous step (green up, red down). Background width = reach vs step 1. Values are per step for the selected metric.
                         </div>
                     </div>
                 </div>
             </div>
             <div className="overflow-x-auto">
-                <table className="min-w-full border-separate border-spacing-0 text-[11px]">
+                <table className="min-w-full border-separate border-spacing-0">
                     <thead>
-                        <tr>
-                            <th className="sticky left-0 bg-white dark:bg-gray-900 z-10 text-left px-2 py-1 font-medium text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">Flow</th>
+                        <tr className="text-xs text-gray-600">
+                            <th className="sticky left-0 z-10 bg-white text-left px-3 py-2 font-medium border-b border-gray-200 w-[320px]">Flow</th>
                             {Array.from({ length: effectiveMax }, (_, i) => i + 1).map(step => (
-                                <th key={step} className="px-2 py-1 text-gray-600 dark:text-gray-400 font-medium border-b border-gray-200 dark:border-gray-700">S{step}</th>
+                                <th key={step} className="px-3 py-2 font-medium border-b border-gray-200 text-xs text-gray-600">S{step}</th>
                             ))}
                         </tr>
                     </thead>
                     <tbody>
-                        {flows.map(flow => {
-                            const row = byFlow[flow];
-                            const maxEmails = Math.max(...row.map(r => r.emailsSent));
+                        {flows.map((flow, rowIdx) => {
+                            const arr = byFlow[flow];
+                            const base = arr.find(c => c.sequencePosition === 1)!;
+                            const baseLine = `Base: OR ${(base.openRate).toFixed(1)}% · RPE $${base.revenuePerEmail.toFixed(2)}`;
                             return (
-                                <tr key={flow} className="hover:bg-gray-50 dark:hover:bg-gray-800/60">
-                                    <td className="sticky left-0 bg-white dark:bg-gray-900 px-2 py-1 font-semibold text-gray-800 dark:text-gray-100 border-b border-gray-100 dark:border-gray-800 whitespace-nowrap align-top">
-                                        <div className="flex items-center gap-1">
-                                            {biggestNeg[flow] && <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" title={`Largest negative Δ at step ${biggestNeg[flow]}`}></span>}
-                                            <span>{flow}</span>
+                                <tr key={flow} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                    <td className="sticky left-0 bg-inherit border-b border-gray-200 px-3 py-3 align-top">
+                                        <div className="flex items-center gap-1 text-sm font-semibold text-gray-900">
+                                            {largestNegPosition[flow] && <span className="w-2 h-2 rounded-full bg-rose-500" aria-label={`Largest negative delta at step ${largestNegPosition[flow]}`}></span>}
+                                            <span className="truncate" title={flow}>{flow}</span>
                                         </div>
-                                        <div className="mt-1 flex h-1 w-full gap-0.5">
-                                            {row.filter(r => r.sequencePosition <= effectiveMax).map(r => {
-                                                const pct = maxEmails === 0 ? 0 : r.emailsSent / maxEmails;
-                                                return <div key={r.sequencePosition} className="h-full bg-purple-400/50 dark:bg-purple-500/40 rounded-sm" style={{ width: `${Math.max(2, pct * 30)}px` }} />;
-                                            })}
-                                        </div>
+                                        <div className="text-xs text-gray-500 mt-1">{baseLine}</div>
                                     </td>
                                     {Array.from({ length: effectiveMax }, (_, i) => i + 1).map(step => {
-                                        const cell = row.find(r => r.sequencePosition === step);
-                                        if (!cell) return <td key={step} className="px-1 py-1 border-b border-gray-100 dark:border-gray-800" />;
-                                        const deltaMetric = getDeltaMetric(cell, metric);
-                                        const backdropWidth = reachPct(flow, step);
-                                        const value = (cell as any)[metric] as number;
-                                        const chipColor = colorClass(cell.deltaRevenuePerEmail, step === 1);
+                                        const cell = arr.find(c => c.sequencePosition === step);
+                                        if (!cell) return <td key={step} className="px-3 py-3 border-b border-gray-200 text-center text-xs text-gray-400" aria-label="No step">–</td>;
+                                        const reach = reachPct(flow, step);
+                                        const deltaVal = step === 1 ? 0 : (metric === 'revenuePerEmail' ? cell.deltaRevenuePerEmail : metric === 'openRate' ? cell.deltaOpenRate : metric === 'clickRate' ? cell.deltaClickRate : cell.deltaConversionRate);
                                         return (
-                                            <td key={step} className="px-1 py-1 border-b border-gray-100 dark:border-gray-800 align-top">
-                                                {view === 'chips' ? (
-                                                    <div className="group relative w-24 h-14 flex items-center">
-                                                        <div className="absolute inset-0 rounded-md bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                                                            <div className="h-full bg-purple-200 dark:bg-purple-700/30" style={{ width: `${backdropWidth}%` }} />
-                                                        </div>
-                                                        <div className={`relative mx-auto ${chipColor} rounded-md text-gray-900 dark:text-gray-900 px-1.5 py-1 w-full shadow ring-1 ring-black/5 flex flex-col items-start justify-center`}>
-                                                            <span className="text-[10px] font-semibold leading-tight">{formatValue(value, metric)}</span>
-                                                            {step === 1 ? (
-                                                                <span className="text-[9px] text-gray-700">Base</span>
-                                                            ) : (
-                                                                <span className="text-[9px] font-medium text-gray-700">{formatDelta(deltaMetric, metric)} • {formatDelta(cell.deltaRevenuePerEmail, 'revenuePerEmail')}</span>
-                                                            )}
-                                                        </div>
-                                                        <div className="absolute left-1/2 bottom-full mb-1 -translate-x-1/2 z-50 hidden group-hover:block w-64 text-[11px] text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-2">
-                                                            <p className="font-semibold mb-1 text-gray-900 dark:text-gray-100">{flow} • Step {step}</p>
-                                                            <ul className="space-y-0.5">
-                                                                <li><span className="text-gray-500 dark:text-gray-400">Emails Sent:</span> {cell.emailsSent.toLocaleString()}</li>
-                                                                <li><span className="text-gray-500 dark:text-gray-400">Reach:</span> {backdropWidth.toFixed(1)}%</li>
-                                                                <li><span className="text-gray-500 dark:text-gray-400">Rev/Email:</span> ${cell.revenuePerEmail.toFixed(2)} {step > 1 && <span className="text-gray-400">({formatDelta(cell.deltaRevenuePerEmail, 'revenuePerEmail')})</span>}</li>
-                                                                <li><span className="text-gray-500 dark:text-gray-400">Open Rate:</span> {cell.openRate.toFixed(2)}% {step > 1 && <span className="text-gray-400">({formatDelta(cell.deltaOpenRate, 'openRate')})</span>}</li>
-                                                                {hasClicks && <li><span className="text-gray-500 dark:text-gray-400">CTR:</span> {cell.clickRate.toFixed(2)}% {step > 1 && <span className="text-gray-400">({formatDelta(cell.deltaClickRate, 'clickRate')})</span>}</li>}
-                                                                {hasConv && <li><span className="text-gray-500 dark:text-gray-400">CVR:</span> {cell.conversionRate.toFixed(2)}% {step > 1 && <span className="text-gray-400">({formatDelta(cell.deltaConversionRate, 'conversionRate')})</span>}</li>}
-                                                            </ul>
-                                                            {biggestNeg[flow] === step && <p className="mt-1 text-[10px] text-rose-600 dark:text-rose-400">Largest negative Rev/Email delta in this flow.</p>}
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="group relative w-16 h-14">
-                                                        <div className={`absolute inset-0 rounded-md flex items-center justify-center text-[10px] font-semibold text-gray-900 dark:text-gray-900 ${chipColor}`}>{formatValue(value, metric)}</div>
-                                                        <div className="absolute left-1/2 bottom-full mb-1 -translate-x-1/2 z-50 hidden group-hover:block w-60 text-[11px] text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-2">
-                                                            <p className="font-semibold mb-1 text-gray-900 dark:text-gray-100">{flow} • Step {step}</p>
-                                                            <ul className="space-y-0.5">
-                                                                <li><span className="text-gray-500 dark:text-gray-400">Emails Sent:</span> {cell.emailsSent.toLocaleString()}</li>
-                                                                <li><span className="text-gray-500 dark:text-gray-400">Reach:</span> {backdropWidth.toFixed(1)}%</li>
-                                                                <li><span className="text-gray-500 dark:text-gray-400">Rev/Email:</span> ${cell.revenuePerEmail.toFixed(2)} {step > 1 && <span className="text-gray-400">({formatDelta(cell.deltaRevenuePerEmail, 'revenuePerEmail')})</span>}</li>
-                                                                <li><span className="text-gray-500 dark:text-gray-400">Open Rate:</span> {cell.openRate.toFixed(2)}% {step > 1 && <span className="text-gray-400">({formatDelta(cell.deltaOpenRate, 'openRate')})</span>}</li>
-                                                                {hasClicks && <li><span className="text-gray-500 dark:text-gray-400">CTR:</span> {cell.clickRate.toFixed(2)}% {step > 1 && <span className="text-gray-400">({formatDelta(cell.deltaClickRate, 'clickRate')})</span>}</li>}
-                                                                {hasConv && <li><span className="text-gray-500 dark:text-gray-400">CVR:</span> {cell.conversionRate.toFixed(2)}% {step > 1 && <span className="text-gray-400">({formatDelta(cell.deltaConversionRate, 'conversionRate')})</span>}</li>}
-                                                            </ul>
-                                                            {biggestNeg[flow] === step && <p className="mt-1 text-[10px] text-rose-600 dark:text-rose-400">Largest negative Rev/Email delta in this flow.</p>}
-                                                        </div>
-                                                    </div>
-                                                )}
+                                            <td key={step} className="group px-3 py-3 border-b border-gray-200 align-top text-center">
+                                                <StepCell
+                                                    view={view}
+                                                    metric={metric}
+                                                    value={(cell as any)[metric]}
+                                                    delta={deltaVal}
+                                                    reachPct={Math.max(0, Math.min(100, Math.round(reach)))}
+                                                    revDelta={cell.deltaRevenuePerEmail}
+                                                    onHoverData={{ flow, step, emails: cell.emailsSent, opens: cell.opens, clicks: cell.clicks, orders: cell.orders, revenue: cell.revenue, rpe: cell.revenuePerEmail, openRate: cell.openRate, clickRate: cell.clickRate }}
+                                                    hasClicks={hasClicks}
+                                                    hasConv={hasConv}
+                                                    largestNeg={largestNegPosition[flow] === step}
+                                                />
                                             </td>
                                         );
                                     })}
@@ -277,7 +306,11 @@ export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Pro
                     </tbody>
                 </table>
             </div>
-            <div className="mt-4 text-[10px] text-gray-500 dark:text-gray-400">Color = Δ Rev/Email vs prior step (green up / red down). Backdrop width = reach (sends as % of step 1). Dot marks largest negative drop.</div>
+            {!flows.length && (
+                <div className="mt-4 space-y-2" aria-label="Loading flows">
+                    {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-6 bg-gray-100 rounded animate-pulse" />)}
+                </div>
+            )}
         </div>
     );
 }

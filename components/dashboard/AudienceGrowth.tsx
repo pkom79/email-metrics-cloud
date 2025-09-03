@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Users, Info } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 
@@ -40,7 +40,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
         } catch { return null; }
     }, [dateRange, customFrom, customTo, activeSubs, dm]);
 
-    const buildBuckets = (start: Date, end: Date): Bucket[] => {
+    const buildBuckets = useCallback((start: Date, end: Date): Bucket[] => {
         const res: Bucket[] = [];
         const cursor = new Date(start);
         const push = (label: string, d: Date) => { res.push({ label, start: new Date(d), countCreated: 0, countFirst: 0, countSubscribed: 0 }); };
@@ -72,9 +72,9 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
             let lastYear = -1; res.forEach((b, i) => { const y = b.start.getFullYear(); if (i === 0 || y !== lastYear) { b.label = b.label + ` '${String(y).slice(-2)}`; lastYear = y; } });
         }
         return res;
-    };
+    }, [granularity, activeSubs]);
 
-    const buckets = useMemo(() => { if (!range) return [] as Bucket[]; return buildBuckets(range.start, range.end); }, [range, granularity, activeSubs]);
+    const buckets = useMemo(() => { if (!range) return [] as Bucket[]; return buildBuckets(range.start, range.end); }, [range, buildBuckets]);
 
     // Compare period buckets (only if not 'all')
     const compareBuckets = useMemo(() => {
@@ -84,11 +84,14 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
         if (compareMode === 'prev-year') { prevStart.setFullYear(prevStart.getFullYear() - 1); prevEnd.setFullYear(prevEnd.getFullYear() - 1); }
         else { prevEnd = new Date(range.start.getTime() - 1); prevStart = new Date(prevEnd.getTime() - spanMs); }
         return buildBuckets(prevStart, prevEnd);
-    }, [range, dateRange, compareMode, granularity, activeSubs]);
+    }, [range, dateRange, compareMode, buildBuckets]);
 
     const total = useMemo(() => buckets.reduce((s, b) => s + (metric === 'created' ? b.countCreated : metric === 'firstActive' ? b.countFirst : b.countSubscribed), 0), [buckets, metric]);
     const prevTotal = useMemo(() => compareBuckets.reduce((s, b) => s + (metric === 'created' ? b.countCreated : metric === 'firstActive' ? b.countFirst : b.countSubscribed), 0), [compareBuckets, metric]);
     const pctChange = useMemo(() => { if (!prevTotal) return null; return ((total - prevTotal) / prevTotal) * 100; }, [total, prevTotal]);
+
+    // Hover state (defined before conditional return to satisfy hooks rule)
+    const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
     if (!buckets.length) return null;
 
@@ -121,8 +124,6 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
     const yTicks = 4;
     const yTickValues = Array.from({ length: yTicks + 1 }, (_, i) => Math.round((maxVal / yTicks) * i));
 
-    // Hover state
-    const [hoverIdx, setHoverIdx] = useState<number | null>(null);
     const active = hoverIdx != null ? buckets[hoverIdx] : null;
 
     return (
@@ -170,14 +171,11 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                     {areaD && <path d={areaD} fill="url(#ag-area)" stroke="none" />}
                     {pathD && <path d={pathD} fill="none" stroke="url(#ag-line)" strokeWidth={2} />}
                     {/* Y axis */}
-                    <line x1={padLeft} x2={padLeft} y1={0} y2={innerH} stroke="#e5e7eb" />
+                    {/* Y axis ticks (labels only, no horizontal grid lines) */}
                     {yTickValues.map(v => {
-                        const y = yScale(v);
-                        return (
+                        const y = yScale(v); return (
                             <g key={v}>
-                                <line x1={padLeft - 4} x2={padLeft} y1={y} y2={y} stroke="#9ca3af" />
                                 <text x={padLeft - 6} y={y + 3} fontSize={10} fill="#6b7280" textAnchor="end" className="tabular-nums">{v.toLocaleString()}</text>
-                                <line x1={padLeft} x2={width - padRight} y1={y} y2={y} stroke="#f3f4f6" />
                             </g>
                         );
                     })}
