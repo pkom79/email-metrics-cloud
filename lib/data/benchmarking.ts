@@ -53,6 +53,9 @@ function getHistoricalWeeks(metricKey: string) {
 export function computeBenchmark(metricKey: string | undefined, currentRangeStart?: Date, currentRangeEnd?: Date): BenchmarkComputation {
   if (!metricKey) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true, hiddenReason: 'No metric key' };
   const weeks = getHistoricalWeeks(metricKey);
+  if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
+    console.debug('[Bench] weeks total', metricKey, weeks.length, { first: weeks[0]?.weekStart, last: weeks[weeks.length-1]?.weekStart, currentRangeStart, currentRangeEnd });
+  }
   if (!weeks.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true, hiddenReason: 'No weekly data' };
 
   // Define anchor: if currentRangeStart supplied, we only look at weeks strictly before it.
@@ -61,10 +64,16 @@ export function computeBenchmark(metricKey: string | undefined, currentRangeStar
 
   // Filter weeks strictly before anchor week start.
   let usable = weeks.filter(w => w.weekStart < anchor);
+  if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
+    console.debug('[Bench] usable before fallback', metricKey, usable.length, 'anchor', anchor);
+  }
   // Fallback: if none, try using range end (common when viewing 'all' and anchor == earliest week)
   if (!usable.length && currentRangeEnd) {
     const altAnchor = new Date(currentRangeEnd); altAnchor.setHours(0,0,0,0); altAnchor.setDate(altAnchor.getDate()+7); // include all weeks up to end
     usable = weeks.filter(w => w.weekStart < altAnchor);
+    if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
+      console.debug('[Bench] fallback usable', metricKey, usable.length, 'altAnchor', altAnchor);
+    }
   }
   const totalWeeksConsidered = usable.length;
   if (!usable.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered, insufficient: true, hiddenReason: 'No historical weeks prior to range' };
