@@ -160,12 +160,20 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
                 {emailsArea && <path d={emailsArea} fill="url(#svi-emails)" stroke="none" />}
                 {/* Metric line */}
                 {metricPath && <path d={metricPath} fill="none" stroke="#8b5cf6" strokeWidth={2} />}
-                {/* Compare ghost line */}
-                {compareSeries && compareSeries.length === points.length && compareSeries.filter(v => v != null).length > 1 && (() => {
-                    const ghostPts = points.map((p, i) => compareSeries[i] == null ? null : { x: (() => { if (points.length <= 1) return 0; const VIEW_W = 900; const PADDING_LEFT = 50; const PADDING_RIGHT = 20; const innerW = VIEW_W - PADDING_LEFT - PADDING_RIGHT; return PADDING_LEFT + (i / (points.length - 1)) * innerW; })(), y: (() => { const v = compareSeries[i] as number; if (metricMax === 0) return 120; return 120 - (v / metricMax) * (120 - 10); })() }).filter(Boolean) as { x: number, y: number }[];
-                    if (ghostPts.length < 2) return null;
-                    const d = catmullRom2bezier(ghostPts);
-                    return <path d={d} fill="none" stroke="#6366f1" strokeWidth={1.5} strokeDasharray="4 4" strokeOpacity={0.4} />;
+                {/* Compare ghost line (segmented to avoid strange vertical spikes) */}
+                {compareSeries && compareSeries.length === points.length && compareSeries.some(v => v != null) && (() => {
+                    const segments: { x: number; y: number }[][] = [];
+                    let current: { x: number; y: number }[] = [];
+                    compareSeries.forEach((v, i) => {
+                        if (v == null || !Number.isFinite(v)) { if (current.length > 1) segments.push(current); current = []; return; }
+                        current.push({ x: xScale(i), y: yMetric(v as number) });
+                    });
+                    if (current.length > 1) segments.push(current);
+                    return segments.map((seg, idx) => {
+                        if (seg.length < 2) return null;
+                        const d = catmullRom2bezier(seg);
+                        return <path key={idx} d={d} fill="none" stroke="#6366f1" strokeWidth={1.5} strokeDasharray="4 4" strokeOpacity={0.35} />;
+                    });
                 })()}
                 {/* Invisible hover zones (no white dots) */}
                 {points.map((p, i) => { if (p.value == null) return null; const x = xScale(i); const y = yMetric(p.value); const cellW = innerW / Math.max(1, (points.length - 1)); return <rect key={i} x={x - cellW / 2} y={0} width={cellW} height={GRAPH_H + 30} fill="transparent" onMouseEnter={() => setHover({ idx: i, x, y })} onMouseLeave={() => setHover(null)} />; })}
@@ -334,65 +342,17 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         return { avgEmails, rpmE, medianUnsub, totalRev, totalEmails };
     }, [points, baseSeries]);
 
-    // Headroom modeling (weekly granularity recommended). We approximate diminishing returns by fitting a simple efficiency curve on recent buckets.
-    const headroom = useMemo(() => {
-        if (!micro || baseSeries.length < 4) return null;
-        // Use revenuePerEmail efficiency for modeling even if viewing another metric (only meaningful for revenue scaling)
-        const effPoints = baseSeries.filter(b => b.emails > 0).map(b => ({ emails: b.emails, rpe: b.revenue / b.emails }));
-        if (effPoints.length < 4) return null;
-        // TODO: Replace with nonlinear fit (e.g., log or saturating curve) for more stable headroom under noisy data.
-        // Sort by emails
-        effPoints.sort((a, b) => a.emails - b.emails);
-        // Smooth via simple moving average (window 3) to reduce noise
-        const smooth = effPoints.map((p, i, arr) => {
-            const win = arr.slice(Math.max(0, i - 1), Math.min(arr.length, i + 2));
-            return { emails: p.emails, rpe: win.reduce((s, w) => s + w.rpe, 0) / win.length };
-        });
-        // Find peak rpe (max efficiency)
-        const peak = smooth.reduce((best, p) => p.rpe > best.rpe ? p : best, smooth[0]);
-        const currentEmails = effPoints[effPoints.length - 1].emails;
-        const currentRPE = effPoints[effPoints.length - 1].rpe;
-        // Estimate marginal revenue per 1k at end by local slope of last two points
-        const lastTwo = smooth.slice(-2);
-        let marginalPer1k = 0;
-        if (lastTwo.length === 2) {
-            const dy = lastTwo[1].rpe - lastTwo[0].rpe;
-            const dx = (lastTwo[1].emails - lastTwo[0].emails) / 1000;
-            if (dx !== 0) marginalPer1k = dy / dx; // incremental revenue per additional email (per email), convert to per 1k below
-        }
-        const marginalRevenuePer1k = marginalPer1k * 1000; // approximate additional revenue for next 1k emails
-        // Headroom definition: additional weekly emails until rpe drops below 95% of peak (soft optimal)
-        const targetEff = peak.rpe * 0.95;
-        // Fit monotonic decline assumption: after peak, rpe declines linearly to last point value
-        let additionalEmails = 0;
-        if (currentEmails < peak.emails) {
-            // Still before peak: headroom is to peak
-            additionalEmails = peak.emails - currentEmails;
-        } else if (currentRPE >= targetEff) {
-            // At or just past peak but efficiency within band; small headroom until crossing 95%
-            const post = smooth.filter(p => p.emails >= peak.emails);
-            const last = post[post.length - 1];
-            if (post.length >= 2) {
-                // approximate slope after peak
-                const p1 = post[0];
-                const p2 = post[post.length - 1];
-                const slope = (p2.rpe - p1.rpe) / (p2.emails - p1.emails || 1);
-                if (slope < 0) {
-                    const emailsTo95 = (targetEff - currentRPE) / slope; // slope negative
-                    if (emailsTo95 > 0) additionalEmails = emailsTo95;
-                }
-            }
-        } else {
-            additionalEmails = 0;
-        }
-        return { peakRPE: peak.rpe, peakEmails: peak.emails, currentEmails, currentRPE, headroomEmails: Math.max(0, Math.round(additionalEmails)), marginalRevenuePer1k };
-    }, [micro, baseSeries]);
+    // Headroom & marginal modeling removed per simplification request.
 
     if (!range) return null;
     const negativeMetric = NEGATIVE_METRICS.includes(metric); // currently unused but may be reintroduced
 
     // Average across displayed buckets (non-null values)
     const avgValue = (() => {
+        if (metric === 'revenuePerEmail') {
+            const totals = baseSeries.reduce((acc, b) => { acc.rev += b.revenue; acc.em += b.emails; return acc; }, { rev: 0, em: 0 });
+            return totals.em > 0 ? totals.rev / totals.em : null;
+        }
         const vals = points.filter(p => p.value != null).map(p => p.value as number);
         if (!vals.length) return null;
         return vals.reduce((s, v) => s + v, 0) / vals.length;
@@ -451,7 +411,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                 </div>
                 <ChartContainer points={points} metric={metric} emailsMax={emailsMax} metricMax={metricMax} formatValue={formatValue} compareSeries={compareSeries} />
                 {!baseSeries.length && (<div className="mt-4 text-xs text-gray-500">No sends in selected range.</div>)}
-                <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                <div className="mt-6 grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
                     <div className="relative border border-gray-200 rounded-xl p-4 bg-white">
                         <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Avg Sends
                             <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-52 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Mean emails per bucket after trimming partial periods.</span></span>
@@ -469,18 +429,6 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                             <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-56 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Median bucket unsubscribe count normalized per 1,000 emails.</span></span>
                         </div>
                         <div className="text-gray-900 font-semibold text-lg tabular-nums">{micro ? (micro.medianUnsub >= 1 ? micro.medianUnsub.toFixed(2) : micro.medianUnsub.toFixed(3)) : '—'}</div>
-                    </div>
-                    <div className="relative border border-gray-200 rounded-xl p-4 bg-white">
-                        <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Headroom
-                            <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-60 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Approx additional emails before efficiency (Rev/Email) falls below 95% of peak. Zero means scaling now risks erosion.</span></span>
-                        </div>
-                        <div className="text-gray-900 font-semibold text-lg tabular-nums">{headroom ? headroom.headroomEmails.toLocaleString() : '—'}</div>
-                    </div>
-                    <div className="relative border border-gray-200 rounded-xl p-4 bg-white col-span-2 md:col-span-2">
-                        <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Marginal Rev / 1k
-                            <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-64 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Estimated incremental revenue if you send 1,000 more emails at current efficiency slope.</span></span>
-                        </div>
-                        <div className={`text-lg font-semibold tabular-nums ${headroom && headroom.marginalRevenuePer1k < 0 ? 'text-rose-600' : 'text-gray-900'}`}>{headroom ? fmtCurrency(headroom.marginalRevenuePer1k) : '—'}</div>
                     </div>
                 </div>
             </div>
