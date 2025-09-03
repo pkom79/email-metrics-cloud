@@ -1,9 +1,9 @@
 "use client";
-import React, { useMemo } from 'react';
+import React from 'react';
 import { ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
 import Sparkline from './Sparkline';
+import { parseMetricValue } from '../../lib/utils/benchmarks'; // still used for conversionRate special case
 import { useBenchmark } from '../../lib/data/benchmarking';
-import { DataManager } from '../../lib/data/dataManager';
 
 interface MetricCardProps {
     title: string;
@@ -46,59 +46,18 @@ const MetricCard: React.FC<MetricCardProps> = ({
     const isZeroDisplay = tinyChange || Math.abs(change) < 1e-9;
     const showChangeBlock = !isAllTime && !hasInsufficientData;
     const isIncrease = change > 0;
-    // Parse numeric from formatted value (currency / percent / number)
-    const numericFromFormatted = (formatted: string): number => {
-        const cleaned = formatted.replace(/[$,%\s]/g, '');
-        const n = parseFloat(cleaned);
-        return isNaN(n) ? 0 : n;
-    };
-    const numericValue = metricKey ? numericFromFormatted(value) : undefined;
-
-    // Adaptive benchmark (dynamic per-account) – anchor on last email date (end of active dataset)
-    const dm = DataManager.getInstance();
-    const anchor = dm.getLastEmailDate();
-    const adaptiveBenchmark = useBenchmark(metricKey, anchor, anchor);
-    const showAdaptive = metricKey != null && adaptiveBenchmark != null;
-
-    const adaptiveBadge = useMemo(() => {
-        if (!showAdaptive) return null;
-        const b = adaptiveBenchmark;
-        if (!b) return null;
-        // Hidden reason – show subtle badge explaining why
-        if (!b.tier) {
-            return (
-                <span className="group inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border bg-gray-50 text-gray-600 border-gray-200">
-                    Benchmarking
-                    <span className="pointer-events-none absolute mt-6 left-1/2 -translate-x-1/2 z-30 hidden group-hover:block w-64 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
-                        Adaptive benchmark not shown: {b.hiddenReason || 'insufficient history'}. Weeks: {b.sampleWeeks}. Need ≥8 for provisional, ≥12 for initial, ≥20 for stable.
-                    </span>
-                </span>
-            );
-        }
-        const tierColors: Record<string, { dot: string; wrapper: string }> = {
-            'Needs Review': { dot: 'bg-rose-500', wrapper: 'bg-rose-50 text-rose-700 border-rose-200' },
-            'Below Average': { dot: 'bg-amber-500', wrapper: 'bg-amber-50 text-amber-700 border-amber-200' },
-            'Typical': { dot: 'bg-gray-400', wrapper: 'bg-gray-50 text-gray-700 border-gray-200' },
-            'Above Average': { dot: 'bg-emerald-500', wrapper: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-            'Exceptional': { dot: 'bg-purple-500', wrapper: 'bg-purple-50 text-purple-700 border-purple-200' },
-        };
-        const c = tierColors[b.tier] || tierColors['Typical'];
-        const pct = b.percentDelta != null ? b.percentDelta : null;
-        return (
-            <span className={`group relative inline-flex items-center gap-1 pl-1 pr-2 py-0.5 rounded-full text-[10px] font-medium border ${c.wrapper}`}>
-                <span className={`w-2 h-2 rounded-full ${c.dot}`} />
-                {b.tier}{b.provisional && <span className="ml-1 uppercase tracking-wide text-[9px]">(Prov.)</span>}
-                <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-72 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
-                    <span className="font-semibold block mb-1">Adaptive Benchmark</span>
-                    Baseline (trimmed mean): {b.baseline != null ? b.baseline.toFixed(2) : '—'}<br />
-                    Current: {b.current != null ? b.current.toFixed(2) : '—'}<br />
-                    {pct != null && <>Delta: {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%<br /></>}
-                    Weeks Used: {b.sampleWeeks}{b.provisional ? ' (provisional)' : b.insufficient ? ' (limited)' : ''}.<br />
-                    Interpretation: {b.tier} relative to your historical performance.
-                </span>
-            </span>
-        );
-    }, [showAdaptive, adaptiveBenchmark]);
+    // Derive current selected range boundaries from sparkline data (first/last points)
+    const rangeStart = sparklineData && sparklineData.length ? new Date(sparklineData[0].date) : undefined;
+    const rangeEnd = sparklineData && sparklineData.length ? new Date(sparklineData[sparklineData.length - 1].date) : undefined;
+    // Adaptive benchmarking (account-specific)
+    let adaptive: any = null;
+    try {
+        adaptive = useBenchmark(metricKey, rangeStart, rangeEnd);
+    } catch (e) {
+        console.warn('Adaptive benchmark hook failed', e);
+        adaptive = { tier: null, hiddenReason: 'Hook error', sampleWeeks: 0 };
+    }
+    const numericValue = metricKey === 'conversionRate' ? parseMetricValue(value) : undefined;
 
     const getValueFormat = () => {
         if (!metricKey) return 'number';
@@ -134,8 +93,46 @@ const MetricCard: React.FC<MetricCardProps> = ({
                     <p className={`text-sm font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400`}>
                         {title}
                     </p>
-                    {/* Adaptive benchmark badge (replaces legacy static tiers) */}
-                    <div className="mt-1 h-5 flex items-center relative">{adaptiveBadge}</div>
+                    {/* Adaptive benchmark badge (reserved 20px height) */}
+                    <div className="mt-1 h-5 flex items-center">
+                        {adaptive && (
+                            (() => {
+                                if (!adaptive.tier) {
+                                    return (
+                                        <span className="group relative inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border bg-gray-50 text-gray-600 border-gray-200">
+                                            Benchmarks
+                                            <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-5 z-30 hidden group-hover:block w-64 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
+                                                Benchmark tier hidden. {adaptive.hiddenReason || 'Insufficient history'}. Weeks available: {adaptive.sampleWeeks}. Need 8+ for provisional, 12+ for initial tiers.
+                                            </span>
+                                        </span>
+                                    );
+                                }
+                                const tierColors: Record<string, string> = {
+                                    'Needs Review': 'bg-rose-50 text-rose-700 border-rose-200',
+                                    'Below Average': 'bg-amber-50 text-amber-700 border-amber-200',
+                                    'Typical': 'bg-gray-50 text-gray-700 border-gray-200',
+                                    'Above Average': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                                    'Exceptional': 'bg-purple-50 text-purple-700 border-purple-200',
+                                };
+                                const cls = tierColors[adaptive.tier] || 'bg-gray-50 text-gray-700 border-gray-200';
+                                const pct = adaptive.percentDelta != null && adaptive.baseline ? ((adaptive.current || 0) - adaptive.baseline) / adaptive.baseline * 100 : null;
+                                return (
+                                    <span className={`group relative inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${cls}`}>
+                                        {adaptive.tier}{adaptive.provisional && <span className="ml-1 text-[9px] uppercase tracking-wide">(Prov.)</span>}
+                                        {pct != null && <span className="tabular-nums">{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</span>}
+                                        <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-5 z-30 hidden group-hover:block w-72 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
+                                            <span className="font-semibold block mb-1">Adaptive Benchmark</span>
+                                            Compares this range vs prior weeks (trimmed mean baseline).<br />
+                                            Baseline: {adaptive.baseline != null ? (() => { if (!metricKey) return adaptive.baseline.toFixed(2); if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metricKey)) return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(adaptive.baseline); if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metricKey)) return adaptive.baseline.toFixed(2); return adaptive.baseline.toFixed(2); })() : '—'}<br />
+                                            Current: {adaptive.current != null ? (() => { if (!metricKey) return adaptive.current.toFixed(2); if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metricKey)) return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(adaptive.current); if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metricKey)) return adaptive.current.toFixed(2); return adaptive.current.toFixed(2); })() : '—'}<br />
+                                            {adaptive.percentDelta != null && <>Delta: {adaptive.percentDelta >= 0 ? '+' : ''}{adaptive.percentDelta.toFixed(1)}%</>}<br />
+                                            Weeks used: {adaptive.sampleWeeks} (tails trimmed). {adaptive.provisional ? 'Provisional (stabilizes after 20+ weeks).' : adaptive.insufficient ? 'Stabilizes after 20+ weeks.' : ''}
+                                        </span>
+                                    </span>
+                                );
+                            })()
+                        )}
+                    </div>
                 </div>
             </div>
 
