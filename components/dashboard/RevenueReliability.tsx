@@ -1,7 +1,7 @@
 "use client";
 import React, { useMemo, useState, useCallback } from 'react';
 import type { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
-import { Info } from 'lucide-react';
+import { Info, ShieldCheck } from 'lucide-react';
 
 interface RevenueReliabilityProps {
     campaigns: ProcessedCampaign[];
@@ -74,8 +74,10 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
         // Raw reliability
         const reliabilityRaw = (1 - Math.min(1, cv)) * 100;
         const volatilityPct = cv * 100; // direct interpretation
-        const bucketRef = Math.round(reliabilityRaw);
-        const bucket = bucketRef >= 90 ? 'Excellent' : bucketRef >= 75 ? 'Strong' : bucketRef >= 60 ? 'Needs Work' : 'Volatile';
+        // Reliability qualitative category mapping (explicit thresholds)
+        // 90–100 Excellent, 80–89 Good, 65–79 OK, 50–64 Attention Needed, <50 Critical
+        const rRounded = Math.round(reliabilityRaw);
+        const category = rRounded >= 90 ? 'Excellent' : rRounded >= 80 ? 'Good' : rRounded >= 65 ? 'OK' : rRounded >= 50 ? 'Attention Needed' : 'Critical';
         const volatilityDisplay = (volatilityPct % 1 === 0) ? volatilityPct.toFixed(0) : volatilityPct.toFixed(1);
         const reliabilityDisplay = (volatilityPct % 1 === 0) ? Math.round(reliabilityRaw).toFixed(0) : reliabilityRaw.toFixed(1);
         const zeroCampaignWeeks = weeks.filter(w => w.campaignEmails === 0).length;
@@ -103,8 +105,7 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
             const factor = share / (1 - share);
             lostCampaignEstimate = weeks.filter(w => w.campaignRevenue === 0).reduce((sum, w) => sum + (w.flowRevenue * factor), 0);
         }
-
-        return { mean, std, cv, reliabilityRaw, reliabilityDisplay, volatilityPct, volatilityDisplay, bucket, zeroCampaignWeeks, meanCampaignShare, lostCampaignEstimate };
+        return { mean, std, cv, reliabilityRaw, reliabilityDisplay, volatilityPct, volatilityDisplay, category, zeroCampaignWeeks, meanCampaignShare, lostCampaignEstimate };
     }, [weeks]);
 
     // Hooks must run before any early return to satisfy rules-of-hooks
@@ -143,7 +144,7 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
     return (
         <div className="mt-8">
             <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5">
-                <div className="flex items-start mb-3">
+                <div className="flex items-start mb-3 justify-between">
                     <div className="flex items-center gap-2">
                         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Weekly Revenue Reliability</h3>
                         <div className="group relative">
@@ -151,15 +152,16 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                             <div className="absolute left-0 top-6 z-20 hidden group-hover:block w-80 text-[11px] leading-snug bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3">
                                 <p className="text-gray-700 dark:text-gray-200 mb-1"><span className="font-semibold">Definitions</span></p>
                                 <ul className="list-disc pl-4 space-y-0.5 text-gray-600 dark:text-gray-300">
+                                    <li><span className="font-medium">Reliability</span>: 100 - Volatility (higher = steadier)</li>
                                     <li><span className="font-medium">Volatility</span>: (Std Dev / Mean) * 100</li>
-                                    <li><span className="font-medium">Reliability</span>: 100 - Volatility</li>
                                     <li><span className="font-medium">Zero Campaign Weeks</span>: No campaign sends</li>
                                     <li><span className="font-medium">Band</span>: ±1 Std Dev around mean</li>
                                 </ul>
-                                <p className="mt-1 text-gray-500 dark:text-gray-400">Higher reliability = steadier revenue base.</p>
+                                <p className="mt-1 text-gray-500 dark:text-gray-400">Aim for Excellent (≥90%) or Good (80–89%).</p>
                             </div>
                         </div>
                     </div>
+                    <ShieldCheck className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div className={`pb-2 overflow-visible ${centerChart ? 'flex justify-center' : ''}`}>
                     <div className="relative" style={{ width: w, marginLeft: centerChart ? 'auto' : undefined, marginRight: centerChart ? 'auto' : undefined }}>
@@ -238,15 +240,25 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                     </div>
                 </div>
                 {stats && (() => {
-                    const reliabilityTooltip = `Reliability = 100 - Volatility. Current volatility ${stats.volatilityDisplay}%. With mean weekly revenue of ${formatCurrency(stats.mean)}, this implies week-to-week swings of about ${stats.volatilityDisplay}% so reliability is ${stats.reliabilityDisplay}%. Higher = steadier.`;
-                    const volatilityTooltip = `Volatility = (Std Dev / Mean) * 100. Std Dev ${formatCurrency(stats.std)} over mean ${formatCurrency(stats.mean)} → ${stats.volatilityDisplay}%. <15% excellent, 15–25% strong, 25–40% needs work, 40%+ unstable.`;
+                    const reliabilityTooltip = (
+                        `Reliability = 100 - Volatility. Current reliability ${stats.reliabilityDisplay}% (${stats.category}). ` +
+                        `Volatility ${stats.volatilityDisplay}%. Mean weekly revenue ${formatCurrency(stats.mean)} with std dev ${formatCurrency(stats.std)}.\n\n` +
+                        `Categories:\n` +
+                        `Excellent 90–100%\n` +
+                        `Good 80–89%\n` +
+                        `OK 65–79%\n` +
+                        `Attention Needed 50–64%\n` +
+                        `Critical <50%\n\n` +
+                        `Higher reliability = steadier, forecastable revenue. Improve by filling gaps, increasing automated flow share, and smoothing spikes.`
+                    );
                     return (
-                        <div className={`mt-6 ${centerChart ? 'flex flex-wrap justify-center gap-4' : 'grid grid-cols-2 md:grid-cols-6 gap-4'} text-xs`}>
+                        <div className={`mt-6 ${centerChart ? 'flex flex-wrap justify-center gap-4' : 'grid grid-cols-2 md:grid-cols-5 gap-4'} text-xs`}>
                             <StatTile label="Avg Weekly Revenue" tooltip="Average weekly combined (campaign + flow) revenue" value={formatCurrency(stats.mean)} />
                             <StatTile label="Std Dev" tooltip="Standard deviation of weekly totals (spread of weekly revenue)" value={formatCurrency(stats.std)} />
                             <StatTile label="Reliability" tooltip={reliabilityTooltip} value={`${stats.reliabilityDisplay}%`} />
-                            <StatTile label="Volatility" tooltip={volatilityTooltip} value={`${stats.volatilityDisplay}%`} />
-                            <StatTile label="Zero Campaign Weeks" tooltip="Weeks with no campaign sends (flows ignored)" value={String(stats.zeroCampaignWeeks)} />
+                            {stats.zeroCampaignWeeks > 0 && (
+                                <StatTile label="Zero Campaign Weeks" tooltip="Weeks with no campaign sends" value={String(stats.zeroCampaignWeeks)} />
+                            )}
                             {stats.lostCampaignEstimate > 0 && (
                                 <StatTile label="Est. Lost Camp Rev" tooltip="Estimated lost campaign revenue in zero-campaign weeks (robust median share * flow revenue)" value={formatCurrency(stats.lostCampaignEstimate)} />
                             )}

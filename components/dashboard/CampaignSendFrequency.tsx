@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState } from 'react';
-import { BarChart3 } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import { ProcessedCampaign } from '../../lib/data/dataTypes';
 
 type BucketKey = '1' | '2' | '3' | '4+';
@@ -161,7 +161,7 @@ export default function CampaignSendFrequency({ campaigns }: Props) {
     if (!campaigns.length) {
         return (
             <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
-                <div className="flex items-center gap-2 mb-2"><BarChart3 className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Performance by Send Frequency</h3></div>
+                <div className="flex items-center gap-2 mb-2"><Layers className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Performance by Send Frequency</h3></div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">No campaigns in the selected date range. Adjust the date filter to view frequency performance.</p>
             </div>
         );
@@ -179,7 +179,7 @@ export default function CampaignSendFrequency({ campaigns }: Props) {
     return (
         <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
-                <div className="flex items-center gap-2"><BarChart3 className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Performance by Send Frequency</h3></div>
+                <div className="flex items-center gap-2"><Layers className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Performance by Send Frequency</h3></div>
                 <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
                     <div className="flex items-center gap-1.5">
                         {(['week', 'campaign'] as const).map(m => (
