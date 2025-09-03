@@ -160,27 +160,13 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
                 {emailsArea && <path d={emailsArea} fill="url(#svi-emails)" stroke="none" />}
                 {/* Metric line */}
                 {metricPath && <path d={metricPath} fill="none" stroke="#8b5cf6" strokeWidth={2} />}
-                {/* Compare ghost line (segmented to avoid strange vertical spikes) */}
-                {compareSeries && compareSeries.length === points.length && compareSeries.some(v => v != null) && (() => {
-                    const segments: { x: number; y: number }[][] = [];
-                    let current: { x: number; y: number }[] = [];
-                    compareSeries.forEach((v, i) => {
-                        if (v == null || !Number.isFinite(v)) { if (current.length > 1) segments.push(current); current = []; return; }
-                        current.push({ x: xScale(i), y: yMetric(v as number) });
-                    });
-                    if (current.length > 1) segments.push(current);
-                    return segments.map((seg, idx) => {
-                        if (seg.length < 2) return null;
-                        const d = catmullRom2bezier(seg);
-                        return <path key={idx} d={d} fill="none" stroke="#6366f1" strokeWidth={1.5} strokeDasharray="4 4" strokeOpacity={0.35} />;
-                    });
-                })()}
+                {/* Compare ghost line removed per simplification (kept for delta calc only) */}
                 {/* Invisible hover zones (no white dots) */}
                 {points.map((p, i) => { if (p.value == null) return null; const x = xScale(i); const y = yMetric(p.value); const cellW = innerW / Math.max(1, (points.length - 1)); return <rect key={i} x={x - cellW / 2} y={0} width={cellW} height={GRAPH_H + 30} fill="transparent" onMouseEnter={() => setHover({ idx: i, x, y })} onMouseLeave={() => setHover(null)} />; })}
             </svg>
             {active && active.value != null && hover && (
                 <div
-                    className="pointer-events-none absolute z-20 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700"
+                    className="pointer-events-none absolute z-20 px-3 py-2 bg-white text-gray-900 text-xs rounded-lg shadow-lg border border-gray-200"
                     style={{
                         left: `${(hover.x / VIEW_W) * 100}%`,
                         top: `${Math.max(0, (hover.y / VIEW_H) * 100 - 5)}%`,
@@ -188,9 +174,9 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
                         whiteSpace: 'nowrap'
                     }}
                 >
-                    <div className="font-medium mb-0.5">{active.label}</div>
-                    <div className="flex justify-between gap-3"><span>Emails</span><span className="tabular-nums">{active.emails?.toLocaleString() || 0}</span></div>
-                    <div className="flex justify-between gap-3"><span>{METRIC_OPTIONS.find(m => m.value === metric)?.label}</span><span className="tabular-nums">{formatValue(active.value)}</span></div>
+                    <div className="font-medium mb-0.5 text-gray-900">{active.label}</div>
+                    <div className="flex justify-between gap-3"><span className="text-gray-500">Emails</span><span className="tabular-nums text-gray-900">{active.emails?.toLocaleString() || 0}</span></div>
+                    <div className="flex justify-between gap-3"><span className="text-gray-500">{METRIC_OPTIONS.find(m => m.value === metric)?.label}</span><span className="tabular-nums text-gray-900">{formatValue(active.value)}</span></div>
                 </div>
             )}
         </div>
@@ -254,16 +240,11 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                 bounces: bouncePer1k * emails / 1000
             };
         });
-        // Trim incomplete boundary buckets for weekly/monthly so partial periods don't appear as drops.
+        // Trim only the first incomplete boundary bucket (avoid trimming last to prevent false drop-off in full weeks/months)
         if ((granularity === 'weekly' || granularity === 'monthly') && buckets.length > 2) {
-            // We only have labels, so estimate bucket length via median diff of internal indices if DataManager included date objects.
-            // Heuristic: treat first/last bucket as incomplete if value (emails sent) is <40% of median internal buckets.
             const internal = buckets.slice(1, -1);
             const medianEmails = (() => { const arr = internal.map(b => b.emails).filter(n => n > 0).sort((a, b) => a - b); if (!arr.length) return 0; return arr[Math.floor(arr.length / 2)]; })();
-            if (medianEmails > 0) {
-                if (buckets[0].emails > 0 && buckets[0].emails < medianEmails * 0.4) buckets = buckets.slice(1);
-                if (buckets[buckets.length - 1].emails > 0 && buckets[buckets.length - 1].emails < medianEmails * 0.4) buckets = buckets.slice(0, buckets.length - 1);
-            }
+            if (medianEmails > 0 && buckets[0].emails > 0 && buckets[0].emails < medianEmails * 0.4) buckets = buckets.slice(1);
         }
         return buckets;
     }, [dm, subset, dateRange, granularity, customFrom, customTo, range]);
@@ -400,10 +381,10 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     <div className="text-right">
                         <div className="flex items-center justify-end gap-2 mb-0.5">
                             <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium">Avg {METRIC_OPTIONS.find(m => m.value === metric)?.label}</div>
-                            {(() => { if (!avgValue || !compareSeries.length || compareSeries.length !== points.length) return null; const compVals = compareSeries.filter(v => v != null) as number[]; if (compVals.length < 2) return null; const compAvg = compVals.reduce((s, v) => s + v, 0) / compVals.length; if (!compAvg) return null; const delta = avgValue - compAvg; const pct = compAvg ? (delta / compAvg) * 100 : 0; const up = delta >= 0; return <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${up ? 'bg-emerald-500/15 text-emerald-500' : 'bg-rose-500/15 text-rose-500'}`}>{up ? '+' : ''}{delta.toFixed(2)} ({pct.toFixed(1)}%)</span>; })()}
+                            {(() => { if (!avgValue || !compareSeries.length || compareSeries.length !== points.length) return null; const compVals = compareSeries.filter(v => v != null) as number[]; if (compVals.length < 2) return null; const compAvg = compVals.reduce((s, v) => s + v, 0) / compVals.length; if (!compAvg) return null; const pct = ((avgValue - compAvg) / compAvg) * 100; const improved = negativeMetric ? pct < 0 : pct > 0; const arrowUp = pct > 0; const cls = improved ? 'text-emerald-600' : 'text-rose-600'; return <span className={`flex items-center gap-1 text-[11px] font-medium ${cls}`}>{arrowUp ? '↑' : '↓'} {Math.abs(pct).toFixed(1)}%</span>; })()}
                             <div className="relative group">
                                 <span className="cursor-help text-gray-400 text-xs">ⓘ</span>
-                                <div className="absolute right-0 top-full z-30 mt-1 w-60 rounded-md border border-gray-700 bg-gray-900 p-2 text-[11px] leading-snug opacity-0 shadow-lg transition-opacity group-hover:opacity-100">Delta vs selected compare period (ghost dashed line). Positive = improvement.</div>
+                                <div className="absolute right-0 top-full z-30 mt-1 w-60 rounded-md border border-gray-200 bg-white p-2 text-[11px] leading-snug opacity-0 shadow-lg transition-opacity group-hover:opacity-100">Change vs compare period average. Green = improvement.</div>
                             </div>
                         </div>
                         <div className="text-3xl font-bold text-gray-900 tabular-nums">{formatValue(avgValue)}</div>
