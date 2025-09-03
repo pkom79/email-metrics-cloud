@@ -144,24 +144,34 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
     return (
         <div className="mt-8">
             <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5">
-                <div className="flex items-start mb-3 justify-between">
-                    <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Weekly Revenue Reliability</h3>
-                        <div className="group relative">
-                            <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-700 dark:text-gray-500 dark:group-hover:text-gray-300 cursor-pointer" />
-                            <div className="absolute left-0 top-6 z-20 hidden group-hover:block w-80 text-[11px] leading-snug bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3">
-                                <p className="text-gray-700 dark:text-gray-200 mb-1"><span className="font-semibold">Definitions</span></p>
+                <div className="flex items-center gap-2 mb-3">
+                    <ShieldCheck className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Weekly Revenue Reliability</h3>
+                    <div className="group relative">
+                        <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-700 dark:text-gray-500 dark:group-hover:text-gray-300 cursor-pointer" />
+                        <div className="absolute left-0 top-6 z-20 hidden group-hover:block w-80 text-[11px] leading-snug bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3 space-y-2">
+                            <div>
+                                <p className="text-gray-700 dark:text-gray-200 font-semibold mb-1">Definitions</p>
                                 <ul className="list-disc pl-4 space-y-0.5 text-gray-600 dark:text-gray-300">
                                     <li><span className="font-medium">Reliability</span>: 100 - Volatility (higher = steadier)</li>
-                                    <li><span className="font-medium">Volatility</span>: (Std Dev / Mean) * 100</li>
+                                    <li><span className="font-medium">Volatility</span>: Std Dev / Mean (as %)</li>
+                                    <li><span className="font-medium">Band</span>: ±1 Std Dev around mean line</li>
                                     <li><span className="font-medium">Zero Campaign Weeks</span>: No campaign sends</li>
-                                    <li><span className="font-medium">Band</span>: ±1 Std Dev around mean</li>
                                 </ul>
-                                <p className="mt-1 text-gray-500 dark:text-gray-400">Aim for Excellent (≥90%) or Good (80–89%).</p>
                             </div>
+                            <div>
+                                <p className="text-gray-700 dark:text-gray-200 font-semibold mb-1">Categories</p>
+                                <ul className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-gray-600 dark:text-gray-300">
+                                    <li>Excellent ≥90%</li>
+                                    <li>Good 80–89%</li>
+                                    <li>OK 65–79%</li>
+                                    <li>Attention 50–64%</li>
+                                    <li className="col-span-2">Critical &lt;50%</li>
+                                </ul>
+                            </div>
+                            <p className="text-gray-500 dark:text-gray-400">Target Excellent or Good for predictable revenue.</p>
                         </div>
                     </div>
-                    <ShieldCheck className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div className={`pb-2 overflow-visible ${centerChart ? 'flex justify-center' : ''}`}>
                     <div className="relative" style={{ width: w, marginLeft: centerChart ? 'auto' : undefined, marginRight: centerChart ? 'auto' : undefined }}>
@@ -240,22 +250,35 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                     </div>
                 </div>
                 {stats && (() => {
+                    const categoryColor = stats.category === 'Excellent' ? 'bg-green-500' :
+                        stats.category === 'Good' ? 'bg-emerald-500' :
+                            stats.category === 'OK' ? 'bg-amber-400' :
+                                stats.category === 'Attention Needed' ? 'bg-orange-500' : 'bg-rose-500';
                     const reliabilityTooltip = (
-                        `Reliability = 100 - Volatility. Current reliability ${stats.reliabilityDisplay}% (${stats.category}). ` +
-                        `Volatility ${stats.volatilityDisplay}%. Mean weekly revenue ${formatCurrency(stats.mean)} with std dev ${formatCurrency(stats.std)}.\n\n` +
-                        `Categories:\n` +
-                        `Excellent 90–100%\n` +
-                        `Good 80–89%\n` +
-                        `OK 65–79%\n` +
-                        `Attention Needed 50–64%\n` +
-                        `Critical <50%\n\n` +
-                        `Higher reliability = steadier, forecastable revenue. Improve by filling gaps, increasing automated flow share, and smoothing spikes.`
+                        <div className="space-y-2">
+                            <div>
+                                <p className="font-semibold text-gray-800 dark:text-gray-100 mb-1">Reliability</p>
+                                <p className="text-gray-600 dark:text-gray-300">Reliability = 100 - Volatility. Measures steadiness of weekly revenue (higher = more predictable).</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-gray-600 dark:text-gray-300">
+                                <div className="col-span-2 font-medium text-gray-700 dark:text-gray-200">Categories</div>
+                                <div>Excellent ≥90%</div>
+                                <div>Good 80–89%</div>
+                                <div>OK 65–79%</div>
+                                <div>Attention 50–64%</div>
+                                <div className="col-span-2">Critical &lt;50%</div>
+                            </div>
+                            <div className="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">
+                                Mean {formatCurrency(stats.mean)} • Std Dev {formatCurrency(stats.std)} • Volatility {stats.volatilityDisplay}%
+                            </div>
+                            <div className="text-[10px] text-gray-500 dark:text-gray-400">Improve by filling send gaps, increasing automated (flow) share, smoothing spikes.</div>
+                        </div>
                     );
                     return (
                         <div className={`mt-6 ${centerChart ? 'flex flex-wrap justify-center gap-4' : 'grid grid-cols-2 md:grid-cols-5 gap-4'} text-xs`}>
+                            <StatTile label="Reliability" tooltip={reliabilityTooltip} value={`${stats.reliabilityDisplay}%`} category={stats.category} categoryColor={categoryColor} />
                             <StatTile label="Avg Weekly Revenue" tooltip="Average weekly combined (campaign + flow) revenue" value={formatCurrency(stats.mean)} />
                             <StatTile label="Std Dev" tooltip="Standard deviation of weekly totals (spread of weekly revenue)" value={formatCurrency(stats.std)} />
-                            <StatTile label="Reliability" tooltip={reliabilityTooltip} value={`${stats.reliabilityDisplay}%`} />
                             {stats.zeroCampaignWeeks > 0 && (
                                 <StatTile label="Zero Campaign Weeks" tooltip="Weeks with no campaign sends" value={String(stats.zeroCampaignWeeks)} />
                             )}
@@ -265,8 +288,7 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                         </div>
                     );
                 })()}
-                {/* Interpretation popover */}
-                <Interpretation trimmed={trimmed} />
+                {/* Interpretation removed per request (tooltip now sufficient) */}
                 <div className="mt-3 flex items-center gap-4 text-[10px] text-gray-500 dark:text-gray-400">
                     <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gradient-to-b from-purple-400 to-purple-700" /> Campaign Revenue</div>
                     <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gradient-to-b from-indigo-400 to-indigo-700" /> Flow Revenue</div>
@@ -277,35 +299,22 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
     );
 }
 
-// Inline component for interpretation popover
-function Interpretation({ trimmed }: { trimmed: { start: boolean; end: boolean } }) {
-    const [open, setOpen] = useState(false);
-    return (
-        <div className="mt-4 text-[11px] text-gray-600 dark:text-gray-300">
-            <button onClick={() => setOpen(o => !o)} className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-300 hover:underline font-medium">
-                {open ? 'Hide interpretation' : 'Show interpretation'}
-            </button>
-            {open && (
-                <div className="mt-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 space-y-2">
-                    <p><span className="font-medium text-gray-800 dark:text-gray-100">Reliability</span> = 100 - Volatility. Volatility is how far weeks swing relative to average (std dev / mean). Higher reliability means steadier revenue—better for forecasting and scaling.</p>
-                    <p className="text-gray-500 dark:text-gray-400">Improve by: 1) Filling calendar gaps with evergreen campaigns, 2) Increasing automated (flow) share, 3) Smoothing seasonal spikes via segmented build-up, 4) Pruning noisy underperforming batches.</p>
-                    {(trimmed.start || trimmed.end) && (
-                        <p className="text-amber-600 dark:text-amber-400 text-[10px]">Partial edge week{trimmed.start && trimmed.end ? 's were' : ' was'} excluded (needs full 7 days).</p>
-                    )}
+// Interpretation component removed.
+
+interface StatTileProps { label: string; value: string; tooltip: React.ReactNode; category?: string; categoryColor?: string; }
+const StatTile: React.FC<StatTileProps> = ({ label, value, tooltip, category, categoryColor }) => (
+    <div className="group relative">
+        <div className="min-w-[170px] rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 p-4 flex flex-col h-full shadow-sm">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">{label}</p>
+            {category && categoryColor && (
+                <div className="flex items-center gap-1 mb-2 text-[11px] font-medium">
+                    <span className={`w-2 h-2 rounded-full ${categoryColor}`} />
+                    <span className="text-gray-600 dark:text-gray-300">{category}</span>
                 </div>
             )}
+            <p className="mt-auto text-2xl font-semibold text-gray-900 dark:text-gray-100">{value}</p>
         </div>
-    );
-}
-
-interface StatTileProps { label: string; value: string; tooltip: string; }
-const StatTile: React.FC<StatTileProps> = ({ label, value, tooltip }) => (
-    <div className="group relative">
-        <div className="min-w-[170px] rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 p-4 flex flex-col justify-between h-full shadow-sm">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{label}</p>
-            <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{value}</p>
-        </div>
-        <div className="absolute left-1/2 top-full mt-2 -translate-x-1/2 z-40 hidden group-hover:block w-56 text-[11px] leading-snug bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-2 text-gray-600 dark:text-gray-300">
+        <div className="absolute left-1/2 top-full mt-2 -translate-x-1/2 z-40 hidden group-hover:block w-60 text-[11px] leading-snug bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-2 text-gray-600 dark:text-gray-300">
             {tooltip}
         </div>
     </div>
