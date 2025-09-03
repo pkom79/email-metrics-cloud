@@ -1,5 +1,6 @@
 "use client";
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { Info, TrendingUp, TrendingDown } from 'lucide-react';
 import type { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
 
 interface EngagementDecayCurveProps {
@@ -20,6 +21,7 @@ const fmtPct = (v: number) => `${v.toFixed(1)}%`;
  * Decay %  = (Recent - Baseline) / Baseline (negative implies decay)
  */
 export default function EngagementDecayCurve({ campaigns, flows, dateRange }: EngagementDecayCurveProps) {
+    const [showHelp, setShowHelp] = useState(false);
     const data = useMemo(() => {
         const all = [...campaigns, ...flows];
         if (!all.length) return [] as { day: string; ts: number; openRate: number; clickRate: number }[];
@@ -67,59 +69,102 @@ export default function EngagementDecayCurve({ campaigns, flows, dateRange }: En
 
     return (
         <div className="mb-4">
-            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
-                <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Engagement Decay Curve</h3>
-                    <span className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">{dateRange}</span>
+            <div className="relative rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Engagement Decay Curve</h3>
+                        <button
+                            onClick={() => setShowHelp(s => !s)}
+                            aria-label="Explain engagement decay"
+                            className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                        >
+                            <Info className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-100 dark:border-purple-800">{dateRange.toUpperCase()}</span>
                 </div>
+                {showHelp && (
+                    <div className="absolute z-10 top-10 left-4 max-w-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 text-[11px] leading-relaxed shadow-lg">
+                        <p className="text-gray-700 dark:text-gray-200 mb-1"><span className="font-semibold">How to read:</span> We group all emails by day and compute daily open & click rates.</p>
+                        <ul className="list-disc pl-4 space-y-0.5 text-gray-600 dark:text-gray-300">
+                            <li><span className="text-purple-600 font-medium">Baseline</span> = avg of first N days.</li>
+                            <li><span className="text-indigo-500 font-medium">Latest</span> = avg of last N days.</li>
+                            <li>Δ shows relative change vs baseline (green = improvement).</li>
+                        </ul>
+                        <p className="mt-1 text-gray-500 dark:text-gray-400">N scales with available data (≤7 days window).</p>
+                    </div>
+                )}
                 {data.length < 5 && (
                     <p className="text-xs text-gray-500 dark:text-gray-400">Not enough daily data points yet to calculate decay.</p>
                 )}
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                    <svg width={w} height={h} className="flex-shrink-0">
-                        <rect x={0} y={0} width={w} height={h} rx={6} className="fill-gray-50 dark:fill-gray-800" />
-                        {/* Gridlines (4 horizontal) */}
-                        {[0.25, 0.5, 0.75].map(g => (
-                            <line key={g} x1={pad} x2={w - pad} y1={pad + (1 - g) * (h - pad * 2)} y2={pad + (1 - g) * (h - pad * 2)} className="stroke-gray-200 dark:stroke-gray-700" strokeWidth={0.5} />
-                        ))}
-                        {/* Open Rate Path */}
-                        <path d={openPath} className="stroke-purple-600" fill="none" strokeWidth={2} strokeLinecap="round" />
-                        {/* Click Rate Path */}
-                        <path d={clickPath} className="stroke-indigo-500" fill="none" strokeWidth={2} strokeLinecap="round" />
-                        {/* End dots */}
-                        {data.length > 1 && (
-                            <>
-                                <circle cx={x(0)} cy={y(data[0].openRate)} r={3} className="fill-purple-600" />
-                                <circle cx={x(0)} cy={y(data[0].clickRate)} r={3} className="fill-indigo-500" />
-                                <circle cx={x(data.length - 1)} cy={y(data[data.length - 1].openRate)} r={3} className="fill-purple-600" />
-                                <circle cx={x(data.length - 1)} cy={y(data[data.length - 1].clickRate)} r={3} className="fill-indigo-500" />
-                            </>
-                        )}
-                    </svg>
+                <div className="flex flex-col lg:flex-row lg:items-center gap-5">
+                    <div className="flex flex-col gap-2">
+                        <svg width={w} height={h} className="flex-shrink-0">
+                            <rect x={0} y={0} width={w} height={h} rx={6} className="fill-gray-50 dark:fill-gray-800" />
+                            {[0.25, 0.5, 0.75].map(g => (
+                                <line key={g} x1={pad} x2={w - pad} y1={pad + (1 - g) * (h - pad * 2)} y2={pad + (1 - g) * (h - pad * 2)} className="stroke-gray-200 dark:stroke-gray-700" strokeWidth={0.5} />
+                            ))}
+                            <path d={openPath} className="stroke-purple-600" fill="none" strokeWidth={2.2} strokeLinecap="round" />
+                            <path d={clickPath} className="stroke-indigo-500" fill="none" strokeWidth={2.2} strokeLinecap="round" />
+                            {data.length > 1 && (
+                                <>
+                                    <circle cx={x(0)} cy={y(data[0].openRate)} r={3} className="fill-purple-600" />
+                                    <circle cx={x(0)} cy={y(data[0].clickRate)} r={3} className="fill-indigo-500" />
+                                    <circle cx={x(data.length - 1)} cy={y(data[data.length - 1].openRate)} r={3} className="fill-purple-600" />
+                                    <circle cx={x(data.length - 1)} cy={y(data[data.length - 1].clickRate)} r={3} className="fill-indigo-500" />
+                                </>
+                            )}
+                        </svg>
+                        <div className="flex items-center gap-4 pl-1">
+                            <div className="flex items-center gap-1 text-[11px] text-gray-600 dark:text-gray-300"><span className="inline-block w-2 h-2 rounded-full bg-purple-600" />Open Rate</div>
+                            <div className="flex items-center gap-1 text-[11px] text-gray-600 dark:text-gray-300"><span className="inline-block w-2 h-2 rounded-full bg-indigo-500" />Click Rate</div>
+                        </div>
+                    </div>
                     {metrics && (
-                        <div className="flex-1 grid grid-cols-2 gap-3 text-xs">
-                            <div>
-                                <p className="text-gray-500 dark:text-gray-400 mb-0.5">Open Rate Baseline</p>
-                                <p className="font-medium text-gray-900 dark:text-gray-100">{fmtPct(metrics.earlyOpen)}</p>
-                                <p className="text-gray-500 dark:text-gray-400 mt-2 mb-0.5">Latest Avg</p>
-                                <p className="font-medium text-gray-900 dark:text-gray-100">{fmtPct(metrics.lateOpen)}</p>
+                        <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                            {/* Open Baseline */}
+                            <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/40">
+                                <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-0.5">Open Baseline</p>
+                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmtPct(metrics.earlyOpen)}</p>
                             </div>
-                            <div>
-                                <p className="text-gray-500 dark:text-gray-400 mb-0.5">Click Rate Baseline</p>
-                                <p className="font-medium text-gray-900 dark:text-gray-100">{fmtPct(metrics.earlyClick)}</p>
-                                <p className="text-gray-500 dark:text-gray-400 mt-2 mb-0.5">Latest Avg</p>
-                                <p className="font-medium text-gray-900 dark:text-gray-100">{fmtPct(metrics.lateClick)}</p>
+                            {/* Open Latest & Delta */}
+                            <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/40">
+                                <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-0.5">Open Latest</p>
+                                <div className="flex items-center gap-2">
+                                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmtPct(metrics.lateOpen)}</p>
+                                    <span className={`inline-flex items-center gap-0.5 text-[11px] font-medium px-1.5 py-0.5 rounded ${metrics.openDeltaPct >= 0 ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'}`}>
+                                        {metrics.openDeltaPct >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                                        {metrics.openDeltaPct.toFixed(1)}%
+                                    </span>
+                                </div>
                             </div>
-                            <div className="col-span-2 mt-2 flex items-center gap-4">
-                                <div className="flex items-center gap-1.5 text-xs">
-                                    <span className="inline-block w-2 h-2 rounded-full bg-purple-600" />
-                                    <span className="text-gray-600 dark:text-gray-300">Open Δ {metrics.openDeltaPct.toFixed(1)}%</span>
+                            {/* Click Baseline */}
+                            <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/40">
+                                <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-0.5">Click Baseline</p>
+                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmtPct(metrics.earlyClick)}</p>
+                            </div>
+                            {/* Click Latest & Delta */}
+                            <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/40">
+                                <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-0.5">Click Latest</p>
+                                <div className="flex items-center gap-2">
+                                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{fmtPct(metrics.lateClick)}</p>
+                                    {(() => {
+                                        // Guard against tiny baselines making delta misleading
+                                        const displayDelta = metrics.earlyClick < 0.1 ? null : metrics.clickDeltaPct;
+                                        return displayDelta === null ? (
+                                            <span className="text-[10px] text-gray-400">n/a</span>
+                                        ) : (
+                                            <span className={`inline-flex items-center gap-0.5 text-[11px] font-medium px-1.5 py-0.5 rounded ${displayDelta >= 0 ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'}`}>
+                                                {displayDelta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                                                {displayDelta.toFixed(1)}%
+                                            </span>
+                                        );
+                                    })()}
                                 </div>
-                                <div className="flex items-center gap-1.5 text-xs">
-                                    <span className="inline-block w-2 h-2 rounded-full bg-indigo-500" />
-                                    <span className="text-gray-600 dark:text-gray-300">Click Δ {metrics.clickDeltaPct.toFixed(1)}%</span>
-                                </div>
-                                <div className="text-[10px] text-gray-500 dark:text-gray-400 ml-auto">N={metrics.windowSize}d windows</div>
+                            </div>
+                            <div className="col-span-full flex items-center justify-between pt-1">
+                                <span className="text-[10px] text-gray-500 dark:text-gray-400">Baseline vs latest averages | Window N={metrics.windowSize} days</span>
+                                <span className="text-[10px] text-gray-400 dark:text-gray-500">Higher is better</span>
                             </div>
                         </div>
                     )}
