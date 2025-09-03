@@ -250,7 +250,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-3 mb-2">
                         <Users className="w-5 h-5 text-purple-600" />
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Subscribers</p>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Active Audience</p>
                     </div>
                     <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{audienceInsights.totalSubscribers.toLocaleString()}</p>
                 </div>
@@ -284,8 +284,8 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             </div>
 
             <div className="mb-6">
-                {/* Subscriber Growth module inserted here */}
-                {React.createElement(require('./SubscriberGrowth').default, { dateRange, granularity, customFrom, customTo })}
+                {/* Audience Growth module */}
+                {React.createElement(require('./AudienceGrowth').default, { dateRange, granularity, customFrom, customTo })}
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
