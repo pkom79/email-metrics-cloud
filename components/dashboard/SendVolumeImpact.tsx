@@ -4,7 +4,7 @@ import { Activity, Info } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
 
-interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; }
+interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; compareMode?: 'prev-period' | 'prev-year'; }
 
 type MetricKey = 'totalRevenue' | 'revenuePerEmail' | 'unsubsPer1k' | 'spamPer1k' | 'bouncesPer1k';
 type SourceScope = 'all' | 'campaigns' | 'flows';
@@ -55,7 +55,7 @@ const fmtNum = (v: number, d = 2) => Number.isFinite(v) ? v.toFixed(d) : '—';
 
 // ChartContainer renders dual-axis SVG + tooltip + baseline band
 interface ChartSeriesPoint { x: number; value: number | null; emails?: number; label: string; faded?: boolean; }
-interface ChartContainerProps { points: ChartSeriesPoint[]; metric: MetricKey; emailsMax: number; metricMax: number; formatValue: (v: number | null) => string; }
+interface ChartContainerProps { points: ChartSeriesPoint[]; metric: MetricKey; emailsMax: number; metricMax: number; formatValue: (v: number | null) => string; compareSeries?: (number | null)[]; }
 
 // Simple Catmull-Rom spline to Bezier for smoother line
 function catmullRom2bezier(points: { x: number, y: number }[]) {
@@ -76,7 +76,7 @@ function catmullRom2bezier(points: { x: number, y: number }[]) {
     return d.join(' ');
 }
 
-const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsMax, metricMax, formatValue }) => {
+const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsMax, metricMax, formatValue, compareSeries }) => {
     // Match FlowStepAnalysis dimensions (graph height 160, drawing area 120 baseline)
     const VIEW_W = 900; const VIEW_H = 160; const GRAPH_H = 120; // baseline at y=120
     const PADDING_LEFT = 50; // space for y ticks
@@ -96,7 +96,8 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
     const metricPath = catmullRom2bezier(metricPts);
     const emailsLine = catmullRom2bezier(emailsPts);
     const emailsArea = emailsPts.length ? `${emailsLine} L ${emailsPts[emailsPts.length - 1].x} ${GRAPH_H} L ${emailsPts[0].x} ${GRAPH_H} Z` : '';
-    const metricArea = metricPts.length ? `${metricPath} L ${metricPts[metricPts.length - 1].x} ${GRAPH_H} L ${metricPts[0].x} ${GRAPH_H} Z` : '';
+    // Removed metric area shading (only show volume shading)
+    const metricArea = '';
 
     // X ticks (max 6)
     const xTicks = useMemo(() => {
@@ -157,21 +158,17 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
                 ))}
                 {/* Emails area */}
                 {emailsArea && <path d={emailsArea} fill="url(#svi-emails)" stroke="none" />}
-                {/* Metric area */}
-                {metricArea && <path d={metricArea} fill="url(#svi-metric)" stroke="none" />}
                 {/* Metric line */}
                 {metricPath && <path d={metricPath} fill="none" stroke="#8b5cf6" strokeWidth={2} />}
-                {/* Points + hover zones */}
-                {points.map((p, i) => {
-                    if (p.value == null) return null;
-                    const x = xScale(i); const y = yMetric(p.value);
-                    return (
-                        <g key={i}>
-                            <circle cx={x} cy={y} r={4} fill="#fff" stroke="#8b5cf6" strokeWidth={1.5} />
-                            <circle cx={x} cy={y} r={12} fill="transparent" onMouseEnter={() => setHover({ idx: i, x, y })} onMouseLeave={() => setHover(null)} />
-                        </g>
-                    );
-                })}
+                {/* Compare ghost line */}
+                {compareSeries && compareSeries.length === points.length && compareSeries.filter(v => v != null).length > 1 && (() => {
+                    const ghostPts = points.map((p, i) => compareSeries[i] == null ? null : { x: (() => { if (points.length <= 1) return 0; const VIEW_W = 900; const PADDING_LEFT = 50; const PADDING_RIGHT = 20; const innerW = VIEW_W - PADDING_LEFT - PADDING_RIGHT; return PADDING_LEFT + (i / (points.length - 1)) * innerW; })(), y: (() => { const v = compareSeries[i] as number; if (metricMax === 0) return 120; return 120 - (v / metricMax) * (120 - 10); })() }).filter(Boolean) as { x: number, y: number }[];
+                    if (ghostPts.length < 2) return null;
+                    const d = catmullRom2bezier(ghostPts);
+                    return <path d={d} fill="none" stroke="#6366f1" strokeWidth={1.5} strokeDasharray="4 4" strokeOpacity={0.4} />;
+                })()}
+                {/* Invisible hover zones (no white dots) */}
+                {points.map((p, i) => { if (p.value == null) return null; const x = xScale(i); const y = yMetric(p.value); const cellW = innerW / Math.max(1, (points.length - 1)); return <rect key={i} x={x - cellW / 2} y={0} width={cellW} height={GRAPH_H + 30} fill="transparent" onMouseEnter={() => setHover({ idx: i, x, y })} onMouseLeave={() => setHover(null)} />; })}
             </svg>
             {active && active.value != null && hover && (
                 <div
@@ -192,7 +189,7 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
     );
 };
 
-export default function SendVolumeImpact({ dateRange, granularity, customFrom, customTo }: Props) {
+export default function SendVolumeImpact({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period' }: Props) {
     const dm = DataManager.getInstance();
     const campaigns = dm.getCampaigns();
     const flows = dm.getFlowEmails();
@@ -274,11 +271,37 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         }
     }), [baseSeries, metric]);
 
-    // Lag (applies only to revenue metrics); shift forward (positive lag means treat revenues as occurring lag days later -> so shift values right)
-    const laggedMetricSeries = metricSeries; // lag removed
+    // Lag removed (direct series)
+    const laggedMetricSeries = metricSeries;
 
-    // Compare series (previous period same length, aligned by index) simplistic implementation
-    const compareSeries: (number | null)[] = []; // removed
+    // Compare series (ghost) – previous period or previous year
+    const compareSeries = useMemo(() => {
+        if (dateRange === 'all' || !range || !baseSeries.length) return [] as (number | null)[];
+        const { startDate, endDate } = range as any;
+        const spanMs = endDate.getTime() - startDate.getTime();
+        let prevStart = new Date(startDate); let prevEnd = new Date(endDate);
+        if (compareMode === 'prev-year') { prevStart.setFullYear(prevStart.getFullYear() - 1); prevEnd.setFullYear(prevEnd.getFullYear() - 1); }
+        else { prevEnd = new Date(startDate.getTime() - 1); prevStart = new Date(prevEnd.getTime() - spanMs); }
+        const iso = (d: Date) => d.toISOString().slice(0, 10);
+        const rev = dm.getMetricTimeSeries(subset.campaigns, subset.flows, 'revenue', 'custom', granularity, iso(prevStart), iso(prevEnd));
+        const emails = dm.getMetricTimeSeries(subset.campaigns, subset.flows, 'emailsSent', 'custom', granularity, iso(prevStart), iso(prevEnd));
+        const unsub = dm.getMetricTimeSeries(subset.campaigns, subset.flows, 'unsubscribeRate', 'custom', granularity, iso(prevStart), iso(prevEnd));
+        const spam = dm.getMetricTimeSeries(subset.campaigns, subset.flows, 'spamRate', 'custom', granularity, iso(prevStart), iso(prevEnd));
+        const bounce = dm.getMetricTimeSeries(subset.campaigns, subset.flows, 'bounceRate', 'custom', granularity, iso(prevStart), iso(prevEnd));
+        const series = rev.map((r, i) => {
+            const em = emails[i]?.value || 0; switch (metric) {
+                case 'totalRevenue': return r.value;
+                case 'revenuePerEmail': return em > 0 ? r.value / em : null;
+                case 'unsubsPer1k': return em > 0 ? (unsub[i]?.value || 0) * 10 : null;
+                case 'spamPer1k': return em > 0 ? (spam[i]?.value || 0) * 10 : null;
+                case 'bouncesPer1k': return em > 0 ? (bounce[i]?.value || 0) * 10 : null;
+            }
+        });
+        if (series.length === baseSeries.length) return series;
+        if (series.length > baseSeries.length) return series.slice(series.length - baseSeries.length);
+        if (series.length < baseSeries.length) return [...new Array(baseSeries.length - series.length).fill(null), ...series];
+        return series;
+    }, [metric, compareMode, dateRange, range, baseSeries, dm, subset, granularity]);
 
     // Baseline expectation: simple mean + stdev of earlier buckets (excluding last 2 buckets) grouped by same day-of-week for daily, otherwise average of all prior periods
     const baseline = { expected: [], low: [], high: [] }; // removed
@@ -302,18 +325,68 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     // Micro analytics side strip
     const micro = useMemo(() => {
         if (!points.length) return null;
-        const valid = points.filter(p => p.value != null && !p.faded);
         const avgEmails = baseSeries.length ? Math.round(baseSeries.reduce((s, b) => s + b.emails, 0) / baseSeries.length) : 0;
-        const rpmE = (() => { // revenue per 1000 emails
-            const totalRev = baseSeries.reduce((s, b) => s + b.revenue, 0);
-            const totalEmails = baseSeries.reduce((s, b) => s + b.emails, 0);
-            return totalEmails > 0 ? (totalRev / totalEmails) * 1000 : 0;
-        })();
-        // median unsub per 1k (compute each bucket unsub per 1k)
+        const totalRev = baseSeries.reduce((s, b) => s + b.revenue, 0);
+        const totalEmails = baseSeries.reduce((s, b) => s + b.emails, 0);
+        const rpmE = totalEmails > 0 ? (totalRev / totalEmails) * 1000 : 0; // revenue per 1k emails
         const unsubPer1kValues = baseSeries.filter(b => b.emails > 0).map(b => (b.unsubs / b.emails) * 1000).sort((a, b) => a - b);
         const medianUnsub = unsubPer1kValues.length ? (unsubPer1kValues[Math.floor(unsubPer1kValues.length / 2)]) : 0;
-        return { avgEmails, rpmE, medianUnsub };
+        return { avgEmails, rpmE, medianUnsub, totalRev, totalEmails };
     }, [points, baseSeries]);
+
+    // Headroom modeling (weekly granularity recommended). We approximate diminishing returns by fitting a simple efficiency curve on recent buckets.
+    const headroom = useMemo(() => {
+        if (!micro || baseSeries.length < 4) return null;
+        // Use revenuePerEmail efficiency for modeling even if viewing another metric (only meaningful for revenue scaling)
+        const effPoints = baseSeries.filter(b => b.emails > 0).map(b => ({ emails: b.emails, rpe: b.revenue / b.emails }));
+        if (effPoints.length < 4) return null;
+        // TODO: Replace with nonlinear fit (e.g., log or saturating curve) for more stable headroom under noisy data.
+        // Sort by emails
+        effPoints.sort((a, b) => a.emails - b.emails);
+        // Smooth via simple moving average (window 3) to reduce noise
+        const smooth = effPoints.map((p, i, arr) => {
+            const win = arr.slice(Math.max(0, i - 1), Math.min(arr.length, i + 2));
+            return { emails: p.emails, rpe: win.reduce((s, w) => s + w.rpe, 0) / win.length };
+        });
+        // Find peak rpe (max efficiency)
+        const peak = smooth.reduce((best, p) => p.rpe > best.rpe ? p : best, smooth[0]);
+        const currentEmails = effPoints[effPoints.length - 1].emails;
+        const currentRPE = effPoints[effPoints.length - 1].rpe;
+        // Estimate marginal revenue per 1k at end by local slope of last two points
+        const lastTwo = smooth.slice(-2);
+        let marginalPer1k = 0;
+        if (lastTwo.length === 2) {
+            const dy = lastTwo[1].rpe - lastTwo[0].rpe;
+            const dx = (lastTwo[1].emails - lastTwo[0].emails) / 1000;
+            if (dx !== 0) marginalPer1k = dy / dx; // incremental revenue per additional email (per email), convert to per 1k below
+        }
+        const marginalRevenuePer1k = marginalPer1k * 1000; // approximate additional revenue for next 1k emails
+        // Headroom definition: additional weekly emails until rpe drops below 95% of peak (soft optimal)
+        const targetEff = peak.rpe * 0.95;
+        // Fit monotonic decline assumption: after peak, rpe declines linearly to last point value
+        let additionalEmails = 0;
+        if (currentEmails < peak.emails) {
+            // Still before peak: headroom is to peak
+            additionalEmails = peak.emails - currentEmails;
+        } else if (currentRPE >= targetEff) {
+            // At or just past peak but efficiency within band; small headroom until crossing 95%
+            const post = smooth.filter(p => p.emails >= peak.emails);
+            const last = post[post.length - 1];
+            if (post.length >= 2) {
+                // approximate slope after peak
+                const p1 = post[0];
+                const p2 = post[post.length - 1];
+                const slope = (p2.rpe - p1.rpe) / (p2.emails - p1.emails || 1);
+                if (slope < 0) {
+                    const emailsTo95 = (targetEff - currentRPE) / slope; // slope negative
+                    if (emailsTo95 > 0) additionalEmails = emailsTo95;
+                }
+            }
+        } else {
+            additionalEmails = 0;
+        }
+        return { peakRPE: peak.rpe, peakEmails: peak.emails, currentEmails, currentRPE, headroomEmails: Math.max(0, Math.round(additionalEmails)), marginalRevenuePer1k };
+    }, [micro, baseSeries]);
 
     if (!range) return null;
     const negativeMetric = NEGATIVE_METRICS.includes(metric); // currently unused but may be reintroduced
@@ -365,16 +438,50 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                 <div className="flex items-start justify-between mb-4">
                     <div />
                     <div className="text-right">
-                        <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium mb-0.5">Avg {METRIC_OPTIONS.find(m => m.value === metric)?.label}</div>
+                        <div className="flex items-center justify-end gap-2 mb-0.5">
+                            <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium">Avg {METRIC_OPTIONS.find(m => m.value === metric)?.label}</div>
+                            {(() => { if (!avgValue || !compareSeries.length || compareSeries.length !== points.length) return null; const compVals = compareSeries.filter(v => v != null) as number[]; if (compVals.length < 2) return null; const compAvg = compVals.reduce((s, v) => s + v, 0) / compVals.length; if (!compAvg) return null; const delta = avgValue - compAvg; const pct = compAvg ? (delta / compAvg) * 100 : 0; const up = delta >= 0; return <span className={`rounded px-2 py-0.5 text-[10px] font-medium ${up ? 'bg-emerald-500/15 text-emerald-500' : 'bg-rose-500/15 text-rose-500'}`}>{up ? '+' : ''}{delta.toFixed(2)} ({pct.toFixed(1)}%)</span>; })()}
+                            <div className="relative group">
+                                <span className="cursor-help text-gray-400 text-xs">ⓘ</span>
+                                <div className="absolute right-0 top-full z-30 mt-1 w-60 rounded-md border border-gray-700 bg-gray-900 p-2 text-[11px] leading-snug opacity-0 shadow-lg transition-opacity group-hover:opacity-100">Delta vs selected compare period (ghost dashed line). Positive = improvement.</div>
+                            </div>
+                        </div>
                         <div className="text-3xl font-bold text-gray-900 tabular-nums">{formatValue(avgValue)}</div>
                     </div>
                 </div>
-                <ChartContainer points={points} metric={metric} emailsMax={emailsMax} metricMax={metricMax} formatValue={formatValue} />
+                <ChartContainer points={points} metric={metric} emailsMax={emailsMax} metricMax={metricMax} formatValue={formatValue} compareSeries={compareSeries} />
                 {!baseSeries.length && (<div className="mt-4 text-xs text-gray-500">No sends in selected range.</div>)}
-                <div className="mt-6 grid grid-cols-3 gap-4 text-xs">
-                    <div className="border border-gray-200 rounded-lg p-3"><div className="text-gray-500 mb-1 font-medium">Avg Sends</div><div className="text-gray-900 font-semibold tabular-nums">{micro?.avgEmails?.toLocaleString() || '—'}</div></div>
-                    <div className="border border-gray-200 rounded-lg p-3"><div className="text-gray-500 mb-1 font-medium">Avg RPME</div><div className="text-gray-900 font-semibold tabular-nums">{micro ? fmtCurrency(micro.rpmE) : '—'}</div></div>
-                    <div className="border border-gray-200 rounded-lg p-3"><div className="text-gray-500 mb-1 font-medium">Median Unsub/1k</div><div className="text-gray-900 font-semibold tabular-nums">{micro ? (micro.medianUnsub >= 1 ? micro.medianUnsub.toFixed(2) : micro.medianUnsub.toFixed(3)) : '—'}</div></div>
+                <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                    <div className="relative border border-gray-200 rounded-xl p-4 bg-white">
+                        <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Avg Sends
+                            <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-52 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Mean emails per bucket after trimming partial periods.</span></span>
+                        </div>
+                        <div className="text-gray-900 font-semibold text-lg tabular-nums">{micro?.avgEmails?.toLocaleString() || '—'}</div>
+                    </div>
+                    <div className="relative border border-gray-200 rounded-xl p-4 bg-white">
+                        <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Revenue / 1k
+                            <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-56 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Total revenue divided by total emails, scaled per 1,000 sends.</span></span>
+                        </div>
+                        <div className="text-gray-900 font-semibold text-lg tabular-nums">{micro ? fmtCurrency(micro.rpmE) : '—'}</div>
+                    </div>
+                    <div className="relative border border-gray-200 rounded-xl p-4 bg-white">
+                        <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Median Unsub/1k
+                            <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-56 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Median bucket unsubscribe count normalized per 1,000 emails.</span></span>
+                        </div>
+                        <div className="text-gray-900 font-semibold text-lg tabular-nums">{micro ? (micro.medianUnsub >= 1 ? micro.medianUnsub.toFixed(2) : micro.medianUnsub.toFixed(3)) : '—'}</div>
+                    </div>
+                    <div className="relative border border-gray-200 rounded-xl p-4 bg-white">
+                        <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Headroom
+                            <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-60 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Approx additional emails before efficiency (Rev/Email) falls below 95% of peak. Zero means scaling now risks erosion.</span></span>
+                        </div>
+                        <div className="text-gray-900 font-semibold text-lg tabular-nums">{headroom ? headroom.headroomEmails.toLocaleString() : '—'}</div>
+                    </div>
+                    <div className="relative border border-gray-200 rounded-xl p-4 bg-white col-span-2 md:col-span-2">
+                        <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Marginal Rev / 1k
+                            <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-64 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Estimated incremental revenue if you send 1,000 more emails at current efficiency slope.</span></span>
+                        </div>
+                        <div className={`text-lg font-semibold tabular-nums ${headroom && headroom.marginalRevenuePer1k < 0 ? 'text-rose-600' : 'text-gray-900'}`}>{headroom ? fmtCurrency(headroom.marginalRevenuePer1k) : '—'}</div>
+                    </div>
                 </div>
             </div>
         </div>
