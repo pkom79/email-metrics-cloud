@@ -107,6 +107,11 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
         return { mean, std, cv, reliabilityRaw, reliabilityDisplay, volatilityPct, volatilityDisplay, bucket, zeroCampaignWeeks, meanCampaignShare, lostCampaignEstimate };
     }, [weeks]);
 
+    // Hooks must run before any early return to satisfy rules-of-hooks
+    const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+    const onEnter = useCallback((i: number) => setHoverIndex(i), []);
+    const onLeave = useCallback(() => setHoverIndex(null), []);
+
     if (!weeks.length) return null;
 
     // Chart geometry (adaptive – no horizontal scrollbar).
@@ -123,12 +128,10 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
     const usableHeight = h - pad - 70; // space for labels / band
     const meanY = (val: number) => (h - pad) - (val / maxRevenue) * usableHeight;
 
-    const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-    const onEnter = useCallback((i: number) => setHoverIndex(i), []);
-    const onLeave = useCallback(() => setHoverIndex(null), []);
-
     const formatCurrency = (v: number) => '$' + Math.round(v).toLocaleString('en-US');
     const formatPct1 = (v: number) => (v * 100).toFixed(1) + '%';
+
+    const fewWeeks = weeks.length > 0 && weeks.length < 10;
 
     return (
         <div className="mt-8">
@@ -151,8 +154,8 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                         </div>
                     </div>
                 </div>
-                <div className="pb-2 overflow-visible">
-                    <div className="relative" style={{ width: w }}>
+                <div className={`pb-2 overflow-visible ${fewWeeks ? 'flex justify-center' : ''}`}>
+                    <div className="relative" style={{ width: w, marginLeft: fewWeeks ? 'auto' : undefined, marginRight: fewWeeks ? 'auto' : undefined }}>
                         <svg width={w} height={h} className="block">
                             <defs>
                                 <linearGradient id="campGrad" x1="0" x2="0" y1="0" y2="1">
@@ -228,14 +231,14 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                     </div>
                 </div>
                 {stats && (
-                    <div className="mt-4 grid grid-cols-2 md:grid-cols-6 gap-3 text-xs">
-                        <div title="Average weekly combined (campaign + flow) revenue" className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/40"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Avg Weekly Revenue</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(stats.mean)}</p></div>
-                        <div title="Standard deviation of weekly totals" className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/40"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Std Dev</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(stats.std)}</p></div>
-                        <div title="Reliability = 100 - Volatility" className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/40"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Reliability</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{stats.reliabilityDisplay}%</p></div>
-                        <div title="Volatility = (Std Dev / Mean) * 100" className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/40"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Volatility</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{stats.volatilityDisplay}%</p></div>
-                        <div title="Weeks with no campaign sends (flows ignored)" className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/40"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Zero Campaign Weeks</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{stats.zeroCampaignWeeks}</p></div>
+                    <div className={`mt-6 ${fewWeeks ? 'flex flex-wrap justify-center gap-4' : 'grid grid-cols-2 md:grid-cols-6 gap-4'} text-xs`}>
+                        <StatTile label="Avg Weekly Revenue" tooltip="Average weekly combined (campaign + flow) revenue" value={formatCurrency(stats.mean)} />
+                        <StatTile label="Std Dev" tooltip="Standard deviation of weekly totals" value={formatCurrency(stats.std)} />
+                        <StatTile label="Reliability" tooltip="Reliability = 100 - Volatility" value={`${stats.reliabilityDisplay}%`} />
+                        <StatTile label="Volatility" tooltip="Volatility = (Std Dev / Mean) * 100" value={`${stats.volatilityDisplay}%`} />
+                        <StatTile label="Zero Campaign Weeks" tooltip="Weeks with no campaign sends (flows ignored)" value={String(stats.zeroCampaignWeeks)} />
                         {stats.lostCampaignEstimate > 0 && (
-                            <div title="Estimated lost campaign revenue in zero-campaign weeks (robust median share * flow revenue)" className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/40"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Est. Lost Camp Rev</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(stats.lostCampaignEstimate)}</p></div>
+                            <StatTile label="Est. Lost Camp Rev" tooltip="Estimated lost campaign revenue in zero-campaign weeks (robust median share * flow revenue)" value={formatCurrency(stats.lostCampaignEstimate)} />
                         )}
                     </div>
                 )}
@@ -271,3 +274,16 @@ function Interpretation({ trimmed }: { trimmed: { start: boolean; end: boolean }
         </div>
     );
 }
+
+interface StatTileProps { label: string; value: string; tooltip: string; }
+const StatTile: React.FC<StatTileProps> = ({ label, value, tooltip }) => (
+    <div className="group relative">
+        <div className="min-w-[170px] rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 p-4 flex flex-col justify-between h-full shadow-sm">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">{label}</p>
+            <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{value}</p>
+        </div>
+        <div className="absolute left-1/2 top-full mt-2 -translate-x-1/2 z-40 hidden group-hover:block w-56 text-[11px] leading-snug bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-2 text-gray-600 dark:text-gray-300">
+            {tooltip}
+        </div>
+    </div>
+);
