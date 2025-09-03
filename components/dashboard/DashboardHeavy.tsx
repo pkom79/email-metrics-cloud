@@ -574,7 +574,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         </div>
                         {/* Weekly Revenue Reliability (moved up) */}
                         <RevenueReliability campaigns={filteredCampaigns} flows={filteredFlowEmails} dateRange={dateRange} />
-                        <SendVolumeImpact dateRange={dateRange} customFrom={customFrom} customTo={customTo} />
+                        <SendVolumeImpact dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} />
                     </section>
                 )}
                 {campaignMetrics && (

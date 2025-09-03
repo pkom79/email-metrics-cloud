@@ -4,7 +4,7 @@ import { Activity } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
 
-interface Props { dateRange: string; customFrom?: string; customTo?: string; }
+interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; }
 
 type MetricKey = 'totalRevenue' | 'revenuePerEmail' | 'unsubsPer1k' | 'spamPer1k' | 'bouncesPer1k';
 type SourceScope = 'all' | 'campaigns' | 'flows';
@@ -125,7 +125,7 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
     );
 };
 
-export default function SendVolumeImpact({ dateRange, customFrom, customTo }: Props) {
+export default function SendVolumeImpact({ dateRange, granularity, customFrom, customTo }: Props) {
     const dm = DataManager.getInstance();
     const campaigns = dm.getCampaigns();
     const flows = dm.getFlowEmails();
@@ -151,8 +151,7 @@ export default function SendVolumeImpact({ dateRange, customFrom, customTo }: Pr
     }, [dateRange, customFrom, customTo, campaigns, flows, dm]);
 
     // Choose granularity based on span
-    // Granularity assumed external (filters). Use DataManager native default (daily) fallback.
-    const granularity: 'daily' | 'weekly' | 'monthly' = 'daily';
+    // Use externally provided granularity (already determined in dashboard filters)
 
     const subset = useMemo(() => {
         if (scope === 'campaigns') return { campaigns, flows: [] as ProcessedFlowEmail[] };
@@ -168,7 +167,7 @@ export default function SendVolumeImpact({ dateRange, customFrom, customTo }: Pr
         const unsubRateSeries = dm.getMetricTimeSeries(subset.campaigns, subset.flows, 'unsubscribeRate', dateRange, granularity, customFrom, customTo); // percent
         const spamRateSeries = dm.getMetricTimeSeries(subset.campaigns, subset.flows, 'spamRate', dateRange, granularity, customFrom, customTo); // percent
         const bounceRateSeries = dm.getMetricTimeSeries(subset.campaigns, subset.flows, 'bounceRate', dateRange, granularity, customFrom, customTo); // percent
-        const buckets: Bucket[] = revenueSeries.map((r, i) => {
+        let buckets: Bucket[] = revenueSeries.map((r, i) => {
             const emails = emailsSeries[i]?.value || 0;
             const unsubsPer1k = (unsubRateSeries[i]?.value || 0) * 10 * (emails > 0 ? 1 : 0); // percent -> per1k
             const spamPer1k = (spamRateSeries[i]?.value || 0) * 10 * (emails > 0 ? 1 : 0);
@@ -183,6 +182,17 @@ export default function SendVolumeImpact({ dateRange, customFrom, customTo }: Pr
                 bounces: bouncePer1k * emails / 1000
             };
         });
+        // Trim incomplete boundary buckets for weekly/monthly so partial periods don't appear as drops.
+        if ((granularity === 'weekly' || granularity === 'monthly') && buckets.length > 2) {
+            // We only have labels, so estimate bucket length via median diff of internal indices if DataManager included date objects.
+            // Heuristic: treat first/last bucket as incomplete if value (emails sent) is <40% of median internal buckets.
+            const internal = buckets.slice(1, -1);
+            const medianEmails = (() => { const arr = internal.map(b => b.emails).filter(n => n > 0).sort((a, b) => a - b); if (!arr.length) return 0; return arr[Math.floor(arr.length / 2)]; })();
+            if (medianEmails > 0) {
+                if (buckets[0].emails > 0 && buckets[0].emails < medianEmails * 0.4) buckets = buckets.slice(1);
+                if (buckets[buckets.length - 1].emails > 0 && buckets[buckets.length - 1].emails < medianEmails * 0.4) buckets = buckets.slice(0, buckets.length - 1);
+            }
+        }
         return buckets;
     }, [dm, subset, dateRange, granularity, customFrom, customTo, range]);
 
@@ -251,24 +261,26 @@ export default function SendVolumeImpact({ dateRange, customFrom, customTo }: Pr
 
     return (
         <div className="mt-10">
-            <div className="flex items-center gap-2 mb-4"><Activity className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 tracking-tight">Send Volume Impact</h3></div>
-            <div className="rounded-2xl bg-white border border-gray-200 p-5">
-                <div className="flex flex-wrap gap-4 items-center mb-6 text-sm">
-                    <label className="flex flex-col gap-1 text-gray-600 text-xs font-medium">
-                        <span>Metric</span>
-                        <select value={metric} onChange={e => setMetric(e.target.value as MetricKey)} className="h-9 rounded-md border border-gray-300 px-3 pr-8 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500 text-sm">
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2"><Activity className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 tracking-tight">Send Volume Impact</h3></div>
+                <div className="flex gap-4 text-sm">
+                    <div className="relative">
+                        <select value={metric} onChange={e => setMetric(e.target.value as MetricKey)} className="appearance-none px-3 h-9 pr-8 rounded-lg border bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                             {METRIC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
-                    </label>
-                    <label className="flex flex-col gap-1 text-gray-600 text-xs font-medium">
-                        <span>Source</span>
-                        <select value={scope} onChange={e => setScope(e.target.value as SourceScope)} className="h-9 rounded-md border border-gray-300 px-3 pr-8 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500 text-sm">
+                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▼</span>
+                    </div>
+                    <div className="relative">
+                        <select value={scope} onChange={e => setScope(e.target.value as SourceScope)} className="appearance-none px-3 h-9 pr-8 rounded-lg border bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                             <option value="all">All Emails</option>
                             <option value="campaigns">Campaigns</option>
                             <option value="flows">Flows</option>
                         </select>
-                    </label>
+                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▼</span>
+                    </div>
                 </div>
+            </div>
+            <div className="rounded-2xl bg-white border border-gray-200 p-6">
                 <div className="flex flex-col md:flex-row md:items-start gap-10">
                     <div className="flex-1">
                         <div className="mb-4">
