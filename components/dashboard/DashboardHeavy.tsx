@@ -543,8 +543,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <div className="flex items-center gap-2 mb-3"><Mail className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Email Performance Overview</h2></div>
                         {/* Revenue Split Bar (Campaign vs Flow) */}
                         <RevenueSplitBar campaigns={filteredCampaigns} flows={filteredFlowEmails} />
-                        {/* Engagement Decay Curve */}
-                        <EngagementDecayCurve campaigns={filteredCampaigns} flows={filteredFlowEmails} dateRange={dateRange} />
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                             {/* Row 1 */}
                             <MetricCard title="Total Revenue" value={formatCurrency(overviewMetrics.totalRevenue.value)} change={overviewMetrics.totalRevenue.change} isPositive={overviewMetrics.totalRevenue.isPositive} previousValue={overviewMetrics.totalRevenue.previousValue} previousPeriod={overviewMetrics.totalRevenue.previousPeriod} dateRange={dateRange} metricKey="revenue" sparklineData={overviewSeries.totalRevenue} compareMode={compareMode} />
@@ -617,6 +615,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 </div>
                             </div>
                         ))}{(() => { const sorted = getSortedCampaigns(); return displayedCampaigns < sorted.length && (<div className="p-4 border-t border-gray-200 dark:border-gray-800 text-center bg-gray-50 dark:bg-gray-900/50"><button onClick={() => setDisplayedCampaigns(n => n + 5)} className="px-4 py-2 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white transition-colors">Load More ({Math.min(5, sorted.length - displayedCampaigns)} more)</button></div>); })()}</div>
+                        {/* Engagement Decay Curve (Campaigns only) */}
+                        <EngagementDecayCurve campaigns={filteredCampaigns} dateRange={dateRange} />
                     </section>
                 )}
                 {flowMetrics && (
