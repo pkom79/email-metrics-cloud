@@ -53,30 +53,23 @@ function getHistoricalWeeks(metricKey: string) {
 export function computeBenchmark(metricKey: string | undefined, currentRangeStart?: Date, currentRangeEnd?: Date): BenchmarkComputation {
   if (!metricKey) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true, hiddenReason: 'No metric key' };
   const weeks = getHistoricalWeeks(metricKey);
-  if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
-    console.debug('[Bench] weeks total', metricKey, weeks.length, { first: weeks[0]?.weekStart, last: weeks[weeks.length-1]?.weekStart, currentRangeStart, currentRangeEnd });
-  }
   if (!weeks.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true, hiddenReason: 'No weekly data' };
 
-  // Define anchor: if currentRangeStart supplied, we only look at weeks strictly before it.
-  let anchor = currentRangeStart ? new Date(currentRangeStart) : new Date();
-  anchor.setHours(0,0,0,0);
+  // Normalize range boundaries
+  let start = currentRangeStart || currentRangeEnd || null;
+  let end = currentRangeEnd || currentRangeStart || null;
+  if (start && end && start > end) { const tmp = start; start = end; end = tmp; }
 
-  // Filter weeks strictly before anchor week start.
-  let usable = weeks.filter(w => w.weekStart < anchor);
-  if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
-    console.debug('[Bench] usable before fallback', metricKey, usable.length, 'anchor', anchor);
-  }
-  // Fallback: if none, try using range end (common when viewing 'all' and anchor == earliest week)
-  if (!usable.length && currentRangeEnd) {
-    const altAnchor = new Date(currentRangeEnd); altAnchor.setHours(0,0,0,0); altAnchor.setDate(altAnchor.getDate()+7); // include all weeks up to end
-    usable = weeks.filter(w => w.weekStart < altAnchor);
-    if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
-      console.debug('[Bench] fallback usable', metricKey, usable.length, 'altAnchor', altAnchor);
-    }
-  }
+  // Anchor baseline off end (or last week) so we always have historical context; include all weeks strictly before end+1 day
+  const baselineAnchor = end ? new Date(end) : new Date();
+  baselineAnchor.setDate(baselineAnchor.getDate() + 1); // include week whose start == end's weekStart
+  baselineAnchor.setHours(0,0,0,0);
+  let usable = weeks.filter(w => w.weekStart < baselineAnchor);
   const totalWeeksConsidered = usable.length;
-  if (!usable.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered, insufficient: true, hiddenReason: 'No historical weeks prior to range' };
+  if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
+    console.debug('[BenchV2]', metricKey, { weeks: weeks.length, usable: usable.length, baselineAnchor, start, end });
+  }
+  if (!usable.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered, insufficient: true, hiddenReason: 'No historical weeks' };
 
   // Take last up to 52 weeks, at least 8 provisional, 12 recommended, 20 full
   const windowWeeks = usable.slice(-52);
@@ -94,13 +87,14 @@ export function computeBenchmark(metricKey: string | undefined, currentRangeStar
 
   // Current value is aggregate over current viewing period (if provided) else last complete week
   let current: number | null = null;
-  if (currentRangeStart && currentRangeEnd) {
-    // Approximate: aggregate weekly values whose weekStart within [currentRangeStart, currentRangeEnd]
-    current = weeks.filter(w => w.weekStart >= currentRangeStart && w.weekStart <= currentRangeEnd).reduce((s,w)=>s+w.value,0);
+  if (start && end) {
+    const mondayOf = (d: Date) => { const n = new Date(d); n.setHours(0,0,0,0); const day = n.getDay(); const diff = n.getDate() - day + (day === 0 ? -6 : 1); n.setDate(diff); return n; };
+    const startWeek = mondayOf(start);
+    const endWeek = mondayOf(end);
+    current = weeks.filter(w => w.weekStart >= startWeek && w.weekStart <= endWeek).reduce((s,w)=>s+w.value,0);
     if (!Number.isFinite(current)) current = null;
   } else {
-    const lastComplete = usable[usable.length-1];
-    current = lastComplete?.value ?? null;
+    current = usable[usable.length-1]?.value ?? null;
   }
 
   if (baseline == null || current == null) {
