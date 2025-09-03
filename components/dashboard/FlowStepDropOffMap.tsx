@@ -69,24 +69,29 @@ export default function FlowStepDropOffMap({ dateRange, customFrom, customTo }: 
 
     const flows = useMemo(() => Object.keys(data.byFlow || {}).sort(), [data]);
     const maxSeq = useMemo(() => Math.max(0, ...flows.map(f => Math.max(...data.byFlow[f].map(r => r.sequencePosition)))), [flows, data]);
-    const cellBaseSize = maxSeq > 10 ? 'w-16 h-14' : 'w-20 h-14';
+    const cellBaseSize = maxSeq > 12 ? 'w-16 h-16' : 'w-20 h-16';
 
     if (!flows.length) return null;
 
-    // Determine delta ranges for color scaling
-    const deltaValues = data.flat.filter(c => c.sequencePosition > 1).map(c => c.deltaRevenuePerEmail);
-    const minDelta = Math.min(0, ...deltaValues, 0);
-    const maxDelta = Math.max(0, ...deltaValues, 0);
-    const scale = (v: number, isFirst: boolean) => {
-        if (isFirst) return 'bg-gray-300 dark:bg-gray-700';
-        if (v === 0) return 'bg-gray-200 dark:bg-gray-800';
+    // Dual scaling: revenue (top) and open rate (bottom)
+    const revDeltas = data.flat.filter(c => c.sequencePosition > 1).map(c => c.deltaRevenuePerEmail);
+    const minRev = Math.min(0, ...revDeltas, 0);
+    const maxRev = Math.max(0, ...revDeltas, 0);
+    const openDeltas = data.flat.filter(c => c.sequencePosition > 1).map(c => c.deltaOpenRate);
+    const minOpen = Math.min(0, ...openDeltas, 0);
+    const maxOpen = Math.max(0, ...openDeltas, 0);
+    const scaleSegment = (v: number, isFirst: boolean, min: number, max: number, pos: string[], neg: string[], neutral: string) => {
+        if (isFirst) return neutral;
+        if (v === 0) return neutral;
         if (v < 0) {
-            const pct = maxDelta === 0 ? 1 : Math.min(1, Math.abs(v) / Math.abs(minDelta || -1));
-            return pct > 0.66 ? 'bg-rose-600' : pct > 0.33 ? 'bg-rose-500' : 'bg-rose-400';
+            const pct = max === 0 ? 1 : Math.min(1, Math.abs(v) / Math.abs(min || -1));
+            return pct > 0.66 ? neg[2] : pct > 0.33 ? neg[1] : neg[0];
         }
-        const pct = maxDelta === 0 ? 1 : Math.min(1, v / (maxDelta || 1));
-        return pct > 0.66 ? 'bg-green-600' : pct > 0.33 ? 'bg-green-500' : 'bg-green-400';
+        const pct = max === 0 ? 1 : Math.min(1, v / (max || 1));
+        return pct > 0.66 ? pos[2] : pct > 0.33 ? pos[1] : pos[0];
     };
+    const revBg = (v: number, isFirst: boolean) => scaleSegment(v, isFirst, minRev, maxRev, ['bg-emerald-100', 'bg-emerald-200', 'bg-emerald-300'], ['bg-rose-100', 'bg-rose-200', 'bg-rose-300'], 'bg-gray-100 dark:bg-gray-700/40');
+    const openBg = (v: number, isFirst: boolean) => scaleSegment(v, isFirst, minOpen, maxOpen, ['bg-emerald-50', 'bg-emerald-100', 'bg-emerald-200'], ['bg-rose-50', 'bg-rose-100', 'bg-rose-200'], 'bg-gray-200 dark:bg-gray-800/40');
 
     // Identify biggest negative deltas per flow
     const biggestNeg: Record<string, number> = {};
@@ -98,8 +103,9 @@ export default function FlowStepDropOffMap({ dateRange, customFrom, customTo }: 
         }
     });
 
-    const formatCurrency = (v: number) => '$' + (v).toFixed(v >= 10 ? 2 : 3).replace(/\.0+$/, '');
+    const formatCurrency = (v: number) => '$' + v.toFixed(2);
     const formatPct = (v: number) => v.toFixed(Math.abs(v) >= 10 ? 1 : 2) + '%';
+    const formatDeltaPp = (v: number) => (v >= 0 ? '+' : '') + v.toFixed(1) + 'pp';
 
     return (
         <div className="mt-8 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5">
@@ -136,28 +142,27 @@ export default function FlowStepDropOffMap({ dateRange, customFrom, customTo }: 
                             const row = data.byFlow[flow];
                             return (
                                 <tr key={flow} className="hover:bg-gray-50 dark:hover:bg-gray-800/60">
-                                    <td className="sticky left-0 bg-white dark:bg-gray-900 px-2 py-1 font-medium text-gray-800 dark:text-gray-100 border-b border-gray-100 dark:border-gray-800 whitespace-nowrap">{flow}</td>
+                                    <td className="sticky left-0 bg-white dark:bg-gray-900 px-2 py-1 font-semibold text-gray-800 dark:text-gray-100 border-b border-gray-100 dark:border-gray-800 whitespace-nowrap {maxSeq > 14 ? 'text-[11px]' : 'text-sm'}">{flow}</td>
                                     {Array.from({ length: maxSeq }, (_, i) => i + 1).map(step => {
                                         const cell = row.find(r => r.sequencePosition === step);
                                         if (!cell) return <td key={step} className="px-1 py-1 align-top border-b border-gray-100 dark:border-gray-800" />;
                                         const isFlag = biggestNeg[flow] === step && step > 1 && cell.deltaRevenuePerEmail < 0;
                                         return (
                                             <td key={step} className="px-1 py-1 border-b border-gray-100 dark:border-gray-800 align-top">
-                                                <div className={`group relative rounded-md ${cellBaseSize} flex flex-col justify-between items-center text-center text-[10px] font-medium text-white ${scale(cell.deltaRevenuePerEmail, step === 1)} transition-colors`}>
-                                                    {isFlag && <span className="absolute top-0 right-0 text-[9px]">⚠</span>}
-                                                    <div className="flex-1 flex flex-col items-center justify-center leading-tight px-1 pt-1">
-                                                        {step === 1 ? (
-                                                            <div className="text-[9px] font-semibold tracking-tight">Base {formatCurrency(cell.revenuePerEmail)}</div>
-                                                        ) : (
-                                                            <div className={`text-[11px] font-semibold ${cell.deltaRevenuePerEmail < 0 ? 'text-white' : 'text-white'}`}>{cell.deltaRevenuePerEmail >= 0 ? '+' : ''}{formatCurrency(cell.deltaRevenuePerEmail)}</div>
+                                                <div className={`group relative rounded-md ${cellBaseSize} flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700`}>
+                                                    {isFlag && <span className="absolute top-0 right-0 text-[9px] px-0.5 pt-0.5">⚠</span>}
+                                                    <div className={`flex-1 flex items-center justify-center px-1 text-[10px] font-semibold leading-tight text-gray-900 dark:text-gray-100 ${revBg(cell.deltaRevenuePerEmail, step === 1)}`}>{step === 1 ? `Base ${formatCurrency(cell.revenuePerEmail)}` : `${cell.deltaRevenuePerEmail >= 0 ? '+' : ''}${formatCurrency(cell.deltaRevenuePerEmail)}`}</div>
+                                                    <div className="h-px bg-gray-300 dark:bg-gray-600" />
+                                                    <div className={`flex-1 flex items-center justify-center px-1 pb-0.5 text-[10px] font-medium leading-tight text-gray-900 dark:text-gray-100 ${openBg(cell.deltaOpenRate, step === 1)}`}>
+                                                        {step === 1 ? formatPct(cell.openRate) : (
+                                                            <span className="flex flex-col items-center leading-tight">
+                                                                <span>{formatPct(cell.openRate)}</span>
+                                                                <span className="text-[9px] font-normal text-gray-700 dark:text-gray-200/80">{formatDeltaPp(cell.deltaOpenRate)}</span>
+                                                            </span>
                                                         )}
                                                     </div>
-                                                    <div className="pb-1 text-[9px] opacity-95 tracking-tight">
-                                                        {formatPct(cell.openRate)}
-                                                    </div>
-                                                    <div className="absolute inset-0 rounded-md ring-1 ring-inset ring-black/5 pointer-events-none" />
-                                                    <div className="absolute left-1/2 top-full mt-1 -translate-x-1/2 z-50 hidden group-hover:block w-60 text-[11px] text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-2">
-                                                        <p className="font-semibold mb-1 text-gray-800 dark:text-gray-100">{flow} • Step {step}</p>
+                                                    <div className="absolute left-1/2 bottom-full mb-1 -translate-x-1/2 z-50 hidden group-hover:block w-60 text-[11px] text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-2">
+                                                        <p className="font-semibold mb-1 text-gray-900 dark:text-gray-100">{flow} • Step {step}</p>
                                                         <ul className="space-y-0.5">
                                                             <li><span className="text-gray-500 dark:text-gray-400">Revenue/Email:</span> {formatCurrency(cell.revenuePerEmail)}</li>
                                                             {step > 1 && <li><span className="text-gray-500 dark:text-gray-400">Δ Rev/Email:</span> {cell.deltaRevenuePerEmail >= 0 ? '+' : ''}{formatCurrency(cell.deltaRevenuePerEmail)}</li>}
@@ -177,11 +182,31 @@ export default function FlowStepDropOffMap({ dateRange, customFrom, customTo }: 
                 </table>
             </div>
             <div className="mt-4 text-[10px] text-gray-500 dark:text-gray-400 flex flex-wrap gap-6 items-center">
-                <div><span className="font-medium text-gray-600 dark:text-gray-300">Legend:</span> Top = Δ Rev/Email vs prior; Bottom = Open Rate. First step shows baseline value.</div>
-                <div><span className="inline-block w-3 h-3 rounded-sm bg-green-500 mr-1 align-middle" /> Lift</div>
-                <div><span className="inline-block w-3 h-3 rounded-sm bg-rose-500 mr-1 align-middle" /> Drop</div>
-                <div><span className="inline-block w-3 h-3 rounded-sm bg-gray-300 dark:bg-gray-700 mr-1 align-middle" /> Baseline (Step 1)</div>
-                <div>⚠ largest negative Δ Rev/Email</div>
+                <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-600 dark:text-gray-300">Legend:</span>
+                    <div className="flex items-center gap-1">
+                        <div className="w-4 h-4 rounded-sm overflow-hidden border border-gray-300 dark:border-gray-600 flex flex-col">
+                            <div className="flex-1 bg-emerald-200" />
+                            <div className="flex-1 bg-emerald-100" />
+                        </div>
+                        <span className="whitespace-nowrap">Positive movement</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <div className="w-4 h-4 rounded-sm overflow-hidden border border-gray-300 dark:border-gray-600 flex flex-col">
+                            <div className="flex-1 bg-rose-300" />
+                            <div className="flex-1 bg-rose-200" />
+                        </div>
+                        <span className="whitespace-nowrap">Negative movement</span>
+                    </div>
+                </div>
+                <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-gray-300 dark:bg-gray-700 border border-gray-300 dark:border-gray-600" /> Baseline (Step 1)</div>
+                <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-600 dark:text-gray-300">Top Half:</span> Δ Revenue/Email vs previous step (color intensity = magnitude)
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-600 dark:text-gray-300">Bottom Half:</span> Open Rate (text) & Δ Open Rate (small line) — shading = Δ Open Rate magnitude
+                </div>
+                <div>⚠ largest negative Δ Rev/Email in flow</div>
             </div>
         </div>
     );
