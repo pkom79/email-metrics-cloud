@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState } from 'react';
-import { ShieldAlert, Info, AlertTriangle } from 'lucide-react';
+import { Info, TrendingUp, BarChart3 } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
 
@@ -13,29 +13,31 @@ interface WindowStats { emailsSent: number; revenue: number; bounces: number; sp
 
 // Formatting helpers
 const formatCurrency = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
-const formatRate = (r: number) => (isFinite(r) ? (r * 100).toFixed(r * 100 >= 1 ? 2 : 3) + '%' : '—');
-const pctDeltaStr = (d: number) => (d >= 0 ? '+' : '') + (d * 100).toFixed(1) + '%';
+const pct = (r: number, digits = 1) => (isFinite(r) ? (r * 100).toFixed(digits) + '%' : '—');
+const signedPct = (r: number, digits = 1) => (r >= 0 ? '+' : '') + pct(Math.abs(r), digits); // we pass abs then re-add sign
+const rate = (r: number) => (r * 100).toFixed(r * 100 >= 1 ? 2 : 3) + '%';
 
-const DeltaBadge = ({ value }: { value: number }) => {
-    const cls = value > 0 ? 'text-rose-600 dark:text-rose-400' : value < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500';
-    return <span className={cls}>{pctDeltaStr(value)}</span>;
+const deltaColor = (v: number, invert = false) => {
+    const posGood = !invert; // when invert true, positive is bad
+    if (v === 0) return 'text-gray-500';
+    if (v > 0) return posGood ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
+    return posGood ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400';
 };
 
-// Simple sparkline generator for an array of numeric rates (0..1)
-function Sparkline({ values, color, title }: { values: number[]; color: string; title: string }) {
-    if (!values.length) return null;
-    const max = Math.max(...values, 0.0001);
-    const pts = values.map((v, i) => {
-        const x = (i / (values.length - 1)) * 60; // width 60
-        const y = 24 - (v / max) * 24;            // height 24
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
+const TrendBadge = ({ value, invert = false, className = '' }: { value: number; invert?: boolean; className?: string }) => (
+    <span className={`font-medium ${deltaColor(value, invert)} ${className}`}>{value >= 0 ? '+' : ''}{(value * 100).toFixed(1)}%</span>
+);
+
+// Tiny inline bar for elasticity visualization
+const ElasticBar = ({ value, maxAbs }: { value: number; maxAbs: number }) => {
+    const pctWidth = maxAbs === 0 ? 0 : Math.min(100, Math.abs(value) / maxAbs * 100);
+    const isPos = value >= 0;
     return (
-        <svg viewBox="0 0 60 24" width={60} height={24} className="overflow-visible" aria-label={title} role="img">
-            <polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <div className="h-2 w-full bg-gray-200 dark:bg-gray-800 rounded overflow-hidden">
+            <div className={`${isPos ? 'bg-emerald-500' : 'bg-rose-500'} h-full`} style={{ width: `${pctWidth}%` }} />
+        </div>
     );
-}
+};
 
 export default function DeliverabilityRiskPanel({ dateRange, customFrom, customTo }: Props) {
     const dm = DataManager.getInstance();
@@ -86,88 +88,64 @@ export default function DeliverabilityRiskPanel({ dateRange, customFrom, customT
     }, [filtered, scope]);
 
     const analysis = useMemo(() => {
-        if (weekly.length < 8) return null;
+        if (weekly.length < 8) return null; // need 8 weeks for two 4-week windows
         const last8 = weekly.slice(-8);
-        if (last8.length < 8) return null;
-
-        const sumWindow = (arr: WeeklyAgg[]): WindowStats => {
+        const agg = (arr: WeeklyAgg[]): WindowStats => {
             const emailsSent = arr.reduce((s, w) => s + w.emailsSent, 0);
             const revenue = arr.reduce((s, w) => s + w.revenue, 0);
             const bounces = arr.reduce((s, w) => s + w.bounces, 0);
             const spam = arr.reduce((s, w) => s + w.spam, 0);
             const unsubs = arr.reduce((s, w) => s + w.unsubs, 0);
-            return {
-                emailsSent, revenue, bounces, spam, unsubs,
-                bounceRate: emailsSent ? bounces / emailsSent : 0,
-                spamRate: emailsSent ? spam / emailsSent : 0,
-                unsubRate: emailsSent ? unsubs / emailsSent : 0,
-                revenuePerEmail: emailsSent ? revenue / emailsSent : 0
-            };
+            return { emailsSent, revenue, bounces, spam, unsubs, bounceRate: emailsSent ? bounces / emailsSent : 0, spamRate: emailsSent ? spam / emailsSent : 0, unsubRate: emailsSent ? unsubs / emailsSent : 0, revenuePerEmail: emailsSent ? revenue / emailsSent : 0 };
         };
-
-        const prev4 = sumWindow(last8.slice(0, 4));
-        const last4 = sumWindow(last8.slice(4));
-
-        const pctChange = (a: number, b: number) => (a === 0 && b === 0) ? 0 : (b - a) / (a || 1e-9);
-
+        const prev = agg(last8.slice(0, 4));
+        const curr = agg(last8.slice(4));
+        const change = (a: number, b: number) => (a === 0 && b === 0) ? 0 : (b - a) / (a || 1e-9);
         const deltas = {
-            emails: pctChange(prev4.emailsSent, last4.emailsSent),
-            bounceRate: pctChange(prev4.bounceRate, last4.bounceRate),
-            spamRate: pctChange(prev4.spamRate, last4.spamRate),
-            unsubRate: pctChange(prev4.unsubRate, last4.unsubRate),
-            rpe: pctChange(prev4.revenuePerEmail, last4.revenuePerEmail)
+            emails: change(prev.emailsSent, curr.emailsSent),
+            revenue: change(prev.revenue, curr.revenue),
+            rpe: change(prev.revenuePerEmail, curr.revenuePerEmail),
+            unsubRate: change(prev.unsubRate, curr.unsubRate),
+            spamRate: change(prev.spamRate, curr.spamRate),
+            bounceRate: change(prev.bounceRate, curr.bounceRate)
         };
-
-        // Triggers (volume-aware)
-        const triggers: { key: string; label: string; severity: 'low' | 'med' | 'high'; detail: string }[] = [];
-
-        if (last4.spamRate > 0.0015 && deltas.spamRate > 0.25) {
-            triggers.push({
-                key: 'spam', label: 'Spam Escalation', severity: deltas.spamRate > 0.5 ? 'high' : 'med',
-                detail: `Spam rate ${formatRate(prev4.spamRate)} → ${formatRate(last4.spamRate)} (${pctDeltaStr(deltas.spamRate)}).`
-            });
-        }
-        if (last4.bounceRate > 0.02 && deltas.bounceRate > 0.20) {
-            triggers.push({ key: 'bounce', label: 'Bounce Spike', severity: 'high', detail: `Bounce rate ${formatRate(prev4.bounceRate)} → ${formatRate(last4.bounceRate)} (${pctDeltaStr(deltas.bounceRate)}).` });
-        }
-        const unsubPerKPrev = prev4.unsubs / (prev4.emailsSent / 1000 || 1);
-        const unsubPerKLast = last4.unsubs / (last4.emailsSent / 1000 || 1);
-        const unsubUnitDelta = (unsubPerKLast - unsubPerKPrev) / (unsubPerKPrev || 1e-9);
-        if (unsubUnitDelta > 0.20 && last4.unsubRate > 0.002) {
-            triggers.push({ key: 'unsub', label: 'Unsub Fatigue', severity: unsubUnitDelta > 0.40 ? 'high' : 'med', detail: `Unsubs/1k +${(unsubUnitDelta * 100).toFixed(1)}% (rate ${formatRate(prev4.unsubRate)} → ${formatRate(last4.unsubRate)}).` });
-        }
-        if (triggers.length && deltas.rpe < -0.05) {
-            triggers.push({ key: 'efficiency', label: 'Revenue Efficiency Down', severity: 'med', detail: `Rev/email ${formatCurrency(prev4.revenuePerEmail)} → ${formatCurrency(last4.revenuePerEmail)} (${pctDeltaStr(deltas.rpe)}).` });
-        }
-        if (deltas.emails > 0.15 && (deltas.unsubRate > deltas.emails + 0.1 || deltas.spamRate > deltas.emails + 0.1)) {
-            triggers.push({ key: 'volume', label: 'Volume Stress', severity: 'low', detail: `Emails +${(deltas.emails * 100).toFixed(1)}% with disproportionate negative metric gains.` });
-        }
-
-        let rawScore = 0;
-        for (const t of triggers) rawScore += t.severity === 'high' ? 35 : t.severity === 'med' ? 20 : 10;
-        rawScore = Math.min(100, rawScore);
-
-        // Confidence weighting (based on volume & number of distinct negative metrics)
-        const baseVolumeConfidence = Math.min(1, last4.emailsSent / 40000); // 40k => full
-        const metricDiversity = new Set(triggers.map(t => t.key)).size / 5; // scale 0..1
-        const confidence = Math.max(0.3, Math.min(1, 0.3 + 0.5 * baseVolumeConfidence + 0.2 * metricDiversity));
-        const weightedScore = Math.round(rawScore * confidence);
-
-        let category: 'Low' | 'Moderate' | 'High' | 'Critical' = 'Low';
-        if (weightedScore >= 70) category = 'Critical'; else if (weightedScore >= 50) category = 'High'; else if (weightedScore >= 30) category = 'Moderate';
-
-        return { prev4, last4, deltas, triggers, rawScore, weightedScore, confidence, category, last8, unsubPerKPrev, unsubPerKLast };
+        const diffEmails = curr.emailsSent - prev.emailsSent;
+        const emailsK = diffEmails / 1000 || 0;
+        const elasticity = {
+            revenuePer1k: emailsK === 0 ? 0 : (curr.revenue - prev.revenue) / emailsK,
+            unsubsPer1k: emailsK === 0 ? 0 : (curr.unsubs - prev.unsubs) / emailsK,
+            spamPer1k: emailsK === 0 ? 0 : (curr.spam - prev.spam) / emailsK,
+            bouncesPer1k: emailsK === 0 ? 0 : (curr.bounces - prev.bounces) / emailsK
+        };
+        // Simple quality classification
+        // Good if revenuePer1k positive and (unsubsPer1k <= 0.3 or revenue gain outweighs unsub growth heuristically)
+        const classification = (() => {
+            if (emailsK === 0) return 'No volume change';
+            if (elasticity.revenuePer1k <= 0 && (elasticity.unsubsPer1k > 0 || elasticity.spamPer1k > 0)) return 'Harmful';
+            if (elasticity.revenuePer1k > 0 && elasticity.unsubsPer1k <= 0.3 && elasticity.spamPer1k <= 0.02) return 'Healthy Expansion';
+            if (elasticity.revenuePer1k > 0 && (elasticity.unsubsPer1k > 0.3 || elasticity.spamPer1k > 0.02)) return 'Mixed Efficiency';
+            if (elasticity.revenuePer1k > 0) return 'Marginal Gain';
+            return 'Neutral';
+        })();
+        // Score (0-100) weighting positive rev vs penalties
+        const score = (() => {
+            if (emailsK === 0) return 0;
+            const base = Math.max(0, Math.min(100, elasticity.revenuePer1k / (prev.revenuePerEmail * 1000 || 1) * 60));
+            const penalty = (elasticity.unsubsPer1k * 5) + (elasticity.spamPer1k * 800) + (elasticity.bouncesPer1k * 2);
+            return Math.max(0, Math.min(100, Math.round(base - penalty)));
+        })();
+        return { prev, curr, deltas, elasticity, classification, score, emailsK, last8 };
     }, [weekly]);
 
-    // Prepare sparkline series (always show if we have any weeks; fallback to zeros) last up to 8 weeks
-    const sparkSeries = useMemo(() => {
-        const take = weekly.slice(-8);
-        return {
-            spam: take.map(w => w.emailsSent ? w.spam / w.emailsSent : 0),
-            bounce: take.map(w => w.emailsSent ? w.bounces / w.emailsSent : 0),
-            unsub: take.map(w => w.emailsSent ? w.unsubs / w.emailsSent : 0)
-        };
-    }, [weekly]);
+    const elasticityRows = useMemo(() => {
+        if (!analysis) return [] as { key: string; label: string; value: number; unit: string; invert?: boolean }[];
+        return [
+            { key: 'rev', label: 'Incremental Revenue', value: analysis.elasticity.revenuePer1k, unit: '$ / +1K emails' },
+            { key: 'unsub', label: 'Incremental Unsubs', value: analysis.elasticity.unsubsPer1k, unit: 'unsubs / +1K', invert: true },
+            { key: 'spam', label: 'Incremental Spam', value: analysis.elasticity.spamPer1k, unit: 'complaints / +1K', invert: true },
+            { key: 'bounce', label: 'Incremental Bounces', value: analysis.elasticity.bouncesPer1k, unit: 'bounces / +1K', invert: true },
+        ];
+    }, [analysis]);
 
     if (!weekly.length) return null;
 
@@ -175,17 +153,17 @@ export default function DeliverabilityRiskPanel({ dateRange, customFrom, customT
         <div className="mt-8 border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 rounded-xl p-6">
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
                 <div className="flex items-center gap-2">
-                    <ShieldAlert className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Deliverability Risk & Cost Avoidance</h3>
+                    <TrendingUp className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Send Volume Impact & Trade‑Offs</h3>
                     <div className="group relative">
                         <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-700 dark:text-gray-500 dark:group-hover:text-gray-300 cursor-pointer" />
-                        <div className="absolute left-0 top-6 z-30 hidden group-hover:block w-80 text-[11px] leading-snug bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3 space-y-2">
+                        <div className="absolute left-0 top-6 z-30 hidden group-hover:block w-96 text-[11px] leading-snug bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3 space-y-2">
                             <p className="font-semibold text-gray-800 dark:text-gray-100">What</p>
-                            <p className="text-gray-600 dark:text-gray-300">Last 4 full weeks vs prior 4. Detects rising failure / complaint signals normalized by volume & engagement efficiency.</p>
-                            <p className="font-semibold text-gray-800 dark:text-gray-100">Score</p>
-                            <p className="text-gray-600 dark:text-gray-300">Weighted sum of triggers (spam, bounce, unsub fatigue, efficiency, volume stress) * confidence (volume + metric diversity).</p>
-                            <p className="font-semibold text-gray-800 dark:text-gray-100">Confidence</p>
-                            <p className="text-gray-600 dark:text-gray-300">Higher with more recent send volume & multiple corroborating signals; low volume caps weighted impact.</p>
+                            <p className="text-gray-600 dark:text-gray-300">Shows how sending more (last 4 weeks) impacted revenue and negative signals vs the prior 4. Elasticities express incremental effect per +1K emails.</p>
+                            <p className="font-semibold text-gray-800 dark:text-gray-100">Interpretation</p>
+                            <p className="text-gray-600 dark:text-gray-300">Use incremental revenue vs unsub/spam growth to decide if further volume expansion is value accretive or destructive.</p>
+                            <p className="font-semibold text-gray-800 dark:text-gray-100">Classification</p>
+                            <p className="text-gray-600 dark:text-gray-300">Healthy = strong incremental revenue with limited complaint churn. Mixed = revenue lift with rising friction. Harmful = little / negative revenue with rising complaints.</p>
                         </div>
                     </div>
                 </div>
@@ -199,80 +177,72 @@ export default function DeliverabilityRiskPanel({ dateRange, customFrom, customT
                 </div>
             </div>
 
-            {/* Sparklines */}
-            <div className="mb-5 grid grid-cols-3 gap-4 text-[11px]">
-                <div className="flex items-center gap-2">
-                    <div className="flex flex-col"><Sparkline values={sparkSeries.spam} color="#db2777" title="Spam Rate" /></div>
-                    <div className="leading-tight"><p className="font-medium text-gray-700 dark:text-gray-300">Spam</p><p className="text-gray-500 dark:text-gray-400">trend</p></div>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="flex flex-col"><Sparkline values={sparkSeries.bounce} color="#0d9488" title="Bounce Rate" /></div>
-                    <div className="leading-tight"><p className="font-medium text-gray-700 dark:text-gray-300">Bounce</p><p className="text-gray-500 dark:text-gray-400">trend</p></div>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="flex flex-col"><Sparkline values={sparkSeries.unsub} color="#9333ea" title="Unsub Rate" /></div>
-                    <div className="leading-tight"><p className="font-medium text-gray-700 dark:text-gray-300">Unsubs</p><p className="text-gray-500 dark:text-gray-400">trend</p></div>
-                </div>
-            </div>
-
             {!analysis && (
-                <div className="text-sm text-gray-600 dark:text-gray-400">Not enough full weeks for risk analysis (need 8). This will populate automatically.</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Not enough full weeks (need 8) to compute elasticities.</div>
             )}
 
             {analysis && (
                 <>
-                    <div className="flex flex-col md:flex-row md:items-end gap-8">
-                        <div className="flex-1">
-                            <div className="mb-4">
-                                <div className="relative w-full h-4 rounded-full bg-gradient-to-r from-emerald-200 via-yellow-200 to-rose-300 dark:from-emerald-700/40 dark:via-yellow-700/40 dark:to-rose-700/40 overflow-hidden">
-                                    <div className="absolute top-0 h-full w-0.5 bg-purple-700 dark:bg-purple-300" style={{ left: `${analysis.weightedScore}%` }} />
-                                </div>
-                                <div className="mt-2 flex justify-between text-[10px] text-gray-500 dark:text-gray-400"><span>Low</span><span>Moderate</span><span>High</span><span>Critical</span></div>
+                    {/* Summary Row */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="space-y-3">
+                            <div className="text-sm text-gray-700 dark:text-gray-300 leading-snug">
+                                Sent <span className="font-semibold text-gray-900 dark:text-gray-100">{analysis.curr.emailsSent.toLocaleString()}</span> emails ({analysis.deltas.emails >= 0 ? '+' : ''}{(analysis.deltas.emails * 100).toFixed(1)}%) vs prev {analysis.prev.emailsSent.toLocaleString()}. Revenue {(analysis.deltas.revenue >= 0 ? 'increased' : 'decreased')} {(analysis.deltas.revenue * 100).toFixed(1)}% while revenue/email {(analysis.deltas.rpe >= 0 ? 'moved up' : 'slid')} {(Math.abs(analysis.deltas.rpe) * 100).toFixed(1)}%. Unsub rate {analysis.deltas.unsubRate >= 0 ? '↑' : '↓'} {(Math.abs(analysis.deltas.unsubRate) * 100).toFixed(1)}%, spam {analysis.deltas.spamRate >= 0 ? '↑' : '↓'} {(Math.abs(analysis.deltas.spamRate) * 100).toFixed(1)}%, bounce {analysis.deltas.bounceRate >= 0 ? '↑' : '↓'} {(Math.abs(analysis.deltas.bounceRate) * 100).toFixed(1)}%.
                             </div>
-                            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                                <div className="flex items-baseline gap-2">
-                                    <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{analysis.weightedScore}</p>
-                                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Risk (weighted)</p>
-                                </div>
-                                <div className="flex items-baseline gap-1 text-xs text-gray-500 dark:text-gray-400">
-                                    Raw <span className="font-medium text-gray-700 dark:text-gray-300">{analysis.rawScore}</span>
-                                    <span className="ml-2">Confidence <span className="font-medium text-gray-700 dark:text-gray-300">{(analysis.confidence * 100).toFixed(0)}%</span></span>
-                                </div>
-                                <div className="text-xs font-medium text-purple-700 dark:text-purple-300">Category: {analysis.category}</div>
+                            <div className="flex items-center gap-3 text-xs">
+                                <span className="px-2 py-1 rounded-md bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 font-medium">{analysis.classification}</span>
+                                <span className="text-gray-500 dark:text-gray-400">Score:</span>
+                                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{analysis.score}</span>
                             </div>
-                            <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                                {analysis.triggers.length === 0 ? 'Stable: no material negative shifts.' : 'Active triggers indicate emerging risk; address higher severity first.'}
-                            </p>
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                                <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40">
+                                    <p className="text-gray-500 dark:text-gray-400 mb-0.5">Revenue / Email</p>
+                                    <p className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(analysis.curr.revenuePerEmail)}</p>
+                                    <TrendBadge value={analysis.deltas.rpe} />
+                                </div>
+                                <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40">
+                                    <p className="text-gray-500 dark:text-gray-400 mb-0.5">Unsub Rate</p>
+                                    <p className="font-semibold text-gray-900 dark:text-gray-100">{rate(analysis.curr.unsubRate)}</p>
+                                    <TrendBadge value={analysis.deltas.unsubRate} invert />
+                                </div>
+                                <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40">
+                                    <p className="text-gray-500 dark:text-gray-400 mb-0.5">Spam Rate</p>
+                                    <p className="font-semibold text-gray-900 dark:text-gray-100">{rate(analysis.curr.spamRate)}</p>
+                                    <TrendBadge value={analysis.deltas.spamRate} invert />
+                                </div>
+                                <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/40">
+                                    <p className="text-gray-500 dark:text-gray-400 mb-0.5">Bounce Rate</p>
+                                    <p className="font-semibold text-gray-900 dark:text-gray-100">{rate(analysis.curr.bounceRate)}</p>
+                                    <TrendBadge value={analysis.deltas.bounceRate} invert />
+                                </div>
+                            </div>
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
-                            <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg p-3"><p className="text-gray-500 dark:text-gray-400 mb-1">Spam Rate</p><p className="font-semibold text-gray-900 dark:text-gray-100">{formatRate(analysis.last4.spamRate)}</p><p className="mt-0.5"><DeltaBadge value={analysis.deltas.spamRate} /></p></div>
-                            <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg p-3"><p className="text-gray-500 dark:text-gray-400 mb-1">Bounce Rate</p><p className="font-semibold text-gray-900 dark:text-gray-100">{formatRate(analysis.last4.bounceRate)}</p><p className="mt-0.5"><DeltaBadge value={analysis.deltas.bounceRate} /></p></div>
-                            <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg p-3"><p className="text-gray-500 dark:text-gray-400 mb-1">Unsub Rate</p><p className="font-semibold text-gray-900 dark:text-gray-100">{formatRate(analysis.last4.unsubRate)}</p><p className="mt-0.5"><DeltaBadge value={analysis.deltas.unsubRate} /></p></div>
-                            <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg p-3"><p className="text-gray-500 dark:text-gray-400 mb-1">Rev / Email</p><p className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(analysis.last4.revenuePerEmail)}</p><p className="mt-0.5"><DeltaBadge value={analysis.deltas.rpe} /></p></div>
-                            <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg p-3"><p className="text-gray-500 dark:text-gray-400 mb-1">Emails Sent</p><p className="font-semibold text-gray-900 dark:text-gray-100">{analysis.last4.emailsSent.toLocaleString()}</p><p className="mt-0.5"><DeltaBadge value={analysis.deltas.emails} /></p></div>
-                            <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg p-3"><p className="text-gray-500 dark:text-gray-400 mb-1">Unsubs / 1K</p><p className="font-semibold text-gray-900 dark:text-gray-100">{(analysis.unsubPerKLast).toFixed(2)}</p></div>
+                        {/* Elasticities */}
+                        <div className="lg:col-span-2">
+                            <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300"><BarChart3 className="w-4 h-4 text-purple-600" />Incremental Impact per +1K Emails</div>
+                            <div className="space-y-3">
+                                {(() => {
+                                    const maxAbs = Math.max(0, ...elasticityRows.map(r => Math.abs(r.value))); return elasticityRows.map(r => (
+                                        <div key={r.key} className="flex items-center gap-4 text-xs">
+                                            <div className="w-40 text-gray-600 dark:text-gray-400 font-medium truncate">{r.label}</div>
+                                            <div className="flex-1"><ElasticBar value={r.value} maxAbs={maxAbs} /></div>
+                                            <div className={`w-32 text-right tabular-nums font-semibold ${r.value === 0 ? 'text-gray-500' : r.value > 0 ? (r.invert ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400') : (r.invert ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}`}>{r.key === 'rev' ? formatCurrency(r.value) : r.value.toFixed(2)}</div>
+                                            <div className="w-28 text-[10px] text-gray-500 dark:text-gray-400 text-right">{r.unit}</div>
+                                        </div>
+                                    ));
+                                })()}
+                            </div>
+                            <p className="mt-3 text-[11px] text-gray-500 dark:text-gray-400 leading-snug">Positive green values add value; red values indicate rising friction. Revenue bar uses dollars, others use raw counts per 1K incremental sends.</p>
                         </div>
                     </div>
-                    <div className="mt-6">
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-400 mb-2 flex items-center gap-1">Triggers {analysis.triggers.length === 0 && <span className="text-gray-400 font-normal normal-case">None</span>}</h4>
-                        {analysis.triggers.length > 0 && (
-                            <ul className="flex flex-col gap-2">
-                                {analysis.triggers.map(t => {
-                                    const color = t.severity === 'high' ? 'bg-rose-50 dark:bg-rose-900/30 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300'
-                                        : t.severity === 'med' ? 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300'
-                                            : 'bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300';
-                                    return (
-                                        <li key={t.key} className={`text-[11px] border rounded-md px-3 py-2 flex items-start gap-2 ${color}`}>
-                                            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                                            <div>
-                                                <p className="font-medium">{t.label}</p>
-                                                <p className="mt-0.5 leading-snug">{t.detail}</p>
-                                            </div>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        )}
+                    {/* Guidance */}
+                    <div className="mt-6 text-[11px] text-gray-600 dark:text-gray-400 leading-snug">
+                        {analysis.classification === 'Healthy Expansion' && 'Current volume scaling is efficient—consider modest additional sends to test upper bounds while monitoring complaint rates.'}
+                        {analysis.classification === 'Mixed Efficiency' && 'Revenue is growing but friction signals are accelerating. Segment pruning or cadence tuning could preserve gains.'}
+                        {analysis.classification === 'Harmful' && 'Scaling appears value destructive—pause further volume increases and address list quality / targeting.'}
+                        {analysis.classification === 'Marginal Gain' && 'Incremental revenue exists but is modest—optimize content or targeting before pushing more volume.'}
+                        {analysis.classification === 'Neutral' && 'No meaningful efficiency change detected—adjust strategy only after further observation.'}
+                        {analysis.classification === 'No volume change' && 'Volume stable; elasticity metrics will activate when sends shift materially.'}
                     </div>
                 </>
             )}
