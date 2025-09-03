@@ -6,7 +6,7 @@ import DayOfWeekPerformance from './DayOfWeekPerformance';
 import HourOfDayPerformance from './HourOfDayPerformance';
 import RevenueSplitBar from './RevenueSplitBar';
 import RevenueReliability from './RevenueReliability';
-import DeliverabilityRiskPanel from './DeliverabilityRiskPanel';
+import SendVolumeImpact from './SendVolumeImpact';
 import AudienceCharts from './AudienceCharts';
 import FlowStepAnalysis from './FlowStepAnalysis';
 import FlowStepDropOffMap from './FlowStepDropOffMap';
@@ -574,7 +574,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         </div>
                         {/* Weekly Revenue Reliability (moved up) */}
                         <RevenueReliability campaigns={filteredCampaigns} flows={filteredFlowEmails} dateRange={dateRange} />
-                        <DeliverabilityRiskPanel dateRange={dateRange} customFrom={customFrom} customTo={customTo} />
+                        <SendVolumeImpact dateRange={dateRange} customFrom={customFrom} customTo={customTo} />
                     </section>
                 )}
                 {campaignMetrics && (

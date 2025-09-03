@@ -1,4 +1,5 @@
 "use client";
+// DEPRECATED: This panel has been superseded by SendVolumeImpact.tsx. Retained temporarily for reference.
 import React, { useMemo, useState } from 'react';
 import { Info, TrendingUp, BarChart3, Activity } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
