@@ -16,10 +16,10 @@ export default function InactivityRevenueDrain({ subscribers }: Props) {
         const now = new Date();
         interface Bucket { key: string; label: string; min: number; max: number | null; clv: number; count: number; }
         const defs: Bucket[] = [
-            { key: '30_59', label: '30-59d', min: 30, max: 59, clv: 0, count: 0 },
-            { key: '60_89', label: '60-89d', min: 60, max: 89, clv: 0, count: 0 },
-            { key: '90_119', label: '90-119d', min: 90, max: 119, clv: 0, count: 0 },
-            { key: '120_plus', label: '120d+', min: 120, max: null, clv: 0, count: 0 },
+            { key: '30_59', label: '30-59 days', min: 30, max: 59, clv: 0, count: 0 },
+            { key: '60_89', label: '60-89 days', min: 60, max: 89, clv: 0, count: 0 },
+            { key: '90_119', label: '90-119 days', min: 90, max: 119, clv: 0, count: 0 },
+            { key: '120_plus', label: '120+ days', min: 120, max: null, clv: 0, count: 0 },
         ];
         let totalClv = 0;
         subscribers.forEach(s => {
@@ -43,19 +43,19 @@ export default function InactivityRevenueDrain({ subscribers }: Props) {
     const formatCurrency = (v: number) => '$' + Math.round(v).toLocaleString('en-US');
 
     return (
-        <div className="mt-8 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5">
+        <div className="mt-6 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
             <div className="flex items-center gap-2 mb-4">
                 <Moon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Inactivity Revenue Drain</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Inactivity Revenue Drain</h3>
                 <div className="group relative">
                     <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-700 dark:text-gray-500 dark:group-hover:text-gray-300 cursor-pointer" />
-                    <div className="absolute left-0 top-6 z-20 hidden group-hover:block w-80 text-[11px] leading-snug bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3 space-y-2">
+                    <div className="absolute left-0 top-6 z-20 hidden group-hover:block w-80 text-xs leading-snug bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3 space-y-2">
                         <p className="text-gray-700 dark:text-gray-200 font-semibold">What</p>
                         <p className="text-gray-600 dark:text-gray-300">Share of total subscriber CLV held by dormant segments (no open or click for the interval).</p>
                         <p className="text-gray-700 dark:text-gray-200 font-semibold">Why</p>
-                        <p className="text-gray-600 dark:text-gray-300">Targets where win‑back can unlock the largest trapped value; prioritize longer-dormant, high CLV pools.</p>
+                        <p className="text-gray-600 dark:text-gray-300">Win‑back focus: unlock trapped value starting with longest inactive, highest CLV clusters.</p>
                         <p className="text-gray-700 dark:text-gray-200 font-semibold">Data</p>
-                        <p className="text-gray-600 dark:text-gray-300">Uses latest of lastOpen / lastClick per subscriber; CLV from imported file. Buckets are exclusive.</p>
+                        <p className="text-gray-600 dark:text-gray-300">Latest of last open / click. Buckets exclusive. 120+ excludes never‑engaged (not yet shown).</p>
                         <p className="text-gray-500 dark:text-gray-400">Dormant CLV: {formatCurrency(totalDormantClv)} ({((totalDormantClv / totalClv) * 100).toFixed(1)}% of total)</p>
                     </div>
                 </div>
@@ -70,10 +70,10 @@ export default function InactivityRevenueDrain({ subscribers }: Props) {
                                 <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-lg overflow-hidden flex items-end" style={{ minHeight: '150px' }}>
                                     <div className="w-full rounded-t-lg bg-gradient-to-b from-purple-400 to-purple-600 transition-all duration-500" style={{ height: `${heightPct}%` }} />
                                 </div>
-                                <div className="mt-2 text-sm font-semibold text-gray-900 dark:text-gray-100">{pct(b.clv)}</div>
-                                <div className="text-xs text-gray-600 dark:text-gray-400">{b.label}</div>
-                                <div className="text-[10px] text-gray-500 dark:text-gray-500">{formatCurrency(b.clv)}</div>
-                                <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition z-10 absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full w-60 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-xs text-gray-700 dark:text-gray-300">
+                                <div className="mt-2 text-base font-semibold text-gray-900 dark:text-gray-100">{pct(b.clv)}</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">{b.label}</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-500">{formatCurrency(b.clv)}</div>
+                                <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition z-10 absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full w-64 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-xs text-gray-700 dark:text-gray-300">
                                     <div className="font-semibold mb-1">{b.label} Inactive</div>
                                     <ul className="space-y-0.5">
                                         <li><span className="text-gray-500 dark:text-gray-400">Dormant CLV:</span> {formatCurrency(b.clv)}</li>
@@ -87,7 +87,7 @@ export default function InactivityRevenueDrain({ subscribers }: Props) {
                     );
                 })}
             </div>
-            <div className="mt-4 text-[10px] text-gray-500 dark:text-gray-400 flex flex-wrap gap-4">
+            <div className="mt-4 text-xs md:text-sm text-gray-500 dark:text-gray-400 flex flex-wrap gap-4">
                 <div><span className="font-medium text-gray-600 dark:text-gray-300">Total CLV:</span> {formatCurrency(totalClv)}</div>
                 <div><span className="font-medium text-gray-600 dark:text-gray-300">Dormant CLV:</span> {formatCurrency(totalDormantClv)} ({((totalDormantClv / totalClv) * 100).toFixed(1)}%)</div>
             </div>

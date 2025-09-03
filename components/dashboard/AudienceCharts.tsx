@@ -1,6 +1,7 @@
 "use client";
 import React from 'react';
 import { Users, UserCheck, DollarSign, TrendingUp, Calendar, AlertCircle, Trash2, PiggyBank, CheckCircle } from 'lucide-react';
+import InactivityRevenueDrain from './InactivityRevenueDrain';
 import { DataManager } from '../../lib/data/dataManager';
 
 export default function AudienceCharts() {
@@ -364,6 +365,9 @@ export default function AudienceCharts() {
                     ))}
                 </div>
             </div>
+
+            {/* Inactivity Revenue Drain (placed after Last Active Segments) */}
+            <InactivityRevenueDrain subscribers={subscribers} />
 
             {/* Dead Weight Subscribers & Potential Savings */}
             {deadWeight && (
