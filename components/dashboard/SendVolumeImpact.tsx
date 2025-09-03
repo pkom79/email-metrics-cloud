@@ -339,7 +339,13 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     }, [metric]);
 
     // Anchor: current range start/end (use week boundaries implicitly inside benchmark helper)
-    const benchmark = useBenchmark(benchmarkMetricKey, range?.startDate, range?.endDate);
+    let benchmark: any = null;
+    try {
+        benchmark = useBenchmark(benchmarkMetricKey, range?.startDate, range?.endDate);
+    } catch (e) {
+        console.warn('Benchmark hook failed', e);
+        benchmark = { insufficient: true };
+    }
 
     const tierBadge = (() => {
         if (!benchmark || benchmark.insufficient || !benchmark.tier) return null;

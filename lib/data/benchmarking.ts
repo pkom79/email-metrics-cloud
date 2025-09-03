@@ -1,4 +1,6 @@
+"use client";
 import { DataManager } from './dataManager';
+import { useSyncExternalStore } from 'react';
 
 /**
  * Benchmark tier labels in ascending performance order (0 = poorest, 4 = strongest)
@@ -46,7 +48,8 @@ function getHistoricalWeeks(metricKey: string) {
  * but at least 10 weeks; require >=20 weeks to show a tier.
  * Trim: remove lowest 10% and highest 10% of values (floor counts) before baseline calculation.
  */
-export function computeBenchmark(metricKey: string, currentRangeStart?: Date, currentRangeEnd?: Date): BenchmarkComputation {
+export function computeBenchmark(metricKey: string | undefined, currentRangeStart?: Date, currentRangeEnd?: Date): BenchmarkComputation {
+  if (!metricKey) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true };
   const weeks = getHistoricalWeeks(metricKey);
   if (!weeks.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true };
 
@@ -123,7 +126,14 @@ export function computeBenchmark(metricKey: string, currentRangeStart?: Date, cu
 /** Simple cache per metric + anchor signature (in-memory only) */
 const _cache = new Map<string, BenchmarkComputation>();
 
-export function getBenchmark(metricKey: string, anchorStart?: Date, anchorEnd?: Date) {
+// Invalidate cache on dataset hydration/persist events (permanent solution to stale tiers)
+if (typeof window !== 'undefined') {
+  const reset = () => _cache.clear();
+  window.addEventListener('em:dataset-hydrated', reset);
+  window.addEventListener('em:dataset-persisted', reset);
+}
+
+export function getBenchmark(metricKey: string | undefined, anchorStart?: Date, anchorEnd?: Date) {
   const key = `${metricKey}|${anchorStart?.toISOString()||'none'}|${anchorEnd?.toISOString()||'none'}`;
   const cached = _cache.get(key);
   if (cached) return cached;
@@ -131,8 +141,20 @@ export function getBenchmark(metricKey: string, anchorStart?: Date, anchorEnd?: 
   _cache.set(key, res);
   return res;
 }
-
-export function useBenchmark(metricKey: string, anchorStart?: Date, anchorEnd?: Date) {
-  // Lightweight hook wrapper (no reactive invalidation on dataset changes yet)
-  return getBenchmark(metricKey, anchorStart, anchorEnd);
+// Reactive hook: re-compute on dataset events & metric/anchor changes using useSyncExternalStore
+export function useBenchmark(metricKey: string | undefined, anchorStart?: Date, anchorEnd?: Date) {
+  return useSyncExternalStore(
+    (cb) => {
+      if (typeof window === 'undefined') return () => {};
+      const handler = () => cb();
+      window.addEventListener('em:dataset-hydrated', handler);
+      window.addEventListener('em:dataset-persisted', handler);
+      return () => {
+        window.removeEventListener('em:dataset-hydrated', handler);
+        window.removeEventListener('em:dataset-persisted', handler);
+      };
+    },
+    () => getBenchmark(metricKey, anchorStart, anchorEnd),
+    () => ({ tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true })
+  );
 }
