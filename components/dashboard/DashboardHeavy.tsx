@@ -4,6 +4,7 @@ import { DataManager } from '../../lib/data/dataManager';
 import MetricCard from './MetricCard';
 import DayOfWeekPerformance from './DayOfWeekPerformance';
 import HourOfDayPerformance from './HourOfDayPerformance';
+import RevenueSplitBar from './RevenueSplitBar';
 import AudienceCharts from './AudienceCharts';
 import FlowStepAnalysis from './FlowStepAnalysis';
 import CustomSegmentBlock from './CustomSegmentBlock';
@@ -539,6 +540,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 {overviewMetrics && (
                     <section>
                         <div className="flex items-center gap-2 mb-3"><Mail className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Email Performance Overview</h2></div>
+                        {/* Revenue Split Bar (Campaign vs Flow) */}
+                        <RevenueSplitBar campaigns={filteredCampaigns} flows={filteredFlowEmails} />
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                             {/* Row 1 */}
                             <MetricCard title="Total Revenue" value={formatCurrency(overviewMetrics.totalRevenue.value)} change={overviewMetrics.totalRevenue.change} isPositive={overviewMetrics.totalRevenue.isPositive} previousValue={overviewMetrics.totalRevenue.previousValue} previousPeriod={overviewMetrics.totalRevenue.previousPeriod} dateRange={dateRange} metricKey="revenue" sparklineData={overviewSeries.totalRevenue} compareMode={compareMode} />
