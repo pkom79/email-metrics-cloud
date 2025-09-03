@@ -18,16 +18,19 @@ interface RevenueReliabilityProps {
  * Also detects weeks with zero sends (gaps) and highlights them.
  */
 export default function RevenueReliability({ campaigns, flows }: RevenueReliabilityProps) {
-    // Build weekly aggregates with separate campaign & flow revenue
-    const weeks = useMemo(() => {
-        if (!campaigns.length && !flows.length) return [] as {
+    // Build weekly aggregates (campaign + flow) and trim partial edge weeks (<7 active days) to avoid skew
+    const { weeks, trimmed } = useMemo(() => {
+        interface WeekRec {
             weekStart: Date;
             label: string;
             revenue: number;
             campaignRevenue: number;
             flowRevenue: number;
             emails: number;
-        }[];
+            activeDays: number; // distinct days with at least one send
+            daySet: Set<string>;
+        }
+        if (!campaigns.length && !flows.length) return { weeks: [] as WeekRec[], trimmed: { start: false, end: false } };
         const startOfWeek = (d: Date) => {
             const dt = new Date(d);
             const day = dt.getDay(); // 0=Sun
@@ -36,23 +39,27 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
             dt.setHours(0, 0, 0, 0);
             return dt;
         };
-        interface Bucket { revenue: number; campaignRevenue: number; flowRevenue: number; emails: number; weekStart: Date; }
-        const map: Record<string, Bucket> = {};
-        const add = (sentDate: Date, revenue: number | undefined, emailsSent: number | undefined, kind: 'campaign' | 'flow') => {
+        const map: Record<string, WeekRec> = {};
+        const add = (sentDate: Date, revenue: number | undefined, emailsSent: number | undefined, type: 'campaign' | 'flow') => {
             const ws = startOfWeek(sentDate);
             const key = ws.toISOString().slice(0, 10);
-            if (!map[key]) map[key] = { revenue: 0, campaignRevenue: 0, flowRevenue: 0, emails: 0, weekStart: ws };
+            if (!map[key]) map[key] = { weekStart: ws, label: '', revenue: 0, campaignRevenue: 0, flowRevenue: 0, emails: 0, activeDays: 0, daySet: new Set() };
             const bucket = map[key];
             const rev = revenue || 0;
             bucket.revenue += rev;
-            if (kind === 'campaign') bucket.campaignRevenue += rev; else bucket.flowRevenue += rev;
+            if (type === 'campaign') bucket.campaignRevenue += rev; else bucket.flowRevenue += rev;
             bucket.emails += emailsSent || 0;
+            bucket.daySet.add(sentDate.toISOString().slice(0, 10));
         };
         for (const c of campaigns) add(c.sentDate, c.revenue, c.emailsSent, 'campaign');
         for (const f of flows) add(f.sentDate, f.revenue, f.emailsSent, 'flow');
-        return Object.values(map)
+        let arr: WeekRec[] = Object.values(map)
             .sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime())
-            .map(w => ({ ...w, label: w.weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }));
+            .map(w => ({ ...w, activeDays: w.daySet.size, label: w.weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }));
+        let start = false, end = false;
+        if (arr.length && arr[0].activeDays < 7) { arr = arr.slice(1); start = true; }
+        if (arr.length && arr[arr.length - 1].activeDays < 7) { arr = arr.slice(0, -1); end = true; }
+        return { weeks: arr, trimmed: { start, end } };
     }, [campaigns, flows]);
 
     const stats = useMemo(() => {
@@ -73,12 +80,17 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
 
     if (!weeks.length) return null;
 
-    // Chart geometry
-    const w = Math.max(weeks.length * 40, 420);
-    const h = 170; const pad = 28;
+    // Chart geometry (responsive scaling). Wider & taller for clarity.
+    const weeksCount = weeks.length;
+    const w = Math.min(Math.max(weeksCount * 60, 820), 1600);
+    const h = 240; const pad = 46;
     const maxRevenue = Math.max(...weeks.map(w => w.revenue), 1);
-    const barW = 22;
-    const meanY = (val: number) => (h - pad) - (val / maxRevenue) * (h - pad - 30);
+    const gap = 16;
+    const innerWidth = w - 80; // side padding
+    const barW = Math.min(50, Math.max(20, (innerWidth - gap * (weeksCount - 1)) / Math.max(1, weeksCount)));
+    const xPosFor = (i: number) => 40 + i * (barW + gap);
+    const usableHeight = h - pad - 70; // space for labels / band
+    const meanY = (val: number) => (h - pad) - (val / maxRevenue) * usableHeight;
 
     const [hoverIndex, setHoverIndex] = useState<number | null>(null);
     const onEnter = useCallback((i: number) => setHoverIndex(i), []);
@@ -149,40 +161,39 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                             )}
                             {/* Bars */}
                             {weeks.map((wk, i) => {
-                                const xPos = i * 40 + 10;
-                                const totalH = (wk.revenue / maxRevenue) * (h - pad - 30);
-                                const campH = (wk.campaignRevenue / maxRevenue) * (h - pad - 30);
-                                const flowH = (wk.flowRevenue / maxRevenue) * (h - pad - 30);
+                                const x = xPosFor(i);
+                                const totalH = (wk.revenue / maxRevenue) * usableHeight;
+                                const campH = (wk.campaignRevenue / maxRevenue) * usableHeight;
+                                const flowH = (wk.flowRevenue / maxRevenue) * usableHeight;
                                 const baseY = (h - pad) - totalH;
-                                const flowY = baseY; // bottom segment
-                                const campY = flowY + (flowH - campH); // stacked above flow
+                                const flowY = baseY;
+                                const campY = flowY + (flowH - campH);
                                 return (
                                     <g key={wk.label} onMouseEnter={() => onEnter(i)} onMouseLeave={onLeave} className="cursor-pointer">
-                                        {/* Flow segment */}
-                                        <rect x={xPos} y={flowY} width={barW} height={Math.max(2, flowH)} rx={3} className="fill-[url(#flowGrad)] opacity-90 hover:opacity-100 transition-opacity" />
-                                        {/* Campaign segment */}
-                                        <rect x={xPos} y={campY} width={barW} height={Math.max(2, campH)} rx={3} className="fill-[url(#campGrad)] opacity-90 hover:opacity-100 transition-opacity" />
-                                        {/* Week label */}
-                                        <text x={xPos + barW / 2} y={h - pad + 12} textAnchor="middle" className="fill-gray-600 dark:fill-gray-400 text-[10px] font-medium">{wk.label}</text>
-                                        {/* Total label for last week */}
+                                        <rect x={x} y={flowY} width={barW} height={Math.max(2, flowH)} rx={5} className="fill-[url(#flowGrad)] opacity-90 hover:opacity-100 transition-opacity shadow-sm" />
+                                        <rect x={x} y={campY} width={barW} height={Math.max(2, campH)} rx={5} className="fill-[url(#campGrad)] opacity-90 hover:opacity-100 transition-opacity shadow-sm" />
                                         {i === weeks.length - 1 && (
-                                            <text x={xPos + barW / 2} y={baseY - 6} textAnchor="middle" className="fill-purple-700 dark:fill-purple-300 text-[10px] font-semibold">{formatCurrency(wk.revenue)}</text>
+                                            <text x={x + barW / 2} y={baseY - 10} textAnchor="middle" className="fill-purple-700 dark:fill-purple-300 text-[10px] font-semibold tracking-tight">{formatCurrency(wk.revenue)}</text>
                                         )}
                                     </g>
                                 );
                             })}
                             {/* Axis baseline */}
                             <line x1={0} x2={w} y1={h - pad} y2={h - pad} className="stroke-gray-300 dark:stroke-gray-700" />
+                            {/* Light grid lines (quartiles) */}
+                            {[0.25, 0.5, 0.75].map(q => (
+                                <line key={q} x1={0} x2={w} y1={meanY(maxRevenue * q)} y2={meanY(maxRevenue * q)} className="stroke-gray-200 dark:stroke-gray-800" strokeDasharray="2 4" />
+                            ))}
                         </svg>
                         {/* Tooltip */}
                         {hoverIndex !== null && weeks[hoverIndex] && stats && (
-                            <div className="pointer-events-none absolute -top-2 left-0 text-[11px]" style={{ transform: `translateX(${hoverIndex * 40 + 0}px)` }}>
+                            <div className="pointer-events-none absolute -top-2 left-0 text-[11px]" style={{ transform: `translateX(${xPosFor(hoverIndex)}px)` }}>
                                 {(() => {
                                     const wk = weeks[hoverIndex];
                                     const campShare = wk.revenue ? wk.campaignRevenue / wk.revenue : 0;
                                     const deviation = stats.mean > 0 ? ((wk.revenue - stats.mean) / stats.mean) * 100 : 0;
                                     return (
-                                        <div className="translate-x-4 -translate-y-2 w-48 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-3">
+                                        <div className="translate-x-6 -translate-y-3 w-56 rounded-lg border border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm shadow-xl p-3">
                                             <p className="font-medium text-gray-800 dark:text-gray-100 mb-1">Week of {wk.label}</p>
                                             <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Total</span><span className="font-medium text-gray-800 dark:text-gray-100">{formatCurrency(wk.revenue)}</span></div>
                                             <div className="flex justify-between"><span className="text-purple-600 dark:text-purple-300">Campaigns</span><span className="font-medium">{formatCurrency(wk.campaignRevenue)}</span></div>
@@ -208,6 +219,9 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                 <div className="mt-4 text-[11px] leading-relaxed text-gray-600 dark:text-gray-300 space-y-1">
                     <p><span className="font-medium text-gray-800 dark:text-gray-100">Interpretation:</span> Volatility shows how far weeks swing from average. Reliability is simply the remaining stability (100 - volatility). A high reliability score means your revenue engine is predictable enough to justify scaling paid acquisition or inventory planning.</p>
                     <p className="text-gray-500 dark:text-gray-400">Improve reliability by: (1) Filling calendar gaps with evergreen campaigns, (2) Lifting automated (flow) share to cushion dips, (3) Smoothing large seasonal spikes with segmented pre-launch build-up, (4) Pruning underperforming send batches that create noisy peaks.</p>
+                    {(trimmed.start || trimmed.end) && (
+                        <p className="text-amber-600 dark:text-amber-400 text-[10px]">Partial edge week{trimmed.start && trimmed.end ? 's were' : ' was'} excluded to avoid skew (needs full 7 days).</p>
+                    )}
                 </div>
                 <div className="mt-3 flex items-center gap-4 text-[10px] text-gray-500 dark:text-gray-400">
                     <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gradient-to-b from-purple-400 to-purple-700" /> Campaign Revenue</div>
