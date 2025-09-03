@@ -25,59 +25,23 @@ interface StepAgg {
 
 type MetricKey = 'openRate' | 'clickRate' | 'conversionRate' | 'revenuePerEmail';
 
-// Small delta badge
-const DeltaBadge: React.FC<{ value: number; type: 'pp' | 'currency'; ariaLabel: string }> = ({ value, type, ariaLabel }) => {
-    const positive = value > 0;
-    const negative = value < 0;
-    const text = type === 'pp'
-        ? `${value > 0 ? '+' : value < 0 ? '' : ''}${value.toFixed(1)} pp`
-        : `${value > 0 ? '+' : value < 0 ? '' : ''}$${Math.abs(value).toFixed(2)}`;
-    const cls = negative ? 'bg-rose-50 text-rose-700' : positive ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600';
-    return <div aria-label={ariaLabel} className={`mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium ${cls}`}>{text}</div>;
-};
-
-interface StepCellProps {
-    view: 'table' | 'heatmap';
-    metric: MetricKey;
-    value: number;
-    delta: number;
-    reachPct: number; // 0-100
-    revDelta: number; // for secondary display (currency)
-    onHoverData: any;
-    hasClicks: boolean;
-    hasConv: boolean;
-    largestNeg: boolean;
-}
-
-const StepCell: React.FC<StepCellProps> = ({ view, metric, value, delta, reachPct, revDelta, onHoverData, hasClicks, hasConv }) => {
+// Heatmap-only step cell (big number, tooltip above, no reach bar line)
+const StepCell: React.FC<{
+    metric: MetricKey; value: number; delta: number; onHoverData: any;
+}> = ({ metric, value, delta, onHoverData }) => {
     const isCurrency = metric === 'revenuePerEmail';
     const displayValue = isCurrency ? `$${value.toFixed(2)}` : `${value.toFixed(1)}%`;
-    const badgeType: 'pp' | 'currency' = isCurrency ? 'currency' : 'pp';
-    // Heatmap color based on delta sign/magnitude
     const mag = Math.min(1, Math.abs(delta) / (isCurrency ? 2 : 10));
-    const heat = delta === 0 ? 'rgba(147,51,234,0.05)' : delta > 0 ? `rgba(16,185,129,${0.15 + mag * 0.35})` : `rgba(244,63,94,${0.15 + mag * 0.35})`;
+    const bg = delta === 0 ? 'rgba(147,51,234,0.05)' : delta > 0 ? `rgba(16,185,129,${0.18 + mag * 0.4})` : `rgba(244,63,94,${0.18 + mag * 0.4})`;
     return (
-        <div className="relative" role="cell">
-            {view === 'table' ? (
-                <div className="relative rounded-lg bg-white ring-1 ring-gray-200 px-3 py-2">
-                    <div className="text-sm font-medium text-gray-900 leading-tight">{displayValue}</div>
-                    <DeltaBadge value={delta} type={badgeType} ariaLabel={`Delta ${delta.toFixed(2)} ${isCurrency ? 'dollars' : 'percentage points'}`} />
-                    <div className="absolute inset-x-2 bottom-1 h-1 rounded-full bg-purple-200" style={{ width: `${reachPct}%` }} />
-                </div>
-            ) : (
-                <div className="relative rounded-lg px-3 py-2 text-sm font-medium text-gray-900" style={{ background: heat }}>
-                    <div>{displayValue}</div>
-                    <div className="absolute inset-x-2 bottom-1 h-1 rounded-full bg-purple-300" style={{ width: `${reachPct}%` }} />
-                </div>
-            )}
-            {/* Hover popover */}
-            <div className="absolute left-1/2 top-full z-30 hidden -translate-x-1/2 pt-2 group-hover:block">
-                <div className="w-64 rounded-lg border border-gray-200 bg-white shadow-xl p-3 text-[11px] text-gray-800">
-                    <p className="font-semibold mb-1">{onHoverData.flow} • Step {onHoverData.step}</p>
+        <div className="relative group rounded-lg px-3 py-3 font-semibold text-gray-900 text-base leading-none select-none" style={{ background: bg }}>
+            <span className="tabular-nums">{displayValue}</span>
+            <div className="pointer-events-none absolute left-1/2 bottom-full z-30 hidden -translate-x-1/2 -translate-y-2 group-hover:block">
+                <div className="w-64 rounded-xl border border-gray-200 bg-white shadow-xl p-4 text-[11px] text-gray-800">
+                    <p className="font-semibold mb-2">{onHoverData.flow} • Step {onHoverData.step}</p>
                     <table className="w-full text-[11px]">
                         <tbody>
                             <tr><td className="text-gray-500 pr-2">Sends</td><td className="text-right tabular-nums">{onHoverData.emails.toLocaleString()}</td></tr>
-                            <tr><td className="text-gray-500 pr-2">Reach %</td><td className="text-right tabular-nums">{reachPct.toFixed(1)}%</td></tr>
                             <tr><td className="text-gray-500 pr-2">Opens</td><td className="text-right tabular-nums">{onHoverData.opens.toLocaleString()}</td></tr>
                             <tr><td className="text-gray-500 pr-2">Clicks</td><td className="text-right tabular-nums">{onHoverData.clicks.toLocaleString()}</td></tr>
                             <tr><td className="text-gray-500 pr-2">Conversions</td><td className="text-right tabular-nums">{onHoverData.orders.toLocaleString()}</td></tr>
@@ -155,7 +119,6 @@ export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Pro
     }, [filtered]);
 
     const [metric, setMetric] = useState<MetricKey>('openRate');
-    const [view, setView] = useState<'table' | 'heatmap'>('table');
 
     if (!flows.length) return null;
 
@@ -170,9 +133,7 @@ export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Pro
         let minVal = 0; let pos = 0;
         cells.forEach(c => {
             if (c.sequencePosition === 1) return;
-            const delta = (metric === 'revenuePerEmail' ? c.deltaRevenuePerEmail
-                : metric === 'openRate' ? c.deltaOpenRate
-                    : metric === 'clickRate' ? c.deltaClickRate : c.deltaConversionRate);
+            const delta = (metric === 'revenuePerEmail' ? c.deltaRevenuePerEmail : metric === 'openRate' ? c.deltaOpenRate : metric === 'clickRate' ? c.deltaClickRate : c.deltaConversionRate);
             if (delta < minVal) { minVal = delta; pos = c.sequencePosition; }
         });
         if (pos) largestNegPosition[f] = pos;
@@ -209,7 +170,7 @@ export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Pro
         { key: 'revenuePerEmail', label: 'Rev/Email', available: true },
     ];
 
-    const reachPct = (flow: string, step: number) => {
+    const reachPct = (flow: string, step: number) => { // retained for tooltip percentage possibility (not displayed visually now)
         const arr = byFlow[flow];
         const base = arr.find(c => c.sequencePosition === 1)?.emailsSent || 0;
         if (!base) return 0;
@@ -232,26 +193,22 @@ export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Pro
             <div className="flex items-start justify-between mb-5">
                 <div className="flex items-center gap-2">
                     <Flame className="w-5 h-5 text-purple-600" />
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Flow Step Drop-Off</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight flex items-center gap-2">Flow Step Drop-Off
+                        <span className="relative group inline-flex items-center">
+                            <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-600 cursor-pointer" />
+                            <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-80 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
+                                <span className="font-semibold block mb-1">Metrics</span>
+                                Open rate = unique opens / delivered. CTR = unique clicks / delivered. CVR = conversions / delivered. Rev/Email = revenue / delivered.
+                                <br /><br />Color shows delta vs previous step (green up, red down). Larger saturation = larger change.
+                            </span>
+                        </span>
+                    </h3>
                 </div>
-                <div className="flex items-center gap-4 text-sm">
-                    <div className="relative">
-                        <select value={metric} onChange={e => setMetric(e.target.value as MetricKey)} className="appearance-none px-3 h-9 pr-8 rounded-lg border bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
-                            {metricOptions.filter(o => o.available).map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
-                        </select>
-                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▼</span>
-                    </div>
-                    <div className="flex items-center rounded-lg border border-gray-300 overflow-hidden">
-                        <button onClick={() => setView('table')} className={`px-3 h-9 text-xs font-medium ${view === 'table' ? 'bg-purple-600 text-white' : 'text-gray-600'}`}>Table</button>
-                        <button onClick={() => setView('heatmap')} className={`px-3 h-9 text-xs font-medium ${view === 'heatmap' ? 'bg-purple-600 text-white' : 'text-gray-600'}`}>Heatmap</button>
-                    </div>
-                    <div className="relative group inline-flex items-center">
-                        <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-600 cursor-pointer" />
-                        <div className="pointer-events-none absolute right-0 top-6 z-30 hidden group-hover:block w-80 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
-                            <span className="font-semibold block mb-1">How to read</span>
-                            Color = Δ vs previous step (green up, red down). Background width = reach vs step 1. Values are per step for the selected metric.
-                        </div>
-                    </div>
+                <div className="relative">
+                    <select value={metric} onChange={e => setMetric(e.target.value as MetricKey)} className="appearance-none px-3 h-9 pr-8 rounded-lg border bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                        {metricOptions.filter(o => o.available).map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+                    </select>
+                    <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▼</span>
                 </div>
             </div>
             <div className="overflow-x-auto">
@@ -267,16 +224,13 @@ export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Pro
                     <tbody>
                         {flows.map((flow, rowIdx) => {
                             const arr = byFlow[flow];
-                            const base = arr.find(c => c.sequencePosition === 1)!;
-                            const baseLine = `Base: OR ${(base.openRate).toFixed(1)}% · RPE $${base.revenuePerEmail.toFixed(2)}`;
                             return (
                                 <tr key={flow} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                     <td className="sticky left-0 bg-inherit border-b border-gray-200 px-3 py-3 align-top">
-                                        <div className="flex items-center gap-1 text-sm font-semibold text-gray-900">
+                                        <div className="flex items-center gap-1 text-sm font-semibold text-gray-900 whitespace-nowrap">
                                             {largestNegPosition[flow] && <span className="w-2 h-2 rounded-full bg-rose-500" aria-label={`Largest negative delta at step ${largestNegPosition[flow]}`}></span>}
-                                            <span className="truncate" title={flow}>{flow}</span>
+                                            <span title={flow}>{flow}</span>
                                         </div>
-                                        <div className="text-xs text-gray-500 mt-1">{baseLine}</div>
                                     </td>
                                     {Array.from({ length: effectiveMax }, (_, i) => i + 1).map(step => {
                                         const cell = arr.find(c => c.sequencePosition === step);
@@ -285,18 +239,7 @@ export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Pro
                                         const deltaVal = step === 1 ? 0 : (metric === 'revenuePerEmail' ? cell.deltaRevenuePerEmail : metric === 'openRate' ? cell.deltaOpenRate : metric === 'clickRate' ? cell.deltaClickRate : cell.deltaConversionRate);
                                         return (
                                             <td key={step} className="group px-3 py-3 border-b border-gray-200 align-top text-center">
-                                                <StepCell
-                                                    view={view}
-                                                    metric={metric}
-                                                    value={(cell as any)[metric]}
-                                                    delta={deltaVal}
-                                                    reachPct={Math.max(0, Math.min(100, Math.round(reach)))}
-                                                    revDelta={cell.deltaRevenuePerEmail}
-                                                    onHoverData={{ flow, step, emails: cell.emailsSent, opens: cell.opens, clicks: cell.clicks, orders: cell.orders, revenue: cell.revenue, rpe: cell.revenuePerEmail, openRate: cell.openRate, clickRate: cell.clickRate }}
-                                                    hasClicks={hasClicks}
-                                                    hasConv={hasConv}
-                                                    largestNeg={largestNegPosition[flow] === step}
-                                                />
+                                                <StepCell metric={metric} value={(cell as any)[metric]} delta={deltaVal} onHoverData={{ flow, step, emails: cell.emailsSent, opens: cell.opens, clicks: cell.clicks, orders: cell.orders, revenue: cell.revenue, rpe: cell.revenuePerEmail, openRate: cell.openRate, clickRate: cell.clickRate }} />
                                             </td>
                                         );
                                     })}
