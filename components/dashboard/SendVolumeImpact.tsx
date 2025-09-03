@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState } from 'react';
-import { Activity } from 'lucide-react';
+import { Activity, Info } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
 
@@ -55,7 +55,7 @@ const fmtNum = (v: number, d = 2) => Number.isFinite(v) ? v.toFixed(d) : '—';
 
 // ChartContainer renders dual-axis SVG + tooltip + baseline band
 interface ChartSeriesPoint { x: number; value: number | null; emails?: number; label: string; faded?: boolean; }
-interface ChartContainerProps { points: ChartSeriesPoint[]; metric: MetricKey; emailsMax: number; metricMax: number; }
+interface ChartContainerProps { points: ChartSeriesPoint[]; metric: MetricKey; emailsMax: number; metricMax: number; formatValue: (v: number | null) => string; }
 
 // Simple Catmull-Rom spline to Bezier for smoother line
 function catmullRom2bezier(points: { x: number, y: number }[]) {
@@ -76,49 +76,116 @@ function catmullRom2bezier(points: { x: number, y: number }[]) {
     return d.join(' ');
 }
 
-const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsMax, metricMax }) => {
-    const H = 320; const PAD_L = 54; const PAD_R = 54; const PAD_T = 10; const PAD_B = 42;
-    const innerH = H - PAD_T - PAD_B; const W = Math.max(760, points.length * 56); const innerW = W - PAD_L - PAD_R;
-    const xScale = (i: number) => points.length <= 1 ? PAD_L + innerW / 2 : PAD_L + (i / (points.length - 1)) * innerW;
-    const yMetric = (v: number) => PAD_T + (1 - (v / (metricMax || 1))) * innerH;
-    const yEmails = (v: number) => PAD_T + (1 - (v / (emailsMax || 1))) * innerH;
+const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsMax, metricMax, formatValue }) => {
+    // Match FlowStepAnalysis dimensions (graph height 160, drawing area 120 baseline)
+    const VIEW_W = 900; const VIEW_H = 160; const GRAPH_H = 120; // baseline at y=120
+    const PADDING_LEFT = 50; // space for y ticks
+    const PADDING_RIGHT = 20;
+    const innerW = VIEW_W - PADDING_LEFT - PADDING_RIGHT;
+    const xScale = (i: number) => points.length <= 1 ? PADDING_LEFT + innerW / 2 : PADDING_LEFT + (i / (points.length - 1)) * innerW;
+    const yMetric = (v: number) => {
+        if (metricMax === 0) return GRAPH_H; return GRAPH_H - (v / metricMax) * (GRAPH_H - 10); // add top padding
+    };
+    const yEmails = (v: number) => {
+        if (emailsMax === 0) return GRAPH_H; return GRAPH_H - (v / emailsMax) * (GRAPH_H - 10);
+    };
 
+    // Build smoothed paths using Catmull-Rom -> Bezier
     const metricPts = points.filter(p => p.value != null).map(p => ({ x: xScale(p.x), y: yMetric(p.value as number) }));
+    const emailsPts = points.map(p => ({ x: xScale(p.x), y: yEmails(p.emails || 0) }));
     const metricPath = catmullRom2bezier(metricPts);
-    const areaEmailsPath = (() => {
-        if (!points.length) return '';
-        let d = 'M' + xScale(0) + ' ' + yEmails(points[0].emails || 0);
-        points.forEach((p, i) => { d += ' L' + xScale(i) + ' ' + yEmails(p.emails || 0); });
-        d += ' L' + xScale(points.length - 1) + ' ' + (PAD_T + innerH) + ' L' + xScale(0) + ' ' + (PAD_T + innerH) + ' Z';
-        return d;
-    })();
+    const emailsLine = catmullRom2bezier(emailsPts);
+    const emailsArea = emailsPts.length ? `${emailsLine} L ${emailsPts[emailsPts.length - 1].x} ${GRAPH_H} L ${emailsPts[0].x} ${GRAPH_H} Z` : '';
+    const metricArea = metricPts.length ? `${metricPath} L ${metricPts[metricPts.length - 1].x} ${GRAPH_H} L ${metricPts[0].x} ${GRAPH_H} Z` : '';
 
-    const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-    const active = hoverIdx != null ? points[hoverIdx] : null;
+    // X ticks (max 6)
+    const xTicks = useMemo(() => {
+        if (points.length < 2) return [] as { x: number; label: string }[];
+        const count = Math.min(6, points.length);
+        const res: { x: number; label: string }[] = [];
+        for (let i = 0; i < count; i++) {
+            const idx = Math.round((i / (count - 1)) * (points.length - 1));
+            res.push({ x: xScale(idx), label: points[idx].label });
+        }
+        return res;
+    }, [points]);
+    // Y ticks for metric (3)
+    const yTicks = useMemo(() => {
+        const ticks: { y: number; value: number }[] = [];
+        for (let i = 0; i < 3; i++) {
+            const v = (metricMax / 2) * i; // 0, mid, max approx replaced below
+            ticks.push({ y: yMetric(v), value: v });
+        }
+        ticks.push({ y: yMetric(metricMax), value: metricMax });
+        // ensure unique ordering
+        return Array.from(new Map(ticks.map(t => [t.value, t])).values());
+    }, [metricMax]);
+
+    const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
+    const active = hover ? points[hover.idx] : null;
 
     return (
-        <div className="relative">
-            <div className="overflow-x-auto">
-                <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[340px] select-none" role="img" aria-label="Send Volume Impact chart">
-                    <rect x={0} y={0} width={W} height={H} className="fill-white" />
-                    <path d={areaEmailsPath} className="fill-purple-100" />
-                    <path d={metricPath} className="stroke-purple-600" strokeWidth={2.4} fill="none" />
-                    {points.map((p, i) => { if (p.value == null) return null; const x = xScale(i); const y = yMetric(p.value); return <circle key={i} cx={x} cy={y} r={3.5} className={p.faded ? "fill-purple-300" : "fill-white stroke-purple-600"} strokeWidth={p.faded ? 0 : 1.5} onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)} />; })}
-                    {/* Left Axis */}
-                    {(() => { const ticks: number[] = []; const steps = 5; for (let i = 0; i <= steps; i++) { ticks.push((metricMax / steps) * i); } return ticks.map(t => <text key={t} x={PAD_L - 6} y={yMetric(t) + 4} textAnchor="end" className="fill-gray-400 text-[11px] tabular-nums">{metric === 'totalRevenue' || metric === 'revenuePerEmail' ? (t >= 1000 ? '$' + (t / 1000).toFixed(1) + 'k' : '$' + t.toFixed(0)) : (t >= 1 ? t.toFixed(1) : t.toFixed(2))}</text>); })()}
-                    <text x={PAD_L} y={14} className="fill-gray-500 text-[11px] font-medium">{METRIC_OPTIONS.find(m => m.value === metric)?.label}</text>
-                    {/* Right Axis */}
-                    {(() => { const ticks: number[] = []; const steps = 5; for (let i = 0; i <= steps; i++) { ticks.push((emailsMax / steps) * i); } return ticks.map(t => <text key={t} x={W - PAD_R + 4} y={yEmails(t) + 4} className="fill-gray-400 text-[11px]">{t >= 1000 ? (t / 1000).toFixed(1) + 'k' : Math.round(t)}</text>); })()}
-                    <text x={W - PAD_R} y={14} textAnchor="end" className="fill-gray-500 text-[11px] font-medium">Emails Sent</text>
-                    {/* X labels */}
-                    {points.map((p, i) => <text key={p.label} x={xScale(i)} y={H - 6} textAnchor="middle" className="fill-gray-400 text-[10px]">{p.label}</text>)}
-                </svg>
-            </div>
-            {active && (
-                <div className="pointer-events-none absolute left-0 top-0 mt-2 ml-2 rounded-md bg-white/95 backdrop-blur border border-gray-200 shadow px-3 py-2 text-[11px] text-gray-700 space-y-1">
-                    <div className="font-semibold text-gray-900">{active.label}</div>
+        <div className="relative" style={{ width: '100%' }} role="img" aria-label="Send Volume Impact chart">
+            <svg width="100%" viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="block select-none">
+                <defs>
+                    <linearGradient id="svi-emails" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.25" />
+                        <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.05" />
+                    </linearGradient>
+                    <linearGradient id="svi-metric" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.18" />
+                        <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.04" />
+                    </linearGradient>
+                </defs>
+                {/* Grid + Y ticks */}
+                {yTicks.map((t, i) => (
+                    <g key={i}>
+                        <line x1={PADDING_LEFT} y1={t.y} x2={VIEW_W - PADDING_RIGHT} y2={t.y} stroke="#e5e7eb" strokeDasharray="2 2" />
+                        <text x={PADDING_LEFT - 6} y={t.y + 4} textAnchor="end" fontSize={11} fill="#6b7280" className="tabular-nums">
+                            {metric === 'totalRevenue' || metric === 'revenuePerEmail'
+                                ? (t.value >= 1000 ? '$' + (t.value / 1000).toFixed(1) + 'k' : '$' + t.value.toFixed(0))
+                                : (t.value >= 1 ? t.value.toFixed(1) : t.value.toFixed(2))}
+                        </text>
+                    </g>
+                ))}
+                {/* X axis ticks */}
+                {xTicks.map((t, i) => (
+                    <g key={i}>
+                        <line x1={t.x} y1={GRAPH_H} x2={t.x} y2={GRAPH_H + 10} stroke="#e5e7eb" />
+                        <text x={t.x} y={GRAPH_H + 25} textAnchor="middle" fontSize={11} fill="#6b7280">{t.label}</text>
+                    </g>
+                ))}
+                {/* Emails area */}
+                {emailsArea && <path d={emailsArea} fill="url(#svi-emails)" stroke="none" />}
+                {/* Metric area */}
+                {metricArea && <path d={metricArea} fill="url(#svi-metric)" stroke="none" />}
+                {/* Metric line */}
+                {metricPath && <path d={metricPath} fill="none" stroke="#8b5cf6" strokeWidth={2} />}
+                {/* Points + hover zones */}
+                {points.map((p, i) => {
+                    if (p.value == null) return null;
+                    const x = xScale(i); const y = yMetric(p.value);
+                    return (
+                        <g key={i}>
+                            <circle cx={x} cy={y} r={4} fill="#fff" stroke="#8b5cf6" strokeWidth={1.5} />
+                            <circle cx={x} cy={y} r={12} fill="transparent" onMouseEnter={() => setHover({ idx: i, x, y })} onMouseLeave={() => setHover(null)} />
+                        </g>
+                    );
+                })}
+            </svg>
+            {active && active.value != null && hover && (
+                <div
+                    className="pointer-events-none absolute z-20 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700"
+                    style={{
+                        left: `${(hover.x / VIEW_W) * 100}%`,
+                        top: `${Math.max(0, (hover.y / VIEW_H) * 100 - 5)}%`,
+                        transform: 'translate(-50%, -100%)',
+                        whiteSpace: 'nowrap'
+                    }}
+                >
+                    <div className="font-medium mb-0.5">{active.label}</div>
                     <div className="flex justify-between gap-3"><span>Emails</span><span className="tabular-nums">{active.emails?.toLocaleString() || 0}</span></div>
-                    <div className="flex justify-between gap-3"><span>{METRIC_OPTIONS.find(m => m.value === metric)?.label}</span><span className="tabular-nums">{(() => { if (active.value == null) return '—'; if (metric === 'totalRevenue' || metric === 'revenuePerEmail') return fmtCurrency(active.value); return active.value >= 1 ? active.value.toFixed(2) : active.value.toFixed(3); })()}</span></div>
+                    <div className="flex justify-between gap-3"><span>{METRIC_OPTIONS.find(m => m.value === metric)?.label}</span><span className="tabular-nums">{formatValue(active.value)}</span></div>
                 </div>
             )}
         </div>
@@ -231,15 +298,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     const metricMax = useMemo(() => Math.max(1, ...points.map(p => p.value || 0)), [points]);
 
     // Headline (current bucket = last non-null value)
-    const lastPoint = [...points].reverse().find(p => p.value != null) || null;
-    const prevPoint = null; // change calc removed
-
-    const formatHeadline = (v: number | null) => {
-        if (v == null) return '—';
-        if (metric === 'totalRevenue' || metric === 'revenuePerEmail') return fmtCurrency(v);
-        return v >= 1 ? v.toFixed(2) : v.toFixed(3);
-    };
-
+    const lastPoint = [...points].reverse().find(p => p.value != null) || null; // retained if needed later
     // Micro analytics side strip
     const micro = useMemo(() => {
         if (!points.length) return null;
@@ -257,12 +316,34 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     }, [points, baseSeries]);
 
     if (!range) return null;
-    const negativeMetric = NEGATIVE_METRICS.includes(metric);
+    const negativeMetric = NEGATIVE_METRICS.includes(metric); // currently unused but may be reintroduced
 
+    // Average across displayed buckets (non-null values)
+    const avgValue = (() => {
+        const vals = points.filter(p => p.value != null).map(p => p.value as number);
+        if (!vals.length) return null;
+        return vals.reduce((s, v) => s + v, 0) / vals.length;
+    })();
+    const formatValue = (v: number | null) => {
+        if (v == null) return '—';
+        if (metric === 'totalRevenue' || metric === 'revenuePerEmail') return fmtCurrency(v);
+        return v >= 1 ? v.toFixed(2) : v.toFixed(3);
+    };
     return (
         <div className="mt-10">
             <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2"><Activity className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 tracking-tight">Send Volume Impact</h3></div>
+                <div className="flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-purple-600" />
+                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight flex items-center gap-2">Send Volume Impact
+                        <span className="relative group inline-flex items-center">
+                            <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-600 cursor-pointer" />
+                            <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-80 bg-gray-900 text-white text-[11px] leading-snug p-3 rounded-lg shadow-xl border border-gray-700">
+                                <span className="font-semibold text-white">How to interpret</span><br />
+                                Purple line = selected performance metric. Shaded background = relative send volume (emails). When volume increases while efficiency (e.g. Revenue / Email) stays stable or improves, scaling is healthy. Rising negative rate metrics (unsubs, spam, bounces) with higher volume indicates pressure. Partial period ends are trimmed.
+                            </span>
+                        </span>
+                    </h3>
+                </div>
                 <div className="flex gap-4 text-sm">
                     <div className="relative">
                         <select value={metric} onChange={e => setMetric(e.target.value as MetricKey)} className="appearance-none px-3 h-9 pr-8 rounded-lg border bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
@@ -281,26 +362,19 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                 </div>
             </div>
             <div className="rounded-2xl bg-white border border-gray-200 p-6">
-                <div className="flex flex-col md:flex-row md:items-start gap-10">
-                    <div className="flex-1">
-                        <div className="mb-4">
-                            <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium mb-1">{METRIC_OPTIONS.find(m => m.value === metric)?.label}</div>
-                            <div className="flex items-baseline gap-3">
-                                <div className="text-3xl font-bold text-gray-900 tabular-nums">{formatHeadline(lastPoint?.value ?? null)}</div>
-                                {lastPoint && <div className="text-xs text-gray-400">Latest: {lastPoint.label}</div>}
-                            </div>
-                        </div>
-                        <ChartContainer points={points} metric={metric} emailsMax={emailsMax} metricMax={metricMax} />
-                        {!baseSeries.length && (<div className="mt-4 text-xs text-gray-500">No sends in selected range.</div>)}
+                <div className="flex items-start justify-between mb-4">
+                    <div />
+                    <div className="text-right">
+                        <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium mb-0.5">Avg {METRIC_OPTIONS.find(m => m.value === metric)?.label}</div>
+                        <div className="text-3xl font-bold text-gray-900 tabular-nums">{formatValue(avgValue)}</div>
                     </div>
-                    <div className="w-full md:w-60 flex-shrink-0 text-xs space-y-3">
-                        <div className="border border-gray-200 rounded-lg p-4 bg-white">
-                            <p className="text-gray-500 mb-2 font-medium">Range Averages</p>
-                            <div className="flex justify-between mb-1"><span className="text-gray-600">Avg Sends</span><span className="tabular-nums font-semibold text-gray-900">{micro?.avgEmails?.toLocaleString() || '—'}</span></div>
-                            <div className="flex justify-between mb-1"><span className="text-gray-600">Avg RPME</span><span className="tabular-nums font-semibold text-gray-900">{micro ? fmtCurrency(micro.rpmE) : '—'}</span></div>
-                            <div className="flex justify-between"><span className="text-gray-600">Median Unsub/1k</span><span className="tabular-nums font-semibold text-gray-900">{micro ? (micro.medianUnsub >= 1 ? micro.medianUnsub.toFixed(2) : micro.medianUnsub.toFixed(3)) : '—'}</span></div>
-                        </div>
-                    </div>
+                </div>
+                <ChartContainer points={points} metric={metric} emailsMax={emailsMax} metricMax={metricMax} formatValue={formatValue} />
+                {!baseSeries.length && (<div className="mt-4 text-xs text-gray-500">No sends in selected range.</div>)}
+                <div className="mt-6 grid grid-cols-3 gap-4 text-xs">
+                    <div className="border border-gray-200 rounded-lg p-3"><div className="text-gray-500 mb-1 font-medium">Avg Sends</div><div className="text-gray-900 font-semibold tabular-nums">{micro?.avgEmails?.toLocaleString() || '—'}</div></div>
+                    <div className="border border-gray-200 rounded-lg p-3"><div className="text-gray-500 mb-1 font-medium">Avg RPME</div><div className="text-gray-900 font-semibold tabular-nums">{micro ? fmtCurrency(micro.rpmE) : '—'}</div></div>
+                    <div className="border border-gray-200 rounded-lg p-3"><div className="text-gray-500 mb-1 font-medium">Median Unsub/1k</div><div className="text-gray-900 font-semibold tabular-nums">{micro ? (micro.medianUnsub >= 1 ? micro.medianUnsub.toFixed(2) : micro.medianUnsub.toFixed(3)) : '—'}</div></div>
                 </div>
             </div>
         </div>
