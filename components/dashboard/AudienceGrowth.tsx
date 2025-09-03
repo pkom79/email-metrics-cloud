@@ -8,6 +8,15 @@ interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'
 type Metric = 'created' | 'firstActive' | 'subscribed';
 interface Bucket { label: string; start: Date; countCreated: number; countFirst: number; countSubscribed: number; }
 
+// Helper to parse consent timestamp (emailConsentRaw) safely
+function parseConsentDate(raw: any): Date | null {
+    if (!raw) return null;
+    const s = String(raw).trim();
+    if (!s || ['TRUE', 'FALSE', 'NEVER_SUBSCRIBED'].includes(s.toUpperCase())) return null;
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+}
+
 export default function AudienceGrowth({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period' }: Props) {
     const dm = DataManager.getInstance();
     const subs = dm.getSubscribers();
@@ -48,8 +57,18 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
         activeSubs.forEach(s => {
             const created = s.profileCreated; if (created >= start && created <= end) { const i = idxFor(created); if (res[i]) res[i].countCreated++; }
             const first = s.firstActiveRaw || s.firstActive; if (first && first >= start && first <= end) { const i = idxFor(first); if (res[i]) res[i].countFirst++; }
-            if (s.emailConsent && s.firstActive && s.firstActive >= start && s.firstActive <= end) { const i = idxFor(s.firstActive); if (res[i]) res[i].countSubscribed++; }
+            // Subscribed now based on consent timestamp (emailConsentRaw). Fallback to created date if consent true but timestamp missing.
+            const consentDate = parseConsentDate((s as any).emailConsentRaw);
+            if (consentDate && consentDate >= start && consentDate <= end) {
+                const i = idxFor(consentDate); if (res[i]) res[i].countSubscribed++;
+            } else if (s.emailConsent && created >= start && created <= end) {
+                const i = idxFor(created); if (res[i]) res[i].countSubscribed++;
+            }
         });
+        // Enhance monthly labels with year markers when year changes
+        if (granularity === 'monthly') {
+            let lastYear = -1; res.forEach((b, i) => { const y = b.start.getFullYear(); if (i === 0 || y !== lastYear) { b.label = b.label + ` '${String(y).slice(-2)}`; lastYear = y; } });
+        }
         return res;
     };
 
@@ -79,11 +98,12 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
     const seriesCompareVals = compareBuckets.length === buckets.length ? compareBuckets.map((b, i) => ({ x: i, v: metric === 'created' ? b.countCreated : metric === 'firstActive' ? b.countFirst : b.countSubscribed })) : [];
     const buildPath = (pts: { x: number; v: number }[]) => { const pts2 = pts.filter(p => p.v > 0).map(p => ({ x: xScale(p.x), y: yScale(p.v) })); if (pts2.length < 2) return ''; const d = [`M${pts2[0].x} ${pts2[0].y}`]; for (let i = 0; i < pts2.length - 1; i++) { const p0 = pts2[i - 1] || pts2[i]; const p1 = pts2[i]; const p2 = pts2[i + 1]; const p3 = pts2[i + 2] || p2; const cp1x = p1.x + (p2.x - p0.x) / 6; const cp1y = p1.y + (p2.y - p0.y) / 6; const cp2x = p2.x - (p3.x - p1.x) / 6; const cp2y = p2.y - (p3.y - p1.y) / 6; d.push(`C${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x} ${p2.y}`); } return d.join(' '); };
     const pathD = buildPath(seriesVals);
-    const comparePathD = seriesCompareVals.length ? buildPath(seriesCompareVals) : '';
+    // Compare path removed (only used for pct change summary)
+    const comparePathD = '';
     const areaD = pathD ? `${pathD} L ${xScale(seriesVals[seriesVals.length - 1].x)} ${innerH} L ${xScale(seriesVals[0].x)} ${innerH} Z` : '';
 
     // X labels thinning
-    const labelStep = Math.ceil(buckets.length / 12);
+    const labelStep = Math.max(1, Math.ceil(buckets.length / 10));
 
     // Hover state
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -91,7 +111,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
 
     return (
         <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-8">
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start justify-between mb-6">
                 <div className="flex items-center gap-2">
                     <Users className="w-5 h-5 text-purple-600" />
                     <h3 className="text-lg font-semibold text-gray-900 tracking-tight flex items-center gap-2">Audience Growth
@@ -122,7 +142,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                         <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium">Total {metric === 'created' ? 'Created' : metric === 'firstActive' ? 'First Active' : 'Subscribed'}</div>
                         {pctChange != null && <span className={`text-[11px] font-medium flex items-center gap-0.5 ${pctChange >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pctChange >= 0 ? '↑' : '↓'} {Math.abs(pctChange).toFixed(1)}%</span>}
                     </div>
-                    <div className="text-3xl font-bold text-gray-900 tabular-nums">{total.toLocaleString()}</div>
+                    <div className="text-4xl font-bold text-gray-900 tabular-nums">{total.toLocaleString()}</div>
                 </div>
             </div>
             <div className="relative" style={{ width: '100%' }}>
@@ -132,7 +152,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                         <linearGradient id="ag-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.25} /><stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.05} /></linearGradient>
                     </defs>
                     {areaD && <path d={areaD} fill="url(#ag-area)" stroke="none" />}
-                    {comparePathD && <path d={comparePathD} fill="none" stroke="#d1d5db" strokeWidth={1.5} strokeDasharray="4 4" />}
+                    {/* Compare ghost line removed intentionally */}
                     {pathD && <path d={pathD} fill="none" stroke="url(#ag-line)" strokeWidth={2} />}
                     {/* X labels (thinned) */}
                     {buckets.map((b, i) => { if (i % labelStep !== 0 && i !== buckets.length - 1) return null; const x = xScale(i); return <text key={i} x={x} y={height - 10} fontSize={11} fill="#6b7280" textAnchor="middle">{b.label}</text>; })}
@@ -149,12 +169,21 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                     </div>
                 )}
             </div>
-            <div className="mt-6 grid grid-cols-3 gap-4 text-xs">
-                <div className="border border-gray-200 rounded-lg p-3"><div className="text-gray-500 mb-1 font-medium">Created</div><div className="text-gray-900 font-semibold tabular-nums">{buckets.reduce((s, b) => s + b.countCreated, 0).toLocaleString()}</div></div>
-                <div className="border border-gray-200 rounded-lg p-3"><div className="text-gray-500 mb-1 font-medium">First Active</div><div className="text-gray-900 font-semibold tabular-nums">{buckets.reduce((s, b) => s + b.countFirst, 0).toLocaleString()}</div></div>
-                <div className="border border-gray-200 rounded-lg p-3"><div className="text-gray-500 mb-1 font-medium">Subscribed</div><div className="text-gray-900 font-semibold tabular-nums">{buckets.reduce((s, b) => s + b.countSubscribed, 0).toLocaleString()}</div></div>
+            <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <div className="border border-gray-200 rounded-2xl p-5 bg-white">
+                    <div className="text-gray-500 mb-2 font-medium text-sm">Created</div>
+                    <div className="text-gray-900 font-semibold tabular-nums text-2xl md:text-3xl leading-none">{buckets.reduce((s, b) => s + b.countCreated, 0).toLocaleString()}</div>
+                </div>
+                <div className="border border-gray-200 rounded-2xl p-5 bg-white">
+                    <div className="text-gray-500 mb-2 font-medium text-sm">First Active</div>
+                    <div className="text-gray-900 font-semibold tabular-nums text-2xl md:text-3xl leading-none">{buckets.reduce((s, b) => s + b.countFirst, 0).toLocaleString()}</div>
+                </div>
+                <div className="border border-gray-200 rounded-2xl p-5 bg-white">
+                    <div className="text-gray-500 mb-2 font-medium text-sm">Subscribed</div>
+                    <div className="text-gray-900 font-semibold tabular-nums text-2xl md:text-3xl leading-none">{buckets.reduce((s, b) => s + b.countSubscribed, 0).toLocaleString()}</div>
+                </div>
             </div>
-            <div className="mt-4 text-[11px] text-gray-500 flex items-start gap-2"><Info className="w-3 h-3 mt-0.5" /> Created = profile added (signup or import); First Active = first event; Subscribed = inferred organic signup; counts limited to currently active emailable profiles.</div>
+            {/* Disclaimer removed; information lives in tooltip only */}
         </div>
     );
 }
