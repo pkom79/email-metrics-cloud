@@ -27,6 +27,7 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
             campaignRevenue: number;
             flowRevenue: number;
             emails: number;
+            campaignEmails: number;
             activeDays: number; // distinct days with at least one send
             daySet: Set<string>;
         }
@@ -43,12 +44,13 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
         const add = (sentDate: Date, revenue: number | undefined, emailsSent: number | undefined, type: 'campaign' | 'flow') => {
             const ws = startOfWeek(sentDate);
             const key = ws.toISOString().slice(0, 10);
-            if (!map[key]) map[key] = { weekStart: ws, label: '', revenue: 0, campaignRevenue: 0, flowRevenue: 0, emails: 0, activeDays: 0, daySet: new Set() };
+            if (!map[key]) map[key] = { weekStart: ws, label: '', revenue: 0, campaignRevenue: 0, flowRevenue: 0, emails: 0, campaignEmails: 0, activeDays: 0, daySet: new Set() };
             const bucket = map[key];
             const rev = revenue || 0;
             bucket.revenue += rev;
             if (type === 'campaign') bucket.campaignRevenue += rev; else bucket.flowRevenue += rev;
             bucket.emails += emailsSent || 0;
+            if (type === 'campaign') bucket.campaignEmails += emailsSent || 0;
             bucket.daySet.add(sentDate.toISOString().slice(0, 10));
         };
         for (const c of campaigns) add(c.sentDate, c.revenue, c.emailsSent, 'campaign');
@@ -69,25 +71,54 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
         const variance = totals.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / totals.length;
         const std = Math.sqrt(variance);
         const cv = mean > 0 ? std / mean : 0; // coefficient of variation 0..∞ (we clamp later)
-        // Simpler reliability: Reliability = (1 - min(1, CV)) * 100
-        const reliability = Math.round((1 - Math.min(1, cv)) * 100);
+        // Raw reliability
+        const reliabilityRaw = (1 - Math.min(1, cv)) * 100;
         const volatilityPct = cv * 100; // direct interpretation
-        const bucket = reliability >= 90 ? 'Excellent' : reliability >= 75 ? 'Strong' : reliability >= 60 ? 'Needs Work' : 'Volatile';
-        const zeroWeeks = weeks.filter(w => w.emails === 0).length;
+        const bucketRef = Math.round(reliabilityRaw);
+        const bucket = bucketRef >= 90 ? 'Excellent' : bucketRef >= 75 ? 'Strong' : bucketRef >= 60 ? 'Needs Work' : 'Volatile';
+        const volatilityDisplay = (volatilityPct % 1 === 0) ? volatilityPct.toFixed(0) : volatilityPct.toFixed(1);
+        const reliabilityDisplay = (volatilityPct % 1 === 0) ? Math.round(reliabilityRaw).toFixed(0) : reliabilityRaw.toFixed(1);
+        const zeroCampaignWeeks = weeks.filter(w => w.campaignEmails === 0).length;
         const meanCampaignShare = weeks.reduce((s, w) => s + (w.campaignRevenue / (w.revenue || 1)), 0) / weeks.length;
-        return { mean, std, cv, reliability, volatilityPct, bucket, zeroWeeks, meanCampaignShare };
+
+        // --- Lost Campaign Revenue Estimation (simple robust flow-share model) ---
+        // Use non-zero campaign weeks to derive a robust median campaign share excluding outliers.
+        const nonZero = weeks.filter(w => w.campaignRevenue > 0 && (w.campaignRevenue + w.flowRevenue) > 0);
+        let lostCampaignEstimate = 0;
+        if (nonZero.length >= 3 && zeroCampaignWeeks > 0) {
+            const shares = nonZero.map(w => w.campaignRevenue / (w.campaignRevenue + w.flowRevenue));
+            const median = (vals: number[]) => {
+                const srt = [...vals].sort((a, b) => a - b); const n = srt.length; if (!n) return 0; return n % 2 ? srt[(n - 1) / 2] : (srt[n / 2 - 1] + srt[n / 2]) / 2;
+            };
+            const medianShare = median(shares);
+            const absDevs = shares.map(s => Math.abs(s - medianShare));
+            const mad = median(absDevs);
+            const scale = mad === 0 ? 1e-6 : (1.4826 * mad);
+            // Exclude outliers beyond 3 scaled MADs
+            const filteredShares = shares.filter(s => Math.abs(s - medianShare) / scale <= 3);
+            const robustShare = filteredShares.length >= 3 ? median(filteredShares) : medianShare;
+            // Guard rails
+            const share = Math.min(0.95, Math.max(0.01, robustShare));
+            // For each zero week: expected C = (share/(1-share)) * flowRevenue
+            const factor = share / (1 - share);
+            lostCampaignEstimate = weeks.filter(w => w.campaignRevenue === 0).reduce((sum, w) => sum + (w.flowRevenue * factor), 0);
+        }
+
+        return { mean, std, cv, reliabilityRaw, reliabilityDisplay, volatilityPct, volatilityDisplay, bucket, zeroCampaignWeeks, meanCampaignShare, lostCampaignEstimate };
     }, [weeks]);
 
     if (!weeks.length) return null;
 
-    // Chart geometry (responsive scaling). Wider & taller for clarity.
+    // Chart geometry (adaptive – no horizontal scrollbar).
     const weeksCount = weeks.length;
-    const w = Math.min(Math.max(weeksCount * 60, 820), 1600);
     const h = 240; const pad = 46;
+    // Base chart width capped to container-friendly size (~max dashboard width).
+    const baseMax = 1100;
+    const w = Math.min(baseMax, Math.max(600, weeksCount * 32));
     const maxRevenue = Math.max(...weeks.map(w => w.revenue), 1);
-    const gap = 16;
-    const innerWidth = w - 80; // side padding
-    const barW = Math.min(50, Math.max(20, (innerWidth - gap * (weeksCount - 1)) / Math.max(1, weeksCount)));
+    const gap = weeksCount > 40 ? 2 : weeksCount > 30 ? 4 : weeksCount > 20 ? 6 : weeksCount > 12 ? 8 : 12;
+    const innerWidth = w - 64; // side padding reduced since no scroll
+    const barW = Math.max(4, Math.min(40, (innerWidth - gap * (weeksCount - 1)) / weeksCount));
     const xPosFor = (i: number) => 40 + i * (barW + gap);
     const usableHeight = h - pad - 70; // space for labels / band
     const meanY = (val: number) => (h - pad) - (val / maxRevenue) * usableHeight;
@@ -102,34 +133,26 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
     return (
         <div className="mt-8">
             <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5">
-                <div className="flex items-start justify-between mb-4 gap-4 flex-wrap">
+                <div className="flex items-start mb-3">
                     <div className="flex items-center gap-2">
                         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Weekly Revenue Reliability</h3>
                         <div className="group relative">
                             <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-700 dark:text-gray-500 dark:group-hover:text-gray-300 cursor-pointer" />
                             <div className="absolute left-0 top-6 z-20 hidden group-hover:block w-80 text-[11px] leading-snug bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3">
-                                <p className="text-gray-700 dark:text-gray-200 mb-1"><span className="font-semibold">What is Reliability?</span> Consistency of weekly total email revenue (campaigns + flows).</p>
+                                <p className="text-gray-700 dark:text-gray-200 mb-1"><span className="font-semibold">Definitions</span></p>
                                 <ul className="list-disc pl-4 space-y-0.5 text-gray-600 dark:text-gray-300">
-                                    <li><span className="font-medium">Volatility %</span> = Coefficient of Variation (std dev / mean).</li>
-                                    <li><span className="font-medium">Reliability</span> = 100 - min(100, Volatility %).</li>
-                                    <li>Lower volatility → easier forecasting & scaling.</li>
-                                    <li>Zero‑send gaps inflate volatility.</li>
+                                    <li><span className="font-medium">Volatility</span>: (Std Dev / Mean) * 100</li>
+                                    <li><span className="font-medium">Reliability</span>: 100 - Volatility</li>
+                                    <li><span className="font-medium">Zero Campaign Weeks</span>: No campaign sends</li>
+                                    <li><span className="font-medium">Band</span>: ±1 Std Dev around mean</li>
                                 </ul>
-                                <p className="mt-1 text-gray-500 dark:text-gray-400">Aim for ≥75. Improve by smoothing send cadence & strengthening evergreen flow revenue.</p>
+                                <p className="mt-1 text-gray-500 dark:text-gray-400">Higher reliability = steadier revenue base.</p>
                             </div>
                         </div>
                     </div>
-                    {stats && (
-                        <div className="flex items-center gap-3 text-xs">
-                            <div className="px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200">Volatility {stats.volatilityPct.toFixed(1)}%</div>
-                            <div className={`px-2 py-1 rounded-md font-medium ${stats.bucket === 'Excellent' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' : stats.bucket === 'Strong' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : stats.bucket === 'Needs Work' ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'}`}>{stats.reliability}% {stats.bucket}</div>
-                            <div className="px-2 py-1 rounded-md bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">{(stats.meanCampaignShare * 100).toFixed(0)}% Campaigns</div>
-                            {stats.zeroWeeks > 0 && <div className="px-2 py-1 rounded-md bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">{stats.zeroWeeks} gap{stats.zeroWeeks > 1 ? 's' : ''}</div>}
-                        </div>
-                    )}
                 </div>
-                <div className="overflow-x-auto pb-2">
-                    <div className="relative inline-block" style={{ width: w }}>
+                <div className="pb-2 overflow-visible">
+                    <div className="relative" style={{ width: w }}>
                         <svg width={w} height={h} className="block">
                             <defs>
                                 <linearGradient id="campGrad" x1="0" x2="0" y1="0" y2="1">
@@ -180,14 +203,11 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                             })}
                             {/* Axis baseline */}
                             <line x1={0} x2={w} y1={h - pad} y2={h - pad} className="stroke-gray-300 dark:stroke-gray-700" />
-                            {/* Light grid lines (quartiles) */}
-                            {[0.25, 0.5, 0.75].map(q => (
-                                <line key={q} x1={0} x2={w} y1={meanY(maxRevenue * q)} y2={meanY(maxRevenue * q)} className="stroke-gray-200 dark:stroke-gray-800" strokeDasharray="2 4" />
-                            ))}
+                            {/* Removed extra grid lines for clarity */}
                         </svg>
                         {/* Tooltip */}
                         {hoverIndex !== null && weeks[hoverIndex] && stats && (
-                            <div className="pointer-events-none absolute -top-2 left-0 text-[11px]" style={{ transform: `translateX(${xPosFor(hoverIndex)}px)` }}>
+                            <div className="pointer-events-none absolute -top-2 left-0 text-[11px] z-30" style={{ transform: `translateX(${xPosFor(hoverIndex)}px)` }}>
                                 {(() => {
                                     const wk = weeks[hoverIndex];
                                     const campShare = wk.revenue ? wk.campaignRevenue / wk.revenue : 0;
@@ -208,27 +228,46 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                     </div>
                 </div>
                 {stats && (
-                    <div className="mt-4 grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
-                        <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gradient-to-br from-gray-50 to-white dark:from-gray-800/40 dark:to-gray-800/10"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Avg Weekly Revenue</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(stats.mean)}</p></div>
-                        <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gradient-to-br from-gray-50 to-white dark:from-gray-800/40 dark:to-gray-800/10"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Std Dev</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(stats.std)}</p></div>
-                        <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gradient-to-br from-purple-50 to-white dark:from-purple-900/20 dark:to-purple-900/5"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Reliability</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{stats.reliability}%</p></div>
-                        <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-900/20 dark:to-indigo-900/5"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Volatility</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{stats.volatilityPct.toFixed(1)}%</p></div>
-                        <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gradient-to-br from-rose-50 to-white dark:from-rose-900/20 dark:to-rose-900/5"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Zero-Send Weeks</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{stats.zeroWeeks}</p></div>
+                    <div className="mt-4 grid grid-cols-2 md:grid-cols-6 gap-3 text-xs">
+                        <div title="Average weekly combined (campaign + flow) revenue" className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/40"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Avg Weekly Revenue</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(stats.mean)}</p></div>
+                        <div title="Standard deviation of weekly totals" className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/40"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Std Dev</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(stats.std)}</p></div>
+                        <div title="Reliability = 100 - Volatility" className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/40"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Reliability</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{stats.reliabilityDisplay}%</p></div>
+                        <div title="Volatility = (Std Dev / Mean) * 100" className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/40"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Volatility</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{stats.volatilityDisplay}%</p></div>
+                        <div title="Weeks with no campaign sends (flows ignored)" className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/40"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Zero Campaign Weeks</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{stats.zeroCampaignWeeks}</p></div>
+                        {stats.lostCampaignEstimate > 0 && (
+                            <div title="Estimated lost campaign revenue in zero-campaign weeks (robust median share * flow revenue)" className="rounded-lg border border-gray-200 dark:border-gray-800 p-2 bg-gray-50 dark:bg-gray-800/40"><p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Est. Lost Camp Rev</p><p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(stats.lostCampaignEstimate)}</p></div>
+                        )}
                     </div>
                 )}
-                <div className="mt-4 text-[11px] leading-relaxed text-gray-600 dark:text-gray-300 space-y-1">
-                    <p><span className="font-medium text-gray-800 dark:text-gray-100">Interpretation:</span> Volatility shows how far weeks swing from average. Reliability is simply the remaining stability (100 - volatility). A high reliability score means your revenue engine is predictable enough to justify scaling paid acquisition or inventory planning.</p>
-                    <p className="text-gray-500 dark:text-gray-400">Improve reliability by: (1) Filling calendar gaps with evergreen campaigns, (2) Lifting automated (flow) share to cushion dips, (3) Smoothing large seasonal spikes with segmented pre-launch build-up, (4) Pruning underperforming send batches that create noisy peaks.</p>
-                    {(trimmed.start || trimmed.end) && (
-                        <p className="text-amber-600 dark:text-amber-400 text-[10px]">Partial edge week{trimmed.start && trimmed.end ? 's were' : ' was'} excluded to avoid skew (needs full 7 days).</p>
-                    )}
-                </div>
+                {/* Interpretation popover */}
+                <Interpretation trimmed={trimmed} />
                 <div className="mt-3 flex items-center gap-4 text-[10px] text-gray-500 dark:text-gray-400">
                     <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gradient-to-b from-purple-400 to-purple-700" /> Campaign Revenue</div>
                     <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gradient-to-b from-indigo-400 to-indigo-700" /> Flow Revenue</div>
-                    {stats && <div className="flex items-center gap-1"><span className="w-6 h-[2px] bg-purple-500" /> Mean (±1σ shaded)</div>}
+                    {stats && <div className="flex items-center gap-1"><span className="w-6 h-[2px] bg-purple-500" /> Mean (±1σ band)</div>}
                 </div>
             </div>
+        </div>
+    );
+}
+
+// Inline component for interpretation popover
+function Interpretation({ trimmed }: { trimmed: { start: boolean; end: boolean } }) {
+    const [open, setOpen] = useState(false);
+    return (
+        <div className="mt-4 text-[11px] text-gray-600 dark:text-gray-300">
+            <button onClick={() => setOpen(o => !o)} className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-300 hover:underline font-medium">
+                {open ? 'Hide interpretation' : 'Show interpretation'}
+            </button>
+            {open && (
+                <div className="mt-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-3 space-y-2">
+                    <p><span className="font-medium text-gray-800 dark:text-gray-100">Reliability</span> = 100 - Volatility. Volatility is how far weeks swing relative to average (std dev / mean). Higher reliability means steadier revenue—better for forecasting and scaling.</p>
+                    <p className="text-gray-500 dark:text-gray-400">Improve by: 1) Filling calendar gaps with evergreen campaigns, 2) Increasing automated (flow) share, 3) Smoothing seasonal spikes via segmented build-up, 4) Pruning noisy underperforming batches.</p>
+                    {(trimmed.start || trimmed.end) && (
+                        <p className="text-amber-600 dark:text-amber-400 text-[10px]">Partial edge week{trimmed.start && trimmed.end ? 's were' : ' was'} excluded (needs full 7 days).</p>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

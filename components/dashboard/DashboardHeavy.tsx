@@ -560,6 +560,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             <MetricCard title="Spam Rate" value={formatPercent(overviewMetrics.spamRate.value)} change={overviewMetrics.spamRate.change} isPositive={overviewMetrics.spamRate.isPositive} previousValue={overviewMetrics.spamRate.previousValue} previousPeriod={overviewMetrics.spamRate.previousPeriod} dateRange={dateRange} metricKey="spamRate" sparklineData={overviewSeries.spamRate} compareMode={compareMode} />
                             <MetricCard title="Bounce Rate" value={formatPercent(overviewMetrics.bounceRate.value)} change={overviewMetrics.bounceRate.change} isPositive={overviewMetrics.bounceRate.isPositive} previousValue={overviewMetrics.bounceRate.previousValue} previousPeriod={overviewMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={overviewSeries.bounceRate} compareMode={compareMode} />
                         </div>
+                        {/* Weekly Revenue Reliability (moved up) */}
+                        <RevenueReliability campaigns={filteredCampaigns} flows={filteredFlowEmails} dateRange={dateRange} />
                     </section>
                 )}
                 {campaignMetrics && (
@@ -615,8 +617,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 </div>
                             </div>
                         ))}{(() => { const sorted = getSortedCampaigns(); return displayedCampaigns < sorted.length && (<div className="p-4 border-t border-gray-200 dark:border-gray-800 text-center bg-gray-50 dark:bg-gray-900/50"><button onClick={() => setDisplayedCampaigns(n => n + 5)} className="px-4 py-2 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white transition-colors">Load More ({Math.min(5, sorted.length - displayedCampaigns)} more)</button></div>); })()}</div>
-                        {/* Weekly Revenue Reliability */}
-                        <RevenueReliability campaigns={filteredCampaigns} flows={filteredFlowEmails} dateRange={dateRange} />
                     </section>
                 )}
                 {flowMetrics && (
