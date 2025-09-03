@@ -77,6 +77,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const dm = useMemo(() => DataManager.getInstance(), []);
 
     const [dashboardError, setDashboardError] = useState<string | null>(null);
+    // Optional override to intentionally show an empty dashboard (e.g. screenshot / marketing)
+    const [forceEmpty, setForceEmpty] = useState(false);
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const qp = new URLSearchParams(window.location.search);
+        if (qp.get('empty') === '1') setForceEmpty(true);
+    }, []);
     const [dataVersion, setDataVersion] = useState(0);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     // Additional readiness flag to avoid rendering charts before hydration attempts complete
@@ -422,6 +429,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const showOverlay = isInitialLoading && !noAccounts;
 
     if (dashboardError) { return <div className="min-h-screen flex items-center justify-center p-6"><div className="max-w-md mx-auto text-center"><h2 className="text-lg font-semibold text-red-600 mb-4">Dashboard Error</h2><p className="text-gray-600 dark:text-gray-300 mb-6">{dashboardError}</p><div className="space-x-4"><button onClick={() => { setDashboardError(null); setDataVersion(v => v + 1); }} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Retry</button><button onClick={() => window.location.reload()} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Reload Page</button></div></div></div>; }
+
+    // Forced empty view (still respects header/footer from layout)
+    if (forceEmpty) return <div className="min-h-screen" />;
 
     // Unified loading gate: ensure initial hydration attempts (or fallback) ran
     if ((!initialLoadComplete && !isAdmin) || (isAdmin && isInitialLoading)) {
