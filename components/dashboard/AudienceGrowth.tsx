@@ -8,9 +8,11 @@ interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'
 type Metric = 'created' | 'firstActive' | 'subscribed';
 interface Bucket { label: string; start: Date; countCreated: number; countFirst: number; countSubscribed: number; }
 
-// Helper to parse consent timestamp (emailConsentRaw) safely
+// (Legacy) parsing helper no longer needed now that transformer exposes emailConsentTimestamp
+// Kept as a no-op fallback for backward compatibility if older data still present
 function parseConsentDate(raw: any): Date | null {
     if (!raw) return null;
+    if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
     const s = String(raw).trim();
     if (!s || ['TRUE', 'FALSE', 'NEVER_SUBSCRIBED'].includes(s.toUpperCase())) return null;
     const d = new Date(s);
@@ -57,8 +59,8 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
         activeSubs.forEach(s => {
             const created = s.profileCreated; if (created >= start && created <= end) { const i = idxFor(created); if (res[i]) res[i].countCreated++; }
             const first = s.firstActiveRaw || s.firstActive; if (first && first >= start && first <= end) { const i = idxFor(first); if (res[i]) res[i].countFirst++; }
-            // Subscribed now based on consent timestamp (emailConsentRaw). Fallback to created date if consent true but timestamp missing.
-            const consentDate = parseConsentDate((s as any).emailConsentRaw);
+            // Subscribed now based on processed consent timestamp. Fallback to raw parse and then created date if consent true.
+            const consentDate = (s as any).emailConsentTimestamp || parseConsentDate((s as any).emailConsentRaw);
             if (consentDate && consentDate >= start && consentDate <= end) {
                 const i = idxFor(consentDate); if (res[i]) res[i].countSubscribed++;
             } else if (s.emailConsent && created >= start && created <= end) {
@@ -90,7 +92,8 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
 
     if (!buckets.length) return null;
 
-    const maxVal = Math.max(1, ...buckets.map(b => Math.max(b.countCreated, b.countFirst, b.countSubscribed)));
+    // Scale now based only on selected metric for better visual variation
+    const maxVal = Math.max(1, ...buckets.map(b => metric === 'created' ? b.countCreated : metric === 'firstActive' ? b.countFirst : b.countSubscribed));
     const width = 900; const height = 160; const innerH = 120; const padLeft = 40; const padRight = 20; const innerW = width - padLeft - padRight;
     const xScale = (i: number) => buckets.length <= 1 ? padLeft + innerW / 2 : padLeft + (i / (buckets.length - 1)) * innerW;
     const yScale = (v: number) => innerH - (v / maxVal) * (innerH - 10);
@@ -102,8 +105,21 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
     const comparePathD = '';
     const areaD = pathD ? `${pathD} L ${xScale(seriesVals[seriesVals.length - 1].x)} ${innerH} L ${xScale(seriesVals[0].x)} ${innerH} Z` : '';
 
-    // X labels thinning
-    const labelStep = Math.max(1, Math.ceil(buckets.length / 10));
+    // X axis tick calculation (evenly spaced, independent of bucket label density)
+    const desiredXTicks = 6; // including first & last
+    const tickIndices: number[] = [];
+    if (buckets.length <= desiredXTicks) {
+        for (let i = 0; i < buckets.length; i++) tickIndices.push(i);
+    } else {
+        for (let i = 0; i < desiredXTicks; i++) {
+            const idx = Math.round((i / (desiredXTicks - 1)) * (buckets.length - 1));
+            if (!tickIndices.includes(idx)) tickIndices.push(idx);
+        }
+    }
+
+    // Y axis ticks (4 divisions)
+    const yTicks = 4;
+    const yTickValues = Array.from({ length: yTicks + 1 }, (_, i) => Math.round((maxVal / yTicks) * i));
 
     // Hover state
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -152,11 +168,27 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                         <linearGradient id="ag-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.25} /><stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.05} /></linearGradient>
                     </defs>
                     {areaD && <path d={areaD} fill="url(#ag-area)" stroke="none" />}
-                    {/* Compare ghost line removed intentionally */}
                     {pathD && <path d={pathD} fill="none" stroke="url(#ag-line)" strokeWidth={2} />}
-                    {/* X labels (thinned) */}
-                    {buckets.map((b, i) => { if (i % labelStep !== 0 && i !== buckets.length - 1) return null; const x = xScale(i); return <text key={i} x={x} y={height - 10} fontSize={11} fill="#6b7280" textAnchor="middle">{b.label}</text>; })}
+                    {/* Y axis */}
+                    <line x1={padLeft} x2={padLeft} y1={0} y2={innerH} stroke="#e5e7eb" />
+                    {yTickValues.map(v => {
+                        const y = yScale(v);
+                        return (
+                            <g key={v}>
+                                <line x1={padLeft - 4} x2={padLeft} y1={y} y2={y} stroke="#9ca3af" />
+                                <text x={padLeft - 6} y={y + 3} fontSize={10} fill="#6b7280" textAnchor="end" className="tabular-nums">{v.toLocaleString()}</text>
+                                <line x1={padLeft} x2={width - padRight} y1={y} y2={y} stroke="#f3f4f6" />
+                            </g>
+                        );
+                    })}
+                    {/* X axis baseline */}
                     <line x1={padLeft} x2={width - padRight} y1={innerH} y2={innerH} stroke="#e5e7eb" />
+                    {/* X axis ticks */}
+                    {tickIndices.map(i => {
+                        const b = buckets[i];
+                        const x = xScale(i);
+                        return <text key={i} x={x} y={height - 10} fontSize={11} fill="#6b7280" textAnchor="middle">{b.label}</text>;
+                    })}
                     {/* Hover hit zones */}
                     {buckets.map((b, i) => { const x = xScale(i); const cellW = innerW / Math.max(1, (buckets.length - 1)); return <rect key={i} x={x - cellW / 2} y={0} width={cellW} height={height} fill="transparent" onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)} />; })}
                 </svg>

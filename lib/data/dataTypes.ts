@@ -70,6 +70,8 @@ export interface ProcessedSubscriber {
     emailConsent: boolean;
     // Preserve raw consent to compute opt-in rate rules like NEVER_SUBSCRIBED
     emailConsentRaw?: string;
+    // Parsed consent timestamp (if provided) to distinguish organic subscription timing
+    emailConsentTimestamp?: Date | null;
     totalClv: number;
     predictedClv: number;
     avgOrderValue: number;

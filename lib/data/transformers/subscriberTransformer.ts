@@ -25,6 +25,7 @@ export class SubscriberTransformer {
 
         const emailConsentRaw = ((raw as any)['Email Marketing Consent'] ?? '').toString();
         const emailConsent = this.parseConsent(emailConsentRaw);
+    const emailConsentTimestamp = this.parseDate((raw as any)['Email Marketing Consent Timestamp']);
 
         const emailSuppressionsRaw = typeof (raw as any)['Email Suppressions'] === 'string' ? (raw as any)['Email Suppressions'] as string : String((raw as any)['Email Suppressions'] ?? '');
         const { suppressions, canReceiveEmail } = this.parseEmailSuppressions(emailSuppressionsRaw);
@@ -43,6 +44,7 @@ export class SubscriberTransformer {
             source: (raw as any)['Source'] || 'Unknown',
             emailConsent,
             emailConsentRaw,
+            emailConsentTimestamp,
             totalClv,
             predictedClv,
             avgOrderValue,
