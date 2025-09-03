@@ -4,7 +4,7 @@ import { Users, UserCheck, DollarSign, TrendingUp, Calendar, AlertCircle, Trash2
 import InactivityRevenueDrain from './InactivityRevenueDrain';
 import { DataManager } from '../../lib/data/dataManager';
 
-export default function AudienceCharts() {
+export default function AudienceCharts({ dateRange, granularity, customFrom, customTo }: { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string }) {
     const dataManager = DataManager.getInstance();
     const audienceInsights = dataManager.getAudienceInsights();
     const subscribers = dataManager.getSubscribers();
@@ -283,6 +283,10 @@ export default function AudienceCharts() {
                 </div>
             </div>
 
+            <div className="mb-6">
+                {/* Subscriber Growth module inserted here */}
+                {React.createElement(require('./SubscriberGrowth').default, { dateRange, granularity, customFrom, customTo })}
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-2 mb-4">

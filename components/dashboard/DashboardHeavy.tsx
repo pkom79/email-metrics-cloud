@@ -9,7 +9,7 @@ import RevenueReliability from './RevenueReliability';
 import SendVolumeImpact from './SendVolumeImpact';
 import AudienceCharts from './AudienceCharts';
 import FlowStepAnalysis from './FlowStepAnalysis';
-import FlowStepDropOffMap from './FlowStepDropOffMap';
+import FlowStepDropOff from './FlowStepDropOff';
 import CustomSegmentBlock from './CustomSegmentBlock';
 import DataAgeNotice from './DataAgeNotice';
 import CampaignSendFrequency from './CampaignSendFrequency';
@@ -666,8 +666,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 {/* Flow Step Analysis */}
                 <section><FlowStepAnalysis dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} /></section>
                 {/* Flow Step Drop-Off Map */}
-                <section><FlowStepDropOffMap dateRange={dateRange} customFrom={customFrom} customTo={customTo} /></section>
-                <div ref={el => setAudienceOverviewRef(el)}><AudienceCharts /></div>
+                <section><FlowStepDropOff dateRange={dateRange} customFrom={customFrom} customTo={customTo} /></section>
+                <div ref={el => setAudienceOverviewRef(el)}><AudienceCharts dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} /></div>
                 <section><CustomSegmentBlock /></section>
             </div></div>
 
