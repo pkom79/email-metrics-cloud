@@ -275,7 +275,34 @@ const BMARK_VERSION = '3'; // bump to invalidate old cached results (include sel
 const lookbackCache = new Map<string, DayRec[]>();
 const resultCache = new Map<string, BenchmarkResult>();
 
+// Global subscription management to avoid per-hook event listener proliferation
+const subscribers = new Set<() => void>();
+function notifyAll(){ for (const cb of subscribers) { try { cb(); } catch {} } }
+function globalHydrationHandler(){ lookbackCache.clear(); resultCache.clear(); notifyAll(); }
+if (typeof window !== 'undefined' && !(window as any).__BENCH_LISTENER__) {
+  try {
+    window.addEventListener('em:dataset-hydrated', globalHydrationHandler);
+    window.addEventListener('em:dataset-persisted', globalHydrationHandler);
+    (window as any).__BENCH_LISTENER__ = true;
+  } catch {}
+}
+
+// Runaway compute instrumentation (helps detect infinite render loops)
+let frameId = 0; let computeCallsThisFrame = 0; let lastWarnTs = 0;
+if (typeof window !== 'undefined') {
+  const raf = () => { frameId++; computeCallsThisFrame = 0; window.requestAnimationFrame(raf); };
+  window.requestAnimationFrame(raf);
+}
+
 function compute(metric: string, start: Date, end: Date): BenchmarkResult {
+  computeCallsThisFrame++;
+  if (computeCallsThisFrame > 400 && typeof window !== 'undefined') {
+    const now = Date.now();
+    if (now - lastWarnTs > 2000) {
+      console.warn('[Benchmark] High compute volume in a single frame; possible render loop', { computeCallsThisFrame, metric, start, end });
+      lastWarnTs = now;
+    }
+  }
   const dm = DataManager.getInstance();
   const { start: lbStart, end: lbEnd } = buildLookback(start); // lookback window ends day before selected start
   // Fetch union (lookback + selected period)
@@ -316,15 +343,9 @@ export function getBenchmark(metric: string | undefined, start?: Date, end?: Dat
 
 export function useBenchmark(metric: string | undefined, start?: Date, end?: Date) {
   return useSyncExternalStore(
-    (cb)=>{
-      if (typeof window==='undefined') return ()=>{};
-      const h=()=>{ resultCache.clear(); lookbackCache.clear(); cb(); };
-      window.addEventListener('em:dataset-hydrated', h);
-      window.addEventListener('em:dataset-persisted', h);
-      return ()=>{ window.removeEventListener('em:dataset-hydrated', h); window.removeEventListener('em:dataset-persisted', h); };
-    },
-    ()=> getBenchmark(metric, start, end),
-  ()=> ({ metric: metric||'', value:0, valueType:'rate' as const, tier:null, diff:null, diffType:null, baseline:null, lookbackDays:0, keptDays:0, hiddenReason:'SSR' })
+    (cb) => { subscribers.add(cb); return () => { subscribers.delete(cb); }; },
+    () => getBenchmark(metric, start, end),
+    () => EMPTY_BENCHMARK
   );
 }
 
