@@ -18,6 +18,9 @@ interface RevenueReliabilityProps {
  * Also detects weeks with zero sends (gaps) and highlights them.
  */
 export default function RevenueReliability({ campaigns, flows }: RevenueReliabilityProps) {
+    const [scope, setScope] = useState<'all' | 'campaigns' | 'flows'>('all');
+    const filteredCampaigns = scope === 'flows' ? [] : campaigns;
+    const filteredFlows = scope === 'campaigns' ? [] : flows;
     // Build weekly aggregates (campaign + flow) and trim partial edge weeks (<7 active days) to avoid skew
     const { weeks, trimmed } = useMemo(() => {
         interface WeekRec {
@@ -31,7 +34,7 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
             activeDays: number; // distinct days with at least one send
             daySet: Set<string>;
         }
-        if (!campaigns.length && !flows.length) return { weeks: [] as WeekRec[], trimmed: { start: false, end: false } };
+        if (!filteredCampaigns.length && !filteredFlows.length) return { weeks: [] as WeekRec[], trimmed: { start: false, end: false } };
         const startOfWeek = (d: Date) => {
             const dt = new Date(d);
             const day = dt.getDay(); // 0=Sun
@@ -53,8 +56,8 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
             if (type === 'campaign') bucket.campaignEmails += emailsSent || 0;
             bucket.daySet.add(sentDate.toISOString().slice(0, 10));
         };
-        for (const c of campaigns) add(c.sentDate, c.revenue, c.emailsSent, 'campaign');
-        for (const f of flows) add(f.sentDate, f.revenue, f.emailsSent, 'flow');
+        for (const c of filteredCampaigns) add(c.sentDate, c.revenue, c.emailsSent, 'campaign');
+        for (const f of filteredFlows) add(f.sentDate, f.revenue, f.emailsSent, 'flow');
         let arr: WeekRec[] = Object.values(map)
             .sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime())
             .map(w => ({ ...w, activeDays: w.daySet.size, label: w.weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }));
@@ -62,7 +65,7 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
         if (arr.length && arr[0].activeDays < 7) { arr = arr.slice(1); start = true; }
         if (arr.length && arr[arr.length - 1].activeDays < 7) { arr = arr.slice(0, -1); end = true; }
         return { weeks: arr, trimmed: { start, end } };
-    }, [campaigns, flows]);
+    }, [filteredCampaigns, filteredFlows]);
 
     const stats = useMemo(() => {
         if (weeks.length < 3) return null; // need at least 3 data points for meaningful variability
@@ -85,25 +88,24 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
 
         // --- Lost Campaign Revenue Estimation (simple robust flow-share model) ---
         // Use non-zero campaign weeks to derive a robust median campaign share excluding outliers.
-        const nonZero = weeks.filter(w => w.campaignRevenue > 0 && (w.campaignRevenue + w.flowRevenue) > 0);
+        // --- Lost Campaign Revenue Estimation (revised: robust median absolute campaign revenue) ---
+        // Rationale: previous share * flow model overstated for brands with high flow revenue. Use median non-zero campaign revenue (robust to outliers) * number of zero weeks.
+        const nonZero = weeks.filter(w => w.campaignRevenue > 0);
         let lostCampaignEstimate = 0;
         if (nonZero.length >= 3 && zeroCampaignWeeks > 0) {
-            const shares = nonZero.map(w => w.campaignRevenue / (w.campaignRevenue + w.flowRevenue));
             const median = (vals: number[]) => {
                 const srt = [...vals].sort((a, b) => a - b); const n = srt.length; if (!n) return 0; return n % 2 ? srt[(n - 1) / 2] : (srt[n / 2 - 1] + srt[n / 2]) / 2;
             };
-            const medianShare = median(shares);
-            const absDevs = shares.map(s => Math.abs(s - medianShare));
-            const mad = median(absDevs);
-            const scale = mad === 0 ? 1e-6 : (1.4826 * mad);
-            // Exclude outliers beyond 3 scaled MADs
-            const filteredShares = shares.filter(s => Math.abs(s - medianShare) / scale <= 3);
-            const robustShare = filteredShares.length >= 3 ? median(filteredShares) : medianShare;
-            // Guard rails
-            const share = Math.min(0.95, Math.max(0.01, robustShare));
-            // For each zero week: expected C = (share/(1-share)) * flowRevenue
-            const factor = share / (1 - share);
-            lostCampaignEstimate = weeks.filter(w => w.campaignRevenue === 0).reduce((sum, w) => sum + (w.flowRevenue * factor), 0);
+            const campVals = nonZero.map(w => w.campaignRevenue);
+            const med = median(campVals);
+            const absDevs = campVals.map(v => Math.abs(v - med));
+            const mad = median(absDevs) || 1e-6;
+            const scale = 1.4826 * mad;
+            const filtered = campVals.filter(v => Math.abs(v - med) / scale <= 3);
+            const robustMedian = filtered.length >= 3 ? median(filtered) : med;
+            // Guard rails – avoid extreme inflation
+            const perWeek = Math.max(0, robustMedian);
+            lostCampaignEstimate = perWeek * zeroCampaignWeeks;
         }
         return { mean, std, cv, reliabilityRaw, reliabilityDisplay, volatilityPct, volatilityDisplay, category, zeroCampaignWeeks, meanCampaignShare, lostCampaignEstimate };
     }, [weeks]);
@@ -143,33 +145,45 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
 
     return (
         <div className="mt-8">
-            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5">
-                <div className="flex items-center gap-2 mb-3">
-                    <ShieldCheck className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Weekly Revenue Reliability</h3>
-                    <div className="group relative">
-                        <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-700 dark:text-gray-500 dark:group-hover:text-gray-300 cursor-pointer" />
-                        <div className="absolute left-0 top-6 z-20 hidden group-hover:block w-80 text-[11px] leading-snug bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3 space-y-2">
-                            <div>
-                                <p className="text-gray-700 dark:text-gray-200 font-semibold mb-1">Definitions</p>
-                                <ul className="list-disc pl-4 space-y-0.5 text-gray-600 dark:text-gray-300">
-                                    <li><span className="font-medium">Reliability</span>: 100 - Volatility (higher = steadier)</li>
-                                    <li><span className="font-medium">Volatility</span>: Std Dev / Mean (as %)</li>
-                                    <li><span className="font-medium">Band</span>: ±1 Std Dev around mean line</li>
-                                    <li><span className="font-medium">Zero Campaign Weeks</span>: No campaign sends</li>
-                                </ul>
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+                <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                        <ShieldCheck className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Weekly Revenue Reliability</h3>
+                        <div className="group relative">
+                            <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-700 dark:text-gray-500 dark:group-hover:text-gray-300 cursor-pointer" />
+                            <div className="absolute left-0 top-6 z-20 hidden group-hover:block w-80 text-[11px] leading-snug bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3 space-y-2">
+                                <div>
+                                    <p className="text-gray-700 dark:text-gray-200 font-semibold mb-1">Definitions</p>
+                                    <ul className="list-disc pl-4 space-y-0.5 text-gray-600 dark:text-gray-300">
+                                        <li><span className="font-medium">Reliability</span>: 100 - Volatility (higher = steadier)</li>
+                                        <li><span className="font-medium">Volatility</span>: Std Dev / Mean (as %)</li>
+                                        <li><span className="font-medium">Band</span>: ±1 Std Dev around mean line</li>
+                                        <li><span className="font-medium">Zero Campaign Weeks</span>: No campaign sends</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <p className="text-gray-700 dark:text-gray-200 font-semibold mb-1">Categories</p>
+                                    <ul className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-gray-600 dark:text-gray-300">
+                                        <li>Excellent ≥90%</li>
+                                        <li>Good 80–89%</li>
+                                        <li>OK 65–79%</li>
+                                        <li>Attention 50–64%</li>
+                                        <li className="col-span-2">Critical &lt;50%</li>
+                                    </ul>
+                                </div>
+                                <p className="text-gray-500 dark:text-gray-400">Target Excellent or Good for predictable revenue.</p>
                             </div>
-                            <div>
-                                <p className="text-gray-700 dark:text-gray-200 font-semibold mb-1">Categories</p>
-                                <ul className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-gray-600 dark:text-gray-300">
-                                    <li>Excellent ≥90%</li>
-                                    <li>Good 80–89%</li>
-                                    <li>OK 65–79%</li>
-                                    <li>Attention 50–64%</li>
-                                    <li className="col-span-2">Critical &lt;50%</li>
-                                </ul>
-                            </div>
-                            <p className="text-gray-500 dark:text-gray-400">Target Excellent or Good for predictable revenue.</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <div className="relative">
+                            <select value={scope} onChange={e => setScope(e.target.value as any)} className="appearance-none px-3 h-8 pr-8 rounded-lg border bg-white border-gray-300 text-gray-700 text-xs font-medium focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                <option value="all">All Email</option>
+                                <option value="campaigns">Campaigns</option>
+                                <option value="flows">Flows</option>
+                            </select>
+                            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]">▼</span>
                         </div>
                     </div>
                 </div>
@@ -277,13 +291,13 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                     return (
                         <div className={`mt-6 ${centerChart ? 'flex flex-wrap justify-center gap-4' : 'grid grid-cols-2 md:grid-cols-5 gap-4'} text-xs`}>
                             <StatTile label="Reliability" tooltip={reliabilityTooltip} value={`${stats.reliabilityDisplay}%`} category={stats.category} categoryColor={categoryColor} />
-                            <StatTile label="Avg Weekly Revenue" tooltip="Average weekly combined (campaign + flow) revenue" value={formatCurrency(stats.mean)} />
-                            <StatTile label="Std Dev" tooltip="Standard deviation of weekly totals (spread of weekly revenue)" value={formatCurrency(stats.std)} />
-                            {stats.zeroCampaignWeeks > 0 && (
+                            <StatTile label="Avg Weekly Revenue" tooltip="Average weekly revenue for selected scope" value={formatCurrency(stats.mean)} />
+                            <StatTile label="Std Dev" tooltip="Standard deviation of weekly revenue (selected scope)" value={formatCurrency(stats.std)} />
+                            {scope === 'campaigns' && stats.zeroCampaignWeeks > 0 && (
                                 <StatTile label="Zero Campaign Weeks" tooltip="Weeks with no campaign sends" value={String(stats.zeroCampaignWeeks)} />
                             )}
-                            {stats.lostCampaignEstimate > 0 && (
-                                <StatTile label="Est. Lost Camp Rev" tooltip="Estimated lost campaign revenue in zero-campaign weeks (robust median share * flow revenue)" value={formatCurrency(stats.lostCampaignEstimate)} />
+                            {scope === 'campaigns' && stats.lostCampaignEstimate > 0 && (
+                                <StatTile label="Est. Lost Camp Rev" tooltip="Estimated lost campaign revenue (median non-zero campaign week * zero weeks)" value={formatCurrency(stats.lostCampaignEstimate)} />
                             )}
                         </div>
                     );
