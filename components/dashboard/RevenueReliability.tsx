@@ -66,6 +66,31 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
         let arr: WeekRec[] = Object.values(map)
             .sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime())
             .map(w => ({ ...w, activeDays: w.daySet.size, label: w.weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }));
+
+        // Fill explicit gap weeks (e.g. missed campaign weeks) so they surface as zero bars
+        if (arr.length) {
+            const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
+            const existing = new Set(arr.map(w => w.weekStart.getTime()));
+            const startTs = arr[0].weekStart.getTime();
+            const endTs = arr[arr.length - 1].weekStart.getTime();
+            for (let ts = startTs; ts <= endTs; ts += ONE_WEEK) {
+                if (!existing.has(ts)) {
+                    const ws = new Date(ts);
+                    arr.push({
+                        weekStart: ws,
+                        label: ws.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                        revenue: 0,
+                        campaignRevenue: 0,
+                        flowRevenue: 0,
+                        emails: 0,
+                        campaignEmails: 0,
+                        activeDays: 0,
+                        daySet: new Set()
+                    });
+                }
+            }
+            arr.sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime());
+        }
         let start = false, end = false;
         if (arr.length && arr[0].activeDays < 7) { arr = arr.slice(1); start = true; }
         if (arr.length && arr[arr.length - 1].activeDays < 7) { arr = arr.slice(0, -1); end = true; }
@@ -223,14 +248,29 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                             {stats && (
                                 <line x1={0} x2={w} y1={meanY(stats.mean)} y2={meanY(stats.mean)} className="stroke-purple-500 dark:stroke-purple-400" strokeDasharray="4 3" strokeWidth={1} />
                             )}
-                            {/* Bars (unified style: single gradient regardless of scope for visual consistency) */}
+                            {/* Bars (stacked campaign (purple) + flow (blue)) */}
                             {weeks.map((wk, i) => {
                                 const x = xPosFor(i);
                                 const totalH = (wk.revenue / maxRevenue) * usableHeight;
+                                const campH = (wk.campaignRevenue / maxRevenue) * usableHeight;
+                                const flowH = (wk.flowRevenue / maxRevenue) * usableHeight;
                                 const baseY = (h - pad) - totalH;
+                                const flowY = (h - pad) - flowH; // bottom segment
+                                const campY = flowY - campH; // stacked above flow
                                 return (
                                     <g key={wk.label} onMouseEnter={() => onEnter(i)} onMouseLeave={onLeave} className="cursor-pointer">
-                                        <rect x={x} y={baseY} width={barW} height={Math.max(2, totalH)} rx={5} className="fill-[url(#flowGrad)] opacity-95 hover:opacity-100 transition-opacity shadow-sm" />
+                                        {/* Flows segment (blue) */}
+                                        {scope !== 'campaigns' && flowH > 0 && (
+                                            <rect x={x} y={flowY} width={barW} height={Math.max(2, flowH)} rx={5} className="fill-[url(#flowGrad)] opacity-95 hover:opacity-100 transition-opacity shadow-sm" />
+                                        )}
+                                        {/* Campaigns segment (purple) */}
+                                        {scope !== 'flows' && campH > 0 && (
+                                            <rect x={x} y={campY} width={barW} height={Math.max(2, campH)} rx={5} className="fill-[url(#campGrad)] opacity-95 hover:opacity-100 transition-opacity shadow-sm" />
+                                        )}
+                                        {/* Zero week placeholder (no campaigns when scope='campaigns') */}
+                                        {wk.revenue === 0 && (
+                                            <rect x={x} y={(h - pad) - 4} width={barW} height={4} rx={2} className="fill-gray-300 dark:fill-gray-700 opacity-70" />
+                                        )}
                                         {i === weeks.length - 1 && (
                                             <text x={x + barW / 2} y={baseY - 10} textAnchor="middle" className="fill-purple-700 dark:fill-purple-300 text-[10px] font-semibold tracking-tight">{formatCurrency(wk.revenue)}</text>
                                         )}

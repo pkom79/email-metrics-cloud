@@ -38,9 +38,18 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
         { value: 'bounceRate', label: 'Bounce Rate' }
     ];
 
+    const rawHourData = useMemo(() => dataManager.getCampaignPerformanceByHourOfDay(filteredCampaigns, selectedMetric), [filteredCampaigns, selectedMetric, dataManager]);
+    const negativeMetrics = useMemo(() => ['unsubscribeRate', 'spamRate', 'bounceRate'] as const, []);
+    const minCampaignsRequired = useMemo(() => {
+        const total = filteredCampaigns.length;
+        if (!total) return 0;
+        return Math.min(12, Math.max(3, Math.ceil(total * 0.05)));
+    }, [filteredCampaigns.length]);
     const hourOfDayData = useMemo(() => {
-        return dataManager.getCampaignPerformanceByHourOfDay(filteredCampaigns, selectedMetric);
-    }, [filteredCampaigns, selectedMetric, dataManager]);
+        const arr = [...rawHourData];
+        if (negativeMetrics.includes(selectedMetric as any)) arr.sort((a, b) => a.value - b.value); else arr.sort((a, b) => b.value - a.value);
+        return arr;
+    }, [rawHourData, selectedMetric, negativeMetrics]);
 
     // Match color scheme logic from DayOfWeekPerformance so colors stay consistent across charts
     const getColorScheme = (metric: string) => {
@@ -257,7 +266,7 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
                 <div className="mt-4 flex flex-wrap justify-center gap-6 text-xs pb-4">
                     {(() => {
                         const activeHours = hourOfDayData.length;
-                        const totalCampaigns = hourOfDayData.reduce((s, d) => s + d.campaignCount, 0);
+                        const totalCampaigns = filteredCampaigns.length;
                         const vals = hourOfDayData.map(d => d.value);
                         const n = vals.length; const median = (() => { const s = [...vals].sort((a, b) => a - b); return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; })();
                         const absDevs = vals.map(v => Math.abs(v - median));
@@ -265,26 +274,28 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
                         const scale = mad * 1.4826 || 1e-6;
                         const best = hourOfDayData.reduce((m, d) => d.value > m.value ? d : m, hourOfDayData[0]);
                         const z = (best.value - median) / scale;
-                        const significant = z >= 1.8 && best.campaignCount >= 3; // slightly stricter than day-of-week
+                        const significant = z >= 1.8 && best.campaignCount >= minCampaignsRequired; // dynamic threshold
                         const peakVal = Math.max(...vals, 0);
-                        return (<>
-                            <div className="min-w-[110px] text-center">
-                                <p className="text-gray-500 dark:text-gray-400 mb-1">Active Hours</p>
-                                <p className="font-semibold text-lg text-gray-900 dark:text-gray-100 tabular-nums">{activeHours}</p>
-                            </div>
-                            <div className="min-w-[140px] text-center">
-                                <p className="text-gray-500 dark:text-gray-400 mb-1">Best Hour (stat)</p>
-                                <p className="font-semibold text-lg text-gray-900 dark:text-gray-100">{significant ? best.hourLabel : 'No clear winner'}</p>
-                            </div>
-                            <div className="min-w-[120px] text-center">
-                                <p className="text-gray-500 dark:text-gray-400 mb-1">Peak Value</p>
-                                <p className="font-semibold text-lg text-gray-900 dark:text-gray-100">{formatMetricValue(peakVal, selectedMetric)}</p>
-                            </div>
-                            <div className="min-w-[130px] text-center">
-                                <p className="text-gray-500 dark:text-gray-400 mb-1">Total Campaigns</p>
-                                <p className="font-semibold text-lg text-gray-900 dark:text-gray-100 tabular-nums">{totalCampaigns}</p>
-                            </div>
-                        </>);
+                        return (
+                            <>
+                                <div className="min-w-[110px] text-center">
+                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Active Hours</p>
+                                    <p className="font-semibold text-xl text-gray-900 dark:text-gray-100 tabular-nums">{activeHours}</p>
+                                </div>
+                                <div className="min-w-[140px] text-center">
+                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Best Hour (stat)</p>
+                                    <p className="font-semibold text-xl text-gray-900 dark:text-gray-100">{significant ? best.hourLabel : 'No clear winner'}</p>
+                                </div>
+                                <div className="min-w-[120px] text-center">
+                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Highest Value</p>
+                                    <p className="font-semibold text-xl text-gray-900 dark:text-gray-100">{formatMetricValue(peakVal, selectedMetric)}</p>
+                                </div>
+                                <div className="min-w-[130px] text-center">
+                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Total Campaigns</p>
+                                    <p className="font-semibold text-xl text-gray-900 dark:text-gray-100 tabular-nums">{totalCampaigns}</p>
+                                </div>
+                            </>
+                        );
                     })()}
                 </div>
             </div>

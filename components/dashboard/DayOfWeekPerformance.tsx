@@ -33,9 +33,22 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
         { value: 'bounceRate', label: 'Bounce Rate' }
     ];
 
+    const rawDayOfWeekData = useMemo(() => dataManager.getCampaignPerformanceByDayOfWeek(filteredCampaigns, selectedMetric), [filteredCampaigns, selectedMetric, dataManager]);
+
+    // Determine dynamic minimum campaigns: 5% of total campaigns (rounded up) capped at 10, floor 3
+    const minCampaignsRequired = useMemo(() => {
+        const total = filteredCampaigns.length;
+        if (!total) return 0;
+        return Math.min(10, Math.max(3, Math.ceil(total * 0.05)));
+    }, [filteredCampaigns.length]);
+
+    // Sort so that for negative metrics (unsubscribe/spam/bounce rate) lowest is on top for fast scanning
+    const negativeMetrics = useMemo(() => ['unsubscribeRate', 'spamRate', 'bounceRate'] as const, []);
     const dayOfWeekData = useMemo(() => {
-        return dataManager.getCampaignPerformanceByDayOfWeek(filteredCampaigns, selectedMetric);
-    }, [filteredCampaigns, selectedMetric, dataManager]);
+        const arr = [...rawDayOfWeekData];
+        if (negativeMetrics.includes(selectedMetric as any)) arr.sort((a, b) => a.value - b.value); else arr.sort((a, b) => b.value - a.value);
+        return arr;
+    }, [rawDayOfWeekData, selectedMetric, negativeMetrics]);
 
     const formatMetricValue = (value: number, metric: string): string => {
         if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric)) {
@@ -198,7 +211,7 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
 
                 <div className="mt-4 flex flex-wrap justify-center gap-6 text-xs pb-4">
                     {(() => {
-                        const totalCampaigns = dayOfWeekData.reduce((sum, d) => sum + d.campaignCount, 0);
+                        const totalCampaigns = filteredCampaigns.length;
                         const vals = dayOfWeekData.map(d => d.value);
                         const n = vals.length;
                         const median = (() => { const s = [...vals].sort((a, b) => a - b); return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; })();
@@ -207,20 +220,20 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
                         const scale = mad * 1.4826 || 1e-6; // approx std
                         const best = dayOfWeekData.reduce((max, d) => d.value > max.value ? d : max, dayOfWeekData[0]);
                         const z = (best.value - median) / scale;
-                        const significant = z >= 1.5 && best.campaignCount >= 3; // heuristic threshold ~ one-tailed ~0.07
+                        const significant = z >= 1.5 && best.campaignCount >= minCampaignsRequired; // dynamic threshold
                         return (
                             <>
                                 <div className="min-w-[120px] text-center">
                                     <p className="text-gray-500 dark:text-gray-400 mb-1">Total Campaigns</p>
-                                    <p className="font-semibold text-lg text-gray-900 dark:text-gray-100 tabular-nums">{totalCampaigns}</p>
+                                    <p className="font-semibold text-xl text-gray-900 dark:text-gray-100 tabular-nums">{totalCampaigns}</p>
                                 </div>
                                 <div className="min-w-[140px] text-center">
                                     <p className="text-gray-500 dark:text-gray-400 mb-1">Best Day (stat)</p>
-                                    <p className="font-semibold text-lg text-gray-900 dark:text-gray-100">{significant ? best.day : 'No clear winner'}</p>
+                                    <p className="font-semibold text-xl text-gray-900 dark:text-gray-100">{significant ? best.day : 'No clear winner'}</p>
                                 </div>
                                 <div className="min-w-[120px] text-center">
-                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Peak Value</p>
-                                    <p className="font-semibold text-lg text-gray-900 dark:text-gray-100">{formatMetricValue(maxValue, selectedMetric)}</p>
+                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Highest Value</p>
+                                    <p className="font-semibold text-xl text-gray-900 dark:text-gray-100">{formatMetricValue(maxValue, selectedMetric)}</p>
                                 </div>
                             </>
                         );
