@@ -55,6 +55,13 @@ export function computeBenchmark(metricKey: string | undefined, currentRangeStar
   const weeks = getHistoricalWeeks(metricKey);
   if (!weeks.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true, hiddenReason: 'No weekly data' };
 
+  // Verbose raw weeks dump (guarded by __BENCH_VERBOSE__ flag)
+  if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
+    try {
+      console.debug('[BenchV2Detail] rawWeeks', metricKey, weeks.map(w => ({ ws: w.weekStart.toISOString().slice(0,10), v: w.value })));
+    } catch {}
+  }
+
   // Normalize range boundaries
   let start = currentRangeStart || currentRangeEnd || null;
   let end = currentRangeEnd || currentRangeStart || null;
@@ -69,6 +76,24 @@ export function computeBenchmark(metricKey: string | undefined, currentRangeStar
   if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
     console.debug('[BenchV2]', metricKey, { weeks: weeks.length, usable: usable.length, baselineAnchor, start, end });
   }
+  // Heuristic fix: if anchor is earlier than all data (e.g., synthetic 2001 dates) we get usable=0; adjust to last week +7d
+  if (usable.length === 0 && weeks.length) {
+    const lastWeek = weeks[weeks.length - 1].weekStart;
+    if (baselineAnchor.getTime() < lastWeek.getTime()) {
+      const adj = new Date(lastWeek); adj.setDate(adj.getDate() + 7); adj.setHours(0,0,0,0);
+      if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
+        console.debug('[BenchV2Fix] anchorAdjusted', metricKey, { oldAnchor: baselineAnchor, newAnchor: adj, reason: 'anchor older than lastWeek causing 0 usable' });
+      }
+      // recompute usable
+      baselineAnchor.setTime(adj.getTime());
+      usable = weeks.filter(w => w.weekStart < baselineAnchor);
+    }
+  }
+  if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
+    try {
+      console.debug('[BenchV2Detail] usableWeeks', metricKey, usable.map(w => ({ ws: w.weekStart.toISOString().slice(0,10), v: w.value })));
+    } catch {}
+  }
   if (!usable.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered, insufficient: true, hiddenReason: 'No historical weeks' };
 
   // Take last up to 52 weeks, at least 8 provisional, 12 recommended, 20 full
@@ -78,12 +103,24 @@ export function computeBenchmark(metricKey: string | undefined, currentRangeStar
   const minFull = 20;       // mark non-provisional once >=20
   if (windowWeeks.length < minProvisional) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient: true, note: 'Need more history', hiddenReason: 'Fewer than 8 weeks' };
 
+  if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
+    try {
+      console.debug('[BenchV2Detail] windowWeeks(<=52)', metricKey, windowWeeks.map(w => ({ ws: w.weekStart.toISOString().slice(0,10), v: w.value })));
+    } catch {}
+  }
+
   // Copy values for trimming
   const values = windowWeeks.map(w => w.value).filter(v => Number.isFinite(v));
   const sorted = [...values].sort((a,b)=>a-b);
   const trimCount = Math.floor(sorted.length * 0.10); // 10% tails
   const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
   const baseline = trimmed.length ? trimmed.reduce((s,v)=>s+v,0)/trimmed.length : (values.reduce((s,v)=>s+v,0)/values.length);
+
+  if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
+    try {
+      console.debug('[BenchV2Detail] trim', metricKey, { sortedLen: sorted.length, trimCount, trimmedLen: trimmed.length, baseline });
+    } catch {}
+  }
 
   // Current value is aggregate over current viewing period (if provided) else last complete week
   let current: number | null = null;
@@ -92,9 +129,18 @@ export function computeBenchmark(metricKey: string | undefined, currentRangeStar
     const startWeek = mondayOf(start);
     const endWeek = mondayOf(end);
     current = weeks.filter(w => w.weekStart >= startWeek && w.weekStart <= endWeek).reduce((s,w)=>s+w.value,0);
+    if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
+      try {
+        const included = weeks.filter(w => w.weekStart >= startWeek && w.weekStart <= endWeek).map(w => ({ ws: w.weekStart.toISOString().slice(0,10), v: w.value }));
+        console.debug('[BenchV2Detail] currentAggregate', metricKey, { startWeek: startWeek.toISOString().slice(0,10), endWeek: endWeek.toISOString().slice(0,10), included, sum: current });
+      } catch {}
+    }
     if (!Number.isFinite(current)) current = null;
   } else {
     current = usable[usable.length-1]?.value ?? null;
+    if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
+      try { console.debug('[BenchV2Detail] currentLastWeek', metricKey, { week: usable[usable.length-1]?.weekStart.toISOString().slice(0,10), value: current }); } catch {}
+    }
   }
 
   if (baseline == null || current == null) {
@@ -133,6 +179,9 @@ export function computeBenchmark(metricKey: string | undefined, currentRangeStar
     exceptional: baseline * (1 + aboveBand),
   };
   const provisional = !insufficient && windowWeeks.length < minFull;
+  if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
+    try { console.debug('[BenchV2Detail] final', metricKey, { tier, insufficient, provisional, sampleWeeks: windowWeeks.length, percentDelta }); } catch {}
+  }
   return { tier, baseline, current, percentDelta, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient, provisional, thresholds };
 }
 
@@ -170,4 +219,22 @@ export function useBenchmark(metricKey: string | undefined, anchorStart?: Date, 
     () => getBenchmark(metricKey, anchorStart, anchorEnd),
   () => ({ tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true, hiddenReason: 'SSR fallback' })
   );
+}
+
+// Developer helper: expose a manual dump function when in browser
+if (typeof window !== 'undefined') {
+  (window as any).__dumpBenchmark = (metricKey: string, start?: Date, end?: Date) => {
+    try {
+      (window as any).__BENCH_VERBOSE__ = true;
+      console.debug('[BenchV2Helper] dumping metric', metricKey, { start, end });
+      const dm = DataManager.getInstance();
+      const raw = dm.getWeeklyMetricSeries(metricKey).map(w => ({ ws: w.weekStart.toISOString().slice(0,10), v: w.value }));
+      console.debug('[BenchV2Helper] rawWeeklySeries', raw);
+      const res = computeBenchmark(metricKey, start, end);
+      console.debug('[BenchV2Helper] result', res);
+      return res;
+    } catch (e) {
+      console.error('[BenchV2Helper] error', e);
+    }
+  };
 }
