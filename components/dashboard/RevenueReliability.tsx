@@ -105,61 +105,27 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
     }, [filteredCampaigns, filteredFlows, dateRange]);
 
     const stats = useMemo(() => {
-        if (weeks.length < 3) return null; // need at least 3 data points for meaningful variability
+        if (weeks.length < 3) return null;
         const totals = weeks.map(w => w.revenue);
         const mean = totals.reduce((s, v) => s + v, 0) / totals.length;
+        if (mean === 0) return null; // all zero revenue => skip
         const variance = totals.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / totals.length;
         const std = Math.sqrt(variance);
-        const cv = mean > 0 ? std / mean : 0; // coefficient of variation 0..∞ (we clamp later)
-        // Raw reliability
-        const reliabilityRaw = (1 - Math.min(1, cv)) * 100;
-        const volatilityPct = cv * 100; // direct interpretation
-        // Reliability qualitative category mapping (explicit thresholds)
-        // 90–100 Excellent, 80–89 Good, 65–79 OK, 50–64 Attention Needed, <50 Critical
-        const rRounded = Math.round(reliabilityRaw);
-        const category = rRounded >= 90 ? 'Excellent' : rRounded >= 80 ? 'Good' : rRounded >= 65 ? 'OK' : rRounded >= 50 ? 'Attention Needed' : 'Critical';
-        const volatilityDisplay = (volatilityPct % 1 === 0) ? volatilityPct.toFixed(0) : volatilityPct.toFixed(1);
-        const reliabilityDisplay = (volatilityPct % 1 === 0) ? Math.round(reliabilityRaw).toFixed(0) : reliabilityRaw.toFixed(1);
+        const cv = std / mean; // coefficient of variation
+        // Smooth reliability model: exponential decay – avoids hard 0 except mean=0
+        const reliability = 100 * Math.exp(-cv);
+        const reliabilityDisplay = reliability.toFixed(0);
+        const volatilityPct = cv * 100;
+        const volatilityDisplay = volatilityPct >= 10 ? volatilityPct.toFixed(0) : volatilityPct.toFixed(1);
         const zeroCampaignWeeks = weeks.filter(w => w.campaignEmails === 0).length;
         const meanCampaignShare = weeks.reduce((s, w) => s + (w.campaignRevenue / (w.revenue || 1)), 0) / weeks.length;
-        // --- Lost Campaign Revenue Estimation (REFINED) ---
-        // For each contiguous block of zero-campaign weeks, interpolate between bounding non-zero weeks (if both sides)
-        // using linear interpolation capped by the global median of non-zero campaign revenue.
-        // If only one side bound exists, apply a decaying sequence (0.9^k) * sideValue capped by median.
-        let lostCampaignEstimate = 0;
-        if (zeroCampaignWeeks > 0) {
-            const nonZeroValues = weeks.filter(w => w.campaignRevenue > 0).map(w => w.campaignRevenue);
-            const median = (vals: number[]) => { const s = [...vals].sort((a, b) => a - b); const n = s.length; if (!n) return 0; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
-            const medianNonZero = median(nonZeroValues) || 0;
-            let i = 0;
-            while (i < weeks.length) {
-                if (weeks[i].campaignRevenue > 0) { i++; continue; }
-                const start = i;
-                while (i < weeks.length && weeks[i].campaignRevenue === 0) i++;
-                const end = i - 1; // inclusive
-                const blockLen = end - start + 1;
-                const prevIdx = start - 1;
-                const nextIdx = end + 1;
-                const prevVal = prevIdx >= 0 ? weeks[prevIdx].campaignRevenue : null;
-                const nextVal = nextIdx < weeks.length ? weeks[nextIdx].campaignRevenue : null;
-                if (prevVal && nextVal) {
-                    // Linear interpolation across blockLen gaps between prevVal and nextVal (blockLen+1 segments)
-                    for (let k = 1; k <= blockLen; k++) {
-                        const t = k / (blockLen + 1);
-                        const interp = prevVal + (nextVal - prevVal) * t;
-                        lostCampaignEstimate += Math.min(medianNonZero, interp);
-                    }
-                } else {
-                    // Single-sided decay
-                    const side = (prevVal || nextVal || 0);
-                    for (let k = 0; k < blockLen; k++) {
-                        const decayed = side * Math.pow(0.9, k + 1);
-                        lostCampaignEstimate += Math.min(medianNonZero, decayed);
-                    }
-                }
-            }
-        }
-        return { mean, std, cv, reliabilityRaw, reliabilityDisplay, volatilityPct, volatilityDisplay, category, zeroCampaignWeeks, meanCampaignShare, lostCampaignEstimate };
+        const nonZeroCamp = weeks.filter(w => w.campaignRevenue > 0).map(w => w.campaignRevenue);
+        const avgNonZeroCamp = nonZeroCamp.length ? nonZeroCamp.reduce((s, v) => s + v, 0) / nonZeroCamp.length : 0;
+        // Conservative gap estimate: 50% of avg non-zero week per gap
+        const lostCampaignEstimate = zeroCampaignWeeks * avgNonZeroCamp * 0.5;
+        const r = Number(reliabilityDisplay);
+        const category = r >= 85 ? 'Excellent' : r >= 70 ? 'Good' : r >= 55 ? 'OK' : r >= 40 ? 'Attention Needed' : 'Critical';
+        return { mean, std, cv, reliability, reliabilityDisplay, volatilityPct, volatilityDisplay, category, zeroCampaignWeeks, meanCampaignShare, lostCampaignEstimate };
     }, [weeks]);
 
     // Hooks must run before any early return to satisfy rules-of-hooks
@@ -169,18 +135,18 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
 
     if (!weeks.length) return null;
 
-    // Chart geometry (adaptive – no horizontal scrollbar).
+    // Chart geometry (fixed bar width + possible horizontal scroll for long ranges)
     const weeksCount = weeks.length;
     const h = 240; const pad = 46;
-    // Base chart width capped to container-friendly size (~max dashboard width).
     const baseMax = 1100;
-    const w = Math.min(baseMax, Math.max(600, weeksCount * 32));
-    const maxRevenue = Math.max(...weeks.map(w => w.revenue), 1);
-    const gap = weeksCount > 40 ? 2 : weeksCount > 30 ? 4 : weeksCount > 20 ? 6 : weeksCount > 12 ? 8 : 12;
-    const innerWidth = w - 64; // side padding reduced since no scroll
-    const barW = Math.max(4, Math.min(40, (innerWidth - gap * (weeksCount - 1)) / weeksCount));
+    const gap = 6;
+    const barW = 14;
+    const contentWidth = 40 + weeksCount * (barW + gap) - gap + 40; // side padding both ends
+    const scrollNeeded = contentWidth > baseMax;
+    const w = scrollNeeded ? contentWidth : Math.min(baseMax, Math.max(600, contentWidth));
     const xPosFor = (i: number) => 40 + i * (barW + gap);
-    const usableHeight = h - pad - 70; // space for labels / band
+    const maxRevenue = Math.max(...weeks.map(w => w.revenue), 1);
+    const usableHeight = h - pad - 70;
     const meanY = (val: number) => (h - pad) - (val / maxRevenue) * usableHeight;
 
     const formatCurrency = (v: number) => '$' + Math.round(v).toLocaleString('en-US');
@@ -191,8 +157,7 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
         const weeksCountLocal = weeks.length;
         if (!weeksCountLocal) return false;
         // After width calc we know if we capped below baseMax; recalc with same formula
-        const tentative = Math.min(1100, Math.max(600, weeksCountLocal * 32));
-        return tentative < 1100; // center when not stretching to full max width
+        return !scrollNeeded && contentWidth < 1100;
     })();
 
     return (
@@ -239,7 +204,7 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
                         </div>
                     </div>
                 </div>
-                <div className={`pb-2 overflow-visible ${centerChart ? 'flex justify-center' : ''}`}>
+                <div className={`pb-2 ${scrollNeeded ? 'overflow-x-auto' : 'overflow-visible'} ${centerChart ? 'flex justify-center' : ''}`}>
                     <div className="relative" style={{ width: w, marginLeft: centerChart ? 'auto' : undefined, marginRight: centerChart ? 'auto' : undefined }}>
                         <svg width={w} height={h} className="block">
                             <defs>
@@ -289,14 +254,7 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
                                         {scope !== 'flows' && campH > 0 && (
                                             <rect x={x} y={campY} width={barW} height={Math.max(2, campH)} className="fill-[url(#campGrad)] opacity-95 hover:opacity-100 transition-opacity shadow-sm" />
                                         )}
-                                        {/* Zero campaign week placeholder only in campaign scope */}
-                                        {scope === 'campaigns' && wk.campaignEmails === 0 && wk.campaignRevenue === 0 && (
-                                            <rect x={x} y={(h - pad) - 4} width={barW} height={4} className="fill-gray-300 dark:fill-gray-700 opacity-70" />
-                                        )}
-                                        {/* Only label last bar if it has non-zero revenue to avoid noisy $0 labels */}
-                                        {i === weeks.length - 1 && wk.revenue > 0 && (
-                                            <text x={x + barW / 2} y={baseY - 10} textAnchor="middle" className="fill-purple-700 dark:fill-purple-300 text-[10px] font-semibold tracking-tight">{formatCurrency(wk.revenue)}</text>
-                                        )}
+                                        {/* No placeholder bars or auto labels; rely on tooltip for clarity */}
                                     </g>
                                 );
                             })}
@@ -341,20 +299,20 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
                         <div className="space-y-2">
                             <div>
                                 <p className="font-semibold text-gray-800 dark:text-gray-100 mb-1">Reliability</p>
-                                <p className="text-gray-600 dark:text-gray-300">Reliability = 100 - Volatility. Measures steadiness of weekly revenue (higher = more predictable).</p>
+                                <p className="text-gray-600 dark:text-gray-300">Reliability uses a smooth stability curve (approx exp(-CV)). Higher = steadier weekly revenue.</p>
                             </div>
                             <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-gray-600 dark:text-gray-300">
                                 <div className="col-span-2 font-medium text-gray-700 dark:text-gray-200">Categories</div>
-                                <div>Excellent ≥90%</div>
-                                <div>Good 80–89%</div>
-                                <div>OK 65–79%</div>
-                                <div>Attention 50–64%</div>
-                                <div className="col-span-2">Critical &lt;50%</div>
+                                <div>Excellent ≥85%</div>
+                                <div>Good 70–84%</div>
+                                <div>OK 55–69%</div>
+                                <div>Attention 40–54%</div>
+                                <div className="col-span-2">Critical &lt;40%</div>
                             </div>
                             <div className="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">
-                                Mean {formatCurrency(stats.mean)} • Std Dev {formatCurrency(stats.std)} • Volatility {stats.volatilityDisplay}%
+                                Mean {formatCurrency(stats.mean)} • Std Dev {formatCurrency(stats.std)} • Volatility {stats.volatilityDisplay}% (CV)
                             </div>
-                            <div className="text-[10px] text-gray-500 dark:text-gray-400">Improve by filling send gaps, increasing automated (flow) share, smoothing spikes.</div>
+                            <div className="text-[10px] text-gray-500 dark:text-gray-400">Improve by smoothing spikes, filling send gaps, growing automated share.</div>
                         </div>
                     );
                     return (
