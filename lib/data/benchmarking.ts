@@ -103,10 +103,10 @@ function hidden(metric: string, lookbackDays: number, keptDays: number, reason: 
   };
 }
 
-function computeTotals(metric: string, rangeStart: Date, rangeEnd: Date, days: DayRec[]): BenchmarkResult {
-  const lookbackDays = days.length;
+function computeTotals(metric: string, rangeStart: Date, rangeEnd: Date, baselineDays: DayRec[], selectedDays: DayRec[]): BenchmarkResult {
+  const lookbackDays = baselineDays.length;
   // Count actual activity days (non-zero value) as existence requirement
-  const activityDays = days.filter(d => {
+  const activityDays = baselineDays.filter(d => {
     if (metric==='revenue') return d.revenue>0;
     if (metric==='totalOrders') return d.totalOrders>0;
     if (metric==='emailsSent') return d.emailsSent>0;
@@ -124,7 +124,7 @@ function computeTotals(metric: string, rangeStart: Date, rangeEnd: Date, days: D
       default: return 0;
     }
   };
-  const dailyVals = days.map(val).sort((a,b)=>a-b);
+  const dailyVals = baselineDays.map(val).sort((a,b)=>a-b);
   let trim = Math.floor(dailyVals.length*0.10);
   // Skip trimming for very small samples (<50 days)
   if (dailyVals.length < 50) trim = 0;
@@ -136,7 +136,7 @@ function computeTotals(metric: string, rangeStart: Date, rangeEnd: Date, days: D
   // Selected period
   const selDays: Date[] = []; const c=new Date(rangeStart); c.setHours(0,0,0,0); const e=new Date(rangeEnd); e.setHours(0,0,0,0);
   while (c <= e){ selDays.push(new Date(c)); c.setDate(c.getDate()+1); }
-  const map = new Map(days.map(d=>[dayKey(d.date), d] as const));
+  const map = new Map([...baselineDays, ...selectedDays].map(d=>[dayKey(d.date), d] as const));
   let actualValue: number;
   if (metric==='avgOrderValue'){
     let rev=0, ord=0; for(const d of selDays){ const r=map.get(dayKey(d)); if (r){ rev+=r.revenue; ord+=r.totalOrders; } } actualValue= ord>0? rev/ord:0;
@@ -171,17 +171,17 @@ function computeTotals(metric: string, rangeStart: Date, rangeEnd: Date, days: D
     lookbackDays,
     keptDays,
   negativeMetric: false,
-  debug: { provisional, activityDays, reqKept, dailyMean, baselineRange, keptSample: kept.slice(0,5), W_note: 'See volatility calc only applied if percentDiff present' }
+  debug: { provisional, activityDays, reqKept, dailyMean, baselineRange, keptSample: kept.slice(0,5), W_note: 'See volatility calc only applied if percentDiff present', baselineDays: lookbackDays, selectedSpan: selDays.length }
   };
 }
 
 // Volatility ratio (AOV, RPE): ratio pipeline for baseline, percent diff, MAD tiers
-function computeVolatilityRatio(metric: string, rangeStart: Date, rangeEnd: Date, days: DayRec[]): BenchmarkResult {
-  const lookbackDays = days.length;
+function computeVolatilityRatio(metric: string, rangeStart: Date, rangeEnd: Date, baselineDays: DayRec[], selectedDays: DayRec[]): BenchmarkResult {
+  const lookbackDays = baselineDays.length;
   const cfg = FLOORS[metric];
   if (!cfg) return hidden(metric, lookbackDays, 0, 'Unsupported metric');
   // Build raw daily numerator + denominator
-  const raw = days.map(d=>({ d, num:(d as any)[cfg.numKey] as number, den:(d as any)[cfg.denomKey] as number }));
+  const raw = baselineDays.map(d=>({ d, num:(d as any)[cfg.numKey] as number, den:(d as any)[cfg.denomKey] as number }));
   const activityDays = raw.filter(r=>r.den>0).length;
   if (activityDays < MIN_LOOKBACK_DAYS_FOR_ANY) return hidden(metric, lookbackDays, 0, `Need at least ${MIN_LOOKBACK_DAYS_FOR_ANY} look-back days`);
   const provisional = activityDays < TARGET_LOOKBACK_DAYS;
@@ -203,7 +203,7 @@ function computeVolatilityRatio(metric: string, rangeStart: Date, rangeEnd: Date
   const baselineRatio = kept.reduce((s,r)=>s + r.num,0) / keptDen;
   if (baselineRatio === 0) return hidden(metric, lookbackDays, keptDays, 'No activity in look-back period');
   // Selected period aggregate
-  const map = new Map(days.map(d=>[dayKey(d.date), d] as const));
+  const map = new Map([...baselineDays, ...selectedDays].map(d=>[dayKey(d.date), d] as const));
   const selDays: Date[] = []; const c=new Date(rangeStart); c.setHours(0,0,0,0); const e=new Date(rangeEnd); e.setHours(0,0,0,0);
   while(c<=e){ selDays.push(new Date(c)); c.setDate(c.getDate()+1); }
   let selNum=0, selDen=0; for(const d of selDays){ const r=map.get(dayKey(d)); if(!r) continue; selNum+=(r as any)[cfg.numKey]||0; selDen+=(r as any)[cfg.denomKey]||0; }
@@ -229,21 +229,21 @@ function computeVolatilityRatio(metric: string, rangeStart: Date, rangeEnd: Date
     lookbackDays,
     keptDays,
     negativeMetric: false,
-    debug: { provisional, activityDays, reqKept, floor, keptDen, W_period }
+  debug: { provisional, activityDays, reqKept, floor, keptDen, W_period, baselineDays: lookbackDays, selectedSpan: selDays.length }
   };
 }
 
-function computeRateRatio(metric: string, rangeStart: Date, rangeEnd: Date, days: DayRec[]): BenchmarkResult {
-  const lookbackDays = days.length;
+function computeRateRatio(metric: string, rangeStart: Date, rangeEnd: Date, baselineDays: DayRec[], selectedDays: DayRec[]): BenchmarkResult {
+  const lookbackDays = baselineDays.length;
   // Activity days requirement counts days with denominator >0
   const cfg0 = FLOORS[metric];
-  const activityDays = days.filter(d => {
+  const activityDays = baselineDays.filter(d => {
     if (!cfg0) return false; const den = (d as any)[cfg0.denomKey] as number; return den>0; }).length;
   if (activityDays < MIN_LOOKBACK_DAYS_FOR_ANY) return hidden(metric, lookbackDays, 0, `Need at least ${MIN_LOOKBACK_DAYS_FOR_ANY} look-back days`);
   const provisional = activityDays < TARGET_LOOKBACK_DAYS;
   const cfg = FLOORS[metric];
   if (!cfg) return hidden(metric, lookbackDays, 0, 'Unsupported metric');
-  const raw = days.map(d=>({d, num:(d as any)[cfg.numKey] as number, den:(d as any)[cfg.denomKey] as number}));
+  const raw = baselineDays.map(d=>({d, num:(d as any)[cfg.numKey] as number, den:(d as any)[cfg.denomKey] as number}));
   const denomVals = raw.filter(r=>r.den>0).map(r=>r.den);
   const floor = percentileFloor(denomVals, cfg.base);
   let filtered = raw.filter(r=>r.den >= floor).map(r=>({...r, ratio: r.den>0? r.num/r.den:0}));
@@ -259,7 +259,7 @@ function computeRateRatio(metric: string, rangeStart: Date, rangeEnd: Date, days
   if (keptDays < reqKept || keptDen < cfg.volumeMin) return hidden(metric, lookbackDays, keptDays, `Need at least ${reqKept} kept days and enough activity for this metric`);
   const aggNum = kept.reduce((s,r)=>s+r.num,0); const baselineRatio = keptDen>0? aggNum/keptDen:0;
   // selected period
-  const map = new Map(days.map(d=>[dayKey(d.date), d] as const));
+  const map = new Map([...baselineDays, ...selectedDays].map(d=>[dayKey(d.date), d] as const));
   const selDays: Date[] = []; const c=new Date(rangeStart); c.setHours(0,0,0,0); const e=new Date(rangeEnd); e.setHours(0,0,0,0);
   while(c<=e){ selDays.push(new Date(c)); c.setDate(c.getDate()+1); }
   let selNum=0, selDen=0; for(const d of selDays){ const r=map.get(dayKey(d)); if(!r) continue; selNum+=(r as any)[cfg.numKey]||0; selDen+=(r as any)[cfg.denomKey]||0; }
@@ -267,26 +267,29 @@ function computeRateRatio(metric: string, rangeStart: Date, rangeEnd: Date, days
   const actualPct = (selNum/selDen)*100; const baselinePct = baselineRatio*100; const diffPP = actualPct - baselinePct;
   const p = baselineRatio; let se = Math.sqrt(p*(1-p)/selDen)*100; if(!isFinite(se)||se<0.1) se=0.1;
   let z = diffPP / se; if (NEGATIVE.has(metric)) z*=-1; const tier = tierRates(z);
-  return { metric, value: actualPct, valueType:'rate', tier, diff: diffPP, diffType:'pp', baseline: baselinePct, lookbackDays, keptDays, negativeMetric: NEGATIVE.has(metric), debug:{ provisional, activityDays, reqKept, floor, keptDen, z, se } };
+  return { metric, value: actualPct, valueType:'rate', tier, diff: diffPP, diffType:'pp', baseline: baselinePct, lookbackDays, keptDays, negativeMetric: NEGATIVE.has(metric), debug:{ provisional, activityDays, reqKept, floor, keptDen, z, se, baselineDays: lookbackDays, selectedSpan: selDays.length } };
 }
 
 // Caches
-const BMARK_VERSION = '2'; // bump to invalidate old cached results
+const BMARK_VERSION = '3'; // bump to invalidate old cached results (include selected period days)
 const lookbackCache = new Map<string, DayRec[]>();
 const resultCache = new Map<string, BenchmarkResult>();
 
 function compute(metric: string, start: Date, end: Date): BenchmarkResult {
   const dm = DataManager.getInstance();
-  const { start: lbStart, end: lbEnd } = buildLookback(start);
-  const sig = `${dm.getCampaigns().length}:${dm.getFlowEmails().length}|${lbStart.toISOString()}|${lbEnd.toISOString()}`;
-  let daily = lookbackCache.get(sig);
-  if (!daily){
-    daily = dm.getDailyRecords(lbStart, lbEnd) as DayRec[];
-    lookbackCache.set(sig, daily);
+  const { start: lbStart, end: lbEnd } = buildLookback(start); // lookback window ends day before selected start
+  // Fetch union (lookback + selected period)
+  const unionSig = `${dm.getCampaigns().length}:${dm.getFlowEmails().length}|${lbStart.toISOString()}|${end.toISOString()}`;
+  let union = lookbackCache.get(unionSig);
+  if (!union){
+    union = dm.getDailyRecords(lbStart, end) as DayRec[];
+    lookbackCache.set(unionSig, union);
   }
-  if (TOTALS.has(metric)) return computeTotals(metric, start, end, daily);
-  if (VOLATILITY_RATIOS.has(metric)) return computeVolatilityRatio(metric, start, end, daily);
-  return computeRateRatio(metric, start, end, daily);
+  const baselineDays = union.filter(d => d.date < start);
+  const selectedDays = union.filter(d => d.date >= start && d.date <= end);
+  if (TOTALS.has(metric)) return computeTotals(metric, start, end, baselineDays, selectedDays);
+  if (VOLATILITY_RATIOS.has(metric)) return computeVolatilityRatio(metric, start, end, baselineDays, selectedDays);
+  return computeRateRatio(metric, start, end, baselineDays, selectedDays);
 }
 
 // Stable empty result to avoid new object identity every render when inputs missing (prevents infinite re-render with useSyncExternalStore)
