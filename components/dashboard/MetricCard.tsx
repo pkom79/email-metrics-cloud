@@ -55,6 +55,12 @@ const MetricCard: React.FC<MetricCardProps> = ({
     // Adaptive benchmarking: pass the actual visible range (start/end) so "current" aggregates that range.
     // We previously advanced an anchor +7d which caused current aggregation to resolve to an empty week (future) => 0 values & -100% deltas.
     const adaptive = useBenchmark(metricKey, rangeStart, rangeEnd);
+    if (typeof window !== 'undefined') {
+        (window as any).__metricCardRenders = ((window as any).__metricCardRenders || 0) + 1;
+        if ((window as any).__metricCardRenders % 200 === 0) {
+            console.warn('[MetricCard] High render count', { count: (window as any).__metricCardRenders, metricKey, rangeStart, rangeEnd });
+        }
+    }
     if (typeof window !== 'undefined' && metricKey) {
         // @ts-ignore
         if (window.__BENCH_DEBUG__ !== false) console.debug('[AdaptiveBenchmark]', metricKey, { rangeStart, rangeEnd, tier: adaptive?.tier, hiddenReason: adaptive?.hiddenReason });
