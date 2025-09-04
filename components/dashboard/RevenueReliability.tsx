@@ -135,18 +135,26 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
 
     if (!weeks.length) return null;
 
-    // Chart geometry (fixed bar width + possible horizontal scroll for long ranges)
+    // Chart geometry (adaptive fill, equal spacing, no horizontal scroll)
     const weeksCount = weeks.length;
     const h = 240; const pad = 46;
-    const baseMax = 1100;
-    const gap = 6;
-    const barW = 14;
-    const contentWidth = 40 + weeksCount * (barW + gap) - gap + 40; // side padding both ends
-    const scrollNeeded = contentWidth > baseMax;
-    const w = scrollNeeded ? contentWidth : Math.min(baseMax, Math.max(600, contentWidth));
-    const xPosFor = (i: number) => 40 + i * (barW + gap);
+    const baseMax = 1100; // max width for dashboard section
+    const w = baseMax; // fixed container drawing width for consistent alignment
+    const sidePad = 40;
+    const avail = w - sidePad * 2;
+    const baseGap = 6;
+    // Initial bar width assumption using base gap
+    let barW = weeksCount ? (avail - baseGap * (weeksCount - 1)) / weeksCount : 0;
+    if (barW > 40) {
+        barW = 40;
+    } else if (barW < 3) {
+        barW = Math.max(2, barW); // allow very narrow bars rather than introducing scroll
+    }
+    // Recompute gap to perfectly fill space with final barW
+    const gap = weeksCount > 1 ? (avail - barW * weeksCount) / (weeksCount - 1) : 0;
+    const xPosFor = (i: number) => sidePad + i * (barW + gap);
     const maxRevenue = Math.max(...weeks.map(w => w.revenue), 1);
-    const usableHeight = h - pad - 70;
+    const usableHeight = h - pad - 70; // leave room for mean band and tooltips
     const meanY = (val: number) => (h - pad) - (val / maxRevenue) * usableHeight;
 
     const formatCurrency = (v: number) => '$' + Math.round(v).toLocaleString('en-US');
@@ -157,7 +165,8 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
         const weeksCountLocal = weeks.length;
         if (!weeksCountLocal) return false;
         // After width calc we know if we capped below baseMax; recalc with same formula
-        return !scrollNeeded && contentWidth < 1100;
+        // center not needed; we always use fixed width
+        return false;
     })();
 
     return (
@@ -204,8 +213,8 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
                         </div>
                     </div>
                 </div>
-                <div className={`pb-2 ${scrollNeeded ? 'overflow-x-auto' : 'overflow-visible'} ${centerChart ? 'flex justify-center' : ''}`}>
-                    <div className="relative" style={{ width: w, marginLeft: centerChart ? 'auto' : undefined, marginRight: centerChart ? 'auto' : undefined }}>
+                <div className={`pb-2 overflow-visible`}>
+                    <div className="relative" style={{ width: w }}>
                         <svg width={w} height={h} className="block">
                             <defs>
                                 <linearGradient id="campGrad" x1="0" x2="0" y1="0" y2="1">
@@ -237,21 +246,25 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
                             )}
                             {/* Bars (stacked campaign (purple) + flow (blue)) */}
                             {weeks.map((wk, i) => {
+                                // Scope display revenues to enforce single-color bars when filtered
+                                const displayCamp = scope === 'flows' ? 0 : wk.campaignRevenue;
+                                const displayFlow = scope === 'campaigns' ? 0 : wk.flowRevenue;
+                                const total = displayCamp + displayFlow;
                                 const x = xPosFor(i);
-                                const totalH = (wk.revenue / maxRevenue) * usableHeight;
-                                const campH = (wk.campaignRevenue / maxRevenue) * usableHeight;
-                                const flowH = (wk.flowRevenue / maxRevenue) * usableHeight;
+                                const totalH = (total / maxRevenue) * usableHeight;
+                                const campH = (displayCamp / maxRevenue) * usableHeight;
+                                const flowH = (displayFlow / maxRevenue) * usableHeight;
                                 const baseY = (h - pad) - totalH;
                                 const flowY = (h - pad) - flowH; // bottom segment
                                 const campY = flowY - campH; // stacked above flow
                                 return (
                                     <g key={wk.label} onMouseEnter={() => onEnter(i)} onMouseLeave={onLeave} className="cursor-pointer">
                                         {/* Flows segment (blue) */}
-                                        {scope !== 'campaigns' && flowH > 0 && (
+                                        {flowH > 0 && (
                                             <rect x={x} y={flowY} width={barW} height={Math.max(2, flowH)} className="fill-[url(#flowGrad)] opacity-95 hover:opacity-100 transition-opacity shadow-sm" />
                                         )}
                                         {/* Campaigns segment (purple) */}
-                                        {scope !== 'flows' && campH > 0 && (
+                                        {campH > 0 && (
                                             <rect x={x} y={campY} width={barW} height={Math.max(2, campH)} className="fill-[url(#campGrad)] opacity-95 hover:opacity-100 transition-opacity shadow-sm" />
                                         )}
                                         {/* No placeholder bars or auto labels; rely on tooltip for clarity */}
