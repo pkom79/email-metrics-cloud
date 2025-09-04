@@ -19,8 +19,13 @@ interface RevenueReliabilityProps {
  */
 export default function RevenueReliability({ campaigns, flows }: RevenueReliabilityProps) {
     const [scope, setScope] = useState<'all' | 'campaigns' | 'flows'>('all');
-    const filteredCampaigns = scope === 'flows' ? [] : campaigns;
-    const filteredFlows = scope === 'campaigns' ? [] : flows;
+    // Derive filtered arrays inside memoized computation blocks to avoid changing deps every render
+    const { filteredCampaigns, filteredFlows } = useMemo(() => {
+        return {
+            filteredCampaigns: scope === 'flows' ? [] : campaigns,
+            filteredFlows: scope === 'campaigns' ? [] : flows
+        };
+    }, [scope, campaigns, flows]);
     // Build weekly aggregates (campaign + flow) and trim partial edge weeks (<7 active days) to avoid skew
     const { weeks, trimmed } = useMemo(() => {
         interface WeekRec {

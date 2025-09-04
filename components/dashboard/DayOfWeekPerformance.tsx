@@ -89,7 +89,7 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
                                 <span className="font-semibold block mb-1">What is this?</span>
                                 Aggregates campaign performance by weekday over the selected range. Each bar sums (or averages) the chosen metric for campaigns sent that day.
                                 <br /><br />
-                                <span className="font-semibold">Best Day logic:</span> We declare a "winner" only if the top day is ≥1.5 MAD (~statistically higher) above the median and has at least 3 campaigns. Otherwise we show "No clear winner" to prevent overfitting.
+                                <span className="font-semibold">Best Day logic:</span> We declare a &quot;winner&quot; only if the top day is ≥1.5 MAD (~statistically higher) above the median and has at least 3 campaigns. Otherwise we show &quot;No clear winner&quot; to prevent overfitting.
                             </span>
                         </span>
                     </h3>

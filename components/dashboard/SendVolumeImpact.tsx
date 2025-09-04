@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Activity, Info } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
@@ -82,10 +82,10 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
     const PADDING_LEFT = 50; // space for y ticks
     const PADDING_RIGHT = 20;
     const innerW = VIEW_W - PADDING_LEFT - PADDING_RIGHT;
-    const xScale = (i: number) => points.length <= 1 ? PADDING_LEFT + innerW / 2 : PADDING_LEFT + (i / (points.length - 1)) * innerW;
-    const yMetric = (v: number) => {
+    const xScale = useCallback((i: number) => points.length <= 1 ? PADDING_LEFT + innerW / 2 : PADDING_LEFT + (i / (points.length - 1)) * innerW, [points.length, PADDING_LEFT, innerW]);
+    const yMetric = useCallback((v: number) => {
         if (metricMax === 0) return GRAPH_H; return GRAPH_H - (v / metricMax) * (GRAPH_H - 10); // add top padding
-    };
+    }, [metricMax]);
     const yEmails = (v: number) => {
         if (emailsMax === 0) return GRAPH_H; return GRAPH_H - (v / emailsMax) * (GRAPH_H - 10);
     };
@@ -109,7 +109,7 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
             res.push({ x: xScale(idx), label: points[idx].label });
         }
         return res;
-    }, [points]);
+    }, [points, xScale]);
     // Y ticks for metric (3)
     const yTicks = useMemo(() => {
         const ticks: { y: number; value: number }[] = [];
@@ -120,7 +120,7 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
         ticks.push({ y: yMetric(metricMax), value: metricMax });
         // ensure unique ordering
         return Array.from(new Map(ticks.map(t => [t.value, t])).values());
-    }, [metricMax]);
+    }, [metricMax, yMetric]);
 
     const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
     const active = hover ? points[hover.idx] : null;

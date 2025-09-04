@@ -135,7 +135,7 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
                             <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-72 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
                                 <span className="font-semibold block mb-1">What is this?</span>
                                 Aggregates campaign performance by send hour (local time) across the selected range so you can spot hourly engagement or revenue concentration.
-                                <br /><br /><span className="font-semibold">Best Hour logic:</span> Winner shown only if the top hour is ≥1.8 MAD above the median and has ≥3 campaigns; else "No clear winner" to avoid random spikes driving decisions.
+                                <br /><br /><span className="font-semibold">Best Hour logic:</span> Winner shown only if the top hour is ≥1.8 MAD above the median and has ≥3 campaigns; else &quot;No clear winner&quot; to avoid random spikes driving decisions.
                             </span>
                         </span>
                     </h3>
