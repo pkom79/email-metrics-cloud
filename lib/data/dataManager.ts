@@ -14,6 +14,7 @@ import { CampaignTransformer } from './transformers/campaignTransformer';
 import { FlowTransformer } from './transformers/flowTransformer';
 import { SubscriberTransformer } from './transformers/subscriberTransformer';
 import { idbGet, idbSet } from '../utils/persist';
+import { auditDates, DateAuditSummary } from './dateUtils';
 
 export interface LoadProgress {
     campaigns: { loaded: boolean; progress: number; error?: string };
@@ -40,6 +41,8 @@ export class DataManager {
     private campaignTransformer = new CampaignTransformer();
     private flowTransformer = new FlowTransformer();
     private subscriberTransformer = new SubscriberTransformer();
+
+    private _dateAudit: DateAuditSummary | null = null;
 
     // Dynamic storage keys based on user
     private get storageKey() {
@@ -365,6 +368,27 @@ export class DataManager {
                 } else { errors.push(`Subscribers: ${res.error || 'Unknown error'}`); this.loadProgress.subscribers.error = res.error; }
             }
             this.isRealDataLoaded = this.campaigns.length > 0 || this.flowEmails.length > 0 || this.subscribers.length > 0;
+
+            // Post-load date audit (only if any emails loaded)
+            if (this.isRealDataLoaded) {
+                try {
+                    const allDates: Date[] = [];
+                    for (const c of this.campaigns) if (c.sentDate instanceof Date && !isNaN(c.sentDate.getTime())) allDates.push(c.sentDate);
+                    for (const f of this.flowEmails) if (f.sentDate instanceof Date && !isNaN(f.sentDate.getTime())) allDates.push(f.sentDate);
+                    this._dateAudit = auditDates(allDates);
+                    if (typeof window !== 'undefined' && this._dateAudit) {
+                        // Expose minimal debug helper
+                        (window as any).__DATA_DATE_AUDIT__ = this._dateAudit;
+                        if (this._dateAudit.suspicious) {
+                            // eslint-disable-next-line no-console
+                            console.warn('[DataManager] Date audit flagged potential parsing issue:', this._dateAudit);
+                        } else if (this._dateAudit.min && this._dateAudit.max) {
+                            // eslint-disable-next-line no-console
+                            console.info('[DataManager] Date range loaded', { from: this._dateAudit.min.toISOString().slice(0,10), to: this._dateAudit.max.toISOString().slice(0,10) });
+                        }
+                    }
+                } catch { /* ignore audit errors */ }
+            }
             onProgress?.(this.loadProgress);
             if (this.isRealDataLoaded) this.persistToStorage();
             return { success: errors.length === 0, errors };
