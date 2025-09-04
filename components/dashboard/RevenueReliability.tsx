@@ -229,7 +229,7 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                                 const campY = flowY + (flowH - campH);
                                 return (
                                     <g key={wk.label} onMouseEnter={() => onEnter(i)} onMouseLeave={onLeave} className="cursor-pointer">
-                                        <rect x={x} y={flowY} width={barW} height={Math.max(2, flowH)} rx={5} className="fill-[url(#flowGrad)] opacity-90 hover:opacity-100 transition-opacity shadow-sm" />
+                                        {scope !== 'campaigns' && <rect x={x} y={flowY} width={barW} height={Math.max(2, flowH)} rx={5} className="fill-[url(#flowGrad)] opacity-90 hover:opacity-100 transition-opacity shadow-sm" />}
                                         <rect x={x} y={campY} width={barW} height={Math.max(2, campH)} rx={5} className="fill-[url(#campGrad)] opacity-90 hover:opacity-100 transition-opacity shadow-sm" />
                                         {i === weeks.length - 1 && (
                                             <text x={x + barW / 2} y={baseY - 10} textAnchor="middle" className="fill-purple-700 dark:fill-purple-300 text-[10px] font-semibold tracking-tight">{formatCurrency(wk.revenue)}</text>
@@ -253,7 +253,7 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                                             <p className="font-medium text-gray-800 dark:text-gray-100 mb-1">Week of {wk.label}</p>
                                             <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Total</span><span className="font-medium text-gray-800 dark:text-gray-100">{formatCurrency(wk.revenue)}</span></div>
                                             <div className="flex justify-between"><span className="text-purple-600 dark:text-purple-300">Campaigns</span><span className="font-medium">{formatCurrency(wk.campaignRevenue)}</span></div>
-                                            <div className="flex justify-between"><span className="text-indigo-600 dark:text-indigo-300">Flows</span><span className="font-medium">{formatCurrency(wk.flowRevenue)}</span></div>
+                                            {scope !== 'campaigns' && <div className="flex justify-between"><span className="text-indigo-600 dark:text-indigo-300">Flows</span><span className="font-medium">{formatCurrency(wk.flowRevenue)}</span></div>}
                                             <div className="flex justify-between mt-1"><span className="text-gray-500 dark:text-gray-400">Campaign Share</span><span>{formatPct1(campShare)}</span></div>
                                             <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Vs Mean</span><span className={deviation >= 0 ? 'text-green-600 dark:text-green-400' : 'text-rose-600 dark:text-rose-400'}>{deviation >= 0 ? '+' : ''}{deviation.toFixed(1)}%</span></div>
                                         </div>
@@ -289,15 +289,18 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                         </div>
                     );
                     return (
-                        <div className={`mt-6 ${centerChart ? 'flex flex-wrap justify-center gap-4' : 'grid grid-cols-2 md:grid-cols-5 gap-4'} text-xs`}>
+                        <div className={`mt-6 ${centerChart ? 'flex flex-wrap justify-center gap-3' : 'grid grid-cols-2 md:grid-cols-6 gap-3'} text-[11px]`}>
                             <StatTile label="Reliability" tooltip={reliabilityTooltip} value={`${stats.reliabilityDisplay}%`} category={stats.category} categoryColor={categoryColor} />
                             <StatTile label="Avg Weekly Revenue" tooltip="Average weekly revenue for selected scope" value={formatCurrency(stats.mean)} />
                             <StatTile label="Std Dev" tooltip="Standard deviation of weekly revenue (selected scope)" value={formatCurrency(stats.std)} />
-                            {scope === 'campaigns' && stats.zeroCampaignWeeks > 0 && (
+                            {scope !== 'flows' && (
                                 <StatTile label="Zero Campaign Weeks" tooltip="Weeks with no campaign sends" value={String(stats.zeroCampaignWeeks)} />
                             )}
-                            {scope === 'campaigns' && stats.lostCampaignEstimate > 0 && (
+                            {scope !== 'flows' && (
                                 <StatTile label="Est. Lost Camp Rev" tooltip="Estimated lost campaign revenue (median non-zero campaign week * zero weeks)" value={formatCurrency(stats.lostCampaignEstimate)} />
+                            )}
+                            {scope === 'all' && (
+                                <StatTile label="Campaign Share" tooltip="Average campaign revenue share of total" value={formatPct1(stats.meanCampaignShare)} />
                             )}
                         </div>
                     );
@@ -305,7 +308,7 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                 {/* Interpretation removed per request (tooltip now sufficient) */}
                 <div className="mt-3 flex items-center gap-4 text-[10px] text-gray-500 dark:text-gray-400">
                     <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gradient-to-b from-purple-400 to-purple-700" /> Campaign Revenue</div>
-                    <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gradient-to-b from-indigo-400 to-indigo-700" /> Flow Revenue</div>
+                    {scope !== 'campaigns' && <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gradient-to-b from-indigo-400 to-indigo-700" /> Flow Revenue</div>}
                     {stats && <div className="flex items-center gap-1"><span className="w-6 h-[2px] bg-purple-500" /> Mean (±1σ band)</div>}
                 </div>
             </div>

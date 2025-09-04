@@ -186,35 +186,35 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
                     )}
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-6 text-sm px-1 pb-4">
-                    <div>
-                        <p className="text-gray-500 dark:text-gray-400">Total Campaigns</p>
-                        <p className="font-bold text-lg text-gray-900 dark:text-gray-100">
-                            {dayOfWeekData.reduce((sum, d) => sum + d.campaignCount, 0)}
-                        </p>
-                    </div>
-                    <div>
-                        <p className="text-gray-500 dark:text-gray-400">Best Day</p>
-                        <p className="font-bold text-lg text-gray-900 dark:text-gray-100">
-                            {(() => {
-                                if (dayOfWeekData.length === 0) return 'N/A';
-                                const best = dayOfWeekData.reduce((max, d) => (d.value > max.value ? d : max), dayOfWeekData[0]);
-                                return best.value > 0 ? best.day : 'N/A';
-                            })()}
-                        </p>
-                    </div>
-                    <div>
-                        <p className="text-gray-500 dark:text-gray-400">Peak Value</p>
-                        <p className="font-bold text-lg text-gray-900 dark:text-gray-100">
-                            {formatMetricValue(maxValue, selectedMetric)}
-                        </p>
-                    </div>
-                    <div>
-                        <p className="text-gray-500 dark:text-gray-400">Date Range</p>
-                        <p className="font-bold text-lg text-gray-900 dark:text-gray-100">
-                            {dateRange === 'all' ? 'All Time' : dateRange}
-                        </p>
-                    </div>
+                <div className="mt-4 flex flex-wrap justify-center gap-6 text-xs pb-4">
+                    {(() => {
+                        const totalCampaigns = dayOfWeekData.reduce((sum, d) => sum + d.campaignCount, 0);
+                        const vals = dayOfWeekData.map(d => d.value);
+                        const n = vals.length;
+                        const median = (() => { const s = [...vals].sort((a, b) => a - b); return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; })();
+                        const absDevs = vals.map(v => Math.abs(v - median));
+                        const mad = (() => { const s = [...absDevs].sort((a, b) => a - b); return n ? (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2) : 0; })();
+                        const scale = mad * 1.4826 || 1e-6; // approx std
+                        const best = dayOfWeekData.reduce((max, d) => d.value > max.value ? d : max, dayOfWeekData[0]);
+                        const z = (best.value - median) / scale;
+                        const significant = z >= 1.5 && best.campaignCount >= 3; // heuristic threshold ~ one-tailed ~0.07
+                        return (
+                            <>
+                                <div className="min-w-[120px] text-center">
+                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Total Campaigns</p>
+                                    <p className="font-semibold text-lg text-gray-900 dark:text-gray-100 tabular-nums">{totalCampaigns}</p>
+                                </div>
+                                <div className="min-w-[140px] text-center">
+                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Best Day (stat)</p>
+                                    <p className="font-semibold text-lg text-gray-900 dark:text-gray-100">{significant ? best.day : 'No clear winner'}</p>
+                                </div>
+                                <div className="min-w-[120px] text-center">
+                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Peak Value</p>
+                                    <p className="font-semibold text-lg text-gray-900 dark:text-gray-100">{formatMetricValue(maxValue, selectedMetric)}</p>
+                                </div>
+                            </>
+                        );
+                    })()}
                 </div>
             </div>
         </section>

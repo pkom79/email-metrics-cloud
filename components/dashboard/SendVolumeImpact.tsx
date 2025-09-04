@@ -439,26 +439,26 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                 </div>
                 <ChartContainer points={points} metric={metric} emailsMax={emailsMax} metricMax={metricMax} formatValue={formatValue} compareSeries={sortMode === 'time' ? compareSeries : undefined} axisMode={sortMode} />
                 {!baseSeries.length && (<div className="mt-4 text-xs text-gray-500">No sends in selected range.</div>)}
-                <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                    <div className="relative border border-gray-200 rounded-xl p-4 bg-white">
+                <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 text-[11px]">
+                    <div className="relative border border-gray-200 rounded-lg p-3 bg-white flex flex-col justify-between">
                         <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Avg Sends
                             <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-52 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Mean emails per bucket after trimming partial periods.</span></span>
                         </div>
                         <div className="text-gray-900 font-semibold text-lg tabular-nums">{micro?.avgEmails?.toLocaleString() || '—'}</div>
                     </div>
-                    <div className="relative border border-gray-200 rounded-xl p-4 bg-white">
+                    <div className="relative border border-gray-200 rounded-lg p-3 bg-white flex flex-col justify-between">
                         <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Revenue / 1k
                             <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-56 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Total revenue divided by total emails, scaled per 1,000 sends.</span></span>
                         </div>
                         <div className="text-gray-900 font-semibold text-lg tabular-nums">{micro ? fmtCurrency(micro.rpmE) : '—'}</div>
                     </div>
-                    <div className="relative border border-gray-200 rounded-xl p-4 bg-white">
+                    <div className="relative border border-gray-200 rounded-lg p-3 bg-white flex flex-col justify-between">
                         <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Median Unsub/1k
                             <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-56 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Median bucket unsubscribe count normalized per 1,000 emails.</span></span>
                         </div>
                         <div className="text-gray-900 font-semibold text-lg tabular-nums">{micro ? (micro.medianUnsub >= 1 ? micro.medianUnsub.toFixed(2) : micro.medianUnsub.toFixed(3)) : '—'}</div>
                     </div>
-                    <div className="relative border border-gray-200 rounded-xl p-4 bg-white">
+                    <div className="relative border border-gray-200 rounded-lg p-3 bg-white flex flex-col justify-between">
                         <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Correlation
                             <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-64 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px] leading-snug">
                                 Pearson correlation (r) between send volume and this metric over time (n ≥ 3).
@@ -490,10 +490,19 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                             }
                             return r != null ? (
                                 <div>
-                                    <div className={`text-lg font-semibold tabular-nums ${r > 0.05 ? 'text-emerald-600' : r < -0.05 ? 'text-rose-600' : 'text-gray-600'}`}>{r.toFixed(2)}
-                                        <span className="ml-2 text-[11px] font-medium text-gray-500">{correlationInfo.label}{correlationInfo.n ? ` · n=${correlationInfo.n}` : ''}</span>
-                                    </div>
-                                    <div className="mt-1 text-[11px] leading-snug text-gray-500 max-w-[180px]">{narrative}</div>
+                                    {(() => {
+                                        // Adjust coloring logic: positive correlation for negative metrics is unfavorable (red), negative correlation favorable (green)
+                                        const isNegMetric = NEGATIVE_METRICS.includes(metric);
+                                        const favorable = !isNegMetric ? (r > 0.05) : (r < -0.05);
+                                        const unfavorable = !isNegMetric ? (r < -0.05) : (r > 0.05);
+                                        const colorClass = favorable ? 'text-emerald-600' : unfavorable ? 'text-rose-600' : 'text-gray-600';
+                                        return (
+                                            <div className={`text-lg font-semibold tabular-nums ${colorClass}`}>{r.toFixed(2)}
+                                                <span className="ml-2 text-[10px] font-medium text-gray-500">{correlationInfo.label}{correlationInfo.n ? ` · n=${correlationInfo.n}` : ''}</span>
+                                            </div>
+                                        );
+                                    })()}
+                                    <div className="mt-1 text-[10px] leading-snug text-gray-500 max-w-[200px] pr-1">{narrative}</div>
                                 </div>
                             ) : (
                                 <div className="text-lg font-semibold text-gray-500">—<span className="ml-2 text-[11px] font-medium">{correlationInfo?.label || '—'}</span></div>
