@@ -37,10 +37,11 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
 
     // Determine dynamic minimum campaigns: 5% of total campaigns (rounded up) capped at 10, floor 3
     const minCampaignsRequired = useMemo(() => {
-        const total = filteredCampaigns.length;
-        if (!total) return 0;
-        return Math.min(10, Math.max(3, Math.ceil(total * 0.05)));
-    }, [filteredCampaigns.length]);
+        // Use total campaigns across full dataset (not just filtered range) for threshold scaling
+        const totalAll = DataManager.getInstance().getCampaigns().length;
+        if (!totalAll) return 0;
+        return Math.min(10, Math.max(3, Math.ceil(totalAll * 0.05))); // cap 10, floor 3
+    }, []);
 
     // Sort so that for negative metrics (unsubscribe/spam/bounce rate) lowest is on top for fast scanning
     const negativeMetrics = useMemo(() => ['unsubscribeRate', 'spamRate', 'bounceRate'] as const, []);

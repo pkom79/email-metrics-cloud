@@ -101,7 +101,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [displayedCampaigns, setDisplayedCampaigns] = useState(5);
     const [stickyBar, setStickyBar] = useState(false);
     const [showCustomDateModal, setShowCustomDateModal] = useState(false);
-    const [audienceOverviewRef, setAudienceOverviewRef] = useState<HTMLElement | null>(null);
+    // Sticky bar end sentinel (placed *after* Audience Growth so bar stays visible through that section)
+    const [stickyEndRef, setStickyEndRef] = useState<HTMLElement | null>(null);
     const [isBeforeAudience, setIsBeforeAudience] = useState(true);
     // Admin accounts selector state
     const [isAdmin, setIsAdmin] = useState(false);
@@ -299,7 +300,24 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     useEffect(() => { setGranularity(safeGranularity); }, [safeGranularity]);
 
     // Sticky observer (desktop only now)
-    useEffect(() => { if (!audienceOverviewRef) return; const observer = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) { setIsBeforeAudience(false); setStickyBar(false); } else { setIsBeforeAudience(true); setStickyBar(window.scrollY > 100); } }, { root: null, rootMargin: '0px 0px -85% 0px', threshold: 0 }); observer.observe(audienceOverviewRef); const onScroll = () => { if (!isBeforeAudience) return; setStickyBar(window.scrollY > 100); }; window.addEventListener('scroll', onScroll, { passive: true }); onScroll(); return () => { observer.disconnect(); window.removeEventListener('scroll', onScroll); }; }, [audienceOverviewRef, isBeforeAudience]);
+    useEffect(() => {
+        if (!stickyEndRef) return;
+        // We now observe a tiny sentinel AFTER Audience Growth; keep sticky until sentinel enters viewport (bottom 75%)
+        const observer = new IntersectionObserver(([entry]) => {
+            if (entry.isIntersecting) {
+                setIsBeforeAudience(false);
+                setStickyBar(false);
+            } else {
+                setIsBeforeAudience(true);
+                setStickyBar(window.scrollY > 100);
+            }
+        }, { root: null, rootMargin: '0px 0px -75% 0px', threshold: 0 });
+        observer.observe(stickyEndRef);
+        const onScroll = () => { if (!isBeforeAudience) return; setStickyBar(window.scrollY > 100); };
+        window.addEventListener('scroll', onScroll, { passive: true });
+        onScroll();
+        return () => { observer.disconnect(); window.removeEventListener('scroll', onScroll); };
+    }, [stickyEndRef, isBeforeAudience]);
 
     // Base data
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -675,7 +693,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 <section><FlowStepAnalysis dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} /></section>
                 {/* Flow Step Drop-Off Map */}
                 <section><FlowStepDropOff dateRange={dateRange} customFrom={customFrom} customTo={customTo} /></section>
-                <div ref={el => setAudienceOverviewRef(el)}><AudienceCharts dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} /></div>
+                <AudienceCharts dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} />
+                {/* Sticky end sentinel (1px spacer) */}
+                <div ref={el => setStickyEndRef(el)} style={{ height: 1 }} />
                 <section><CustomSegmentBlock /></section>
             </div></div>
 

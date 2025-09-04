@@ -41,10 +41,10 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
     const rawHourData = useMemo(() => dataManager.getCampaignPerformanceByHourOfDay(filteredCampaigns, selectedMetric), [filteredCampaigns, selectedMetric, dataManager]);
     const negativeMetrics = useMemo(() => ['unsubscribeRate', 'spamRate', 'bounceRate'] as const, []);
     const minCampaignsRequired = useMemo(() => {
-        const total = filteredCampaigns.length;
-        if (!total) return 0;
-        return Math.min(12, Math.max(3, Math.ceil(total * 0.05)));
-    }, [filteredCampaigns.length]);
+        const totalAll = DataManager.getInstance().getCampaigns().length;
+        if (!totalAll) return 0;
+        return Math.min(12, Math.max(3, Math.ceil(totalAll * 0.05)));
+    }, []);
     const hourOfDayData = useMemo(() => {
         const arr = [...rawHourData];
         if (negativeMetrics.includes(selectedMetric as any)) arr.sort((a, b) => a.value - b.value); else arr.sort((a, b) => b.value - a.value);

@@ -115,27 +115,27 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
         const reliabilityDisplay = (volatilityPct % 1 === 0) ? Math.round(reliabilityRaw).toFixed(0) : reliabilityRaw.toFixed(1);
         const zeroCampaignWeeks = weeks.filter(w => w.campaignEmails === 0).length;
         const meanCampaignShare = weeks.reduce((s, w) => s + (w.campaignRevenue / (w.revenue || 1)), 0) / weeks.length;
-
-        // --- Lost Campaign Revenue Estimation (simple robust flow-share model) ---
-        // Use non-zero campaign weeks to derive a robust median campaign share excluding outliers.
-        // --- Lost Campaign Revenue Estimation (revised: robust median absolute campaign revenue) ---
-        // Rationale: previous share * flow model overstated for brands with high flow revenue. Use median non-zero campaign revenue (robust to outliers) * number of zero weeks.
-        const nonZero = weeks.filter(w => w.campaignRevenue > 0);
+        // --- Lost Campaign Revenue Estimation (NEW): For each zero-campaign week, take average of the closest previous and next non-zero campaign weeks' campaign revenue.
+        // If only one side exists, use that side's value. Sum across all zero weeks.
         let lostCampaignEstimate = 0;
-        if (nonZero.length >= 3 && zeroCampaignWeeks > 0) {
-            const median = (vals: number[]) => {
-                const srt = [...vals].sort((a, b) => a - b); const n = srt.length; if (!n) return 0; return n % 2 ? srt[(n - 1) / 2] : (srt[n / 2 - 1] + srt[n / 2]) / 2;
-            };
-            const campVals = nonZero.map(w => w.campaignRevenue);
-            const med = median(campVals);
-            const absDevs = campVals.map(v => Math.abs(v - med));
-            const mad = median(absDevs) || 1e-6;
-            const scale = 1.4826 * mad;
-            const filtered = campVals.filter(v => Math.abs(v - med) / scale <= 3);
-            const robustMedian = filtered.length >= 3 ? median(filtered) : med;
-            // Guard rails – avoid extreme inflation
-            const perWeek = Math.max(0, robustMedian);
-            lostCampaignEstimate = perWeek * zeroCampaignWeeks;
+        if (zeroCampaignWeeks > 0) {
+            const nonZeroIndices = weeks
+                .map((w, idx) => ({ idx, rev: w.campaignRevenue }))
+                .filter(r => r.rev > 0);
+            if (nonZeroIndices.length) {
+                weeks.forEach((w, i) => {
+                    if (w.campaignRevenue > 0) return;
+                    // find nearest preceding non-zero
+                    let prev: number | null = null;
+                    for (let j = i - 1; j >= 0; j--) { if (weeks[j].campaignRevenue > 0) { prev = weeks[j].campaignRevenue; break; } }
+                    // find nearest following non-zero
+                    let next: number | null = null;
+                    for (let j = i + 1; j < weeks.length; j++) { if (weeks[j].campaignRevenue > 0) { next = weeks[j].campaignRevenue; break; } }
+                    if (prev === null && next === null) return; // cannot estimate
+                    const est = prev !== null && next !== null ? (prev + next) / 2 : (prev !== null ? prev : (next as number));
+                    lostCampaignEstimate += est;
+                });
+            }
         }
         return { mean, std, cv, reliabilityRaw, reliabilityDisplay, volatilityPct, volatilityDisplay, category, zeroCampaignWeeks, meanCampaignShare, lostCampaignEstimate };
     }, [weeks]);
@@ -337,7 +337,7 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                                 <StatTile label="Zero Campaign Weeks" tooltip="Weeks with no campaign sends" value={String(stats.zeroCampaignWeeks)} />
                             )}
                             {scope === 'campaigns' && stats.lostCampaignEstimate > 0 && (
-                                <StatTile label="Est. Lost Camp Rev" tooltip="Estimated lost campaign revenue (median non-zero campaign week * zero weeks)" value={formatCurrency(stats.lostCampaignEstimate)} />
+                                <StatTile label="Est. Lost Camp Rev" tooltip="Estimated lost campaign revenue (avg of adjacent non-zero campaign weeks for each zero week)" value={formatCurrency(stats.lostCampaignEstimate)} />
                             )}
                         </div>
                     );
