@@ -17,7 +17,7 @@ interface RevenueReliabilityProps {
  *  - Reliability % = clamp(100 - (CV * 100 * penaltyFactor), 0, 100) with penaltyFactor scaling to keep typical CV ranges meaningful.
  * Also detects weeks with zero sends (gaps) and highlights them.
  */
-export default function RevenueReliability({ campaigns, flows }: RevenueReliabilityProps) {
+export default function RevenueReliability({ campaigns, flows, dateRange }: RevenueReliabilityProps) {
     const [scope, setScope] = useState<'all' | 'campaigns' | 'flows'>('all');
     // Derive filtered arrays inside memoized computation blocks to avoid changing deps every render
     const { filteredCampaigns, filteredFlows } = useMemo(() => {
@@ -94,8 +94,15 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
         let start = false, end = false;
         if (arr.length && arr[0].activeDays < 7) { arr = arr.slice(1); start = true; }
         if (arr.length && arr[arr.length - 1].activeDays < 7) { arr = arr.slice(0, -1); end = true; }
+        // Apply week count limit based on selected date range to avoid overcrowding for short windows
+        const maxWeeksMap: Record<string, number> = { '30d': 6, '60d': 10, '90d': 14, '120d': 18, '180d': 26, '365d': 54 };
+        const maxWeeks = maxWeeksMap[dateRange] || (dateRange === 'all' ? Infinity : 40);
+        if (arr.length > maxWeeks) {
+            // Keep most recent weeks (slice from end)
+            arr = arr.slice(-maxWeeks);
+        }
         return { weeks: arr, trimmed: { start, end } };
-    }, [filteredCampaigns, filteredFlows]);
+    }, [filteredCampaigns, filteredFlows, dateRange]);
 
     const stats = useMemo(() => {
         if (weeks.length < 3) return null; // need at least 3 data points for meaningful variability
@@ -115,26 +122,41 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
         const reliabilityDisplay = (volatilityPct % 1 === 0) ? Math.round(reliabilityRaw).toFixed(0) : reliabilityRaw.toFixed(1);
         const zeroCampaignWeeks = weeks.filter(w => w.campaignEmails === 0).length;
         const meanCampaignShare = weeks.reduce((s, w) => s + (w.campaignRevenue / (w.revenue || 1)), 0) / weeks.length;
-        // --- Lost Campaign Revenue Estimation (NEW): For each zero-campaign week, take average of the closest previous and next non-zero campaign weeks' campaign revenue.
-        // If only one side exists, use that side's value. Sum across all zero weeks.
+        // --- Lost Campaign Revenue Estimation (REFINED) ---
+        // For each contiguous block of zero-campaign weeks, interpolate between bounding non-zero weeks (if both sides)
+        // using linear interpolation capped by the global median of non-zero campaign revenue.
+        // If only one side bound exists, apply a decaying sequence (0.9^k) * sideValue capped by median.
         let lostCampaignEstimate = 0;
         if (zeroCampaignWeeks > 0) {
-            const nonZeroIndices = weeks
-                .map((w, idx) => ({ idx, rev: w.campaignRevenue }))
-                .filter(r => r.rev > 0);
-            if (nonZeroIndices.length) {
-                weeks.forEach((w, i) => {
-                    if (w.campaignRevenue > 0) return;
-                    // find nearest preceding non-zero
-                    let prev: number | null = null;
-                    for (let j = i - 1; j >= 0; j--) { if (weeks[j].campaignRevenue > 0) { prev = weeks[j].campaignRevenue; break; } }
-                    // find nearest following non-zero
-                    let next: number | null = null;
-                    for (let j = i + 1; j < weeks.length; j++) { if (weeks[j].campaignRevenue > 0) { next = weeks[j].campaignRevenue; break; } }
-                    if (prev === null && next === null) return; // cannot estimate
-                    const est = prev !== null && next !== null ? (prev + next) / 2 : (prev !== null ? prev : (next as number));
-                    lostCampaignEstimate += est;
-                });
+            const nonZeroValues = weeks.filter(w => w.campaignRevenue > 0).map(w => w.campaignRevenue);
+            const median = (vals: number[]) => { const s = [...vals].sort((a, b) => a - b); const n = s.length; if (!n) return 0; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
+            const medianNonZero = median(nonZeroValues) || 0;
+            let i = 0;
+            while (i < weeks.length) {
+                if (weeks[i].campaignRevenue > 0) { i++; continue; }
+                const start = i;
+                while (i < weeks.length && weeks[i].campaignRevenue === 0) i++;
+                const end = i - 1; // inclusive
+                const blockLen = end - start + 1;
+                const prevIdx = start - 1;
+                const nextIdx = end + 1;
+                const prevVal = prevIdx >= 0 ? weeks[prevIdx].campaignRevenue : null;
+                const nextVal = nextIdx < weeks.length ? weeks[nextIdx].campaignRevenue : null;
+                if (prevVal && nextVal) {
+                    // Linear interpolation across blockLen gaps between prevVal and nextVal (blockLen+1 segments)
+                    for (let k = 1; k <= blockLen; k++) {
+                        const t = k / (blockLen + 1);
+                        const interp = prevVal + (nextVal - prevVal) * t;
+                        lostCampaignEstimate += Math.min(medianNonZero, interp);
+                    }
+                } else {
+                    // Single-sided decay
+                    const side = (prevVal || nextVal || 0);
+                    for (let k = 0; k < blockLen; k++) {
+                        const decayed = side * Math.pow(0.9, k + 1);
+                        lostCampaignEstimate += Math.min(medianNonZero, decayed);
+                    }
+                }
             }
         }
         return { mean, std, cv, reliabilityRaw, reliabilityDisplay, volatilityPct, volatilityDisplay, category, zeroCampaignWeeks, meanCampaignShare, lostCampaignEstimate };
@@ -261,11 +283,11 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                                     <g key={wk.label} onMouseEnter={() => onEnter(i)} onMouseLeave={onLeave} className="cursor-pointer">
                                         {/* Flows segment (blue) */}
                                         {scope !== 'campaigns' && flowH > 0 && (
-                                            <rect x={x} y={flowY} width={barW} height={Math.max(2, flowH)} rx={5} className="fill-[url(#flowGrad)] opacity-95 hover:opacity-100 transition-opacity shadow-sm" />
+                                            <rect x={x} y={flowY} width={barW} height={Math.max(2, flowH)} className="fill-[url(#flowGrad)] opacity-95 hover:opacity-100 transition-opacity shadow-sm" />
                                         )}
                                         {/* Campaigns segment (purple) */}
                                         {scope !== 'flows' && campH > 0 && (
-                                            <rect x={x} y={campY} width={barW} height={Math.max(2, campH)} rx={5} className="fill-[url(#campGrad)] opacity-95 hover:opacity-100 transition-opacity shadow-sm" />
+                                            <rect x={x} y={campY} width={barW} height={Math.max(2, campH)} className="fill-[url(#campGrad)] opacity-95 hover:opacity-100 transition-opacity shadow-sm" />
                                         )}
                                         {/* Zero week placeholder (no campaigns when scope='campaigns') */}
                                         {wk.revenue === 0 && (
@@ -337,7 +359,7 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                                 <StatTile label="Zero Campaign Weeks" tooltip="Weeks with no campaign sends" value={String(stats.zeroCampaignWeeks)} />
                             )}
                             {scope === 'campaigns' && stats.lostCampaignEstimate > 0 && (
-                                <StatTile label="Est. Lost Camp Rev" tooltip="Estimated lost campaign revenue (avg of adjacent non-zero campaign weeks for each zero week)" value={formatCurrency(stats.lostCampaignEstimate)} />
+                                <StatTile label="Est. Lost Camp Rev" tooltip={<span>Estimated lost campaign revenue (interpolated between surrounding non-zero weeks, capped by median; single-sided gaps decay 10% per week). Conservative vs prior method.</span>} value={formatCurrency(stats.lostCampaignEstimate)} />
                             )}
                         </div>
                     );
