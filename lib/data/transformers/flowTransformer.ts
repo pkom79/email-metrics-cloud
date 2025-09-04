@@ -1,5 +1,4 @@
 import { RawFlowCSV, ProcessedFlowEmail, FlowSequenceInfo } from '../../data/dataTypes';
-import { parseMetricDate } from '../dateUtils';
 
 export class FlowTransformer {
     transform(rawFlows: RawFlowCSV[]): ProcessedFlowEmail[] {
@@ -95,8 +94,7 @@ export class FlowTransformer {
     }
 
     private parseDate(dateStr: string): Date {
-        const d = parseMetricDate(dateStr);
-        return d || new Date();
+        try { const d = new Date(dateStr); return isNaN(d.getTime()) ? new Date() : d; } catch { return new Date(); }
     }
 
     private parseNumber(value: any): number {

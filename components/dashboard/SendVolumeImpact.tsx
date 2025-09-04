@@ -1,8 +1,7 @@
 "use client";
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Activity, Info } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
-import { useBenchmark } from '../../lib/data/benchmarking';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
 
 interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; compareMode?: 'prev-period' | 'prev-year'; }
@@ -83,10 +82,10 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
     const PADDING_LEFT = 50; // space for y ticks
     const PADDING_RIGHT = 20;
     const innerW = VIEW_W - PADDING_LEFT - PADDING_RIGHT;
-    const xScale = useCallback((i: number) => points.length <= 1 ? PADDING_LEFT + innerW / 2 : PADDING_LEFT + (i / (points.length - 1)) * innerW, [points.length, innerW]);
-    const yMetric = useCallback((v: number) => {
+    const xScale = (i: number) => points.length <= 1 ? PADDING_LEFT + innerW / 2 : PADDING_LEFT + (i / (points.length - 1)) * innerW;
+    const yMetric = (v: number) => {
         if (metricMax === 0) return GRAPH_H; return GRAPH_H - (v / metricMax) * (GRAPH_H - 10); // add top padding
-    }, [metricMax]);
+    };
     const yEmails = (v: number) => {
         if (emailsMax === 0) return GRAPH_H; return GRAPH_H - (v / emailsMax) * (GRAPH_H - 10);
     };
@@ -110,7 +109,7 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
             res.push({ x: xScale(idx), label: points[idx].label });
         }
         return res;
-    }, [points, xScale]);
+    }, [points]);
     // Y ticks for metric (3)
     const yTicks = useMemo(() => {
         const ticks: { y: number; value: number }[] = [];
@@ -121,7 +120,7 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
         ticks.push({ y: yMetric(metricMax), value: metricMax });
         // ensure unique ordering
         return Array.from(new Map(ticks.map(t => [t.value, t])).values());
-    }, [metricMax, yMetric]);
+    }, [metricMax]);
 
     const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
     const active = hover ? points[hover.idx] : null;
@@ -328,59 +327,6 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
 
     // Benchmark integration
     // Map internal metric keys to underlying DataManager metric keys for weekly series baseline
-    const benchmarkMetricKey = useMemo(() => {
-        switch (metric) {
-            case 'totalRevenue': return 'revenue';
-            case 'revenuePerEmail': return 'revenuePerEmail';
-            case 'unsubsPer1k': return 'unsubscribeRate';
-            case 'spamPer1k': return 'spamRate';
-            case 'bouncesPer1k': return 'bounceRate';
-        }
-    }, [metric]);
-
-    // Anchor: current range start/end (use week boundaries implicitly inside benchmark helper)
-    // Unconditional hook usage (no try/catch around hook itself)
-    // Benchmark anchor should use the visible range (start->end). Guard against undefined.
-    // Always call hook (stable order). Missing inputs handled internally with EMPTY_BENCHMARK
-    const benchmark = useBenchmark(
-        benchmarkMetricKey,
-        range?.startDate,
-        range?.endDate
-    );
-
-    const tierBadge = (() => {
-        if (!benchmark.tier) {
-            return (
-                <span className="group relative inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium border bg-gray-50 text-gray-600 border-gray-200">
-                    Benchmarking
-                    <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-72 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
-                        Benchmark hidden. {benchmark.hiddenReason || 'Insufficient history'}.
-                    </span>
-                </span>
-            );
-        }
-        const tierColors: Record<string, string> = {
-            'Critical': 'bg-rose-50 text-rose-700 border-rose-200',
-            'Needs Attention': 'bg-amber-50 text-amber-700 border-amber-200',
-            'OK': 'bg-gray-50 text-gray-700 border-gray-200',
-            'Good': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-            'Excellent': 'bg-purple-50 text-purple-700 border-purple-200',
-        };
-        const pct = benchmark.diff != null && benchmark.diffType === 'percent' ? benchmark.diff : null;
-        return (
-            <span className={`group relative inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium border ${tierColors[benchmark.tier] || 'bg-gray-50 text-gray-700 border-gray-200'}`}>
-                {benchmark.tier}
-                {pct != null && <span className="tabular-nums">{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</span>}
-                <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-72 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
-                    Baseline: {benchmark.baseline != null ? (benchmarkMetricKey === 'revenue' || benchmarkMetricKey === 'revenuePerEmail' ? fmtCurrency(benchmark.baseline) : benchmark.baseline.toFixed(2)) : '—'}<br />
-                    {benchmark.diff != null && benchmark.diffType === 'percent' && <>Difference vs benchmark: {benchmark.diff >= 0 ? '+' : ''}{benchmark.diff.toFixed(1)}%</>}
-                    {benchmark.diff != null && benchmark.diffType === 'pp' && <>Difference vs benchmark: {benchmark.diff >= 0 ? '+' : ''}{benchmark.diff.toFixed(2)} pp</>}<br />
-                    {benchmark.hiddenReason && <span className="text-gray-600">{benchmark.hiddenReason}</span>}
-                </span>
-            </span>
-        );
-    })();
-
     if (!range) return null;
     const negativeMetric = NEGATIVE_METRICS.includes(metric); // currently unused but may be reintroduced
 
@@ -412,7 +358,6 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                                 Purple line = selected performance metric. Shaded background = relative send volume (emails). When volume increases while efficiency (e.g. Revenue / Email) stays stable or improves, scaling is healthy. Rising negative rate metrics (unsubs, spam, bounces) with higher volume indicates pressure. Partial period ends are trimmed.
                             </span>
                         </span>
-                        {tierBadge}
                     </h3>
                 </div>
                 <div className="flex gap-4 text-sm">

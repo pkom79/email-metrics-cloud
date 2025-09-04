@@ -14,7 +14,6 @@ import { CampaignTransformer } from './transformers/campaignTransformer';
 import { FlowTransformer } from './transformers/flowTransformer';
 import { SubscriberTransformer } from './transformers/subscriberTransformer';
 import { idbGet, idbSet } from '../utils/persist';
-import { auditDates, DateAuditSummary } from './dateUtils';
 
 export interface LoadProgress {
     campaigns: { loaded: boolean; progress: number; error?: string };
@@ -42,7 +41,7 @@ export class DataManager {
     private flowTransformer = new FlowTransformer();
     private subscriberTransformer = new SubscriberTransformer();
 
-    private _dateAudit: DateAuditSummary | null = null;
+    // Removed date audit state (adaptive benchmarking revert)
 
     // Dynamic storage keys based on user
     private get storageKey() {
@@ -190,42 +189,7 @@ export class DataManager {
      * This leverages the internal daily aggregate map, rebuilding it if the underlying
      * campaign/flow counts changed. Used by the new benchmarking pipeline (daily look-back).
      */
-    getDailyRecords(start: Date, end: Date): {
-        date: Date;
-        revenue: number;
-        emailsSent: number;
-        totalOrders: number;
-        uniqueOpens: number;
-        uniqueClicks: number;
-        unsubscribesCount: number;
-        spamComplaintsCount: number;
-        bouncesCount: number;
-    }[] {
-        const sig = `${this.campaigns.length}:${this.flowEmails.length}`;
-        if (this._dailyAggVersion !== sig) this._rebuildDailyAggregates();
-        const s = new Date(start); s.setHours(0,0,0,0);
-        const e = new Date(end); e.setHours(0,0,0,0);
-        const out: any[] = [];
-        let guard = 0;
-        while (s <= e && guard < 800) { // hard safety cap (< 800 days ~ 2+ years)
-            const key = this._dayKey(s);
-            const rec = this._dailyAgg.get(key);
-            out.push({
-                date: new Date(s),
-                revenue: rec?.revenue || 0,
-                emailsSent: rec?.emailsSent || 0,
-                totalOrders: rec?.totalOrders || 0,
-                uniqueOpens: rec?.uniqueOpens || 0,
-                uniqueClicks: rec?.uniqueClicks || 0,
-                unsubscribesCount: rec?.unsubscribesCount || 0,
-                spamComplaintsCount: rec?.spamComplaintsCount || 0,
-                bouncesCount: rec?.bouncesCount || 0,
-            });
-            s.setDate(s.getDate()+1);
-            guard++;
-        }
-        return out;
-    }
+    // Removed getDailyRecords (adaptive benchmarking revert)
 
     // ----------------------------------------------
     // Performance caches (added for faster time series)
@@ -395,26 +359,7 @@ export class DataManager {
             }
             this.isRealDataLoaded = this.campaigns.length > 0 || this.flowEmails.length > 0 || this.subscribers.length > 0;
 
-            // Post-load date audit (only if any emails loaded)
-            if (this.isRealDataLoaded) {
-                try {
-                    const allDates: Date[] = [];
-                    for (const c of this.campaigns) if (c.sentDate instanceof Date && !isNaN(c.sentDate.getTime())) allDates.push(c.sentDate);
-                    for (const f of this.flowEmails) if (f.sentDate instanceof Date && !isNaN(f.sentDate.getTime())) allDates.push(f.sentDate);
-                    this._dateAudit = auditDates(allDates);
-                    if (typeof window !== 'undefined' && this._dateAudit) {
-                        // Expose minimal debug helper
-                        (window as any).__DATA_DATE_AUDIT__ = this._dateAudit;
-                        if (this._dateAudit.suspicious) {
-                            // eslint-disable-next-line no-console
-                            console.warn('[DataManager] Date audit flagged potential parsing issue:', this._dateAudit);
-                        } else if (this._dateAudit.min && this._dateAudit.max) {
-                            // eslint-disable-next-line no-console
-                            console.info('[DataManager] Date range loaded', { from: this._dateAudit.min.toISOString().slice(0,10), to: this._dateAudit.max.toISOString().slice(0,10) });
-                        }
-                    }
-                } catch { /* ignore audit errors */ }
-            }
+            // Date audit removed
             onProgress?.(this.loadProgress);
             if (this.isRealDataLoaded) this.persistToStorage();
             return { success: errors.length === 0, errors };
@@ -1041,45 +986,5 @@ export class DataManager {
      * For rate metrics, if denominator is zero the value will be 0 (consistent with other helpers) rather than null.
      * This is exposed publicly to support dynamic benchmarking logic.
      */
-    getWeeklyMetricSeries(metricKey: string): { weekStart: Date; value: number }[] {
-        try {
-            const dataSig = `${this.campaigns.length}:${this.flowEmails.length}`;
-            if (this._dailyAggVersion !== dataSig) this._rebuildDailyAggregates();
-            // Collect all day keys present in dailyAgg
-            const dayEntries: { date: Date; sums: any }[] = [];
-            for (const [k, sums] of this._dailyAgg.entries()) {
-                const d = new Date(k);
-                if (!(d instanceof Date) || isNaN(d.getTime())) continue;
-                dayEntries.push({ date: d, sums });
-            }
-            if (!dayEntries.length) return [];
-            dayEntries.sort((a, b) => a.date.getTime() - b.date.getTime());
-            const weeks: { weekStart: Date; sums: { revenue: number; emailsSent: number; totalOrders: number; uniqueOpens: number; uniqueClicks: number; unsubscribesCount: number; spamComplaintsCount: number; bouncesCount: number; emailCount: number } }[] = [];
-            let current: any = null; let currentKey = '';
-            for (const d of dayEntries) {
-                const monday = this._mondayOf(d.date);
-                const key = this._dayKey(monday);
-                if (key !== currentKey) {
-                    if (current) weeks.push(current);
-                    currentKey = key;
-                    current = { weekStart: monday, sums: { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } };
-                }
-                const s = current.sums;
-                s.revenue += d.sums.revenue;
-                s.emailsSent += d.sums.emailsSent;
-                s.totalOrders += d.sums.totalOrders;
-                s.uniqueOpens += d.sums.uniqueOpens;
-                s.uniqueClicks += d.sums.uniqueClicks;
-                s.unsubscribesCount += d.sums.unsubscribesCount;
-                s.spamComplaintsCount += d.sums.spamComplaintsCount;
-                s.bouncesCount += d.sums.bouncesCount;
-                s.emailCount += d.sums.emailCount;
-            }
-            if (current) weeks.push(current);
-            return weeks.map(w => ({ weekStart: w.weekStart, value: this._deriveMetricFromSums(metricKey, w.sums) }));
-        } catch (e) {
-            console.warn('getWeeklyMetricSeries failed', e);
-            return [];
-        }
-    }
+    // Removed getWeeklyMetricSeries (adaptive benchmarking revert)
 }

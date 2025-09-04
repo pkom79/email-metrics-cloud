@@ -296,10 +296,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     // Safe granularity
     const safeGranularity = useMemo(() => { try { if (dm.getCampaigns().length === 0 && dm.getFlowEmails().length === 0) return 'daily'; if (customActive && customDays > 0) return dm.getGranularityForDateRange(`${customDays}d`); if (dateRange === 'all') return dm.getGranularityForDateRange('all'); return dm.getGranularityForDateRange(dateRange === 'custom' ? '30d' : dateRange); } catch { return 'daily'; } }, [dateRange, customActive, customDays, dm]);
-    useEffect(() => {
-        // Only update if changed to prevent render loops when safeGranularity recomputes to same value
-        setGranularity(g => g === safeGranularity ? g : safeGranularity);
-    }, [safeGranularity]);
+    useEffect(() => { setGranularity(safeGranularity); }, [safeGranularity]);
 
     // Sticky observer (desktop only now)
     useEffect(() => { if (!audienceOverviewRef) return; const observer = new IntersectionObserver(([entry]) => { if (entry.isIntersecting) { setIsBeforeAudience(false); setStickyBar(false); } else { setIsBeforeAudience(true); setStickyBar(window.scrollY > 100); } }, { root: null, rootMargin: '0px 0px -85% 0px', threshold: 0 }); observer.observe(audienceOverviewRef); const onScroll = () => { if (!isBeforeAudience) return; setStickyBar(window.scrollY > 100); }; window.addEventListener('scroll', onScroll, { passive: true }); onScroll(); return () => { observer.disconnect(); window.removeEventListener('scroll', onScroll); }; }, [audienceOverviewRef, isBeforeAudience]);
