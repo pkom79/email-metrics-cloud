@@ -25,6 +25,16 @@ const NEGATIVE = new Set(['unsubscribeRate','spamRate','bounceRate']);
 const TOTALS = new Set(['revenue','totalOrders','emailsSent']);
 const VOLATILITY_RATIOS = new Set(['avgOrderValue','revenuePerEmail']); // AOV & RPE: ratio pipeline + volatility tiering (percent diff)
 
+// Threshold policy (adaptive for sparse datasets)
+const TARGET_LOOKBACK_DAYS = 140;          // Ideal required historical activity days
+const MIN_LOOKBACK_DAYS_FOR_ANY = 30;      // Minimum to even compute a provisional benchmark
+const TARGET_KEPT_DAYS = 90;               // Ideal after trimming
+function requiredKeptDays(lookbackActivity: number){
+  // Need 90 if we have plenty, else 60% of available, but never less than 20
+  if (lookbackActivity >= TARGET_KEPT_DAYS) return TARGET_KEPT_DAYS;
+  return Math.max(20, Math.ceil(lookbackActivity * 0.6));
+}
+
 // Floors and kept denominator volume requirements (ratio metrics)
 const FLOORS: Record<string,{base:number; denomKey:string; numKey:string; volumeMin:number}> = {
   avgOrderValue: { base:10, denomKey:'totalOrders', numKey:'revenue', volumeMin:500 },
@@ -102,7 +112,8 @@ function computeTotals(metric: string, rangeStart: Date, rangeEnd: Date, days: D
     if (metric==='emailsSent') return d.emailsSent>0;
     return false;
   }).length;
-  if (activityDays < 140) return hidden(metric, lookbackDays, 0, 'Need at least 140 look-back days');
+  if (activityDays < MIN_LOOKBACK_DAYS_FOR_ANY) return hidden(metric, lookbackDays, 0, `Need at least ${MIN_LOOKBACK_DAYS_FOR_ANY} look-back days`);
+  const provisional = activityDays < TARGET_LOOKBACK_DAYS;
   const val = (r: DayRec) => {
     switch(metric){
       case 'revenue': return r.revenue;
@@ -114,10 +125,13 @@ function computeTotals(metric: string, rangeStart: Date, rangeEnd: Date, days: D
     }
   };
   const dailyVals = days.map(val).sort((a,b)=>a-b);
-  const trim = Math.floor(dailyVals.length*0.10);
-  const kept = dailyVals.slice(trim, dailyVals.length-trim);
+  let trim = Math.floor(dailyVals.length*0.10);
+  // Skip trimming for very small samples (<50 days)
+  if (dailyVals.length < 50) trim = 0;
+  const kept = dailyVals.slice(trim, dailyVals.length-trim || dailyVals.length);
   const keptDays = kept.length;
-  if (keptDays < 90) return hidden(metric, lookbackDays, keptDays, 'Need at least 90 kept days and enough activity for this metric');
+  const reqKept = requiredKeptDays(activityDays);
+  if (keptDays < reqKept) return hidden(metric, lookbackDays, keptDays, `Need at least ${reqKept} kept days (have ${keptDays})`);
   const dailyMean = kept.reduce((s,v)=>s+v,0)/keptDays;
   // Selected period
   const selDays: Date[] = []; const c=new Date(rangeStart); c.setHours(0,0,0,0); const e=new Date(rangeEnd); e.setHours(0,0,0,0);
@@ -143,6 +157,7 @@ function computeTotals(metric: string, rangeStart: Date, rangeEnd: Date, days: D
     let W_base = 2*baseMAD; if (!isFinite(W_base) || W_base<=0) W_base=0.05;
     const W_period = Math.min(0.25, Math.max(0.05, W_base / Math.sqrt(selDays.length||1)));
     tier = tierTotals(percentDiff, W_period);
+    if (provisional) tier = tier; // tiers still shown but flagged in debug
   }
   return {
     metric,
@@ -156,7 +171,7 @@ function computeTotals(metric: string, rangeStart: Date, rangeEnd: Date, days: D
     lookbackDays,
     keptDays,
   negativeMetric: false,
-  debug: { activityDays, dailyMean, baselineRange, keptSample: kept.slice(0,5), W_note: 'See volatility calc only applied if percentDiff present' }
+  debug: { provisional, activityDays, reqKept, dailyMean, baselineRange, keptSample: kept.slice(0,5), W_note: 'See volatility calc only applied if percentDiff present' }
   };
 }
 
@@ -168,7 +183,8 @@ function computeVolatilityRatio(metric: string, rangeStart: Date, rangeEnd: Date
   // Build raw daily numerator + denominator
   const raw = days.map(d=>({ d, num:(d as any)[cfg.numKey] as number, den:(d as any)[cfg.denomKey] as number }));
   const activityDays = raw.filter(r=>r.den>0).length;
-  if (activityDays < 140) return hidden(metric, lookbackDays, 0, 'Need at least 140 look-back days');
+  if (activityDays < MIN_LOOKBACK_DAYS_FOR_ANY) return hidden(metric, lookbackDays, 0, `Need at least ${MIN_LOOKBACK_DAYS_FOR_ANY} look-back days`);
+  const provisional = activityDays < TARGET_LOOKBACK_DAYS;
   const denomVals = raw.filter(r=>r.den>0).map(r=>r.den);
   const floor = percentileFloor(denomVals, cfg.base);
   let filtered = raw.filter(r=>r.den >= floor && r.den>0).map(r=>({ ...r, ratio: r.num/r.den }));
@@ -181,7 +197,8 @@ function computeVolatilityRatio(metric: string, rangeStart: Date, rangeEnd: Date
   acc=0; let high=sorted.length-1; while(high>=0 && acc<trimVol){ acc+=sorted[high].den; high--; }
   const kept = sorted.slice(low, high+1);
   const keptDays = kept.length; const keptDen = kept.reduce((s,r)=>s+r.den,0);
-  if (keptDays < 90 || keptDen < cfg.volumeMin) return hidden(metric, lookbackDays, keptDays, 'Need at least 90 kept days and enough activity for this metric');
+  const reqKept = requiredKeptDays(activityDays);
+  if (keptDays < reqKept || keptDen < cfg.volumeMin) return hidden(metric, lookbackDays, keptDays, `Need at least ${reqKept} kept days and enough activity for this metric`);
   // Baseline ratio
   const baselineRatio = kept.reduce((s,r)=>s + r.num,0) / keptDen;
   if (baselineRatio === 0) return hidden(metric, lookbackDays, keptDays, 'No activity in look-back period');
@@ -212,7 +229,7 @@ function computeVolatilityRatio(metric: string, rangeStart: Date, rangeEnd: Date
     lookbackDays,
     keptDays,
     negativeMetric: false,
-    debug: { floor, keptDen, W_period }
+    debug: { provisional, activityDays, reqKept, floor, keptDen, W_period }
   };
 }
 
@@ -222,7 +239,8 @@ function computeRateRatio(metric: string, rangeStart: Date, rangeEnd: Date, days
   const cfg0 = FLOORS[metric];
   const activityDays = days.filter(d => {
     if (!cfg0) return false; const den = (d as any)[cfg0.denomKey] as number; return den>0; }).length;
-  if (activityDays < 140) return hidden(metric, lookbackDays, 0, 'Need at least 140 look-back days');
+  if (activityDays < MIN_LOOKBACK_DAYS_FOR_ANY) return hidden(metric, lookbackDays, 0, `Need at least ${MIN_LOOKBACK_DAYS_FOR_ANY} look-back days`);
+  const provisional = activityDays < TARGET_LOOKBACK_DAYS;
   const cfg = FLOORS[metric];
   if (!cfg) return hidden(metric, lookbackDays, 0, 'Unsupported metric');
   const raw = days.map(d=>({d, num:(d as any)[cfg.numKey] as number, den:(d as any)[cfg.denomKey] as number}));
@@ -237,7 +255,8 @@ function computeRateRatio(metric: string, rangeStart: Date, rangeEnd: Date, days
   acc=0; let high=sorted.length-1; while(high>=0 && acc<trimVol){ acc+=sorted[high].den; high--; }
   const kept = sorted.slice(low, high+1);
   const keptDays = kept.length; const keptDen = kept.reduce((s,r)=>s+r.den,0);
-  if (keptDays < 90 || keptDen < cfg.volumeMin) return hidden(metric, lookbackDays, keptDays, 'Need at least 90 kept days and enough activity for this metric');
+  const reqKept = requiredKeptDays(activityDays);
+  if (keptDays < reqKept || keptDen < cfg.volumeMin) return hidden(metric, lookbackDays, keptDays, `Need at least ${reqKept} kept days and enough activity for this metric`);
   const aggNum = kept.reduce((s,r)=>s+r.num,0); const baselineRatio = keptDen>0? aggNum/keptDen:0;
   // selected period
   const map = new Map(days.map(d=>[dayKey(d.date), d] as const));
@@ -248,7 +267,7 @@ function computeRateRatio(metric: string, rangeStart: Date, rangeEnd: Date, days
   const actualPct = (selNum/selDen)*100; const baselinePct = baselineRatio*100; const diffPP = actualPct - baselinePct;
   const p = baselineRatio; let se = Math.sqrt(p*(1-p)/selDen)*100; if(!isFinite(se)||se<0.1) se=0.1;
   let z = diffPP / se; if (NEGATIVE.has(metric)) z*=-1; const tier = tierRates(z);
-  return { metric, value: actualPct, valueType:'rate', tier, diff: diffPP, diffType:'pp', baseline: baselinePct, lookbackDays, keptDays, negativeMetric: NEGATIVE.has(metric), debug:{floor, keptDen, z, se} };
+  return { metric, value: actualPct, valueType:'rate', tier, diff: diffPP, diffType:'pp', baseline: baselinePct, lookbackDays, keptDays, negativeMetric: NEGATIVE.has(metric), debug:{ provisional, activityDays, reqKept, floor, keptDen, z, se } };
 }
 
 // Caches
