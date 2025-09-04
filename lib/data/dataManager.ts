@@ -182,6 +182,48 @@ export class DataManager {
         } catch { return null; }
     }
 
+    /**
+     * Return zero-filled daily aggregate records between start and end (inclusive).
+     * This leverages the internal daily aggregate map, rebuilding it if the underlying
+     * campaign/flow counts changed. Used by the new benchmarking pipeline (daily look-back).
+     */
+    getDailyRecords(start: Date, end: Date): {
+        date: Date;
+        revenue: number;
+        emailsSent: number;
+        totalOrders: number;
+        uniqueOpens: number;
+        uniqueClicks: number;
+        unsubscribesCount: number;
+        spamComplaintsCount: number;
+        bouncesCount: number;
+    }[] {
+        const sig = `${this.campaigns.length}:${this.flowEmails.length}`;
+        if (this._dailyAggVersion !== sig) this._rebuildDailyAggregates();
+        const s = new Date(start); s.setHours(0,0,0,0);
+        const e = new Date(end); e.setHours(0,0,0,0);
+        const out: any[] = [];
+        let guard = 0;
+        while (s <= e && guard < 800) { // hard safety cap (< 800 days ~ 2+ years)
+            const key = this._dayKey(s);
+            const rec = this._dailyAgg.get(key);
+            out.push({
+                date: new Date(s),
+                revenue: rec?.revenue || 0,
+                emailsSent: rec?.emailsSent || 0,
+                totalOrders: rec?.totalOrders || 0,
+                uniqueOpens: rec?.uniqueOpens || 0,
+                uniqueClicks: rec?.uniqueClicks || 0,
+                unsubscribesCount: rec?.unsubscribesCount || 0,
+                spamComplaintsCount: rec?.spamComplaintsCount || 0,
+                bouncesCount: rec?.bouncesCount || 0,
+            });
+            s.setDate(s.getDate()+1);
+            guard++;
+        }
+        return out;
+    }
+
     // ----------------------------------------------
     // Performance caches (added for faster time series)
     // ----------------------------------------------

@@ -55,9 +55,8 @@ const MetricCard: React.FC<MetricCardProps> = ({
     // We previously advanced an anchor +7d which caused current aggregation to resolve to an empty week (future) => 0 values & -100% deltas.
     const adaptive = useBenchmark(metricKey, rangeStart, rangeEnd);
     if (typeof window !== 'undefined' && metricKey) {
-        // Lightweight debug (won't spam because rerenders limited)
         // @ts-ignore
-        if (window.__BENCH_DEBUG__ !== false) console.debug('[AdaptiveBenchmark]', metricKey, { rangeStart, rangeEnd, sampleWeeks: adaptive?.sampleWeeks, tier: adaptive?.tier, hiddenReason: adaptive?.hiddenReason });
+        if (window.__BENCH_DEBUG__ !== false) console.debug('[AdaptiveBenchmark]', metricKey, { rangeStart, rangeEnd, tier: adaptive?.tier, hiddenReason: adaptive?.hiddenReason });
     }
     const numericValue = metricKey === 'conversionRate' ? parseMetricValue(value) : undefined;
 
@@ -104,31 +103,30 @@ const MetricCard: React.FC<MetricCardProps> = ({
                                         <span className="group relative inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border bg-gray-50 text-gray-600 border-gray-200">
                                             Benchmarks
                                             <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-5 z-30 hidden group-hover:block w-64 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
-                                                Benchmark tier hidden. {adaptive.hiddenReason || 'Insufficient history'}. Weeks available: {adaptive.sampleWeeks}. Need 8+ for provisional, 12+ for initial tiers.
+                                                Benchmark hidden. {adaptive.hiddenReason || 'Insufficient history'}.
                                             </span>
                                         </span>
                                     );
                                 }
                                 const tierColors: Record<string, string> = {
-                                    'Needs Review': 'bg-rose-50 text-rose-700 border-rose-200',
-                                    'Below Average': 'bg-amber-50 text-amber-700 border-amber-200',
-                                    'Typical': 'bg-gray-50 text-gray-700 border-gray-200',
-                                    'Above Average': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                                    'Exceptional': 'bg-purple-50 text-purple-700 border-purple-200',
+                                    'Critical': 'bg-rose-50 text-rose-700 border-rose-200',
+                                    'Needs Attention': 'bg-amber-50 text-amber-700 border-amber-200',
+                                    'OK': 'bg-gray-50 text-gray-700 border-gray-200',
+                                    'Good': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                                    'Excellent': 'bg-purple-50 text-purple-700 border-purple-200',
                                 };
                                 const cls = tierColors[adaptive.tier] || 'bg-gray-50 text-gray-700 border-gray-200';
-                                const pct = adaptive.percentDelta != null && adaptive.baseline ? ((adaptive.current || 0) - adaptive.baseline) / adaptive.baseline * 100 : null;
+                                const pct = adaptive.diff != null && adaptive.diffType === 'percent' ? adaptive.diff : null;
                                 return (
                                     <span className={`group relative inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${cls}`}>
-                                        {adaptive.tier}{adaptive.provisional && <span className="ml-1 text-[9px] uppercase tracking-wide">(Prov.)</span>}
+                                        {adaptive.tier}
                                         {pct != null && <span className="tabular-nums">{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</span>}
                                         <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-5 z-30 hidden group-hover:block w-72 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
-                                            <span className="font-semibold block mb-1">Adaptive Benchmark</span>
-                                            Compares this range vs prior weeks (trimmed mean baseline).<br />
+                                            <span className="font-semibold block mb-1">Benchmark</span>
                                             Baseline: {adaptive.baseline != null ? (() => { if (!metricKey) return adaptive.baseline.toFixed(2); if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metricKey)) return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(adaptive.baseline); if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metricKey)) return adaptive.baseline.toFixed(2); return adaptive.baseline.toFixed(2); })() : '—'}<br />
-                                            Current: {adaptive.current != null ? (() => { if (!metricKey) return adaptive.current.toFixed(2); if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metricKey)) return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(adaptive.current); if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metricKey)) return adaptive.current.toFixed(2); return adaptive.current.toFixed(2); })() : '—'}<br />
-                                            {adaptive.percentDelta != null && <>Delta: {adaptive.percentDelta >= 0 ? '+' : ''}{adaptive.percentDelta.toFixed(1)}%</>}<br />
-                                            Weeks used: {adaptive.sampleWeeks} (tails trimmed). {adaptive.provisional ? 'Provisional (stabilizes after 20+ weeks).' : adaptive.insufficient ? 'Stabilizes after 20+ weeks.' : ''}
+                                            {adaptive.diff != null && adaptive.diffType === 'percent' && <>Difference vs benchmark: {adaptive.diff >= 0 ? '+' : ''}{adaptive.diff.toFixed(1)}%</>}
+                                            {adaptive.diff != null && adaptive.diffType === 'pp' && <>Difference vs benchmark: {adaptive.diff >= 0 ? '+' : ''}{adaptive.diff.toFixed(1)} pp</>}<br />
+                                            {adaptive.hiddenReason && <span className="text-gray-600">{adaptive.hiddenReason}</span>}
                                         </span>
                                     </span>
                                 );

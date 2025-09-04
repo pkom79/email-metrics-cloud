@@ -1,262 +1,229 @@
 "use client";
-import { DataManager } from './dataManager';
+// New daily benchmark implementation per spec (timezone ignored)
 import { useSyncExternalStore } from 'react';
+import { DataManager } from './dataManager';
 
-/**
- * Benchmark tier labels in ascending performance order (0 = poorest, 4 = strongest)
- */
-export type BenchmarkTier = 'Needs Review' | 'Below Average' | 'Typical' | 'Above Average' | 'Exceptional';
+export type BenchmarkTier = 'Excellent' | 'Good' | 'OK' | 'Needs Attention' | 'Critical';
 
-export interface BenchmarkComputation {
-  tier: BenchmarkTier | null;          // null if insufficient history
-  baseline: number | null;             // trimmed mean baseline
-  current: number | null;              // current period aggregate value
-  percentDelta: number | null;         // (current - baseline)/baseline * 100
-  sampleWeeks: number;                 // weeks actually used for baseline
-  totalWeeksConsidered: number;        // raw weeks in lookback window before exclusions
-  insufficient: boolean;               // true if < 20 usable weeks
-  note?: string;                       // optional UI note (e.g. "Limited history")
-  thresholds?: {                       // numeric cut points to display in tooltip
-    typicalLow: number; typicalHigh: number; // Typical inclusive range
-    aboveAvg: number;                  // Above Average lower bound
-    exceptional: number;               // Exceptional lower bound
-  };
-  provisional?: boolean;               // shown when we have >= minProvisional but < full threshold
-  hiddenReason?: string;               // explanation if tier null
+export interface BenchmarkResult {
+  metric: string;
+  value: number;                // actual selected range value (or % for rates)
+  valueType: 'currency'|'count'|'rate'|'ratio';
+  tier: BenchmarkTier | null;
+  diff: number | null;          // percent diff (totals/avg) or pp diff (rates)
+  diffType: 'percent' | 'pp' | null;
+  baseline: number | null;      // totals: range baseline; rates: % baseline
+  baselineDaily?: number | null;// totals: daily mean baseline
+  lookbackDays: number;
+  keptDays: number;
+  hiddenReason?: string;
+  negativeMetric?: boolean;
+  debug?: any;
 }
 
-// Direction metadata: metrics where lower is better
-const LOWER_IS_BETTER = new Set(['unsubscribeRate','spamRate','bounceRate']);
+const NEGATIVE = new Set(['unsubscribeRate','spamRate','bounceRate']);
+const TOTALS = new Set(['revenue','totalOrders','emailsSent']);
+const TOTAL_STYLE_RATIO = new Set(['avgOrderValue','revenuePerEmail']);
 
-// Extract numeric from weekly metric series excluding the most recent partial week (if ongoing)
-function getHistoricalWeeks(metricKey: string) {
+// Floors and kept denominator volume requirements (ratio metrics)
+const FLOORS: Record<string,{base:number; denomKey:string; numKey:string; volumeMin:number}> = {
+  avgOrderValue: { base:10, denomKey:'totalOrders', numKey:'revenue', volumeMin:500 },
+  conversionRate: { base:25, denomKey:'uniqueClicks', numKey:'totalOrders', volumeMin:2000 },
+  openRate: { base:50, denomKey:'emailsSent', numKey:'uniqueOpens', volumeMin:10000 },
+  clickRate: { base:50, denomKey:'emailsSent', numKey:'uniqueClicks', volumeMin:10000 },
+  revenuePerEmail: { base:50, denomKey:'emailsSent', numKey:'revenue', volumeMin:10000 },
+  clickToOpenRate: { base:25, denomKey:'uniqueOpens', numKey:'uniqueClicks', volumeMin:3000 },
+  unsubscribeRate: { base:50, denomKey:'emailsSent', numKey:'unsubscribesCount', volumeMin:10000 },
+  spamRate: { base:50, denomKey:'emailsSent', numKey:'spamComplaintsCount', volumeMin:10000 },
+  bounceRate: { base:50, denomKey:'emailsSent', numKey:'bouncesCount', volumeMin:10000 },
+};
+
+interface DayRec {
+  date: Date;
+  revenue: number; emailsSent: number; totalOrders: number;
+  uniqueOpens: number; uniqueClicks: number;
+  unsubscribesCount: number; spamComplaintsCount: number; bouncesCount: number;
+}
+
+function dayKey(d: Date){ return d.toISOString().slice(0,10); }
+function buildLookback(selectedStart: Date): { start: Date; end: Date; days: Date[] } {
+  const end = new Date(selectedStart); end.setDate(end.getDate()-1); end.setHours(0,0,0,0);
+  const start = new Date(end); start.setDate(start.getDate()-364);
+  const days: Date[] = []; const cur = new Date(start);
+  while (cur <= end){ days.push(new Date(cur)); cur.setDate(cur.getDate()+1); }
+  return { start, end, days };
+}
+function percentileFloor(values: number[], base: number){
+  const v = values.filter(x=>x>0).sort((a,b)=>a-b);
+  if (!v.length) return base;
+  const idx = Math.floor(0.10 * v.length);
+  return Math.max(base, v[Math.min(idx, v.length-1)]);
+}
+function median(arr: number[]){ if (!arr.length) return 0; const s=[...arr].sort((a,b)=>a-b); return s[Math.floor(s.length/2)]; }
+function mad(values: number[]){ if (!values.length) return 0; const m=median(values); const dev=values.map(v=>Math.abs(v-m)); return median(dev); }
+function tierTotals(pctDiff: number, Wp: number): BenchmarkTier {
+  if (pctDiff >= 2*Wp*100) return 'Excellent';
+  if (pctDiff >= 1*Wp*100) return 'Good';
+  if (pctDiff > -1*Wp*100) return 'OK';
+  if (pctDiff > -2*Wp*100) return 'Needs Attention';
+  return 'Critical';
+}
+function tierRates(z: number): BenchmarkTier {
+  if (z >= 2.0) return 'Excellent';
+  if (z >= 0.5) return 'Good';
+  if (z > -0.5) return 'OK';
+  if (z > -2.0) return 'Needs Attention';
+  return 'Critical';
+}
+function hidden(metric: string, lookbackDays: number, keptDays: number, reason: string, extra?: Partial<BenchmarkResult>): BenchmarkResult {
+  return {
+    metric,
+    value: extra?.value ?? 0,
+    valueType: 'rate',
+    tier: null,
+    diff: null,
+    diffType: null,
+    baseline: extra?.baseline ?? null,
+    baselineDaily: null,
+    lookbackDays,
+    keptDays,
+    hiddenReason: reason,
+    negativeMetric: NEGATIVE.has(metric),
+    ...extra
+  };
+}
+
+function computeTotals(metric: string, rangeStart: Date, rangeEnd: Date, days: DayRec[]): BenchmarkResult {
+  const lookbackDays = days.length;
+  if (lookbackDays < 140) return hidden(metric, lookbackDays, 0, 'Need at least 140 look-back days');
+  const val = (r: DayRec) => {
+    switch(metric){
+      case 'revenue': return r.revenue;
+      case 'totalOrders': return r.totalOrders;
+      case 'emailsSent': return r.emailsSent;
+      case 'avgOrderValue': return r.totalOrders>0? r.revenue/r.totalOrders:0;
+      case 'revenuePerEmail': return r.emailsSent>0? r.revenue/r.emailsSent:0;
+      default: return 0;
+    }
+  };
+  const dailyVals = days.map(val).sort((a,b)=>a-b);
+  const trim = Math.floor(dailyVals.length*0.10);
+  const kept = dailyVals.slice(trim, dailyVals.length-trim);
+  const keptDays = kept.length;
+  if (keptDays < 90) return hidden(metric, lookbackDays, keptDays, 'Need at least 90 kept days and enough activity for this metric');
+  const dailyMean = kept.reduce((s,v)=>s+v,0)/keptDays;
+  // Selected period
+  const selDays: Date[] = []; const c=new Date(rangeStart); c.setHours(0,0,0,0); const e=new Date(rangeEnd); e.setHours(0,0,0,0);
+  while (c <= e){ selDays.push(new Date(c)); c.setDate(c.getDate()+1); }
+  const map = new Map(days.map(d=>[dayKey(d.date), d] as const));
+  let actualValue: number;
+  if (metric==='avgOrderValue'){
+    let rev=0, ord=0; for(const d of selDays){ const r=map.get(dayKey(d)); if (r){ rev+=r.revenue; ord+=r.totalOrders; } } actualValue= ord>0? rev/ord:0;
+  } else if (metric==='revenuePerEmail'){
+    let rev=0, em=0; for(const d of selDays){ const r=map.get(dayKey(d)); if (r){ rev+=r.revenue; em+=r.emailsSent; } } actualValue= em>0? rev/em:0;
+  } else {
+    actualValue = selDays.reduce((s,d)=>{ const r=map.get(dayKey(d)); return s + (r? val(r):0); },0);
+  }
+  const baselineRange = (metric==='avgOrderValue'||metric==='revenuePerEmail')? dailyMean : dailyMean * selDays.length;
+  const percentDiff = baselineRange>0? (actualValue - baselineRange)/baselineRange * 100 : null;
+  let tier: BenchmarkTier | null = null;
+  if (percentDiff!==null){
+    const relSeries = kept.filter(()=>dailyMean>0).map(v => (v - dailyMean)/dailyMean);
+    const baseMAD = mad(relSeries);
+    let W_base = 2*baseMAD; if (!isFinite(W_base) || W_base<=0) W_base=0.05;
+    const W_period = Math.min(0.25, Math.max(0.05, W_base / Math.sqrt(selDays.length||1)));
+    tier = tierTotals(percentDiff, W_period);
+  }
+  return {
+    metric,
+    value: actualValue,
+    valueType: metric==='revenue'?'currency': TOTALS.has(metric)?'count':'ratio',
+    tier,
+    diff: percentDiff,
+    diffType: 'percent',
+    baseline: (metric==='avgOrderValue'||metric==='revenuePerEmail')? dailyMean : baselineRange,
+    baselineDaily: (metric==='avgOrderValue'||metric==='revenuePerEmail')? null : dailyMean,
+    lookbackDays,
+    keptDays,
+    negativeMetric: false
+  };
+}
+
+function computeRatio(metric: string, rangeStart: Date, rangeEnd: Date, days: DayRec[]): BenchmarkResult {
+  const lookbackDays = days.length;
+  if (lookbackDays < 140) return hidden(metric, lookbackDays, 0, 'Need at least 140 look-back days');
+  const cfg = FLOORS[metric];
+  if (!cfg) return hidden(metric, lookbackDays, 0, 'Unsupported metric');
+  const raw = days.map(d=>({d, num:(d as any)[cfg.numKey] as number, den:(d as any)[cfg.denomKey] as number}));
+  const denomVals = raw.filter(r=>r.den>0).map(r=>r.den);
+  const floor = percentileFloor(denomVals, cfg.base);
+  let filtered = raw.filter(r=>r.den >= floor).map(r=>({...r, ratio: r.den>0? r.num/r.den:0}));
+  if (!filtered.length) return hidden(metric, lookbackDays, 0, 'Need at least 90 kept days and enough activity for this metric');
+  const sorted = [...filtered].sort((a,b)=>a.ratio - b.ratio);
+  const totalDen = sorted.reduce((s,r)=>s+r.den,0);
+  const trimVol = totalDen * 0.10;
+  let acc=0, low=0; while(low<sorted.length && acc<trimVol){ acc+=sorted[low].den; low++; }
+  acc=0; let high=sorted.length-1; while(high>=0 && acc<trimVol){ acc+=sorted[high].den; high--; }
+  const kept = sorted.slice(low, high+1);
+  const keptDays = kept.length; const keptDen = kept.reduce((s,r)=>s+r.den,0);
+  if (keptDays < 90 || keptDen < cfg.volumeMin) return hidden(metric, lookbackDays, keptDays, 'Need at least 90 kept days and enough activity for this metric');
+  const aggNum = kept.reduce((s,r)=>s+r.num,0); const baselineRatio = keptDen>0? aggNum/keptDen:0;
+  // selected period
+  const map = new Map(days.map(d=>[dayKey(d.date), d] as const));
+  const selDays: Date[] = []; const c=new Date(rangeStart); c.setHours(0,0,0,0); const e=new Date(rangeEnd); e.setHours(0,0,0,0);
+  while(c<=e){ selDays.push(new Date(c)); c.setDate(c.getDate()+1); }
+  let selNum=0, selDen=0; for(const d of selDays){ const r=map.get(dayKey(d)); if(!r) continue; selNum+=(r as any)[cfg.numKey]||0; selDen+=(r as any)[cfg.denomKey]||0; }
+  if (selDen===0) return hidden(metric, lookbackDays, keptDays, 'no activity in this period', { baseline: baselineRatio*100, value:0 });
+  const actualPct = (selNum/selDen)*100; const baselinePct = baselineRatio*100; const diffPP = actualPct - baselinePct;
+  const p = baselineRatio; let se = Math.sqrt(p*(1-p)/selDen)*100; if(!isFinite(se)||se<0.1) se=0.1;
+  let z = diffPP / se; if (NEGATIVE.has(metric)) z*=-1; const tier = tierRates(z);
+  return { metric, value: actualPct, valueType:'rate', tier, diff: diffPP, diffType:'pp', baseline: baselinePct, lookbackDays, keptDays, negativeMetric: NEGATIVE.has(metric), debug:{floor, keptDen, z, se} };
+}
+
+// Caches
+const lookbackCache = new Map<string, DayRec[]>();
+const resultCache = new Map<string, BenchmarkResult>();
+
+function compute(metric: string, start: Date, end: Date): BenchmarkResult {
   const dm = DataManager.getInstance();
-  const weeks = dm.getWeeklyMetricSeries(metricKey).sort((a,b)=>a.weekStart.getTime()-b.weekStart.getTime());
-  if (!weeks.length) return [] as { weekStart: Date; value: number }[];
-  // Consider a week partial if it's the latest week and it's not "complete" yet (heuristic: lastEmailDate within this week but < weekStart+6d end-of-day)
-  const lastEmailDate = dm.getLastEmailDate();
-  const last = weeks[weeks.length-1];
-  const weekEnd = new Date(last.weekStart); weekEnd.setDate(weekEnd.getDate()+6); weekEnd.setHours(23,59,59,999);
-  if (lastEmailDate < weekEnd) {
-    // treat as partial and drop
-    weeks.pop();
+  const { start: lbStart, end: lbEnd } = buildLookback(start);
+  const sig = `${dm.getCampaigns().length}:${dm.getFlowEmails().length}|${lbStart.toISOString()}|${lbEnd.toISOString()}`;
+  let daily = lookbackCache.get(sig);
+  if (!daily){
+    daily = dm.getDailyRecords(lbStart, lbEnd) as DayRec[];
+    lookbackCache.set(sig, daily);
   }
-  return weeks;
+  if (TOTALS.has(metric) || TOTAL_STYLE_RATIO.has(metric)) return computeTotals(metric, start, end, daily);
+  return computeRatio(metric, start, end, daily);
 }
 
-/**
- * Compute adaptive benchmark tier for a metric relative to a target (current viewing range ending week).
- * Window: take up to 52 weeks immediately preceding the current viewed window start (or last complete week),
- * but at least 10 weeks; require >=20 weeks to show a tier.
- * Trim: remove lowest 10% and highest 10% of values (floor counts) before baseline calculation.
- */
-export function computeBenchmark(metricKey: string | undefined, currentRangeStart?: Date, currentRangeEnd?: Date): BenchmarkComputation {
-  if (!metricKey) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true, hiddenReason: 'No metric key' };
-  const weeks = getHistoricalWeeks(metricKey);
-  if (!weeks.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true, hiddenReason: 'No weekly data' };
-
-  // Verbose raw weeks dump (guarded by __BENCH_VERBOSE__ flag)
-  if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
-    try {
-      console.debug('[BenchV2Detail] rawWeeks', metricKey, weeks.map(w => ({ ws: w.weekStart.toISOString().slice(0,10), v: w.value })));
-    } catch {}
-  }
-
-  // Normalize range boundaries
-  let start = currentRangeStart || currentRangeEnd || null;
-  let end = currentRangeEnd || currentRangeStart || null;
-  // Clamp obviously bogus early dates (e.g., year < 2010) to first available weekStart
-  const firstWeek = weeks[0].weekStart;
-  if (start && start.getFullYear() < 2010) start = new Date(firstWeek);
-  if (end && end.getFullYear() < 2010) end = new Date(weeks[weeks.length-1].weekStart);
-  if (start && end && start > end) { const tmp = start; start = end; end = tmp; }
-
-  // Identify current period weeks based on visible range; default to last complete week if range ambiguous
-  const mondayOf = (d: Date) => { const n = new Date(d); n.setHours(0,0,0,0); const day = n.getDay(); const diff = n.getDate() - day + (day === 0 ? -6 : 1); n.setDate(diff); return n; };
-  let currentWeeks: { weekStart: Date; value: number }[];
-  if (start && end) {
-    const startWeek = mondayOf(start);
-    const endWeek = mondayOf(end);
-    currentWeeks = weeks.filter(w => w.weekStart >= startWeek && w.weekStart <= endWeek);
-    if (!currentWeeks.length) currentWeeks = [weeks[weeks.length - 1]]; // fallback
-  } else {
-    currentWeeks = [weeks[weeks.length - 1]];
-  }
-
-  // Baseline candidates are strictly prior weeks (exclude current weeks entirely)
-  let baselineCandidates = weeks.filter(w => w.weekStart < currentWeeks[0].weekStart);
-  const totalWeeksConsidered = baselineCandidates.length;
-  if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
-    console.debug('[BenchV2]', metricKey, { weeks: weeks.length, baselineCandidates: baselineCandidates.length, currentWeeks: currentWeeks.length, start, end });
-  }
-  if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
-    try {
-      console.debug('[BenchV2Detail] currentWeeks', metricKey, currentWeeks.map(w => ({ ws: w.weekStart.toISOString().slice(0,10), v: w.value })));
-      console.debug('[BenchV2Detail] baselineCandidates', metricKey, baselineCandidates.map(w => ({ ws: w.weekStart.toISOString().slice(0,10), v: w.value })));
-    } catch {}
-  }
-  // Fallback: if no prior weeks (e.g., viewing full history), synthesize a split: last K weeks = current, rest = baseline
-  let syntheticSplit = false;
-  if (!baselineCandidates.length) {
-    if (weeks.length >= 8) {
-      // choose K (current slice) = min(4, max(1, ~10% of weeks))
-      const K = Math.min(4, Math.max(1, Math.round(weeks.length * 0.10)));
-      currentWeeks = weeks.slice(-K);
-      baselineCandidates = weeks.slice(0, weeks.length - K);
-      syntheticSplit = true;
-      if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
-        console.debug('[BenchV2Fallback] synthetic split applied', { metricKey, K, baselineWeeks: baselineCandidates.length, currentWeeks: currentWeeks.length });
-      }
-    } else {
-      return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered, insufficient: true, hiddenReason: 'Not enough weeks to compute baseline' };
-    }
-  }
-
-  const windowWeeks = baselineCandidates.slice(-52);
-  const minProvisional = 8; // show a provisional badge
-  const minShowTier = 12;   // compute tier but mark provisional if < full threshold
-  const minFull = 20;       // mark non-provisional once >=20
-  if (windowWeeks.length < minProvisional) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient: true, note: 'Need more history', hiddenReason: syntheticSplit ? 'Baseline slice after synthetic split still <8 weeks' : 'Fewer than 8 weeks' };
-
-  if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
-    try {
-      console.debug('[BenchV2Detail] windowWeeks(<=52)', metricKey, windowWeeks.map(w => ({ ws: w.weekStart.toISOString().slice(0,10), v: w.value })));
-    } catch {}
-  }
-
-  // Copy values for trimming
-  const values = windowWeeks.map(w => w.value).filter(v => Number.isFinite(v));
-  const sorted = [...values].sort((a,b)=>a-b);
-  const trimCount = Math.floor(sorted.length * 0.10); // 10% tails
-  const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
-  const baseline = trimmed.length ? trimmed.reduce((s,v)=>s+v,0)/trimmed.length : (values.reduce((s,v)=>s+v,0)/values.length);
-
-  if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
-    try {
-      console.debug('[BenchV2Detail] trim', metricKey, { sortedLen: sorted.length, trimCount, trimmedLen: trimmed.length, baseline });
-    } catch {}
-  }
-
-  // Current value is aggregate over current viewing period (if provided) else last complete week
-  // Current aggregation strategy:
-  // For additive metrics (revenue, totalOrders, emailsSent) sum across selected weeks.
-  // For rate/average metrics (openRate, clickRate, etc.) take the mean of week values to compare vs weekly baseline mean.
-  const ADDITIVE = new Set(['revenue','totalOrders','emailsSent']);
-  let current: number | null = null;
-  if (currentWeeks.length) {
-    if (ADDITIVE.has(metricKey)) current = currentWeeks.reduce((s,w)=>s+w.value,0);
-    else current = currentWeeks.reduce((s,w)=>s+w.value,0)/currentWeeks.length;
-  }
-  if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
-    try { console.debug('[BenchV2Detail] currentValue', metricKey, { currentWeeks: currentWeeks.length, current }); } catch {}
-  }
-
-  if (baseline == null || current == null) {
-    return { tier: null, baseline: baseline ?? null, current: current ?? null, percentDelta: null, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient: windowWeeks.length < minFull, provisional: windowWeeks.length >= minShowTier, hiddenReason: 'Missing current or baseline' };
-  }
-
-  const lowerIsBetter = LOWER_IS_BETTER.has(metricKey);
-  // Scale baseline for additive metrics to match the number of current weeks aggregated
-  const baselineScaled = ((): number => {
-    if (baseline == null) return NaN;
-    if (ADDITIVE.has(metricKey)) return baseline * currentWeeks.length; // expected additive value over same count of weeks
-    return baseline; // already mean
-  })();
-  const percentDelta = baselineScaled === 0 ? null : ((current - baselineScaled) / baselineScaled) * 100;
-  // If we have many weeks & current computed 0 while baseline > 0, treat as 0% until we have a confirmed non-zero recent period (prevents every metric showing -100%)
-  if (percentDelta != null && percentDelta <= -100 && baseline > 0 && current === 0 && weeks.length >= 20) {
-    // Neutralize extreme drop likely caused by empty current slice
-    if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
-      console.debug('[BenchV2Adjust] neutralizing extreme -100% delta', { metricKey, baseline, current });
-    }
-    // Use -0 to preserve sign for needs-review logic but not push into harsh tier purely from missing data
-  }
-
-  // Determine tier thresholds. Approach: Typical = baseline ±15%; Above Average = +15% to +35%; Exceptional > +35% (or conversely for lower-is-better with inverted logic).
-  const typicalBand = 0.15; const aboveBand = 0.35;
-  let tier: BenchmarkTier;
-  if (lowerIsBetter) {
-    // Invert logic: improvements are decreases.
-    const delta = percentDelta ?? 0;
-    if (delta <= -aboveBand*100) tier = 'Exceptional';
-    else if (delta <= -typicalBand*100) tier = 'Above Average';
-    else if (Math.abs(delta) <= typicalBand*100) tier = 'Typical';
-    else if (delta < 0) tier = 'Typical'; // fallback
-    else if (delta <= aboveBand*100) tier = 'Below Average';
-    else tier = 'Needs Review';
-  } else {
-    const delta = percentDelta ?? 0;
-    if (delta >= aboveBand*100) tier = 'Exceptional';
-    else if (delta >= typicalBand*100) tier = 'Above Average';
-    else if (Math.abs(delta) <= typicalBand*100) tier = 'Typical';
-    else if (delta > -aboveBand*100) tier = 'Below Average';
-    else tier = 'Needs Review';
-  }
-
-  const insufficient = windowWeeks.length < minFull;
-  const thresholds = {
-    typicalLow: baseline * (1 - typicalBand),
-    typicalHigh: baseline * (1 + typicalBand),
-    aboveAvg: baseline * (1 + typicalBand),
-    exceptional: baseline * (1 + aboveBand),
-  };
-  const provisional = !insufficient && windowWeeks.length < minFull;
-  if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
-    try { console.debug('[BenchV2Detail] final', metricKey, { tier, insufficient, provisional, sampleWeeks: windowWeeks.length, percentDelta }); } catch {}
-  }
-  return { tier, baseline, current, percentDelta, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient, provisional, thresholds, note: syntheticSplit ? 'Synthetic split (full range selected)' : undefined };
+export function getBenchmark(metric: string | undefined, start?: Date, end?: Date): BenchmarkResult {
+  if (!metric || !start || !end) return { metric: metric||'', value:0, valueType:'rate', tier:null, diff:null, diffType:null, baseline:null, lookbackDays:0, keptDays:0, hiddenReason:'missing inputs' };
+  const dm = DataManager.getInstance();
+  const key = `${metric}|${start.toISOString()}|${end.toISOString()}|${dm.getCampaigns().length}:${dm.getFlowEmails().length}`;
+  const cached = resultCache.get(key); if (cached) return cached;
+  const res = compute(metric, start, end); resultCache.set(key,res); return res;
 }
 
-/** Simple cache per metric + anchor signature (in-memory only) */
-const _cache = new Map<string, BenchmarkComputation>();
-
-// Invalidate cache on dataset hydration/persist events (permanent solution to stale tiers)
-if (typeof window !== 'undefined') {
-  const reset = () => _cache.clear();
-  window.addEventListener('em:dataset-hydrated', reset);
-  window.addEventListener('em:dataset-persisted', reset);
-}
-
-export function getBenchmark(metricKey: string | undefined, anchorStart?: Date, anchorEnd?: Date) {
-  const key = `${metricKey}|${anchorStart?.toISOString()||'none'}|${anchorEnd?.toISOString()||'none'}`;
-  const cached = _cache.get(key);
-  if (cached) return cached;
-  const res = computeBenchmark(metricKey, anchorStart, anchorEnd);
-  _cache.set(key, res);
-  return res;
-}
-// Reactive hook: re-compute on dataset events & metric/anchor changes using useSyncExternalStore
-export function useBenchmark(metricKey: string | undefined, anchorStart?: Date, anchorEnd?: Date) {
+export function useBenchmark(metric: string | undefined, start?: Date, end?: Date) {
   return useSyncExternalStore(
-    (cb) => {
-      if (typeof window === 'undefined') return () => {};
-      const handler = () => cb();
-      window.addEventListener('em:dataset-hydrated', handler);
-      window.addEventListener('em:dataset-persisted', handler);
-      return () => {
-        window.removeEventListener('em:dataset-hydrated', handler);
-        window.removeEventListener('em:dataset-persisted', handler);
-      };
+    (cb)=>{
+      if (typeof window==='undefined') return ()=>{};
+      const h=()=>{ resultCache.clear(); lookbackCache.clear(); cb(); };
+      window.addEventListener('em:dataset-hydrated', h);
+      window.addEventListener('em:dataset-persisted', h);
+      return ()=>{ window.removeEventListener('em:dataset-hydrated', h); window.removeEventListener('em:dataset-persisted', h); };
     },
-    () => getBenchmark(metricKey, anchorStart, anchorEnd),
-  () => ({ tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered: 0, insufficient: true, hiddenReason: 'SSR fallback' })
+    ()=> getBenchmark(metric, start, end),
+  ()=> ({ metric: metric||'', value:0, valueType:'rate' as const, tier:null, diff:null, diffType:null, baseline:null, lookbackDays:0, keptDays:0, hiddenReason:'SSR' })
   );
 }
 
-// Developer helper: expose a manual dump function when in browser
+// Developer helper
 if (typeof window !== 'undefined') {
-  (window as any).__dumpBenchmark = (metricKey: string, start?: Date, end?: Date) => {
-    try {
-      (window as any).__BENCH_VERBOSE__ = true;
-      console.debug('[BenchV2Helper] dumping metric', metricKey, { start, end });
-      const dm = DataManager.getInstance();
-      const raw = dm.getWeeklyMetricSeries(metricKey).map(w => ({ ws: w.weekStart.toISOString().slice(0,10), v: w.value }));
-      console.debug('[BenchV2Helper] rawWeeklySeries', raw);
-      const res = computeBenchmark(metricKey, start, end);
-      console.debug('[BenchV2Helper] result', res);
-      return res;
-    } catch (e) {
-      console.error('[BenchV2Helper] error', e);
-    }
+  (window as any).__dumpBenchmark = (metric: string, start: Date, end: Date) => {
+    const res = getBenchmark(metric,start,end);
+    console.debug('[BenchmarkDump]', metric, start.toISOString(), end.toISOString(), res);
+    return res;
   };
 }

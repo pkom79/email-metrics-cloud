@@ -343,38 +343,33 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     const benchmark = useBenchmark(benchmarkMetricKey, range?.endDate, range?.endDate);
 
     const tierBadge = (() => {
-        if (!benchmark) return null;
         if (!benchmark.tier) {
             return (
                 <span className="group relative inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium border bg-gray-50 text-gray-600 border-gray-200">
                     Benchmarking
                     <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-72 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
-                        Benchmark tier hidden. {benchmark.hiddenReason || 'Insufficient history'}.
-                        Weeks available: {benchmark.sampleWeeks}. Need at least 8 for provisional and 12+ for initial tiers.
+                        Benchmark hidden. {benchmark.hiddenReason || 'Insufficient history'}.
                     </span>
                 </span>
             );
         }
         const tierColors: Record<string, string> = {
-            'Needs Review': 'bg-rose-50 text-rose-700 border-rose-200',
-            'Below Average': 'bg-amber-50 text-amber-700 border-amber-200',
-            'Typical': 'bg-gray-50 text-gray-700 border-gray-200',
-            'Above Average': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-            'Exceptional': 'bg-purple-50 text-purple-700 border-purple-200',
+            'Critical': 'bg-rose-50 text-rose-700 border-rose-200',
+            'Needs Attention': 'bg-amber-50 text-amber-700 border-amber-200',
+            'OK': 'bg-gray-50 text-gray-700 border-gray-200',
+            'Good': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+            'Excellent': 'bg-purple-50 text-purple-700 border-purple-200',
         };
-        const cls = tierColors[benchmark.tier] || 'bg-gray-50 text-gray-700 border-gray-200';
-        const pct = benchmark.percentDelta != null && benchmark.baseline ? ((benchmark.current || 0) - benchmark.baseline) / benchmark.baseline * 100 : null;
+        const pct = benchmark.diff != null && benchmark.diffType === 'percent' ? benchmark.diff : null;
         return (
-            <span className={`group relative inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium border ${cls}`}>
-                {benchmark.tier}{benchmark.provisional && <span className="ml-1 text-[9px] uppercase tracking-wide">(Prov.)</span>}
+            <span className={`group relative inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium border ${tierColors[benchmark.tier] || 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+                {benchmark.tier}
                 {pct != null && <span className="tabular-nums">{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</span>}
                 <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-72 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
-                    <span className="font-semibold block mb-1">Benchmarking</span>
-                    This tier compares the current period&#39;s performance vs your prior weeks (trimmed mean).<br />
                     Baseline: {benchmark.baseline != null ? (benchmarkMetricKey === 'revenue' || benchmarkMetricKey === 'revenuePerEmail' ? fmtCurrency(benchmark.baseline) : benchmark.baseline.toFixed(2)) : '—'}<br />
-                    Current: {benchmark.current != null ? (benchmarkMetricKey === 'revenue' || benchmarkMetricKey === 'revenuePerEmail' ? fmtCurrency(benchmark.current) : benchmark.current.toFixed(2)) : '—'}<br />
-                    {benchmark.percentDelta != null && <>Delta: {benchmark.percentDelta >= 0 ? '+' : ''}{benchmark.percentDelta.toFixed(1)}%</>}<br />
-                    Weeks used: {benchmark.sampleWeeks} (trimmed tails). {benchmark.provisional ? 'Provisional tier (stabilizes after 20+ weeks).' : benchmark.insufficient ? 'Once 20+ historical weeks accumulate this tier is fully stable.' : ''}
+                    {benchmark.diff != null && benchmark.diffType === 'percent' && <>Difference vs benchmark: {benchmark.diff >= 0 ? '+' : ''}{benchmark.diff.toFixed(1)}%</>}
+                    {benchmark.diff != null && benchmark.diffType === 'pp' && <>Difference vs benchmark: {benchmark.diff >= 0 ? '+' : ''}{benchmark.diff.toFixed(2)} pp</>}<br />
+                    {benchmark.hiddenReason && <span className="text-gray-600">{benchmark.hiddenReason}</span>}
                 </span>
             </span>
         );
