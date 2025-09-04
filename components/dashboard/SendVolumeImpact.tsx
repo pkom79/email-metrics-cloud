@@ -54,8 +54,8 @@ const fmtCurrency = (v: number) => new Intl.NumberFormat('en-US', { style: 'curr
 const fmtNum = (v: number, d = 2) => Number.isFinite(v) ? v.toFixed(d) : '—';
 
 // ChartContainer renders dual-axis SVG + tooltip + baseline band
-interface ChartSeriesPoint { x: number; value: number | null; emails?: number; label: string; faded?: boolean; }
-interface ChartContainerProps { points: ChartSeriesPoint[]; metric: MetricKey; emailsMax: number; metricMax: number; formatValue: (v: number | null) => string; compareSeries?: (number | null)[]; }
+interface ChartSeriesPoint { x: number; value: number | null; emails?: number; label: string; dateLabel?: string; faded?: boolean; }
+interface ChartContainerProps { points: ChartSeriesPoint[]; metric: MetricKey; emailsMax: number; metricMax: number; formatValue: (v: number | null) => string; compareSeries?: (number | null)[]; axisMode: 'time' | 'volume'; }
 
 // Simple Catmull-Rom spline to Bezier for smoother line
 function catmullRom2bezier(points: { x: number, y: number }[]) {
@@ -76,7 +76,7 @@ function catmullRom2bezier(points: { x: number, y: number }[]) {
     return d.join(' ');
 }
 
-const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsMax, metricMax, formatValue, compareSeries }) => {
+const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsMax, metricMax, formatValue, compareSeries, axisMode }) => {
     // Match FlowStepAnalysis dimensions (graph height 160, drawing area 120 baseline)
     const VIEW_W = 900; const VIEW_H = 160; const GRAPH_H = 120; // baseline at y=120
     const PADDING_LEFT = 50; // space for y ticks
@@ -156,6 +156,11 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
                         <text x={t.x} y={GRAPH_H + 25} textAnchor="middle" fontSize={11} fill="#6b7280">{t.label}</text>
                     </g>
                 ))}
+                {axisMode === 'volume' && (
+                    <text x={PADDING_LEFT} y={GRAPH_H + 40} textAnchor="start" fontSize={10} fill="#6b7280" className="font-medium">
+                        Send Volume (Highest → Lowest)
+                    </text>
+                )}
                 {/* Emails area */}
                 {emailsArea && <path d={emailsArea} fill="url(#svi-emails)" stroke="none" />}
                 {/* Metric line */}
@@ -174,7 +179,7 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
                         whiteSpace: 'nowrap'
                     }}
                 >
-                    <div className="font-medium mb-0.5 text-gray-900">{active.label}</div>
+                    <div className="font-medium mb-0.5 text-gray-900">{axisMode === 'volume' ? (active.dateLabel ? active.dateLabel + ' • ' + active.label : active.label) : active.label}</div>
                     <div className="flex justify-between gap-3"><span className="text-gray-500">Emails</span><span className="tabular-nums text-gray-900">{active.emails?.toLocaleString() || 0}</span></div>
                     <div className="flex justify-between gap-3"><span className="text-gray-500">{METRIC_OPTIONS.find(m => m.value === metric)?.label}</span><span className="tabular-nums text-gray-900">{formatValue(active.value)}</span></div>
                 </div>
@@ -303,6 +308,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     }, [sortMode, baseSeries]);
 
     // Build chart points (ordered for display)
+    const formatEmailsShort = (n: number) => n >= 1000000 ? (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M' : n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(n);
     const points = useMemo(() => displayOrder.map((idx, displayIdx) => {
         const b = baseSeries[idx];
         const val = laggedMetricSeries[idx];
@@ -311,9 +317,9 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             if (metric === 'revenuePerEmail' && b.emails < MIN_EMAILS_PER_BUCKET_RPE) faded = true;
             if (NEGATIVE_METRICS.includes(metric) && b.emails < MIN_EMAILS_PER_BUCKET_PER1K) faded = true;
         }
-        // In volume mode keep original label; could append rank if desired
-        return { x: displayIdx, value: val, emails: b.emails, label: b.label, faded };
-    }), [displayOrder, baseSeries, laggedMetricSeries, metric]);
+        const label = sortMode === 'volume' ? formatEmailsShort(b.emails) : b.label;
+        return { x: displayIdx, value: val, emails: b.emails, label, dateLabel: b.label, faded };
+    }), [displayOrder, baseSeries, laggedMetricSeries, metric, sortMode]);
 
     const emailsMax = useMemo(() => Math.max(...baseSeries.map(b => b.emails), 1), [baseSeries]);
     const metricMax = useMemo(() => Math.max(1, ...points.map(p => p.value || 0)), [points]);
@@ -431,7 +437,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                         <div className="text-3xl font-bold text-gray-900 tabular-nums">{formatValue(avgValue)}</div>
                     </div>
                 </div>
-                <ChartContainer points={points} metric={metric} emailsMax={emailsMax} metricMax={metricMax} formatValue={formatValue} compareSeries={sortMode === 'time' ? compareSeries : undefined} />
+                <ChartContainer points={points} metric={metric} emailsMax={emailsMax} metricMax={metricMax} formatValue={formatValue} compareSeries={sortMode === 'time' ? compareSeries : undefined} axisMode={sortMode} />
                 {!baseSeries.length && (<div className="mt-4 text-xs text-gray-500">No sends in selected range.</div>)}
                 <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                     <div className="relative border border-gray-200 rounded-xl p-4 bg-white">
@@ -454,15 +460,45 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     </div>
                     <div className="relative border border-gray-200 rounded-xl p-4 bg-white">
                         <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Correlation
-                            <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-60 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Pearson correlation between send volume and metric using chronological buckets (n ≥ 3). Strength bands: Negligible &lt;0.1, Weak &lt;0.3, Moderate &lt;0.5, Strong &lt;0.7.</span></span>
+                            <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-64 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px] leading-snug">
+                                Pearson correlation (r) between send volume and this metric over time (n ≥ 3).
+                                <br /><br />
+                                Positive means the metric tends to be higher in higher-volume periods.
+                                Negative means it tends to be lower when volume is higher.
+                                <br /><br />
+                                Strength: Neg &lt;0.1, Weak &lt;0.3, Moderate &lt;0.5, Strong &lt;0.7.
+                            </span></span>
                         </div>
-                        {correlationInfo?.r != null ? (
-                            <div className={`text-lg font-semibold tabular-nums ${correlationInfo.r > 0.05 ? 'text-emerald-600' : correlationInfo.r < -0.05 ? 'text-rose-600' : 'text-gray-600'}`}>{correlationInfo.r.toFixed(2)}
-                                <span className="ml-2 text-[11px] font-medium text-gray-500">{correlationInfo.label}{correlationInfo.n ? ` · n=${correlationInfo.n}` : ''}</span>
-                            </div>
-                        ) : (
-                            <div className="text-lg font-semibold text-gray-500">—<span className="ml-2 text-[11px] font-medium">{correlationInfo?.label || '—'}</span></div>
-                        )}
+                        {(() => {
+                            if (!correlationInfo) return <div className="text-lg font-semibold text-gray-500">—</div>;
+                            const r = correlationInfo.r;
+                            const metricLabel = METRIC_OPTIONS.find(m => m.value === metric)?.label || 'Metric';
+                            let narrative = '';
+                            if (r == null) narrative = correlationInfo.label || 'Insufficient data';
+                            else {
+                                const pos = r > 0.05; const neg = r < -0.05; const isNegativeMetric = NEGATIVE_METRICS.includes(metric);
+                                if (!pos && !neg) narrative = `Little relationship between volume and ${metricLabel}.`;
+                                else if (pos) {
+                                    if (metric === 'totalRevenue') narrative = 'Higher send volume often coincides with higher total revenue.';
+                                    else if (metric === 'revenuePerEmail') narrative = 'Scaling volume hasn’t hurt efficiency (revenue/email rises with volume).';
+                                    else if (isNegativeMetric) narrative = `Higher volume periods tend to have higher ${metricLabel.toLowerCase()} (monitor).`;
+                                } else if (neg) {
+                                    if (metric === 'totalRevenue') narrative = 'Higher volume is not translating into more total revenue.';
+                                    else if (metric === 'revenuePerEmail') narrative = 'Efficiency drops at higher volume (revenue/email falls).';
+                                    else if (isNegativeMetric) narrative = `Higher volume does not increase ${metricLabel.toLowerCase()} (good).`;
+                                }
+                            }
+                            return r != null ? (
+                                <div>
+                                    <div className={`text-lg font-semibold tabular-nums ${r > 0.05 ? 'text-emerald-600' : r < -0.05 ? 'text-rose-600' : 'text-gray-600'}`}>{r.toFixed(2)}
+                                        <span className="ml-2 text-[11px] font-medium text-gray-500">{correlationInfo.label}{correlationInfo.n ? ` · n=${correlationInfo.n}` : ''}</span>
+                                    </div>
+                                    <div className="mt-1 text-[11px] leading-snug text-gray-500 max-w-[180px]">{narrative}</div>
+                                </div>
+                            ) : (
+                                <div className="text-lg font-semibold text-gray-500">—<span className="ml-2 text-[11px] font-medium">{correlationInfo?.label || '—'}</span></div>
+                            );
+                        })()}
                     </div>
                 </div>
             </div>
