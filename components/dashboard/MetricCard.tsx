@@ -4,6 +4,7 @@ import { ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
 import Sparkline from './Sparkline';
 import { parseMetricValue } from '../../lib/utils/benchmarks'; // still used for conversionRate special case
 import { useBenchmark } from '../../lib/data/benchmarking';
+import { getMetricDefinition } from '../../lib/data/metricDefinitions';
 
 interface MetricCardProps {
     title: string;
@@ -117,15 +118,29 @@ const MetricCard: React.FC<MetricCardProps> = ({
                                 };
                                 const cls = tierColors[adaptive.tier] || 'bg-gray-50 text-gray-700 border-gray-200';
                                 const pct = adaptive.diff != null && adaptive.diffType === 'percent' ? adaptive.diff : null;
+                                const definition = getMetricDefinition(metricKey);
+                                // For totals we normalize display of baseline to daily mean if baselineDaily available so user isn't confused by day-count differences
+                                const displayBaseline = (() => {
+                                    if (adaptive.baseline == null) return '—';
+                                    if (!metricKey) return adaptive.baseline.toFixed(2);
+                                    if (['revenue', 'totalOrders', 'emailsSent'].includes(metricKey) && adaptive.baselineDaily) {
+                                        // Show both range baseline and daily mean
+                                        return `${new Intl.NumberFormat('en-US', { style: metricKey === 'revenue' ? 'currency' : 'decimal', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(adaptive.baseline)} (Daily avg ${metricKey === 'revenue' ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(adaptive.baselineDaily) : adaptive.baselineDaily.toFixed(1)})`;
+                                    }
+                                    if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metricKey)) return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(adaptive.baseline);
+                                    if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metricKey)) return adaptive.baseline.toFixed(2);
+                                    return adaptive.baseline.toFixed(2);
+                                })();
                                 return (
                                     <span className={`group relative inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${cls}`}>
                                         {adaptive.tier}
                                         {pct != null && <span className="tabular-nums">{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</span>}
                                         <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-5 z-30 hidden group-hover:block w-72 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
                                             <span className="font-semibold block mb-1">Benchmark</span>
-                                            Baseline: {adaptive.baseline != null ? (() => { if (!metricKey) return adaptive.baseline.toFixed(2); if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metricKey)) return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(adaptive.baseline); if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metricKey)) return adaptive.baseline.toFixed(2); return adaptive.baseline.toFixed(2); })() : '—'}<br />
+                                            Baseline: {displayBaseline}<br />
                                             {adaptive.diff != null && adaptive.diffType === 'percent' && <>Difference vs benchmark: {adaptive.diff >= 0 ? '+' : ''}{adaptive.diff.toFixed(1)}%</>}
                                             {adaptive.diff != null && adaptive.diffType === 'pp' && <>Difference vs benchmark: {adaptive.diff >= 0 ? '+' : ''}{adaptive.diff.toFixed(1)} pp</>}<br />
+                                            {definition && <span className="block mt-1 text-gray-600">{definition}</span>}
                                             {adaptive.hiddenReason && <span className="text-gray-600">{adaptive.hiddenReason}</span>}
                                         </span>
                                     </span>
