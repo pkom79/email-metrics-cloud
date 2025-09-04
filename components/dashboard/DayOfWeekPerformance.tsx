@@ -82,7 +82,17 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
             <div className="flex items-center justify-between px-6 py-4">
                 <div className="flex items-center gap-3">
                     <Calendar className="w-5 h-5 text-purple-600" />
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Campaign Performance by Day of Week</h3>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Performance by Day of Week
+                        <span className="relative group inline-flex items-center">
+                            <span className="w-4 h-4 inline-flex items-center justify-center rounded-full bg-gray-200 text-gray-600 text-[10px] font-medium cursor-pointer group-hover:bg-gray-300">i</span>
+                            <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-72 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
+                                <span className="font-semibold block mb-1">What is this?</span>
+                                Aggregates campaign performance by weekday over the selected range. Each bar sums (or averages) the chosen metric for campaigns sent that day.
+                                <br /><br />
+                                <span className="font-semibold">Best Day logic:</span> We declare a "winner" only if the top day is ≥1.5 MAD (~statistically higher) above the median and has at least 3 campaigns. Otherwise we show "No clear winner" to prevent overfitting.
+                            </span>
+                        </span>
+                    </h3>
                 </div>
                 <div className="relative">
                     <select
@@ -169,7 +179,7 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
 
                     {hoveredBar && (
                         <div
-                            className="absolute z-10 p-3 rounded-lg shadow-xl border text-sm pointer-events-none backdrop-blur-sm bg-white/95 dark:bg-gray-800/95 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 transform -translate-x-1/2 -translate-y-full"
+                            className="absolute z-20 p-3 rounded-lg shadow-xl border text-sm pointer-events-none backdrop-blur-sm bg-white/95 dark:bg-gray-800/95 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 transform -translate-x-1/2 -translate-y-full"
                             style={{
                                 left: `${(labelWidth + (hoveredBar.value / (maxValue || 1)) * (800 - labelWidth - 60) / 2) / 8}%`,
                                 top: `${startY + (dayOfWeekData.findIndex(d => d.day === hoveredBar.day) * (barHeight + barSpacing)) + barHeight / 2 - 20}px`

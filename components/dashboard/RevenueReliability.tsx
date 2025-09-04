@@ -218,19 +218,14 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                             {stats && (
                                 <line x1={0} x2={w} y1={meanY(stats.mean)} y2={meanY(stats.mean)} className="stroke-purple-500 dark:stroke-purple-400" strokeDasharray="4 3" strokeWidth={1} />
                             )}
-                            {/* Bars */}
+                            {/* Bars (unified style: single gradient regardless of scope for visual consistency) */}
                             {weeks.map((wk, i) => {
                                 const x = xPosFor(i);
                                 const totalH = (wk.revenue / maxRevenue) * usableHeight;
-                                const campH = (wk.campaignRevenue / maxRevenue) * usableHeight;
-                                const flowH = (wk.flowRevenue / maxRevenue) * usableHeight;
                                 const baseY = (h - pad) - totalH;
-                                const flowY = baseY;
-                                const campY = flowY + (flowH - campH);
                                 return (
                                     <g key={wk.label} onMouseEnter={() => onEnter(i)} onMouseLeave={onLeave} className="cursor-pointer">
-                                        {scope !== 'campaigns' && <rect x={x} y={flowY} width={barW} height={Math.max(2, flowH)} rx={5} className="fill-[url(#flowGrad)] opacity-90 hover:opacity-100 transition-opacity shadow-sm" />}
-                                        <rect x={x} y={campY} width={barW} height={Math.max(2, campH)} rx={5} className="fill-[url(#campGrad)] opacity-90 hover:opacity-100 transition-opacity shadow-sm" />
+                                        <rect x={x} y={baseY} width={barW} height={Math.max(2, totalH)} rx={5} className="fill-[url(#flowGrad)] opacity-95 hover:opacity-100 transition-opacity shadow-sm" />
                                         {i === weeks.length - 1 && (
                                             <text x={x + barW / 2} y={baseY - 10} textAnchor="middle" className="fill-purple-700 dark:fill-purple-300 text-[10px] font-semibold tracking-tight">{formatCurrency(wk.revenue)}</text>
                                         )}
@@ -289,26 +284,21 @@ export default function RevenueReliability({ campaigns, flows }: RevenueReliabil
                         </div>
                     );
                     return (
-                        <div className={`mt-6 ${centerChart ? 'flex flex-wrap justify-center gap-3' : 'grid grid-cols-2 md:grid-cols-6 gap-3'} text-[11px]`}>
+                        <div className={`mt-6 flex flex-wrap justify-center gap-4 text-[11px]`}>
                             <StatTile label="Reliability" tooltip={reliabilityTooltip} value={`${stats.reliabilityDisplay}%`} category={stats.category} categoryColor={categoryColor} />
                             <StatTile label="Avg Weekly Revenue" tooltip="Average weekly revenue for selected scope" value={formatCurrency(stats.mean)} />
                             <StatTile label="Std Dev" tooltip="Standard deviation of weekly revenue (selected scope)" value={formatCurrency(stats.std)} />
-                            {scope !== 'flows' && (
+                            {scope === 'campaigns' && stats.zeroCampaignWeeks > 0 && (
                                 <StatTile label="Zero Campaign Weeks" tooltip="Weeks with no campaign sends" value={String(stats.zeroCampaignWeeks)} />
                             )}
-                            {scope !== 'flows' && (
+                            {scope === 'campaigns' && stats.lostCampaignEstimate > 0 && (
                                 <StatTile label="Est. Lost Camp Rev" tooltip="Estimated lost campaign revenue (median non-zero campaign week * zero weeks)" value={formatCurrency(stats.lostCampaignEstimate)} />
-                            )}
-                            {scope === 'all' && (
-                                <StatTile label="Campaign Share" tooltip="Average campaign revenue share of total" value={formatPct1(stats.meanCampaignShare)} />
                             )}
                         </div>
                     );
                 })()}
                 {/* Interpretation removed per request (tooltip now sufficient) */}
                 <div className="mt-3 flex items-center gap-4 text-[10px] text-gray-500 dark:text-gray-400">
-                    <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gradient-to-b from-purple-400 to-purple-700" /> Campaign Revenue</div>
-                    {scope !== 'campaigns' && <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gradient-to-b from-indigo-400 to-indigo-700" /> Flow Revenue</div>}
                     {stats && <div className="flex items-center gap-1"><span className="w-6 h-[2px] bg-purple-500" /> Mean (±1σ band)</div>}
                 </div>
             </div>

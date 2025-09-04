@@ -128,8 +128,16 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
             <div className="flex items-center justify-between px-6 py-4">
                 <div className="flex items-center gap-3">
                     <Clock className="w-5 h-5 text-purple-600" />
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                         Campaign Performance by Hour of Day
+                        <span className="relative group inline-flex items-center">
+                            <span className="w-4 h-4 inline-flex items-center justify-center rounded-full bg-gray-200 text-gray-600 text-[10px] font-medium cursor-pointer group-hover:bg-gray-300">i</span>
+                            <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-72 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
+                                <span className="font-semibold block mb-1">What is this?</span>
+                                Aggregates campaign performance by send hour (local time) across the selected range so you can spot hourly engagement or revenue concentration.
+                                <br /><br /><span className="font-semibold">Best Hour logic:</span> Winner shown only if the top hour is ≥1.8 MAD above the median and has ≥3 campaigns; else "No clear winner" to avoid random spikes driving decisions.
+                            </span>
+                        </span>
                     </h3>
                 </div>
                 <div className="relative">
@@ -221,7 +229,7 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
 
                     {hoveredBar && (
                         <div
-                            className="absolute z-10 p-3 rounded-lg shadow-xl border text-sm pointer-events-none backdrop-blur-sm bg-white/95 dark:bg-gray-800/95 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 transform -translate-x-1/2 -translate-y-full"
+                            className="absolute z-20 p-3 rounded-lg shadow-xl border text-sm pointer-events-none backdrop-blur-sm bg-white/95 dark:bg-gray-800/95 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 transform -translate-x-1/2 -translate-y-full"
                             style={{
                                 left: `${(labelWidth + (hoveredBar.value / (maxValue || 1)) * (800 - labelWidth - 60) / 2) / 8}%`,
                                 top: `${startY + (hourOfDayData.findIndex(d => d.hourLabel === hoveredBar.hourLabel) * (barHeight + barSpacing)) + barHeight / 2 - 20}px`
