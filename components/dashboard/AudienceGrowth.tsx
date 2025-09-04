@@ -128,7 +128,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
 
     return (
         <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-8">
-            <div className="flex items-start justify-between mb-6">
+            <div className="flex items-start justify-between mb-6 sticky top-14 z-20 bg-white border-b border-transparent pb-2">
                 <div className="flex items-center gap-2">
                     <Users className="w-5 h-5 text-purple-600" />
                     <h3 className="text-lg font-semibold text-gray-900 tracking-tight flex items-center gap-2">Audience Growth

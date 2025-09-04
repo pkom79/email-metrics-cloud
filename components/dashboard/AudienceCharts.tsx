@@ -310,7 +310,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-2 mb-4">
                         <Calendar className="w-5 h-5 text-purple-600" />
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Subscriber Lifetime</h3>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Audience Lifetime</h3>
                     </div>
                     <div className="space-y-3">
                         {lifetimeData.map((item) => (
@@ -373,19 +373,33 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             {/* Inactivity Revenue Drain (placed after Last Active Segments) */}
             <InactivityRevenueDrain subscribers={subscribers} />
 
-            {/* Dead Weight Subscribers & Potential Savings */}
+            {/* Dead Weight Audience & Potential Savings */}
             {deadWeight && (
                 <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-2 mb-4">
                         <Trash2 className="w-5 h-5 text-purple-600" />
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Dead Weight Subscribers</h3>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Dead Weight Audience
+                            <span className="relative group inline-flex items-center">
+                                <span className="w-4 h-4 inline-flex items-center justify-center rounded-full bg-gray-200 text-gray-600 text-[10px] font-medium cursor-pointer group-hover:bg-gray-300">i</span>
+                                <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-80 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
+                                    <span className="font-semibold block mb-1">What is Dead Weight?</span>
+                                    These are subscribers who haven’t opened or clicked in a long time or were never active after signup. Keeping a large inactive segment inflates your Klaviyo billing and can slowly hurt deliverability (lower engagement signals). Purging or suppressing them periodically helps:
+                                    <ul className="list-disc pl-4 mt-2 space-y-1 text-gray-700 dark:text-gray-300">
+                                        <li>Reduce platform cost</li>
+                                        <li>Improve average engagement & deliverability</li>
+                                        <li>Focus re‑activation efforts on a smaller, fresher segment</li>
+                                    </ul>
+                                    <span className="block mt-2 text-gray-500 dark:text-gray-400">Always run a light re‑engagement flow before suppressing.</span>
+                                </span>
+                            </span>
+                        </h3>
                     </div>
 
                     {/* Summary */}
                     <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
                         <div>
                             <p className="text-4xl font-bold text-gray-900 dark:text-gray-100">{deadWeight.combined.length.toLocaleString()}</p>
-                            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Dead weight subscribers ({((deadWeight.combined.length / subscribers.length) * 100).toFixed(1)}% of list)</p>
+                            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Dead weight audience ({((deadWeight.combined.length / subscribers.length) * 100).toFixed(1)}% of list)</p>
                         </div>
                         <div>
                             <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Projected List After Purge</p>
@@ -411,7 +425,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                                 <CheckCircle className="w-4 h-4 mt-0.5" />
                                 <div>
                                     <p className="font-medium mb-1 text-green-800 dark:text-green-300">No dead‑weight detected</p>
-                                    <p className="text-xs leading-relaxed text-green-700 dark:text-green-400">Your list is fully active under the current definition, so you’re not overpaying for Klaviyo here. Great job keeping engagement clean.</p>
+                                    <p className="text-xs leading-relaxed text-green-700 dark:text-green-400">You’re not overpaying for your Klaviyo account. Good job!</p>
                                 </div>
                             </div>
                         ) : deadWeight.currentPrice === null ? (
@@ -438,16 +452,18 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                                 </div>
                             </div>
                         ) : (
-                            <div className="text-sm text-gray-600 dark:text-gray-400">No savings identified at current list size.</div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400">You’re not overpaying for your Klaviyo account. Good job!</div>
                         )}
                     </div>
-                    <p className="mt-6 text-xs text-gray-500 dark:text-gray-500">Estimation only. Klaviyo pricing may change at any time; actual savings may vary.</p>
+                    {deadWeight && deadWeight.monthlySavings !== null && deadWeight.monthlySavings > 0 && (
+                        <p className="mt-6 text-xs text-gray-500 dark:text-gray-500">Estimation only. Klaviyo pricing may change at any time; actual savings may vary.</p>
+                    )}
                     <div className="mt-3">
                         <button
                             type="button"
                             onClick={() => setShowDeadWeightGuide(true)}
                             className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:underline"
-                        >How to suppress dead-weight subscribers in Klaviyo?</button>
+                        >How to suppress dead-weight audience in Klaviyo?</button>
                     </div>
                     {showDeadWeightGuide && (
                         <div className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto">
@@ -455,7 +471,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                             <div className="relative w-full max-w-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-xl p-6 animate-fade-in">
                                 <div className="flex items-start justify-between mb-4">
                                     <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                                        <Trash2 className="w-5 h-5 text-purple-600" /> Suppress Dead‑Weight Subscribers
+                                        <Trash2 className="w-5 h-5 text-purple-600" /> Suppress Dead‑Weight Audience
                                     </h4>
                                     <button onClick={() => setShowDeadWeightGuide(false)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" aria-label="Close">
                                         ✕
