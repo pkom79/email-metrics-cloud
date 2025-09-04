@@ -289,8 +289,13 @@ function compute(metric: string, start: Date, end: Date): BenchmarkResult {
   return computeRateRatio(metric, start, end, daily);
 }
 
+// Stable empty result to avoid new object identity every render when inputs missing (prevents infinite re-render with useSyncExternalStore)
+const EMPTY_BENCHMARK: BenchmarkResult = {
+  metric: '', value:0, valueType:'rate', tier:null, diff:null, diffType:null, baseline:null, lookbackDays:0, keptDays:0, hiddenReason:'missing inputs', baselineDaily: null, negativeMetric: false
+};
+
 export function getBenchmark(metric: string | undefined, start?: Date, end?: Date): BenchmarkResult {
-  if (!metric || !start || !end) return { metric: metric||'', value:0, valueType:'rate', tier:null, diff:null, diffType:null, baseline:null, lookbackDays:0, keptDays:0, hiddenReason:'missing inputs' };
+  if (!metric || !start || !end) return EMPTY_BENCHMARK;
   const dm = DataManager.getInstance();
   const key = `${BMARK_VERSION}|${metric}|${start.toISOString()}|${end.toISOString()}|${dm.getCampaigns().length}:${dm.getFlowEmails().length}`;
   const cached = resultCache.get(key);
