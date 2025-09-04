@@ -26,8 +26,8 @@ const TOTALS = new Set(['revenue','totalOrders','emailsSent']);
 const VOLATILITY_RATIOS = new Set(['avgOrderValue','revenuePerEmail']); // AOV & RPE: ratio pipeline + volatility tiering (percent diff)
 
 // Threshold policy (adaptive for sparse datasets)
-const TARGET_LOOKBACK_DAYS = 140;          // Ideal required historical activity days
-const MIN_LOOKBACK_DAYS_FOR_ANY = 30;      // Minimum to even compute a provisional benchmark
+const TARGET_LOOKBACK_DAYS = 140;          // Required historical activity days (strict)
+const MIN_LOOKBACK_DAYS_FOR_ANY = 140;     // Enforce strict minimum per spec
 const TARGET_KEPT_DAYS = 90;               // Ideal after trimming
 function requiredKeptDays(lookbackActivity: number){
   // Need 90 if we have plenty, else 60% of available, but never less than 20

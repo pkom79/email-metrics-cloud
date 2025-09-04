@@ -578,7 +578,25 @@ export class DataManager {
                 }
             }
 
-            const series = buckets.map(b => ({ value: this._deriveMetricFromSums(metricKey, b.sums as any), date: b.label }));
+            const series = buckets.map(b => {
+                // Derive an ISO date for range computations (avoid parsing label like "Aug 04" -> year 2001)
+                let isoDate: string;
+                if (granularity === 'daily') {
+                    // bucket.key is YYYY-MM-DD
+                    isoDate = b.key;
+                } else if (granularity === 'weekly') {
+                    // key is Monday; use week end (Monday +6) for ordering consistency
+                    const parts = b.key.split('-');
+                    const dObj = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                    dObj.setDate(dObj.getDate() + 6);
+                    isoDate = dObj.toISOString().slice(0, 10);
+                } else { // monthly
+                    const [y, m] = b.key.split('-');
+                    const dObj = new Date(Number(y), Number(m) - 1, 1);
+                    isoDate = dObj.toISOString().slice(0, 10);
+                }
+                return { value: this._deriveMetricFromSums(metricKey, b.sums as any), date: b.label, iso: isoDate };
+            });
             this._timeSeriesCache.set(tsCacheKey, { built: Date.now(), data: series });
             return series;
         } catch (err) {

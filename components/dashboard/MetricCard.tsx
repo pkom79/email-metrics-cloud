@@ -49,8 +49,8 @@ const MetricCard: React.FC<MetricCardProps> = ({
     // Derive current selected range boundaries from sparkline data (first/last points)
     // Anchor should be the range END so we look back from the most recent visible period.
     // Using start caused zero historical weeks when viewing a recent short range (e.g., 30d) because all weeks are >= anchor.
-    const rangeEnd = sparklineData && sparklineData.length ? new Date(sparklineData[sparklineData.length - 1].date) : undefined;
-    const rangeStart = sparklineData && sparklineData.length ? new Date(sparklineData[0].date) : undefined; // kept for potential future tooltip context
+    const rangeEnd = sparklineData && sparklineData.length ? new Date((sparklineData[sparklineData.length - 1] as any).iso || sparklineData[sparklineData.length - 1].date) : undefined;
+    const rangeStart = sparklineData && sparklineData.length ? new Date((sparklineData[0] as any).iso || sparklineData[0].date) : undefined; // kept for potential future tooltip context
     // Adaptive benchmarking: pass the actual visible range (start/end) so "current" aggregates that range.
     // We previously advanced an anchor +7d which caused current aggregation to resolve to an empty week (future) => 0 values & -100% deltas.
     const adaptive = useBenchmark(metricKey, rangeStart, rangeEnd);
