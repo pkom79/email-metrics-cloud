@@ -91,16 +91,7 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
             }
             arr.sort((a, b) => a.weekStart.getTime() - b.weekStart.getTime());
         }
-        let start = false, end = false;
-        if (arr.length && arr[0].activeDays < 7) { arr = arr.slice(1); start = true; }
-        if (arr.length && arr[arr.length - 1].activeDays < 7) { arr = arr.slice(0, -1); end = true; }
-        // Apply week count limit based on selected date range to avoid overcrowding for short windows
-        const maxWeeksMap: Record<string, number> = { '30d': 6, '60d': 10, '90d': 14, '120d': 18, '180d': 26, '365d': 54 };
-        const maxWeeks = maxWeeksMap[dateRange] || (dateRange === 'all' ? Infinity : 40);
-        if (arr.length > maxWeeks) {
-            // Keep most recent weeks (slice from end)
-            arr = arr.slice(-maxWeeks);
-        }
+        // Keep all full historical weeks; no trimming or limiting (ensures consistency across date ranges)
         return { weeks: arr };
     }, [filteredCampaigns, filteredFlows, dateRange]);
 
@@ -117,7 +108,8 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
         const reliabilityDisplay = reliability.toFixed(0);
         const volatilityPct = cv * 100;
         const volatilityDisplay = volatilityPct >= 10 ? volatilityPct.toFixed(0) : volatilityPct.toFixed(1);
-        const zeroCampaignWeeks = weeks.filter(w => w.campaignEmails === 0).length;
+        // Zero campaign weeks exclude pure inactivity (no sends at all) to avoid counting artificial gap rows
+        const zeroCampaignWeeks = weeks.filter(w => w.campaignEmails === 0 && (w.flowRevenue > 0 || w.revenue > 0)).length;
         const meanCampaignShare = weeks.reduce((s, w) => s + (w.campaignRevenue / (w.revenue || 1)), 0) / weeks.length;
         const nonZeroCamp = weeks.filter(w => w.campaignRevenue > 0).map(w => w.campaignRevenue);
         const avgNonZeroCamp = nonZeroCamp.length ? nonZeroCamp.reduce((s, v) => s + v, 0) / nonZeroCamp.length : 0;
@@ -337,7 +329,7 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
                                 <StatTile label="Zero Campaign Weeks" tooltip="Weeks with no campaign sends" value={String(stats.zeroCampaignWeeks)} />
                             )}
                             {scope === 'campaigns' && stats.lostCampaignEstimate > 0 && (
-                                <StatTile label="Est. Lost Camp Rev" tooltip={<span>Estimated lost campaign revenue (interpolated between surrounding non-zero weeks, capped by median; single-sided gaps decay 10% per week). Conservative vs prior method.</span>} value={formatCurrency(stats.lostCampaignEstimate)} />
+                                <StatTile label="Est. Lost Camp Rev" tooltip={<span>Estimated lost campaign revenue (≈50% of average non-zero campaign week × gap weeks). Heuristic, directional only.</span>} value={formatCurrency(stats.lostCampaignEstimate)} />
                             )}
                         </div>
                     );
