@@ -50,8 +50,28 @@ const MetricCard: React.FC<MetricCardProps> = ({
     // Derive current selected range boundaries from sparkline data (first/last points)
     // Anchor should be the range END so we look back from the most recent visible period.
     // Using start caused zero historical weeks when viewing a recent short range (e.g., 30d) because all weeks are >= anchor.
-    const rangeEnd = sparklineData && sparklineData.length ? new Date((sparklineData[sparklineData.length - 1] as any).iso || sparklineData[sparklineData.length - 1].date) : undefined;
-    const rangeStart = sparklineData && sparklineData.length ? new Date((sparklineData[0] as any).iso || sparklineData[0].date) : undefined; // kept for potential future tooltip context
+    // Memoize derived range bounds; avoid creating new Date objects if underlying iso strings unchanged
+    const [rangeStart, rangeEnd] = React.useMemo(() => {
+        if (!sparklineData || !sparklineData.length) return [undefined, undefined] as [Date | undefined, Date | undefined];
+        const firstRaw: any = sparklineData[0];
+        const lastRaw: any = sparklineData[sparklineData.length - 1];
+        const firstIso = firstRaw.iso || firstRaw.date;
+        const lastIso = lastRaw.iso || lastRaw.date;
+        // Use cached refs on window to compare and reuse objects (lightweight global cache acceptable for client-only component)
+        if (typeof window !== 'undefined') {
+            const cache = (window as any).__MC_RANGE_CACHE__ || ((window as any).__MC_RANGE_CACHE__ = {});
+            const prev = cache[metricKey || title];
+            if (prev && prev.firstIso === firstIso && prev.lastIso === lastIso) {
+                return [prev.start, prev.end];
+            }
+            const start = new Date(firstIso);
+            const end = new Date(lastIso);
+            cache[metricKey || title] = { firstIso, lastIso, start, end };
+            return [start, end];
+        }
+        return [new Date(firstIso), new Date(lastIso)];
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sparklineData, metricKey, title]);
     // Adaptive benchmarking: pass the actual visible range (start/end) so "current" aggregates that range.
     // We previously advanced an anchor +7d which caused current aggregation to resolve to an empty week (future) => 0 values & -100% deltas.
     const adaptive = useBenchmark(metricKey, rangeStart, rangeEnd);

@@ -278,7 +278,26 @@ const resultCache = new Map<string, BenchmarkResult>();
 // Global subscription management to avoid per-hook event listener proliferation
 const subscribers = new Set<() => void>();
 function notifyAll(){ for (const cb of subscribers) { try { cb(); } catch {} } }
-function globalHydrationHandler(){ lookbackCache.clear(); resultCache.clear(); notifyAll(); }
+// Throttled global hydration handler to avoid event storms triggering cascaded rerenders
+let lastHydrationNotify = 0;
+let hydrationPending = false;
+function flushHydration(){ hydrationPending = false; lookbackCache.clear(); resultCache.clear(); notifyAll(); }
+function globalHydrationHandler(){
+  const now = performance.now?.() || Date.now();
+  // If calls arrive within 50ms window, batch them into a single notification on next frame
+  if (now - lastHydrationNotify < 50){
+    if (!hydrationPending){
+      hydrationPending = true;
+      try {
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => flushHydration());
+        else setTimeout(flushHydration, 0);
+      } catch { setTimeout(flushHydration, 0); }
+    }
+    return;
+  }
+  lastHydrationNotify = now;
+  flushHydration();
+}
 if (typeof window !== 'undefined' && !(window as any).__BENCH_LISTENER__) {
   try {
     window.addEventListener('em:dataset-hydrated', globalHydrationHandler);

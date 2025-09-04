@@ -245,6 +245,31 @@ export class DataManager {
 
     constructor() {
         if (typeof window !== 'undefined') {
+            // Lightweight coalescer for hydration events to avoid storms causing render loops
+            // We attach a scheduling helper on the instance (first construction) that batches multiple
+            // internal hydration triggers (localStorage + idb + ensureHydrated) into a single
+            // 'em:dataset-hydrated' event in the same tick / animation frame.
+            const scheduleHydrationEvent = (() => {
+                let pending = false;
+                return () => {
+                    if (pending) return;
+                    pending = true;
+                    // Use rAF when available to bunch synchronous cascades; fallback to setTimeout
+                    const fire = () => {
+                        pending = false;
+                        try { window.dispatchEvent(new CustomEvent('em:dataset-hydrated')); } catch { /* ignore */ }
+                    };
+                    try {
+                        if (typeof requestAnimationFrame === 'function') {
+                            requestAnimationFrame(() => fire());
+                        } else {
+                            setTimeout(fire, 0);
+                        }
+                    } catch { setTimeout(fire, 0); }
+                };
+            })();
+            // Expose for other methods in this instance (closure safe)
+            (this as any)._scheduleHydrationEvent = scheduleHydrationEvent;
             try {
                 const raw = localStorage.getItem(this.storageKey);
                 if (raw) {
@@ -254,7 +279,8 @@ export class DataManager {
                     this.flowEmails = (parsed.flowEmails || []).map((f: any) => ({ ...f, sentDate: revive(f.sentDate) }));
                     this.subscribers = (parsed.subscribers || []);
                     this.isRealDataLoaded = this.campaigns.length > 0 || this.flowEmails.length > 0 || this.subscribers.length > 0;
-                    try { window.dispatchEvent(new CustomEvent('em:dataset-hydrated')); } catch { }
+                    // Use coalesced dispatch
+                    scheduleHydrationEvent();
                 }
             } catch { }
             (async () => {
@@ -267,7 +293,7 @@ export class DataManager {
                         this.flowEmails = (fromIdb.flowEmails || []).map((f: any) => ({ ...f, sentDate: revive(f.sentDate) }));
                         this.subscribers = (fromIdb.subscribers || []);
                         this.isRealDataLoaded = this.campaigns.length > 0 || this.flowEmails.length > 0 || this.subscribers.length > 0;
-                        try { window.dispatchEvent(new CustomEvent('em:dataset-hydrated')); } catch { }
+                        scheduleHydrationEvent();
                     }
                 } catch { }
             })();
@@ -284,7 +310,7 @@ export class DataManager {
                 this.flowEmails = (fromIdb.flowEmails || []).map((f: any) => ({ ...f, sentDate: revive(f.sentDate) }));
                 this.subscribers = (fromIdb.subscribers || []);
                 this.isRealDataLoaded = this.campaigns.length > 0 || this.flowEmails.length > 0 || this.subscribers.length > 0;
-                try { window.dispatchEvent(new CustomEvent('em:dataset-hydrated')); } catch { }
+                try { (this as any)._scheduleHydrationEvent?.(); } catch { }
                 return this.isRealDataLoaded;
             }
         } catch { }
