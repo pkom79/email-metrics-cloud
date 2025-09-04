@@ -95,13 +95,28 @@ export function computeBenchmark(metricKey: string | undefined, currentRangeStar
       console.debug('[BenchV2Detail] baselineCandidates', metricKey, baselineCandidates.map(w => ({ ws: w.weekStart.toISOString().slice(0,10), v: w.value })));
     } catch {}
   }
-  if (!baselineCandidates.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered, insufficient: true, hiddenReason: 'No historical weeks before current range' };
+  // Fallback: if no prior weeks (e.g., viewing full history), synthesize a split: last K weeks = current, rest = baseline
+  let syntheticSplit = false;
+  if (!baselineCandidates.length) {
+    if (weeks.length >= 8) {
+      // choose K (current slice) = min(4, max(1, ~10% of weeks))
+      const K = Math.min(4, Math.max(1, Math.round(weeks.length * 0.10)));
+      currentWeeks = weeks.slice(-K);
+      baselineCandidates = weeks.slice(0, weeks.length - K);
+      syntheticSplit = true;
+      if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
+        console.debug('[BenchV2Fallback] synthetic split applied', { metricKey, K, baselineWeeks: baselineCandidates.length, currentWeeks: currentWeeks.length });
+      }
+    } else {
+      return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered, insufficient: true, hiddenReason: 'Not enough weeks to compute baseline' };
+    }
+  }
 
   const windowWeeks = baselineCandidates.slice(-52);
   const minProvisional = 8; // show a provisional badge
   const minShowTier = 12;   // compute tier but mark provisional if < full threshold
   const minFull = 20;       // mark non-provisional once >=20
-  if (windowWeeks.length < minProvisional) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient: true, note: 'Need more history', hiddenReason: 'Fewer than 8 weeks' };
+  if (windowWeeks.length < minProvisional) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient: true, note: 'Need more history', hiddenReason: syntheticSplit ? 'Baseline slice after synthetic split still <8 weeks' : 'Fewer than 8 weeks' };
 
   if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
     try {
@@ -189,7 +204,7 @@ export function computeBenchmark(metricKey: string | undefined, currentRangeStar
   if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
     try { console.debug('[BenchV2Detail] final', metricKey, { tier, insufficient, provisional, sampleWeeks: windowWeeks.length, percentDelta }); } catch {}
   }
-  return { tier, baseline, current, percentDelta, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient, provisional, thresholds };
+  return { tier, baseline, current, percentDelta, sampleWeeks: windowWeeks.length, totalWeeksConsidered, insufficient, provisional, thresholds, note: syntheticSplit ? 'Synthetic split (full range selected)' : undefined };
 }
 
 /** Simple cache per metric + anchor signature (in-memory only) */
