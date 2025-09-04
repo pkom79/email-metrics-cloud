@@ -189,6 +189,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     const flows = dm.getFlowEmails();
     const [metric, setMetric] = useState<MetricKey>('totalRevenue');
     const [scope, setScope] = useState<SourceScope>('all');
+    const [sortMode, setSortMode] = useState<'time' | 'volume'>('time');
     // Simplified: removed compare / baseline / lag per brand feedback
 
     // Determine effective date range boundaries (mirror DataManager logic)
@@ -249,7 +250,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         return buckets;
     }, [dm, subset, dateRange, granularity, customFrom, customTo, range]);
 
-    // Derive metric series values
+    // Derive metric series values (chronological)
     const metricSeries = useMemo(() => baseSeries.map(b => {
         switch (metric) {
             case 'totalRevenue': return b.revenue;
@@ -295,19 +296,52 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     // Baseline expectation: simple mean + stdev of earlier buckets (excluding last 2 buckets) grouped by same day-of-week for daily, otherwise average of all prior periods
     const baseline = { expected: [], low: [], high: [] }; // removed
 
-    // Build chart points
-    const points = useMemo(() => baseSeries.map((b, i) => {
-        const val = laggedMetricSeries[i];
+    // Display ordering (chronological or by volume desc)
+    const displayOrder = useMemo(() => {
+        if (sortMode === 'time') return baseSeries.map((_, i) => i);
+        return baseSeries.map((_, i) => i).sort((a, b) => baseSeries[b].emails - baseSeries[a].emails);
+    }, [sortMode, baseSeries]);
+
+    // Build chart points (ordered for display)
+    const points = useMemo(() => displayOrder.map((idx, displayIdx) => {
+        const b = baseSeries[idx];
+        const val = laggedMetricSeries[idx];
         let faded = false;
         if (val != null) {
             if (metric === 'revenuePerEmail' && b.emails < MIN_EMAILS_PER_BUCKET_RPE) faded = true;
             if (NEGATIVE_METRICS.includes(metric) && b.emails < MIN_EMAILS_PER_BUCKET_PER1K) faded = true;
         }
-        return { x: i, value: val, emails: b.emails, label: b.label, faded };
-    }), [baseSeries, laggedMetricSeries, metric]);
+        // In volume mode keep original label; could append rank if desired
+        return { x: displayIdx, value: val, emails: b.emails, label: b.label, faded };
+    }), [displayOrder, baseSeries, laggedMetricSeries, metric]);
 
     const emailsMax = useMemo(() => Math.max(...baseSeries.map(b => b.emails), 1), [baseSeries]);
     const metricMax = useMemo(() => Math.max(1, ...points.map(p => p.value || 0)), [points]);
+
+    // Correlation (always computed on chronological series for integrity)
+    const correlationInfo = useMemo(() => {
+        if (!baseSeries.length) return null;
+        const pairs: { emails: number; metric: number }[] = [];
+        for (let i = 0; i < baseSeries.length; i++) {
+            const em = baseSeries[i].emails;
+            const mv = metricSeries[i];
+            if (em > 0 && mv != null && Number.isFinite(mv)) pairs.push({ emails: em, metric: mv });
+        }
+        const n = pairs.length;
+        if (n < 3) return { r: null as number | null, n, strength: 'n/a', direction: 'n/a', label: 'Insufficient data' };
+        const xs = pairs.map(p => p.emails);
+        const ys = pairs.map(p => p.metric);
+        const mean = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
+        const mx = mean(xs); const my = mean(ys);
+        let num = 0, dxs = 0, dys = 0;
+        for (let i = 0; i < n; i++) { const dx = xs[i] - mx; const dy = ys[i] - my; num += dx * dy; dxs += dx * dx; dys += dy * dy; }
+        if (dxs === 0 || dys === 0) return { r: null as number | null, n, strength: 'n/a', direction: 'n/a', label: 'No variance' };
+        const r = num / Math.sqrt(dxs * dys);
+        const abs = Math.abs(r);
+        const strength = abs < 0.1 ? 'Negligible' : abs < 0.3 ? 'Weak' : abs < 0.5 ? 'Moderate' : abs < 0.7 ? 'Strong' : 'Very Strong';
+        const direction = r > 0.05 ? 'Positive' : r < -0.05 ? 'Negative' : 'Neutral';
+        return { r, n, strength, direction, label: `${strength} ${direction === 'Neutral' ? '' : direction}`.trim() };
+    }, [baseSeries, metricSeries]);
 
     // Headline (current bucket = last non-null value)
     const lastPoint = [...points].reverse().find(p => p.value != null) || null; // retained if needed later
@@ -355,12 +389,17 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                             <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-600 cursor-pointer" />
                             <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-80 bg-gray-900 text-white text-[11px] leading-snug p-3 rounded-lg shadow-xl border border-gray-700">
                                 <span className="font-semibold text-white">How to interpret</span><br />
-                                Purple line = selected performance metric. Shaded background = relative send volume (emails). When volume increases while efficiency (e.g. Revenue / Email) stays stable or improves, scaling is healthy. Rising negative rate metrics (unsubs, spam, bounces) with higher volume indicates pressure. Partial period ends are trimmed.
+                                Purple line = selected performance metric. Shaded background = relative send volume (emails). Toggle between chronological and volume-sorted views. Correlation is always computed on the chronological data. Rising negative rate metrics (unsubs, spam, bounces) with higher volume indicates pressure. Partial period ends are trimmed.
                             </span>
                         </span>
                     </h3>
                 </div>
                 <div className="flex gap-4 text-sm">
+                    <div className="flex gap-1 rounded-lg bg-gray-100 p-1 h-9 items-center">
+                        {(['time', 'volume'] as const).map(m => (
+                            <button key={m} onClick={() => setSortMode(m)} className={`px-3 h-7 rounded-md text-xs font-medium transition ${sortMode === m ? 'bg-white shadow border border-gray-300 text-gray-900' : 'text-gray-600 hover:text-gray-900'}`}>{m === 'time' ? 'Time' : 'Volume'}</button>
+                        ))}
+                    </div>
                     <div className="relative">
                         <select value={metric} onChange={e => setMetric(e.target.value as MetricKey)} className="appearance-none px-3 h-9 pr-8 rounded-lg border bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                             {METRIC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -392,9 +431,9 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                         <div className="text-3xl font-bold text-gray-900 tabular-nums">{formatValue(avgValue)}</div>
                     </div>
                 </div>
-                <ChartContainer points={points} metric={metric} emailsMax={emailsMax} metricMax={metricMax} formatValue={formatValue} compareSeries={compareSeries} />
+                <ChartContainer points={points} metric={metric} emailsMax={emailsMax} metricMax={metricMax} formatValue={formatValue} compareSeries={sortMode === 'time' ? compareSeries : undefined} />
                 {!baseSeries.length && (<div className="mt-4 text-xs text-gray-500">No sends in selected range.</div>)}
-                <div className="mt-6 grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                     <div className="relative border border-gray-200 rounded-xl p-4 bg-white">
                         <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Avg Sends
                             <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-52 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Mean emails per bucket after trimming partial periods.</span></span>
@@ -412,6 +451,18 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                             <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-56 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Median bucket unsubscribe count normalized per 1,000 emails.</span></span>
                         </div>
                         <div className="text-gray-900 font-semibold text-lg tabular-nums">{micro ? (micro.medianUnsub >= 1 ? micro.medianUnsub.toFixed(2) : micro.medianUnsub.toFixed(3)) : '—'}</div>
+                    </div>
+                    <div className="relative border border-gray-200 rounded-xl p-4 bg-white">
+                        <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Correlation
+                            <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-60 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Pearson correlation between send volume and metric using chronological buckets (n ≥ 3). Strength bands: Negligible &lt;0.1, Weak &lt;0.3, Moderate &lt;0.5, Strong &lt;0.7.</span></span>
+                        </div>
+                        {correlationInfo?.r != null ? (
+                            <div className={`text-lg font-semibold tabular-nums ${correlationInfo.r > 0.05 ? 'text-emerald-600' : correlationInfo.r < -0.05 ? 'text-rose-600' : 'text-gray-600'}`}>{correlationInfo.r.toFixed(2)}
+                                <span className="ml-2 text-[11px] font-medium text-gray-500">{correlationInfo.label}{correlationInfo.n ? ` · n=${correlationInfo.n}` : ''}</span>
+                            </div>
+                        ) : (
+                            <div className="text-lg font-semibold text-gray-500">—<span className="ml-2 text-[11px] font-medium">{correlationInfo?.label || '—'}</span></div>
+                        )}
                     </div>
                 </div>
             </div>
