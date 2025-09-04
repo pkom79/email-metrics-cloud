@@ -27,7 +27,7 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
         };
     }, [scope, campaigns, flows]);
     // Build weekly aggregates (campaign + flow) and trim partial edge weeks (<7 active days) to avoid skew
-    const { weeks, trimmed } = useMemo(() => {
+    const { weeks } = useMemo(() => {
         interface WeekRec {
             weekStart: Date;
             label: string;
@@ -39,7 +39,7 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
             activeDays: number; // distinct days with at least one send
             daySet: Set<string>;
         }
-        if (!filteredCampaigns.length && !filteredFlows.length) return { weeks: [] as WeekRec[], trimmed: { start: false, end: false } };
+        if (!filteredCampaigns.length && !filteredFlows.length) return { weeks: [] as WeekRec[] };
         const startOfWeek = (d: Date) => {
             const dt = new Date(d);
             const day = dt.getDay(); // 0=Sun
@@ -101,7 +101,7 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
             // Keep most recent weeks (slice from end)
             arr = arr.slice(-maxWeeks);
         }
-        return { weeks: arr, trimmed: { start, end } };
+        return { weeks: arr };
     }, [filteredCampaigns, filteredFlows, dateRange]);
 
     const stats = useMemo(() => {
@@ -289,11 +289,12 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
                                         {scope !== 'flows' && campH > 0 && (
                                             <rect x={x} y={campY} width={barW} height={Math.max(2, campH)} className="fill-[url(#campGrad)] opacity-95 hover:opacity-100 transition-opacity shadow-sm" />
                                         )}
-                                        {/* Zero week placeholder (no campaigns when scope='campaigns') */}
-                                        {wk.revenue === 0 && (
-                                            <rect x={x} y={(h - pad) - 4} width={barW} height={4} rx={2} className="fill-gray-300 dark:fill-gray-700 opacity-70" />
+                                        {/* Zero campaign week placeholder only in campaign scope */}
+                                        {scope === 'campaigns' && wk.campaignEmails === 0 && wk.campaignRevenue === 0 && (
+                                            <rect x={x} y={(h - pad) - 4} width={barW} height={4} className="fill-gray-300 dark:fill-gray-700 opacity-70" />
                                         )}
-                                        {i === weeks.length - 1 && (
+                                        {/* Only label last bar if it has non-zero revenue to avoid noisy $0 labels */}
+                                        {i === weeks.length - 1 && wk.revenue > 0 && (
                                             <text x={x + barW / 2} y={baseY - 10} textAnchor="middle" className="fill-purple-700 dark:fill-purple-300 text-[10px] font-semibold tracking-tight">{formatCurrency(wk.revenue)}</text>
                                         )}
                                     </g>
@@ -314,9 +315,15 @@ export default function RevenueReliability({ campaigns, flows, dateRange }: Reve
                                         <div className="translate-x-6 -translate-y-3 w-56 rounded-lg border border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm shadow-xl p-3">
                                             <p className="font-medium text-gray-800 dark:text-gray-100 mb-1">Week of {wk.label}</p>
                                             <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Total</span><span className="font-medium text-gray-800 dark:text-gray-100">{formatCurrency(wk.revenue)}</span></div>
-                                            <div className="flex justify-between"><span className="text-purple-600 dark:text-purple-300">Campaigns</span><span className="font-medium">{formatCurrency(wk.campaignRevenue)}</span></div>
-                                            {scope !== 'campaigns' && <div className="flex justify-between"><span className="text-indigo-600 dark:text-indigo-300">Flows</span><span className="font-medium">{formatCurrency(wk.flowRevenue)}</span></div>}
-                                            <div className="flex justify-between mt-1"><span className="text-gray-500 dark:text-gray-400">Campaign Share</span><span>{formatPct1(campShare)}</span></div>
+                                            {scope !== 'flows' && (
+                                                <div className="flex justify-between"><span className="text-purple-600 dark:text-purple-300">Campaigns</span><span className="font-medium">{formatCurrency(wk.campaignRevenue)}</span></div>
+                                            )}
+                                            {scope !== 'campaigns' && (
+                                                <div className="flex justify-between"><span className="text-indigo-600 dark:text-indigo-300">Flows</span><span className="font-medium">{formatCurrency(wk.flowRevenue)}</span></div>
+                                            )}
+                                            {scope === 'all' && (
+                                                <div className="flex justify-between mt-1"><span className="text-gray-500 dark:text-gray-400">Campaign Share</span><span>{formatPct1(campShare)}</span></div>
+                                            )}
                                             <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Vs Mean</span><span className={deviation >= 0 ? 'text-green-600 dark:text-green-400' : 'text-rose-600 dark:text-rose-400'}>{deviation >= 0 ? '+' : ''}{deviation.toFixed(1)}%</span></div>
                                         </div>
                                     );
