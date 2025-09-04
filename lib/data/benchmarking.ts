@@ -188,7 +188,7 @@ function computeVolatilityRatio(metric: string, rangeStart: Date, rangeEnd: Date
   const denomVals = raw.filter(r=>r.den>0).map(r=>r.den);
   const floor = percentileFloor(denomVals, cfg.base);
   let filtered = raw.filter(r=>r.den >= floor && r.den>0).map(r=>({ ...r, ratio: r.num/r.den }));
-  if (!filtered.length) return hidden(metric, lookbackDays, 0, 'Need at least 90 kept days and enough activity for this metric');
+  if (!filtered.length) return hidden(metric, lookbackDays, 0, `Insufficient days above floor (den >= ${floor}). Activity days with denom>0: ${activityDays}`);
   // Sort by ratio, trim 10% cumulative denominator at both ends
   const sorted = [...filtered].sort((a,b)=>a.ratio - b.ratio);
   const totalDen = sorted.reduce((s,r)=>s+r.den,0);
@@ -198,7 +198,8 @@ function computeVolatilityRatio(metric: string, rangeStart: Date, rangeEnd: Date
   const kept = sorted.slice(low, high+1);
   const keptDays = kept.length; const keptDen = kept.reduce((s,r)=>s+r.den,0);
   const reqKept = requiredKeptDays(activityDays);
-  if (keptDays < reqKept || keptDen < cfg.volumeMin) return hidden(metric, lookbackDays, keptDays, `Need at least ${reqKept} kept days and enough activity for this metric`);
+  if (keptDays < reqKept) return hidden(metric, lookbackDays, keptDays, `Need ${reqKept} kept days after trimming (have ${keptDays})`, { debug: { floor, keptDen, reqKept, activityDays } });
+  if (keptDen < cfg.volumeMin) return hidden(metric, lookbackDays, keptDays, `Need cumulative ${cfg.denomKey} >= ${cfg.volumeMin} in kept days (have ${keptDen})`, { debug: { floor, keptDen, reqKept, activityDays } });
   // Baseline ratio
   const baselineRatio = kept.reduce((s,r)=>s + r.num,0) / keptDen;
   if (baselineRatio === 0) return hidden(metric, lookbackDays, keptDays, 'No activity in look-back period');
@@ -247,7 +248,7 @@ function computeRateRatio(metric: string, rangeStart: Date, rangeEnd: Date, base
   const denomVals = raw.filter(r=>r.den>0).map(r=>r.den);
   const floor = percentileFloor(denomVals, cfg.base);
   let filtered = raw.filter(r=>r.den >= floor).map(r=>({...r, ratio: r.den>0? r.num/r.den:0}));
-  if (!filtered.length) return hidden(metric, lookbackDays, 0, 'Need at least 90 kept days and enough activity for this metric');
+  if (!filtered.length) return hidden(metric, lookbackDays, 0, `Insufficient days above floor (den >= ${floor}). Activity days with denom>0: ${activityDays}`);
   const sorted = [...filtered].sort((a,b)=>a.ratio - b.ratio);
   const totalDen = sorted.reduce((s,r)=>s+r.den,0);
   const trimVol = totalDen * 0.10;
@@ -256,7 +257,8 @@ function computeRateRatio(metric: string, rangeStart: Date, rangeEnd: Date, base
   const kept = sorted.slice(low, high+1);
   const keptDays = kept.length; const keptDen = kept.reduce((s,r)=>s+r.den,0);
   const reqKept = requiredKeptDays(activityDays);
-  if (keptDays < reqKept || keptDen < cfg.volumeMin) return hidden(metric, lookbackDays, keptDays, `Need at least ${reqKept} kept days and enough activity for this metric`);
+  if (keptDays < reqKept) return hidden(metric, lookbackDays, keptDays, `Need ${reqKept} kept days after trimming (have ${keptDays})`, { debug: { floor, keptDen, reqKept, activityDays } });
+  if (keptDen < cfg.volumeMin) return hidden(metric, lookbackDays, keptDays, `Need cumulative ${cfg.denomKey} >= ${cfg.volumeMin} in kept days (have ${keptDen})`, { debug: { floor, keptDen, reqKept, activityDays } });
   const aggNum = kept.reduce((s,r)=>s+r.num,0); const baselineRatio = keptDen>0? aggNum/keptDen:0;
   // selected period
   const map = new Map([...baselineDays, ...selectedDays].map(d=>[dayKey(d.date), d] as const));
