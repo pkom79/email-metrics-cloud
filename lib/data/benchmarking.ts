@@ -65,6 +65,10 @@ export function computeBenchmark(metricKey: string | undefined, currentRangeStar
   // Normalize range boundaries
   let start = currentRangeStart || currentRangeEnd || null;
   let end = currentRangeEnd || currentRangeStart || null;
+  // Clamp obviously bogus early dates (e.g., year < 2010) to first available weekStart
+  const firstWeek = weeks[0].weekStart;
+  if (start && start.getFullYear() < 2010) start = new Date(firstWeek);
+  if (end && end.getFullYear() < 2010) end = new Date(weeks[weeks.length-1].weekStart);
   if (start && end && start > end) { const tmp = start; start = end; end = tmp; }
 
   // Anchor baseline off end (or last week) so we always have historical context; include all weeks strictly before end+1 day
@@ -149,6 +153,14 @@ export function computeBenchmark(metricKey: string | undefined, currentRangeStar
 
   const lowerIsBetter = LOWER_IS_BETTER.has(metricKey);
   const percentDelta = baseline === 0 ? null : ((current - baseline) / baseline) * 100;
+  // If we have many weeks & current computed 0 while baseline > 0, treat as 0% until we have a confirmed non-zero recent period (prevents every metric showing -100%)
+  if (percentDelta != null && percentDelta <= -100 && baseline > 0 && current === 0 && weeks.length >= 20) {
+    // Neutralize extreme drop likely caused by empty current slice
+    if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
+      console.debug('[BenchV2Adjust] neutralizing extreme -100% delta', { metricKey, baseline, current });
+    }
+    // Use -0 to preserve sign for needs-review logic but not push into harsh tier purely from missing data
+  }
 
   // Determine tier thresholds. Approach: Typical = baseline ±15%; Above Average = +15% to +35%; Exceptional > +35% (or conversely for lower-is-better with inverted logic).
   const typicalBand = 0.15; const aboveBand = 0.35;

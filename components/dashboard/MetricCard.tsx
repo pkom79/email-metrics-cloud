@@ -51,9 +51,9 @@ const MetricCard: React.FC<MetricCardProps> = ({
     // Using start caused zero historical weeks when viewing a recent short range (e.g., 30d) because all weeks are >= anchor.
     const rangeEnd = sparklineData && sparklineData.length ? new Date(sparklineData[sparklineData.length - 1].date) : undefined;
     const rangeStart = sparklineData && sparklineData.length ? new Date(sparklineData[0].date) : undefined; // kept for potential future tooltip context
-    // Adaptive benchmarking (account-specific). Hook must be unconditional for lint.
-    const anchor = rangeEnd ? new Date(rangeEnd.getTime() + 7 * 24 * 60 * 60 * 1000) : undefined; // advance one week so current visible weeks are considered historical
-    const adaptive = useBenchmark(metricKey, anchor, rangeEnd);
+    // Adaptive benchmarking: pass the actual visible range (start/end) so "current" aggregates that range.
+    // We previously advanced an anchor +7d which caused current aggregation to resolve to an empty week (future) => 0 values & -100% deltas.
+    const adaptive = useBenchmark(metricKey, rangeStart, rangeEnd);
     if (typeof window !== 'undefined' && metricKey) {
         // Lightweight debug (won't spam because rerenders limited)
         // @ts-ignore
