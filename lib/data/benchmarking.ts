@@ -71,37 +71,33 @@ export function computeBenchmark(metricKey: string | undefined, currentRangeStar
   if (end && end.getFullYear() < 2010) end = new Date(weeks[weeks.length-1].weekStart);
   if (start && end && start > end) { const tmp = start; start = end; end = tmp; }
 
-  // Anchor baseline off end (or last week) so we always have historical context; include all weeks strictly before end+1 day
-  const baselineAnchor = end ? new Date(end) : new Date();
-  baselineAnchor.setDate(baselineAnchor.getDate() + 1); // include week whose start == end's weekStart
-  baselineAnchor.setHours(0,0,0,0);
-  let usable = weeks.filter(w => w.weekStart < baselineAnchor);
-  const totalWeeksConsidered = usable.length;
-  if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
-    console.debug('[BenchV2]', metricKey, { weeks: weeks.length, usable: usable.length, baselineAnchor, start, end });
+  // Identify current period weeks based on visible range; default to last complete week if range ambiguous
+  const mondayOf = (d: Date) => { const n = new Date(d); n.setHours(0,0,0,0); const day = n.getDay(); const diff = n.getDate() - day + (day === 0 ? -6 : 1); n.setDate(diff); return n; };
+  let currentWeeks: { weekStart: Date; value: number }[];
+  if (start && end) {
+    const startWeek = mondayOf(start);
+    const endWeek = mondayOf(end);
+    currentWeeks = weeks.filter(w => w.weekStart >= startWeek && w.weekStart <= endWeek);
+    if (!currentWeeks.length) currentWeeks = [weeks[weeks.length - 1]]; // fallback
+  } else {
+    currentWeeks = [weeks[weeks.length - 1]];
   }
-  // Heuristic fix: if anchor is earlier than all data (e.g., synthetic 2001 dates) we get usable=0; adjust to last week +7d
-  if (usable.length === 0 && weeks.length) {
-    const lastWeek = weeks[weeks.length - 1].weekStart;
-    if (baselineAnchor.getTime() < lastWeek.getTime()) {
-      const adj = new Date(lastWeek); adj.setDate(adj.getDate() + 7); adj.setHours(0,0,0,0);
-      if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
-        console.debug('[BenchV2Fix] anchorAdjusted', metricKey, { oldAnchor: baselineAnchor, newAnchor: adj, reason: 'anchor older than lastWeek causing 0 usable' });
-      }
-      // recompute usable
-      baselineAnchor.setTime(adj.getTime());
-      usable = weeks.filter(w => w.weekStart < baselineAnchor);
-    }
+
+  // Baseline candidates are strictly prior weeks (exclude current weeks entirely)
+  let baselineCandidates = weeks.filter(w => w.weekStart < currentWeeks[0].weekStart);
+  const totalWeeksConsidered = baselineCandidates.length;
+  if (typeof window !== 'undefined' && (window as any).__BENCH_DEBUG__ !== false) {
+    console.debug('[BenchV2]', metricKey, { weeks: weeks.length, baselineCandidates: baselineCandidates.length, currentWeeks: currentWeeks.length, start, end });
   }
   if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
     try {
-      console.debug('[BenchV2Detail] usableWeeks', metricKey, usable.map(w => ({ ws: w.weekStart.toISOString().slice(0,10), v: w.value })));
+      console.debug('[BenchV2Detail] currentWeeks', metricKey, currentWeeks.map(w => ({ ws: w.weekStart.toISOString().slice(0,10), v: w.value })));
+      console.debug('[BenchV2Detail] baselineCandidates', metricKey, baselineCandidates.map(w => ({ ws: w.weekStart.toISOString().slice(0,10), v: w.value })));
     } catch {}
   }
-  if (!usable.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered, insufficient: true, hiddenReason: 'No historical weeks' };
+  if (!baselineCandidates.length) return { tier: null, baseline: null, current: null, percentDelta: null, sampleWeeks: 0, totalWeeksConsidered, insufficient: true, hiddenReason: 'No historical weeks before current range' };
 
-  // Take last up to 52 weeks, at least 8 provisional, 12 recommended, 20 full
-  const windowWeeks = usable.slice(-52);
+  const windowWeeks = baselineCandidates.slice(-52);
   const minProvisional = 8; // show a provisional badge
   const minShowTier = 12;   // compute tier but mark provisional if < full threshold
   const minFull = 20;       // mark non-provisional once >=20
@@ -127,24 +123,17 @@ export function computeBenchmark(metricKey: string | undefined, currentRangeStar
   }
 
   // Current value is aggregate over current viewing period (if provided) else last complete week
+  // Current aggregation strategy:
+  // For additive metrics (revenue, totalOrders, emailsSent) sum across selected weeks.
+  // For rate/average metrics (openRate, clickRate, etc.) take the mean of week values to compare vs weekly baseline mean.
+  const ADDITIVE = new Set(['revenue','totalOrders','emailsSent']);
   let current: number | null = null;
-  if (start && end) {
-    const mondayOf = (d: Date) => { const n = new Date(d); n.setHours(0,0,0,0); const day = n.getDay(); const diff = n.getDate() - day + (day === 0 ? -6 : 1); n.setDate(diff); return n; };
-    const startWeek = mondayOf(start);
-    const endWeek = mondayOf(end);
-    current = weeks.filter(w => w.weekStart >= startWeek && w.weekStart <= endWeek).reduce((s,w)=>s+w.value,0);
-    if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
-      try {
-        const included = weeks.filter(w => w.weekStart >= startWeek && w.weekStart <= endWeek).map(w => ({ ws: w.weekStart.toISOString().slice(0,10), v: w.value }));
-        console.debug('[BenchV2Detail] currentAggregate', metricKey, { startWeek: startWeek.toISOString().slice(0,10), endWeek: endWeek.toISOString().slice(0,10), included, sum: current });
-      } catch {}
-    }
-    if (!Number.isFinite(current)) current = null;
-  } else {
-    current = usable[usable.length-1]?.value ?? null;
-    if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
-      try { console.debug('[BenchV2Detail] currentLastWeek', metricKey, { week: usable[usable.length-1]?.weekStart.toISOString().slice(0,10), value: current }); } catch {}
-    }
+  if (currentWeeks.length) {
+    if (ADDITIVE.has(metricKey)) current = currentWeeks.reduce((s,w)=>s+w.value,0);
+    else current = currentWeeks.reduce((s,w)=>s+w.value,0)/currentWeeks.length;
+  }
+  if (typeof window !== 'undefined' && (window as any).__BENCH_VERBOSE__) {
+    try { console.debug('[BenchV2Detail] currentValue', metricKey, { currentWeeks: currentWeeks.length, current }); } catch {}
   }
 
   if (baseline == null || current == null) {
@@ -152,7 +141,13 @@ export function computeBenchmark(metricKey: string | undefined, currentRangeStar
   }
 
   const lowerIsBetter = LOWER_IS_BETTER.has(metricKey);
-  const percentDelta = baseline === 0 ? null : ((current - baseline) / baseline) * 100;
+  // Scale baseline for additive metrics to match the number of current weeks aggregated
+  const baselineScaled = ((): number => {
+    if (baseline == null) return NaN;
+    if (ADDITIVE.has(metricKey)) return baseline * currentWeeks.length; // expected additive value over same count of weeks
+    return baseline; // already mean
+  })();
+  const percentDelta = baselineScaled === 0 ? null : ((current - baselineScaled) / baselineScaled) * 100;
   // If we have many weeks & current computed 0 while baseline > 0, treat as 0% until we have a confirmed non-zero recent period (prevents every metric showing -100%)
   if (percentDelta != null && percentDelta <= -100 && baseline > 0 && current === 0 && weeks.length >= 20) {
     // Neutralize extreme drop likely caused by empty current slice
