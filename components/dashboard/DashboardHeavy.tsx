@@ -616,7 +616,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             <div className="relative"><select value={selectedCampaignMetric} onChange={e => setSelectedCampaignMetric(e.target.value)} className="appearance-none px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">{campaignMetricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</select><ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" /></div>
                         </div>
                         <div className="border rounded-lg overflow-hidden border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">{getSortedCampaigns().slice(0, displayedCampaigns).map((c, i) => (
-                            <div key={c.id} className={`p-4 avoid-break ${i !== 0 ? 'border-t border-gray-200 dark:border-gray-800' : ''}`}>
+                            <div key={c.id} className={`group relative p-4 avoid-break ${i !== 0 ? 'border-t border-gray-200 dark:border-gray-800' : ''}`}>
                                 <div className="flex items-center justify-between">
                                     <div className="flex-1">
                                         <div className="flex items-center gap-3 mb-1.5"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium bg-purple-100 text-purple-900">{i + 1}</span><h4 className="font-medium text-gray-900 dark:text-gray-100">{c.subject}</h4></div>
@@ -627,6 +627,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                         <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{formatMetricValue((c as any)[selectedCampaignMetric] as number, selectedCampaignMetric)}</p>
                                         <p className="text-sm text-gray-500 dark:text-gray-400">{campaignMetricOptions.find(m => m.value === selectedCampaignMetric)?.label}</p>
                                     </div>
+                                </div>
+                                <div className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity absolute left-4 right-4 top-full mt-2 z-40 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl p-4 text-xs grid grid-cols-2 gap-x-6 gap-y-1">
+                                    {['revenue', 'revenuePerEmail', 'openRate', 'clickRate', 'clickToOpenRate', 'emailsSent', 'totalOrders', 'avgOrderValue', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].map(mk => (
+                                        <div key={mk} className="flex justify-between gap-4">
+                                            <span className="text-gray-500 capitalize">{campaignMetricOptions.find(opt => opt.value === mk)?.label || mk}</span>
+                                            <span className="tabular-nums font-medium text-gray-900 dark:text-gray-100">{formatMetricValue((c as any)[mk] as number, mk)}</span>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         ))}{(() => { const sorted = getSortedCampaigns(); return displayedCampaigns < sorted.length && (<div className="p-4 border-t border-gray-200 dark:border-gray-800 text-center bg-gray-50 dark:bg-gray-900/50"><button onClick={() => setDisplayedCampaigns(n => n + 5)} className="px-4 py-2 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white transition-colors">Load More ({Math.min(5, sorted.length - displayedCampaigns)} more)</button></div>); })()}</div>
