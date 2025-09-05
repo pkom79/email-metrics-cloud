@@ -252,14 +252,23 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
             const iso = sunday.toISOString().slice(0, 10);
             weekHasCampaign.add(iso);
         }
-
-        // Collect revenue for weeks that had campaigns (positive or zero) to derive median of productive context
-        const withCampaignRevenues: number[] = [];
-        for (const b of weeklyBuckets) {
-            if (weekHasCampaign.has(b.iso || '')) withCampaignRevenues.push(b.value);
+        // Fallback: if we could not extract any send dates (weekHasCampaign empty), infer campaign weeks from revenue > 0
+        let inferred = false;
+        if (weekHasCampaign.size === 0) {
+            for (const b of weeklyBuckets) if (b.value > 0 && b.iso) weekHasCampaign.add(b.iso);
+            inferred = true;
         }
+
+        // Collect revenue for weeks that had campaigns to derive median baseline
+        const withCampaignRevenues: number[] = [];
+        for (const b of weeklyBuckets) if (weekHasCampaign.has(b.iso || '')) withCampaignRevenues.push(b.value);
         const positive = withCampaignRevenues.filter(v => v > 0).sort((a, b) => a - b);
-        if (!positive.length) return { zeroCampaignWeeks: 0, estimatedLost: 0 };
+        if (!positive.length) {
+            // If still no positive revenue weeks, we cannot estimate lost revenue.
+            // But we may still have zero campaign weeks if inference used.
+            const zeroCampaignWeeks = inferred ? weeklyBuckets.filter(b => !weekHasCampaign.has(b.iso || '')).length : 0;
+            return { zeroCampaignWeeks, estimatedLost: 0 };
+        }
         const median = positive[Math.floor(positive.length / 2)];
         const cap = median * 0.8; // 80% median cap (conservative upper bound)
 
