@@ -416,48 +416,60 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const flowMetrics = useMemo(() => { const all = defFlows; if (!all.length) return null as any; const totalRevenue = all.reduce((s, e) => s + e.revenue, 0); const totalEmailsSent = all.reduce((s, e) => s + e.emailsSent, 0); const totalOrders = all.reduce((s, e) => s + e.totalOrders, 0); const totalOpens = all.reduce((s, e) => s + e.uniqueOpens, 0); const totalClicks = all.reduce((s, e) => s + e.uniqueClicks, 0); const totalUnsubs = all.reduce((s, e) => s + e.unsubscribesCount, 0); const totalSpam = all.reduce((s, e) => s + e.spamComplaintsCount, 0); const totalBounces = all.reduce((s, e) => s + e.bouncesCount, 0); const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0; const revenuePerEmail = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0; const openRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0; const clickRate = totalEmailsSent > 0 ? (totalClicks / totalEmailsSent) * 100 : 0; const clickToOpenRate = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0; const conversionRate = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0; const unsubscribeRate = totalEmailsSent > 0 ? (totalUnsubs / totalEmailsSent) * 100 : 0; const spamRate = totalEmailsSent > 0 ? (totalSpam / totalEmailsSent) * 100 : 0; const bounceRate = totalEmailsSent > 0 ? (totalBounces / totalEmailsSent) * 100 : 0; const mk = (k: string, v: number) => { const d = calcPoP(k, 'flows', { flowName: selectedFlow }); return { value: v, change: d.changePercent, isPositive: d.isPositive, previousValue: d.previousValue, previousPeriod: d.previousPeriod }; }; return { totalRevenue: mk('totalRevenue', totalRevenue), averageOrderValue: mk('avgOrderValue', avgOrderValue), revenuePerEmail: mk('revenuePerEmail', revenuePerEmail), openRate: mk('openRate', openRate), clickRate: mk('clickRate', clickRate), clickToOpenRate: mk('clickToOpenRate', clickToOpenRate), emailsSent: mk('emailsSent', totalEmailsSent), totalOrders: mk('totalOrders', totalOrders), conversionRate: mk('conversionRate', conversionRate), unsubscribeRate: mk('unsubscribeRate', unsubscribeRate), spamRate: mk('spamRate', spamRate), bounceRate: mk('bounceRate', bounceRate) }; }, [defFlows, calcPoP, selectedFlow]);
 
     const effectiveSeriesRange = dateRange === 'custom' && customActive ? 'custom' : dateRange;
-    const overviewSeries = useMemo(() => ({
-        totalRevenue: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'revenue', effectiveSeriesRange, granularity, customFrom, customTo),
-        averageOrderValue: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'avgOrderValue', effectiveSeriesRange, granularity, customFrom, customTo),
-        revenuePerEmail: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'revenuePerEmail', effectiveSeriesRange, granularity, customFrom, customTo),
-        openRate: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'openRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        clickRate: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'clickRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        clickToOpenRate: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'clickToOpenRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        emailsSent: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'emailsSent', effectiveSeriesRange, granularity, customFrom, customTo),
-        totalOrders: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'totalOrders', effectiveSeriesRange, granularity, customFrom, customTo),
-        conversionRate: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'conversionRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        unsubscribeRate: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'unsubscribeRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        spamRate: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'spamRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        bounceRate: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'bounceRate', effectiveSeriesRange, granularity, customFrom, customTo),
-    }), [defCampaigns, defFlows, effectiveSeriesRange, granularity, dm, customFrom, customTo]);
-    const campaignSeries = useMemo(() => ({
-        totalRevenue: dm.getMetricTimeSeries(defCampaigns as any, [], 'revenue', effectiveSeriesRange, granularity, customFrom, customTo),
-        averageOrderValue: dm.getMetricTimeSeries(defCampaigns as any, [], 'avgOrderValue', effectiveSeriesRange, granularity, customFrom, customTo),
-        revenuePerEmail: dm.getMetricTimeSeries(defCampaigns as any, [], 'revenuePerEmail', effectiveSeriesRange, granularity, customFrom, customTo),
-        openRate: dm.getMetricTimeSeries(defCampaigns as any, [], 'openRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        clickRate: dm.getMetricTimeSeries(defCampaigns as any, [], 'clickRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        clickToOpenRate: dm.getMetricTimeSeries(defCampaigns as any, [], 'clickToOpenRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        emailsSent: dm.getMetricTimeSeries(defCampaigns as any, [], 'emailsSent', effectiveSeriesRange, granularity, customFrom, customTo),
-        totalOrders: dm.getMetricTimeSeries(defCampaigns as any, [], 'totalOrders', effectiveSeriesRange, granularity, customFrom, customTo),
-        conversionRate: dm.getMetricTimeSeries(defCampaigns as any, [], 'conversionRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        unsubscribeRate: dm.getMetricTimeSeries(defCampaigns as any, [], 'unsubscribeRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        spamRate: dm.getMetricTimeSeries(defCampaigns as any, [], 'spamRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        bounceRate: dm.getMetricTimeSeries(defCampaigns as any, [], 'bounceRate', effectiveSeriesRange, granularity, customFrom, customTo),
-    }), [defCampaigns, effectiveSeriesRange, granularity, dm, customFrom, customTo]);
-    const flowSeries = useMemo(() => ({
-        totalRevenue: dm.getMetricTimeSeries([], defFlows as any, 'revenue', effectiveSeriesRange, granularity, customFrom, customTo),
-        averageOrderValue: dm.getMetricTimeSeries([], defFlows as any, 'avgOrderValue', effectiveSeriesRange, granularity, customFrom, customTo),
-        revenuePerEmail: dm.getMetricTimeSeries([], defFlows as any, 'revenuePerEmail', effectiveSeriesRange, granularity, customFrom, customTo),
-        openRate: dm.getMetricTimeSeries([], defFlows as any, 'openRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        clickRate: dm.getMetricTimeSeries([], defFlows as any, 'clickRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        clickToOpenRate: dm.getMetricTimeSeries([], defFlows as any, 'clickToOpenRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        emailsSent: dm.getMetricTimeSeries([], defFlows as any, 'emailsSent', effectiveSeriesRange, granularity, customFrom, customTo),
-        totalOrders: dm.getMetricTimeSeries([], defFlows as any, 'totalOrders', effectiveSeriesRange, granularity, customFrom, customTo),
-        conversionRate: dm.getMetricTimeSeries([], defFlows as any, 'conversionRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        unsubscribeRate: dm.getMetricTimeSeries([], defFlows as any, 'unsubscribeRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        spamRate: dm.getMetricTimeSeries([], defFlows as any, 'spamRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        bounceRate: dm.getMetricTimeSeries([], defFlows as any, 'bounceRate', effectiveSeriesRange, granularity, customFrom, customTo),
-    }), [defFlows, effectiveSeriesRange, granularity, dm, customFrom, customTo]);
+    const overviewSeries = useMemo(() => {
+        const keys = ['revenue', 'avgOrderValue', 'revenuePerEmail', 'openRate', 'clickRate', 'clickToOpenRate', 'emailsSent', 'totalOrders', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'];
+        const multi = (dm as any).getMultipleMetricTimeSeries?.(defCampaigns as any, defFlows as any, keys, effectiveSeriesRange, granularity, customFrom, customTo);
+        return {
+            totalRevenue: multi?.revenue || [],
+            averageOrderValue: multi?.avgOrderValue || [],
+            revenuePerEmail: multi?.revenuePerEmail || [],
+            openRate: multi?.openRate || [],
+            clickRate: multi?.clickRate || [],
+            clickToOpenRate: multi?.clickToOpenRate || [],
+            emailsSent: multi?.emailsSent || [],
+            totalOrders: multi?.totalOrders || [],
+            conversionRate: multi?.conversionRate || [],
+            unsubscribeRate: multi?.unsubscribeRate || [],
+            spamRate: multi?.spamRate || [],
+            bounceRate: multi?.bounceRate || [],
+        };
+    }, [defCampaigns, defFlows, effectiveSeriesRange, granularity, dm, customFrom, customTo]);
+    const campaignSeries = useMemo(() => {
+        const keys = ['revenue', 'avgOrderValue', 'revenuePerEmail', 'openRate', 'clickRate', 'clickToOpenRate', 'emailsSent', 'totalOrders', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'];
+        const multi = (dm as any).getMultipleMetricTimeSeries?.(defCampaigns as any, [], keys, effectiveSeriesRange, granularity, customFrom, customTo);
+        return {
+            totalRevenue: multi?.revenue || [],
+            averageOrderValue: multi?.avgOrderValue || [],
+            revenuePerEmail: multi?.revenuePerEmail || [],
+            openRate: multi?.openRate || [],
+            clickRate: multi?.clickRate || [],
+            clickToOpenRate: multi?.clickToOpenRate || [],
+            emailsSent: multi?.emailsSent || [],
+            totalOrders: multi?.totalOrders || [],
+            conversionRate: multi?.conversionRate || [],
+            unsubscribeRate: multi?.unsubscribeRate || [],
+            spamRate: multi?.spamRate || [],
+            bounceRate: multi?.bounceRate || [],
+        };
+    }, [defCampaigns, effectiveSeriesRange, granularity, dm, customFrom, customTo]);
+    const flowSeries = useMemo(() => {
+        const keys = ['revenue', 'avgOrderValue', 'revenuePerEmail', 'openRate', 'clickRate', 'clickToOpenRate', 'emailsSent', 'totalOrders', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'];
+        const multi = (dm as any).getMultipleMetricTimeSeries?.([], defFlows as any, keys, effectiveSeriesRange, granularity, customFrom, customTo);
+        return {
+            totalRevenue: multi?.revenue || [],
+            averageOrderValue: multi?.avgOrderValue || [],
+            revenuePerEmail: multi?.revenuePerEmail || [],
+            openRate: multi?.openRate || [],
+            clickRate: multi?.clickRate || [],
+            clickToOpenRate: multi?.clickToOpenRate || [],
+            emailsSent: multi?.emailsSent || [],
+            totalOrders: multi?.totalOrders || [],
+            conversionRate: multi?.conversionRate || [],
+            unsubscribeRate: multi?.unsubscribeRate || [],
+            spamRate: multi?.spamRate || [],
+            bounceRate: multi?.bounceRate || [],
+        };
+    }, [defFlows, effectiveSeriesRange, granularity, dm, customFrom, customTo]);
 
     // Unified readiness effect
     // Overlay now only tied to isInitialLoading; metric calculations are synchronous & cached
