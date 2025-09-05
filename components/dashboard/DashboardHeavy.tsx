@@ -137,6 +137,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     }, []);
     const [dataVersion, setDataVersion] = useDebugState('dataVersion', 0);
     const [isInitialLoading, setIsInitialLoading] = useDebugState('isInitialLoading', true);
+    // Lazy Flow Step Analysis visibility (must be top-level hook; previous inline hook caused React error 310)
+    const [showFlowSteps, setShowFlowSteps] = useState(false);
     // Wrapper to annotate why isInitialLoading changes & prevent re-flips to true after completion
     const hasCompletedInitialRef = useRef(false);
     const setIsInitialLoadingReason = useCallback((val: boolean, reason: string) => {
@@ -968,22 +970,17 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     </section>
                 )}
                 {/* Flow Step Analysis (lazy – hidden until user expands) */}
-                {(() => {
-                    const [showFlowSteps, setShowFlowSteps] = useState(false);
-                    return (
-                        <section>
-                            <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2"><Zap className="w-5 h-5 text-purple-600" />Flow Step Analysis</h3>
-                                <button onClick={() => setShowFlowSteps(v => !v)} className="px-3 py-1.5 text-sm rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                                    {showFlowSteps ? 'Hide' : 'Show'}
-                                </button>
-                            </div>
-                            {showFlowSteps && (
-                                <FlowStepAnalysis dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
-                            )}
-                        </section>
-                    );
-                })()}
+                <section>
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2"><Zap className="w-5 h-5 text-purple-600" />Flow Step Analysis</h3>
+                        <button onClick={() => setShowFlowSteps(v => !v)} className="px-3 py-1.5 text-sm rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            {showFlowSteps ? 'Hide' : 'Show'}
+                        </button>
+                    </div>
+                    {showFlowSteps && (
+                        <FlowStepAnalysis dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
+                    )}
+                </section>
                 {/* Flow Step Drop-Off Map */}
                 <section><FlowStepDropOff dateRange={dateRange} customFrom={customFrom} customTo={customTo} /></section>
                 <AudienceCharts dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} />
