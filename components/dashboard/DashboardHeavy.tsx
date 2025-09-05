@@ -72,6 +72,24 @@ async function loadAccountData(dm: any, accountId: string): Promise<boolean> {
     }
 }
 
+// Debug helper: wrap useState to log transitions (activated with ?debug=state)
+function useDebugState<T>(label: string, initial: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+    const [val, setVal] = useState<T>(initial);
+    const setWrapped = useCallback((next: React.SetStateAction<T>) => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('debug')?.includes('state')) {
+                const prev = val;
+                const resolved = (typeof next === 'function' ? (next as any)(prev) : next) as T;
+                // eslint-disable-next-line no-console
+                console.log('[EM Debug][setState]', label, { prev, next: resolved });
+            }
+        }
+        setVal(next);
+    }, [val]);
+    return [val, setWrapped];
+}
+
 export default function DashboardHeavy({ businessName, userId }: { businessName?: string; userId?: string }) {
     // Debug flag (enable by adding ?debug=1 to URL) to instrument potential render loops
     const debugMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1';
@@ -85,28 +103,28 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     useEffect(() => { if (userId) DataManager.setUserId(userId); }, [userId]);
     const dm = useMemo(() => DataManager.getInstance(), []);
 
-    const [dashboardError, setDashboardError] = useState<string | null>(null);
+    const [dashboardError, setDashboardError] = useDebugState<string | null>('dashboardError', null);
     // Optional override to intentionally show an empty dashboard (e.g. screenshot / marketing)
-    const [forceEmpty, setForceEmpty] = useState(false);
+    const [forceEmpty, setForceEmpty] = useDebugState('forceEmpty', false);
     useEffect(() => {
         if (typeof window === 'undefined') return;
         const qp = new URLSearchParams(window.location.search);
         if (qp.get('empty') === '1') setForceEmpty(true);
     }, []);
-    const [dataVersion, setDataVersion] = useState(0);
-    const [isInitialLoading, setIsInitialLoading] = useState(true);
+    const [dataVersion, setDataVersion] = useDebugState('dataVersion', 0);
+    const [isInitialLoading, setIsInitialLoading] = useDebugState('isInitialLoading', true);
     // Additional readiness flag to avoid rendering charts before hydration attempts complete
-    const [initialLoadComplete, setInitialLoadComplete] = useState(false);
-    const [dateRange, setDateRange] = useState<'30d' | '60d' | '90d' | '120d' | '180d' | '365d' | 'all' | 'custom'>('30d');
-    const [customFrom, setCustomFrom] = useState<string | undefined>();
-    const [customTo, setCustomTo] = useState<string | undefined>();
+    const [initialLoadComplete, setInitialLoadComplete] = useDebugState('initialLoadComplete', false);
+    const [dateRange, setDateRange] = useDebugState<'30d' | '60d' | '90d' | '120d' | '180d' | '365d' | 'all' | 'custom'>('dateRange', '30d');
+    const [customFrom, setCustomFrom] = useDebugState<string | undefined>('customFrom', undefined);
+    const [customTo, setCustomTo] = useDebugState<string | undefined>('customTo', undefined);
     const customActive = dateRange === 'custom' && customFrom && customTo;
     const customDays = useMemo(() => { if (!customActive) return 0; const from = new Date(customFrom!); from.setHours(0, 0, 0, 0); const to = new Date(customTo!); to.setHours(23, 59, 59, 999); const diff = Math.floor((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1; return Math.max(diff, 1); }, [customActive, customFrom, customTo]);
-    const [granularity, setGranularity] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+    const [granularity, setGranularity] = useDebugState<'daily' | 'weekly' | 'monthly'>('granularity', 'daily');
     const granularitySetCountRef = useRef(0);
-    const [compareMode, setCompareMode] = useState<'prev-period' | 'prev-year'>('prev-period');
-    const [selectedFlow, setSelectedFlow] = useState('all');
-    const [selectedCampaignMetric, setSelectedCampaignMetric] = useState('revenue');
+    const [compareMode, setCompareMode] = useDebugState<'prev-period' | 'prev-year'>('compareMode', 'prev-period');
+    const [selectedFlow, setSelectedFlow] = useDebugState('selectedFlow', 'all');
+    const [selectedCampaignMetric, setSelectedCampaignMetric] = useDebugState('selectedCampaignMetric', 'revenue');
 
     // Earliest allowed custom date (front-end constraint matching 2-year server cap)
     const EARLIEST_ALLOWED_DATE = useMemo(() => {
