@@ -30,6 +30,7 @@ const definitions: Record<string, string> = {
     clickToOpenRate: 'Percent of openers who clicked.',
     conversionRate: 'Percent of clickers who placed an order.',
     revenue: 'Total attributed email revenue.',
+    avgOrderValue: 'Average value of orders attributed to emails.',
     revenuePerEmail: 'Revenue divided by emails sent.',
     emailsSent: 'Total emails delivered.',
     totalOrders: 'Total attributed orders.',
@@ -67,12 +68,13 @@ const MetricCard: React.FC<MetricCardProps> = ({
         return 'Within';
     };
     const bandStatus = classify();
-    const deltaLine = hasPrev ? (isRate ? `${(numericCurrent - (previousValue || 0)).toFixed(1)} pp` : `${change >= 0 ? '+' : ''}${Math.abs(change).toFixed(1)}%`) : 'No prior period';
+    const negativeMetrics = ['unsubscribeRate', 'spamRate', 'bounceRate'];
+    const deltaLine = hasPrev ? (isRate && !negativeMetrics.includes(metricKey || '') ? `${(numericCurrent - (previousValue || 0)).toFixed(1)} pp` : `${change >= 0 ? '+' : ''}${Math.abs(change).toFixed(1)}%`) : 'No prior period';
 
     const tooltip = metricKey && definitions[metricKey] ? [
         definitions[metricKey],
-        `Now ${value}. ${band && band.eligible ? bandStatus : 'No'} the usual range. ${deltaLine}.`,
-        band && band.eligible ? `Usual range: ${formatPrev(band.low)} – ${formatPrev(band.high)}.` : ''
+        band && band.eligible ? `Current value is ${bandStatus.toLowerCase()} the usual range.` : 'Current value has no comparison range.',
+        band && band.eligible ? `Usual range: ${formatPrev(band.low)}–${formatPrev(band.high)}.` : ''
     ].filter(Boolean).join('\n') : '';
 
     return (
@@ -99,13 +101,16 @@ const MetricCard: React.FC<MetricCardProps> = ({
                 valueFormat={metricKey && (metricKey === 'revenue' || metricKey === 'avgOrderValue' || metricKey === 'revenuePerEmail') ? 'currency' : (isRate ? 'percentage' : 'number')}
                 hasInsufficientData={!hasPrev}
                 forceZeroStyle={showChange && Math.abs(change) < 0.05}
+                segment={segment}
+                band={band}
+                metricKey={metricKey}
             />
             <div className="flex items-end justify-between">
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
                 {showChange && (
                     <div className={`flex items-center text-sm font-medium ${Math.abs(change) < 0.05 ? 'text-gray-600 dark:text-gray-400' : isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} title={trendTooltip}>
                         {Math.abs(change) < 0.05 ? <ArrowRight className="w-4 h-4 mr-1" /> : isIncrease ? <ArrowUp className="w-4 h-4 mr-1" /> : <ArrowDown className="w-4 h-4 mr-1" />}
-                        {isRate ? `${(numericCurrent - (previousValue || 0)).toFixed(1)}pp` : `${Math.abs(change).toFixed(1)}%`}
+                        {isRate && !negativeMetrics.includes(metricKey || '') ? `${(numericCurrent - (previousValue || 0)).toFixed(1)}pp` : `${Math.abs(change).toFixed(1)}%`}
                     </div>
                 )}
             </div>

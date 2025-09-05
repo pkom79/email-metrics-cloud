@@ -12,11 +12,12 @@ interface SparklineProps {
     forceZeroStyle?: boolean; // treat as displayed zero (purple style)
     segment?: 'all' | 'campaigns' | 'flows';
     band?: { low: number; high: number; median: number; bins: number; eligible: boolean } | null;
+    metricKey?: string;
 }
 
 const SEGMENT_COLORS: Record<string, string> = { all: '#8B5CF6', campaigns: '#6366F1', flows: '#10B981' };
 
-const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, isNegativeMetric = false, data, valueFormat = 'number', hasInsufficientData = false, forceZeroStyle = false, segment = 'all', band = null }) => {
+const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, isNegativeMetric = false, data, valueFormat = 'number', hasInsufficientData = false, forceZeroStyle = false, segment = 'all', band = null, metricKey }) => {
     const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; value: number; date: string } | null>(null);
     const svgRef = useRef<SVGSVGElement>(null);
 
@@ -36,7 +37,26 @@ const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, is
         }
     };
 
-    const baseStroke = SEGMENT_COLORS[segment] || '#8B5CF6';
+    const getMetricColorScheme = (metric?: string) => {
+        const colorSchemes = {
+            revenue: '#8b5cf6',
+            avgOrderValue: '#06b6d4', 
+            revenuePerEmail: '#10b981',
+            openRate: '#f59e0b',
+            clickRate: '#ef4444',
+            clickToOpenRate: '#8b5cf6',
+            emailsSent: '#3b82f6',
+            totalOrders: '#10b981',
+            conversionRate: '#f97316',
+            unsubscribeRate: '#ef4444',
+            spamRate: '#dc2626',
+            bounceRate: '#991b1b'
+        } as const;
+        
+        return (colorSchemes as any)[metric || ''] || SEGMENT_COLORS[segment] || '#8B5CF6';
+    };
+
+    const baseStroke = getMetricColorScheme(metricKey);
     const colorScheme = { stroke: baseStroke, gradientStart: baseStroke, gradientEnd: baseStroke };
     const sparklineData = data.length > 0 ? data : [];
 
@@ -147,8 +167,8 @@ const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, is
                     const yLow = norm(band.low);
                     const yMedian = norm(band.median);
                     return <g>
-                        <rect x={padding} y={Math.min(yHigh, yLow)} width={width - padding * 2} height={Math.abs(yLow - yHigh) || 2} fill={colorScheme.stroke} opacity={0.15} rx={2} />
-                        <line x1={padding} x2={width - padding} y1={yMedian} y2={yMedian} stroke={colorScheme.stroke} strokeWidth={1} opacity={0.25} />
+                        <rect x={padding} y={Math.min(yHigh, yLow)} width={width - padding * 2} height={Math.abs(yLow - yHigh) || 2} fill="#6B7280" opacity={0.25} rx={2} />
+                        <line x1={padding} x2={width - padding} y1={yMedian} y2={yMedian} stroke="#6B7280" strokeWidth={1.5} opacity={0.5} strokeDasharray="4 2" />
                     </g>;
                 })()}
                 {areaPath && <path d={areaPath} fill={`url(#${gradientId})`} opacity={0.18} />}
