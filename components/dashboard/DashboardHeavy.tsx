@@ -164,6 +164,61 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // Debug state for link errors
     const [linkDebugInfo, setLinkDebugInfo] = useState<string | null>(null);
 
+    // --------------------------------------------------
+    // Debug: state change tracer (enable via ?debug=state)
+    // Logs which tracked state keys changed between renders to isolate render loop cause.
+    // --------------------------------------------------
+    const prevStateRef = useRef<any | null>(null);
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const params = new URLSearchParams(window.location.search);
+        if (!params.get('debug')?.includes('state')) return;
+        const snapshot = {
+            dashboardError,
+            forceEmpty,
+            dataVersion,
+            isInitialLoading,
+            initialLoadComplete,
+            dateRange,
+            customFrom,
+            customTo,
+            granularity,
+            compareMode,
+            selectedFlow,
+            selectedCampaignMetric,
+            displayedCampaigns,
+            stickyBar,
+            showCustomDateModal,
+            stickyEndRef: !!stickyEndRef,
+            isBeforeAudience,
+            isAdmin,
+            adminCheckComplete,
+            accountsError,
+            selectedAccountId,
+            selectedAccountLabel,
+            linkDebugInfoPresent: !!linkDebugInfo,
+        };
+        if (prevStateRef.current) {
+            const changed: Record<string, { prev: any; next: any }> = {};
+            for (const k of Object.keys(snapshot)) {
+                if (prevStateRef.current[k] !== (snapshot as any)[k]) {
+                    changed[k] = { prev: prevStateRef.current[k], next: (snapshot as any)[k] };
+                }
+            }
+            if (Object.keys(changed).length) {
+                // eslint-disable-next-line no-console
+                console.log('[EM Debug][state changes]', changed);
+            } else {
+                // eslint-disable-next-line no-console
+                console.log('[EM Debug][state changes] (none)');
+            }
+        } else {
+            // eslint-disable-next-line no-console
+            console.log('[EM Debug][state tracer] initial snapshot');
+        }
+        prevStateRef.current = snapshot;
+    });
+
     // Check for link error parameters on load
     useEffect(() => {
         if (typeof window !== 'undefined') {
