@@ -94,6 +94,11 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
         const campaignsSeries: SeriesPoint[] = [];
         const flowsSeries: SeriesPoint[] = [];
 
+        let clusterSizeUsed = 1;
+        const rawDailyAll: SeriesPoint[] = [];
+        const rawDailyCampaigns: SeriesPoint[] = [];
+        const rawDailyFlows: SeriesPoint[] = [];
+
         if (granularity === 'daily') {
             // Adaptive clustering for long ranges; widen cluster size progressively (up to 14 days) so chart stays within width.
             const startDay = new Date(start); startDay.setHours(0, 0, 0, 0);
@@ -106,6 +111,14 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                 clusterSize = Math.ceil(totalDays / MAX_BARS);
                 if (clusterSize < 2) clusterSize = 2;
                 if (clusterSize > maxClusterAllowed) clusterSize = maxClusterAllowed;
+            }
+            clusterSizeUsed = clusterSize;
+            // Build raw (unclustered) daily arrays for stats
+            for (let d = new Date(startDay); d <= endDay; d.setDate(d.getDate() + 1)) {
+                const iso = dateToISO(d);
+                rawDailyAll.push({ iso, date: iso, value: mapAll.get(iso) ?? 0 });
+                rawDailyCampaigns.push({ iso, date: iso, value: mapCamp.get(iso) ?? 0 });
+                rawDailyFlows.push({ iso, date: iso, value: mapFlows.get(iso) ?? 0 });
             }
             for (let offset = 0; offset < totalDays; offset += clusterSize) {
                 const cStart = new Date(startDay); cStart.setDate(cStart.getDate() + offset);
@@ -155,8 +168,7 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                 flowsSeries.push({ iso, date: label, value: mapFlows.get(iso) ?? 0 });
             }
         }
-
-        return { all, campaigns: campaignsSeries, flows: flowsSeries };
+        return { all, campaigns: campaignsSeries, flows: flowsSeries, clusterSize: clusterSizeUsed, rawDailyAll, rawDailyCampaigns, rawDailyFlows };
     }, [granularity, rangeBoundary, rawAll, rawCampaigns, rawFlows]);
 
     // Minimum threshold check
@@ -173,6 +185,33 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
     }, [granularity, fullBuckets.all.length, rangeBoundary]);
     const activeSeries = mode === 'all' ? fullBuckets.all : mode === 'campaigns' ? fullBuckets.campaigns : fullBuckets.flows;
     const maxVal = activeSeries.reduce((m, p) => Math.max(m, p.value), 0);
+
+    // --- Stats: mean, std dev, reliability score ---
+    interface Stats { mean: number; stdDev: number; reliabilityScore: number; count: number; }
+    const computeStats = (series: SeriesPoint[]): Stats => {
+        const n = series.length;
+        if (!n) return { mean: 0, stdDev: 0, reliabilityScore: 0, count: 0 };
+        const mean = series.reduce((s, p) => s + p.value, 0) / n;
+        const variance = series.reduce((s, p) => s + Math.pow(p.value - mean, 2), 0) / n;
+        const stdDev = Math.sqrt(variance);
+        const reliabilityScore = mean > 0 ? Math.max(0, Math.min(100, (1 - stdDev / mean) * 100)) : 0;
+        return { mean, stdDev, reliabilityScore, count: n };
+    };
+    let statsSource: SeriesPoint[] = [];
+    if (granularity === 'daily') {
+        statsSource = mode === 'all' ? (fullBuckets.rawDailyAll || []) : mode === 'campaigns' ? (fullBuckets.rawDailyCampaigns || []) : (fullBuckets.rawDailyFlows || []);
+    } else {
+        statsSource = activeSeries; // full weeks or months already
+    }
+    const stats = computeStats(statsSource);
+    const avgPerPeriod = stats.mean;
+    const reliabilityClass = (() => {
+        const s = stats.reliabilityScore;
+        if (s >= 80) return { label: 'Excellent', color: 'text-emerald-600 dark:text-emerald-400' };
+        if (s >= 60) return { label: 'Good', color: 'text-green-600 dark:text-green-400' };
+        if (s >= 40) return { label: 'OK', color: 'text-amber-600 dark:text-amber-400' };
+        return { label: 'Poor', color: 'text-rose-600 dark:text-rose-400' };
+    })();
 
     // Layout + axes geometry
     const targetWidth = 1100;
@@ -218,27 +257,32 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
     return (
         <div className="mt-6">
             <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
-                <div className="px-4 py-4 sm:px-6 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4" style={{ padding: 16 }}>
+                <div className="px-4 py-4 sm:px-6 sm:py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4" style={{ padding: 16 }}>
                     <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Revenue Reliability</h3>
-                    <div className="inline-flex rounded-lg overflow-hidden border border-purple-300 dark:border-purple-700 text-sm">
-                        {(['all', 'campaigns', 'flows'] as ViewMode[]).map(v => {
-                            const active = mode === v;
-                            const label = v === 'all' ? 'All Emails' : v === 'campaigns' ? 'Campaigns' : 'Flows';
-                            return (
-                                <button
-                                    key={v}
-                                    onClick={() => setMode(v)}
-                                    className={
-                                        'px-3 py-1.5 font-medium transition-colors ' +
-                                        (active
-                                            ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white'
-                                            : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-gray-700') +
-                                        (v !== 'flows' ? ' border-r border-purple-300 dark:border-purple-700' : '')
-                                    }
-                                    style={{ fontSize: 13 }}
-                                >{label}</button>
-                            );
-                        })}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 w-full lg:w-auto">
+                        <div className="inline-flex rounded-lg overflow-hidden border border-purple-300 dark:border-purple-700 text-sm self-start">
+                            {(['all', 'campaigns', 'flows'] as ViewMode[]).map(v => {
+                                const active = mode === v;
+                                const label = v === 'all' ? 'All Emails' : v === 'campaigns' ? 'Campaigns' : 'Flows';
+                                return (
+                                    <button
+                                        key={v}
+                                        onClick={() => setMode(v)}
+                                        className={
+                                            'px-3 py-1.5 font-medium transition-colors ' +
+                                            (active
+                                                ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white'
+                                                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-gray-700') +
+                                            (v !== 'flows' ? ' border-r border-purple-300 dark:border-purple-700' : '')
+                                        }
+                                        style={{ fontSize: 13 }}
+                                    >{label}</button>
+                                );
+                            })}
+                        </div>
+                        <div className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Avg {granularity === 'daily' ? 'Daily' : granularity === 'weekly' ? 'Weekly' : 'Monthly'} Revenue: <span className="text-gray-900 dark:text-gray-100">{formatCurrencyFull(avgPerPeriod)}</span>
+                        </div>
                     </div>
                 </div>
                 <div className="px-4 pb-5 sm:px-6" style={{ paddingTop: 0 }}>
@@ -252,6 +296,9 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                         <div className="p-6 text-center text-sm text-gray-600 dark:text-gray-300">No data available for the selected filters.</div>
                     ) : (
                         <div className="relative">
+                            {granularity === 'daily' && fullBuckets.clusterSize && (
+                                <div className="absolute -top-4 left-4 text-[10px] italic text-gray-500 dark:text-gray-400">* Daily data clustered into {fullBuckets.clusterSize}-day buckets.</div>
+                            )}
                             <div className="mx-auto relative" style={{ width: Math.min(svgWidth, targetWidth) }}>
                                 <svg width={Math.min(svgWidth, targetWidth)} height={chartHeight} className="block select-none">
                                     {/* Y grid & labels */}
@@ -303,6 +350,25 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                                         })()}
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    )}
+                    {meetsThreshold && stats.count > 1 && (
+                        <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 p-4">
+                                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Mean</div>
+                                <div className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrencyFull(stats.mean)}</div>
+                                <div className="text-[11px] text-gray-500 mt-1">Average {granularity} revenue (full periods)</div>
+                            </div>
+                            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 p-4">
+                                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Std Dev</div>
+                                <div className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrencyFull(stats.stdDev)}</div>
+                                <div className="text-[11px] text-gray-500 mt-1">Variability across full periods</div>
+                            </div>
+                            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 p-4">
+                                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Reliability Score</div>
+                                <div className={`text-lg font-bold ${reliabilityClass.color}`}>{stats.reliabilityScore.toFixed(0)}%</div>
+                                <div className="text-[11px] text-gray-500 mt-1">1 - (Std Dev / Mean)</div>
                             </div>
                         </div>
                     )}
