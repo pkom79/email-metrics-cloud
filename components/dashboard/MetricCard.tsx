@@ -1,154 +1,114 @@
 "use client";
-import React from 'react';
-import { ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowUp, ArrowDown, ArrowRight, Info } from 'lucide-react';
 import Sparkline from './Sparkline';
-import { getBenchmarkStatus, parseMetricValue } from '../../lib/utils/benchmarks';
 
+interface BandData { low: number; high: number; median: number; bins: number; eligible: boolean }
 interface MetricCardProps {
     title: string;
     value: string;
-    change: number;
+    change: number; // percent change for counts, pp diff for rates handled separately
     isPositive: boolean;
     dateRange: string;
-    isNegativeMetric?: boolean;
     metricKey?: string;
     sparklineData?: { value: number; date: string }[];
-    // Kept for compatibility but not rendered anymore
-    granularity?: 'daily' | 'weekly' | 'monthly';
-    // Previous period tooltip data
     previousValue?: number;
     previousPeriod?: { startDate: Date; endDate: Date };
     compareMode?: 'prev-period' | 'prev-year';
-    benchmarkCategory?: 'Campaigns' | 'Flows' | 'Combined';
+    segment?: 'all' | 'campaigns' | 'flows';
+    band?: BandData | null;
 }
 
+const RATE_KEYS = new Set(['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate']);
+const rateBuffers: Record<string, number> = {
+    openRate: 0.5, clickRate: 0.10, clickToOpenRate: 0.20, conversionRate: 0.20,
+    unsubscribeRate: 0.05, spamRate: 0.02, bounceRate: 0.05
+};
+const definitions: Record<string, string> = {
+    openRate: 'Percent of sent emails that were opened.',
+    clickRate: 'Percent of sent emails that were clicked.',
+    clickToOpenRate: 'Percent of openers who clicked.',
+    conversionRate: 'Percent of clickers who placed an order.',
+    revenue: 'Total attributed email revenue.',
+    revenuePerEmail: 'Revenue divided by emails sent.',
+    emailsSent: 'Total emails delivered.',
+    totalOrders: 'Total attributed orders.',
+    unsubscribeRate: 'Percent of sent emails that caused an unsubscribe.',
+    spamRate: 'Percent of sent emails marked as spam.',
+    bounceRate: 'Percent of sent emails that bounced.'
+};
+
 const MetricCard: React.FC<MetricCardProps> = ({
-    title,
-    value,
-    change,
-    isPositive,
-    dateRange,
-    isNegativeMetric = false,
-    metricKey,
-    sparklineData = [],
-    previousValue,
-    previousPeriod,
-    compareMode = 'prev-period',
-    benchmarkCategory = 'Campaigns'
+    title, value, change, isPositive, dateRange, metricKey, sparklineData = [], previousValue, previousPeriod, compareMode = 'prev-period', segment = 'all', band = null
 }) => {
     const isAllTime = dateRange === 'all';
-    const DISPLAY_EPS = 0.05; // <0.05% rounds to 0.0%
-
-    const shouldShowAsPositive = isPositive;
-    const hasInsufficientData = previousValue == null || previousPeriod == null;
-    const tinyChange = Math.abs(change) < DISPLAY_EPS; // will display as 0.0%
-    const isZeroDisplay = tinyChange || Math.abs(change) < 1e-9;
-    const showChangeBlock = !isAllTime && !hasInsufficientData;
+    const hasPrev = previousValue != null && previousPeriod != null;
+    const showChange = !isAllTime && hasPrev;
+    const numericCurrent = (() => { const c = value.replace(/[$,%]/g, ''); const n = parseFloat(c); return Number.isFinite(n) ? n : 0; })();
+    const isRate = metricKey ? RATE_KEYS.has(metricKey) : false;
     const isIncrease = change > 0;
-    const benchmarkResult = metricKey ? getBenchmarkStatus(metricKey, parseMetricValue(value), benchmarkCategory) : null;
-    const numericValue = metricKey === 'conversionRate' ? parseMetricValue(value) : undefined;
 
-    const getValueFormat = () => {
-        if (!metricKey) return 'number';
-        if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metricKey)) return 'currency';
-        if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metricKey)) return 'percentage';
-        return 'number';
-    };
-    const valueFormat = getValueFormat();
-
-    const formatPrevValue = (v?: number) => {
-        if (v == null) return '';
-        switch (valueFormat) {
-            case 'currency':
-                return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
-            case 'percentage':
-                const formatted = v.toFixed(1);
-                const num = parseFloat(formatted);
-                return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : `${formatted}%`;
-            default:
-                return Math.round(v).toLocaleString('en-US');
-        }
+    const formatPrev = (v: number) => {
+        if (metricKey === 'revenue' || metricKey === 'avgOrderValue' || metricKey === 'revenuePerEmail') return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+        if (isRate) return `${v.toFixed(1)}%`;
+        return Math.round(v).toLocaleString('en-US');
     };
     const formatDate = (d: Date) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const label = compareMode === 'prev-year' ? 'Same period last year' : 'Previous period';
-    const trendTooltip = previousPeriod && previousValue != null
-        ? `${label} (${formatDate(previousPeriod.startDate)} – ${formatDate(previousPeriod.endDate)}): ${formatPrevValue(previousValue)}`
-        : `Change vs ${label.toLowerCase()}`;
+    const trendTooltip = hasPrev ? `${label} (${formatDate(previousPeriod!.startDate)} – ${formatDate(previousPeriod!.endDate)}): ${formatPrev(previousValue!)}
+    `: `Change vs ${label.toLowerCase()}`;
+
+    const classify = () => {
+        if (!metricKey || !band || !band.eligible) return '–';
+        let buffer = 0;
+        if (isRate) buffer = rateBuffers[metricKey] || 0; else { const span = Math.max(0, band.high - band.low); buffer = Math.max(band.high * 0.05, span * 0.05); }
+        if (numericCurrent > band.high + buffer) return 'Above';
+        if (numericCurrent < band.low - buffer) return 'Below';
+        return 'Within';
+    };
+    const bandStatus = classify();
+    const deltaLine = hasPrev ? (isRate ? `${(numericCurrent - (previousValue || 0)).toFixed(1)} pp` : `${change >= 0 ? '+' : ''}${Math.abs(change).toFixed(1)}%`) : 'No prior period';
+
+    const tooltip = metricKey && definitions[metricKey] ? [
+        definitions[metricKey],
+        `Now ${value}. ${band && band.eligible ? bandStatus : 'No'} the usual range. ${deltaLine}.`,
+        band && band.eligible ? `Usual range: ${formatPrev(band.low)} – ${formatPrev(band.high)}.` : ''
+    ].filter(Boolean).join('\n') : '';
 
     return (
-        <div className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4 hover:shadow-lg transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-[1.03] hover:z-20 will-change-transform origin-center`}>
-            <div className="flex items-center justify-between mb-2">
-                <div className="flex-1">
-                    <p className={`text-sm font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400`}>
-                        {title}
-                    </p>
-                    {/* Reserve fixed height so sparkline rows align whether benchmark exists or not */}
-                    <div className="mt-1 h-5 flex items-center">
-                        {benchmarkResult && (
-                            <div className="flex items-center gap-1">
-                                <div
-                                    className={`w-2 h-2 rounded-full ${benchmarkResult.status === 'excellent' ? 'bg-green-400' : benchmarkResult.status === 'good' ? 'bg-green-500' : benchmarkResult.status === 'ok' ? 'bg-yellow-400' : benchmarkResult.status === 'attention' ? 'bg-orange-400' : 'bg-red-500'
-                                        }`}
-                                />
-                                <span className={`text-xs font-medium ${benchmarkResult.color}`} style={(benchmarkResult as any).hexColor ? { color: (benchmarkResult as any).hexColor } : undefined}>
-                                    {benchmarkResult.label}
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            <Sparkline
-                isPositive={shouldShowAsPositive}
-                change={change}
-                isAllTime={isAllTime}
-                isNegativeMetric={isNegativeMetric}
-                data={sparklineData}
-                valueFormat={valueFormat as any}
-                hasInsufficientData={hasInsufficientData}
-                forceZeroStyle={showChangeBlock ? isZeroDisplay : true /* if we hide arrow treat as purple */}
-            />
-
-            <div className="flex items-end justify-between">
-                <p className={`text-2xl font-bold text-gray-900 dark:text-white`}>
-                    {value}
-                </p>
+        <div className="relative group bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4 hover:shadow-lg transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-[1.03] hover:z-20">
+            <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">
-                    {metricKey === 'conversionRate' && numericValue !== undefined && numericValue > 100 && (
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full border border-purple-200 text-purple-700 bg-purple-50 dark:border-purple-700 dark:text-purple-200 dark:bg-purple-900/30`}>
-                            Includes view-through
+                    <p className="text-sm font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{title}</p>
+                    {tooltip && (
+                        <span className="relative">
+                            <Info className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-pointer" />
+                            <span className="invisible group-hover:visible absolute z-50 top-5 left-0 w-72 whitespace-pre-line text-xs bg-gray-900 text-white p-3 rounded-md shadow-lg border border-gray-700">{tooltip}</span>
                         </span>
                     )}
-                    {showChangeBlock && (
-                        <div
-                            className={`flex items-center text-sm font-medium ${isZeroDisplay
-                                ? 'text-gray-600 dark:text-gray-400'
-                                : shouldShowAsPositive
-                                    ? 'text-green-600 dark:text-green-400'
-                                    : 'text-red-600 dark:text-red-400'
-                                }`}
-                            title={trendTooltip}
-                            aria-label={trendTooltip}
-                        >
-                            {isZeroDisplay ? (
-                                <ArrowRight className="w-4 h-4 mr-1" />
-                            ) : isIncrease ? (
-                                <ArrowUp className="w-4 h-4 mr-1" />
-                            ) : (
-                                <ArrowDown className="w-4 h-4 mr-1" />
-                            )}
-                            {isZeroDisplay ? '0.0' : (() => {
-                                const formatted = Math.abs(change).toFixed(1);
-                                const num = parseFloat(formatted);
-                                return num >= 1000 ? num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatted;
-                            })()}%
-                        </div>
-                    )}
                 </div>
+                {band && band.eligible && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">{bandStatus}</span>
+                )}
             </div>
-
-            {/* Removed bottom granularity caption */}
+            <Sparkline
+                isPositive={isPositive}
+                change={change}
+                isAllTime={isAllTime}
+                data={sparklineData}
+                valueFormat={metricKey && (metricKey === 'revenue' || metricKey === 'avgOrderValue' || metricKey === 'revenuePerEmail') ? 'currency' : (isRate ? 'percentage' : 'number')}
+                hasInsufficientData={!hasPrev}
+                forceZeroStyle={showChange && Math.abs(change) < 0.05}
+            />
+            <div className="flex items-end justify-between">
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+                {showChange && (
+                    <div className={`flex items-center text-sm font-medium ${Math.abs(change) < 0.05 ? 'text-gray-600 dark:text-gray-400' : isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} title={trendTooltip}>
+                        {Math.abs(change) < 0.05 ? <ArrowRight className="w-4 h-4 mr-1" /> : isIncrease ? <ArrowUp className="w-4 h-4 mr-1" /> : <ArrowDown className="w-4 h-4 mr-1" />}
+                        {isRate ? `${(numericCurrent - (previousValue || 0)).toFixed(1)}pp` : `${Math.abs(change).toFixed(1)}%`}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

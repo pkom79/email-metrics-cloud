@@ -206,6 +206,7 @@ export class DataManager {
             }
         }[]
     }> = new Map();
+    private _bandCache: Map<string, { low: number; high: number; median: number; bins: number; eligible: boolean; granularity: 'daily'|'weekly'|'monthly' }> = new Map();
 
     constructor() {
         if (typeof window !== 'undefined') {
@@ -308,6 +309,7 @@ export class DataManager {
         this._dailyAgg.clear();
         this._timeSeriesCache.clear();
         this._seriesBaseCache.clear();
+    this._bandCache.clear();
     }
 
     private persistToStorage(): void {
@@ -749,6 +751,74 @@ export class DataManager {
     }
 
     private formatHourLabel(hour: number): string { if (hour === 0) return '12 AM'; if (hour < 12) return `${hour} AM`; if (hour === 12) return '12 PM'; return `${hour - 12} PM`; }
+
+    /** Lightweight helper for raw date range-based granularity (days difference) */
+    getGranularityForRange(startDate: Date, endDate: Date): 'daily'|'weekly'|'monthly' {
+        const dayMs = 86400000;
+        const days = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / dayMs) + 1);
+        if (days <= 120) return 'daily';
+        if (days <= 365) return 'weekly';
+        return 'monthly';
+    }
+
+    /** Percentile helper (nearest-rank) */
+    private _nearestRank(sorted: number[], p: number) {
+        if (!sorted.length) return 0;
+        const rank = Math.ceil(p * sorted.length);
+        const idx = Math.min(sorted.length - 1, Math.max(0, rank - 1));
+        return sorted[idx];
+    }
+
+    /** Historical performance band per specification */
+    getHistoricalBand(
+        campaigns: ProcessedCampaign[],
+        flows: ProcessedFlowEmail[],
+        metricKey: string,
+        currentStart: Date,
+        currentEnd: Date,
+        granularity: 'daily'|'weekly'|'monthly'
+    ): { low: number; high: number; median: number; bins: number; eligible: boolean } | null {
+        try {
+            if (!currentStart || !currentEnd || currentEnd < currentStart) return null;
+            const dataSig = `${this.campaigns.length}:${this.flowEmails.length}`;
+            const subsetSig = this._subsetSignature(campaigns, flows);
+            const cacheKey = `${dataSig}|${subsetSig}|${metricKey}|${granularity}|${currentStart.toISOString().slice(0,10)}|${currentEnd.toISOString().slice(0,10)}`;
+            const cached = this._bandCache.get(cacheKey);
+            if (cached) return { low: cached.low, high: cached.high, median: cached.median, bins: cached.bins, eligible: cached.eligible };
+
+            const floors: Record<'daily'|'weekly'|'monthly', number> = { daily: 90, weekly: 12, monthly: 6 };
+            const floor = floors[granularity];
+            const oneDay = 86400000;
+
+            const build = (lookbackDays: number) => {
+                const histEnd = new Date(currentStart.getTime() - oneDay);
+                const histStart = new Date(histEnd.getTime() - (lookbackDays - 1) * oneDay);
+                histStart.setHours(0,0,0,0); histEnd.setHours(23,59,59,999);
+                const buckets = this._buildBaseBucketsForSubset(campaigns, flows, granularity, histStart, histEnd) as Array<{sums:any}>;
+                if (!buckets.length) return { kept:0, low:0, high:0, median:0 };
+                const values = buckets.map(b => this._deriveMetricFromSums(metricKey, b.sums)).filter(v => Number.isFinite(v));
+                if (!values.length) return { kept:0, low:0, high:0, median:0 };
+                const sorted = [...values].sort((a,b)=>a-b);
+                const trimN = Math.floor(sorted.length * 0.10);
+                const trimmed = sorted.slice(trimN, sorted.length - trimN);
+                if (!trimmed.length) return { kept:0, low:0, high:0, median:0 };
+                const low = this._nearestRank(trimmed, 0.20);
+                const high = this._nearestRank(trimmed, 0.80);
+                const median = this._nearestRank(trimmed, 0.50);
+                return { kept: trimmed.length, low, high, median };
+            };
+
+            let res = build(365);
+            if (res.kept < floor) res = build(730);
+            const eligible = res.kept >= floor;
+            const out = { low: res.low, high: res.high, median: res.median, bins: res.kept, eligible, granularity };
+            this._bandCache.set(cacheKey, out);
+            return { low: out.low, high: out.high, median: out.median, bins: out.bins, eligible: out.eligible };
+        } catch (e) {
+            console.warn('getHistoricalBand failed', e);
+            return null;
+        }
+    }
 
     getGranularityForDateRange(dateRange: string): 'daily' | 'weekly' | 'monthly' {
         try {
