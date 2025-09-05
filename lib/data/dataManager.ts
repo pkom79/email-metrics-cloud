@@ -576,6 +576,105 @@ export class DataManager {
         }
     }
 
+    /**
+     * Batch version used by dashboard to avoid repeating base bucket construction per metric.
+     * Re‑implements the shared portion of getMetricTimeSeries once, then derives every metric.
+     * Also populates the per-metric _timeSeriesCache so subsequent single calls stay hot.
+     */
+    getMultipleMetricTimeSeries(
+        campaigns: ProcessedCampaign[],
+        flows: ProcessedFlowEmail[],
+        metricKeys: string[],
+        dateRange: string,
+        granularity: 'daily' | 'weekly' | 'monthly',
+        customFrom?: string,
+        customTo?: string
+    ): Record<string, { value: number; date: string }[]> | null {
+        try {
+            if (!Array.isArray(metricKeys) || metricKeys.length === 0) return {};
+            const range = this._computeDateRangeForTimeSeries(dateRange, customFrom, customTo);
+            if (!range) return {};
+            const { startDate, endDate } = range;
+            const dataSig = `${this.campaigns.length}:${this.flowEmails.length}`;
+            if (this._dailyAggVersion !== dataSig) this._rebuildDailyAggregates();
+            const subsetSig = this._subsetSignature(campaigns, flows);
+            const rangeKey = `${startDate.toISOString().slice(0, 10)}_${endDate.toISOString().slice(0, 10)}`;
+
+            // Build buckets once
+            let buckets: { key: string; label: string; sums: { revenue: number; emailsSent: number; totalOrders: number; uniqueOpens: number; uniqueClicks: number; unsubscribesCount: number; spamComplaintsCount: number; bouncesCount: number; emailCount: number } }[] = [];
+            if (subsetSig === 'all') {
+                const dayKeys: string[] = [];
+                const cursor = new Date(startDate); cursor.setHours(0, 0, 0, 0);
+                const end = new Date(endDate); end.setHours(0, 0, 0, 0);
+                let guard = 0;
+                while (cursor <= end && guard < 8000) {
+                    dayKeys.push(this._dayKey(cursor));
+                    cursor.setDate(cursor.getDate() + 1);
+                    guard++;
+                }
+                if (granularity === 'daily') {
+                    buckets = dayKeys.map(k => {
+                        const rec = this._dailyAgg.get(k) || { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } as any;
+                        const d = new Date(k);
+                        return { key: k, label: this.safeToLocaleDateString(d, { month: 'short', day: 'numeric' }), sums: rec };
+                    });
+                } else if (granularity === 'weekly') {
+                    let currentWeekKey = ''; let current: any = null;
+                    for (const k of dayKeys) {
+                        const d = new Date(k);
+                        const monday = this._mondayOf(d);
+                        const wKey = this._dayKey(monday);
+                        if (wKey !== currentWeekKey) {
+                            if (current) buckets.push(current);
+                            currentWeekKey = wKey;
+                            const weekEnd = new Date(monday); weekEnd.setDate(weekEnd.getDate() + 6);
+                            current = { key: wKey, label: this.safeToLocaleDateString(weekEnd, { month: 'short', day: 'numeric' }), sums: { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } };
+                        }
+                        const rec = this._dailyAgg.get(k);
+                        if (rec) { const s = current.sums; s.revenue += rec.revenue; s.emailsSent += rec.emailsSent; s.totalOrders += rec.totalOrders; s.uniqueOpens += rec.uniqueOpens; s.uniqueClicks += rec.uniqueClicks; s.unsubscribesCount += rec.unsubscribesCount; s.spamComplaintsCount += rec.spamComplaintsCount; s.bouncesCount += rec.bouncesCount; s.emailCount += rec.emailCount; }
+                    }
+                    if (current) buckets.push(current);
+                } else { // monthly
+                    let currentMonthKey = ''; let current: any = null;
+                    for (const k of dayKeys) {
+                        const d = new Date(k);
+                        const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                        if (mKey !== currentMonthKey) { if (current) buckets.push(current); currentMonthKey = mKey; current = { key: mKey, label: this.safeToLocaleDateString(new Date(d.getFullYear(), d.getMonth(), 1), { month: 'short', year: '2-digit' }), sums: { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } }; }
+                        const rec = this._dailyAgg.get(k);
+                        if (rec) { const s = current.sums; s.revenue += rec.revenue; s.emailsSent += rec.emailsSent; s.totalOrders += rec.totalOrders; s.uniqueOpens += rec.uniqueOpens; s.uniqueClicks += rec.uniqueClicks; s.unsubscribesCount += rec.unsubscribesCount; s.spamComplaintsCount += rec.spamComplaintsCount; s.bouncesCount += rec.bouncesCount; s.emailCount += rec.emailCount; }
+                    }
+                    if (current) buckets.push(current);
+                }
+            } else {
+                const baseKey = `${dataSig}|${subsetSig}|${granularity}|${rangeKey}|base`;
+                const baseCached = this._seriesBaseCache.get(baseKey);
+                if (baseCached) buckets = baseCached.buckets as any;
+                else {
+                    buckets = this._buildBaseBucketsForSubset(campaigns, flows, granularity, startDate, endDate) as any;
+                    this._seriesBaseCache.set(baseKey, { built: Date.now(), buckets: buckets as any });
+                }
+            }
+
+            const out: Record<string, { value: number; date: string }[]> = {};
+            for (const metric of metricKeys) {
+                const tsCacheKey = `${dataSig}|${subsetSig}|${granularity}|${rangeKey}|${metric}`;
+                const existing = this._timeSeriesCache.get(tsCacheKey);
+                if (existing) { out[metric] = existing.data; continue; }
+                const series = buckets.map(b => {
+                    let isoDate: string;
+                    if (granularity === 'daily') isoDate = b.key; else if (granularity === 'weekly') { const parts = b.key.split('-'); const dObj = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])); dObj.setDate(dObj.getDate() + 6); isoDate = dObj.toISOString().slice(0, 10); } else { const [y, m] = b.key.split('-'); const dObj = new Date(Number(y), Number(m) - 1, 1); isoDate = dObj.toISOString().slice(0, 10); }
+                    return { value: this._deriveMetricFromSums(metric, b.sums as any), date: b.label, iso: isoDate };
+                });
+                this._timeSeriesCache.set(tsCacheKey, { built: Date.now(), data: series });
+                out[metric] = series;
+            }
+            return out;
+        } catch (e) {
+            console.warn('getMultipleMetricTimeSeries failed', e);
+            return null;
+        }
+    }
+
     // (Removed duplicate _rebuildDailyAggregates and _computeDateRangeForTimeSeries definitions; consolidated earlier in file.)
 
     getFlowStepTimeSeries(

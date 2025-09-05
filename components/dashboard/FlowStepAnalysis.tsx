@@ -54,6 +54,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         { value: 'totalOrders', label: 'Total Orders', format: 'number' }
     ] as const;
 
+    // Start with no flow selected; user must choose explicitly to avoid heavy initial render cost.
     const [selectedFlow, setSelectedFlow] = useState<string>('');
     const [selectedMetric, setSelectedMetric] = useState<string>('revenue');
 
@@ -655,13 +656,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         );
     };
 
-    // Auto-select highest revenue flow when data loads or date range changes
-    useEffect(() => {
-        if (!selectedFlow && flowSummaries.length) {
-            const top = [...flowSummaries].sort((a, b) => b.metrics.revenue - a.metrics.revenue)[0];
-            if (top) setSelectedFlow(top.flowName);
-        }
-    }, [selectedFlow, flowSummaries]);
+    // Removed auto-select to reduce initial synchronous work and avoid triggering large series builds.
+    // Users now explicitly pick a flow.
 
     return (
         <section>
@@ -673,6 +669,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 <div className="flex items-center gap-4">
                     <div className="relative">
                         <select value={selectedFlow} onChange={(e) => setSelectedFlow(e.target.value)} className="appearance-none px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                            <option value="">Select a flow…</option>
                             {uniqueFlowNames.map((flow: string) => (<option key={flow} value={flow}>{flow}</option>))}
                         </select>
                         <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
@@ -694,6 +691,11 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 </div>
             </div>
 
+            {!selectedFlow && (
+                <div className="p-6 border border-dashed rounded-lg text-center text-sm text-gray-500 dark:text-gray-400 border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
+                    Select a flow above to analyze its step performance.
+                </div>
+            )}
             {selectedFlow && (
                 <div className="space-y-4">
                     {flowStepMetrics.map((step, index) => renderStepChart(step, index))}
