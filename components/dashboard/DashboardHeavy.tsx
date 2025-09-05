@@ -971,15 +971,32 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 )}
                 {/* Flow Step Analysis (lazy – hidden until user expands) */}
                 <section>
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2"><Zap className="w-5 h-5 text-purple-600" />Flow Step Analysis</h3>
-                        <button onClick={() => setShowFlowSteps(v => !v)} className="px-3 py-1.5 text-sm rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                            {showFlowSteps ? 'Hide' : 'Show'}
+                    <div className="mb-4 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden bg-white dark:bg-gray-900">
+                        <button
+                            onClick={() => setShowFlowSteps(v => !v)}
+                            className="w-full flex items-center justify-between px-5 py-3 text-left group hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                            aria-expanded={showFlowSteps}
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${showFlowSteps ? 'bg-purple-100 border-purple-300 dark:bg-purple-900/40 dark:border-purple-700' : 'bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700'} transition-colors`}>
+                                    <Zap className={`w-4 h-4 ${showFlowSteps ? 'text-purple-600 dark:text-purple-300' : 'text-gray-600 dark:text-gray-300'}`} />
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100">Flow Step Analysis</span>
+                                    <span className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">Drill into individual step performance across selected flows</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs font-medium px-2 py-1 rounded-full border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800">{showFlowSteps ? 'Collapse' : 'Expand'}</span>
+                                <ChevronDown className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform ${showFlowSteps ? 'rotate-180' : ''}`} />
+                            </div>
                         </button>
+                        {showFlowSteps && (
+                            <div className="px-5 pb-6 pt-2 border-t border-gray-200 dark:border-gray-800">
+                                <FlowStepAnalysis suppressTitle dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
+                            </div>
+                        )}
                     </div>
-                    {showFlowSteps && (
-                        <FlowStepAnalysis dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
-                    )}
                 </section>
                 {/* Flow Step Drop-Off Map */}
                 <section><FlowStepDropOff dateRange={dateRange} customFrom={customFrom} customTo={customTo} /></section>

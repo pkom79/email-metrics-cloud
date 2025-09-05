@@ -9,6 +9,11 @@ interface FlowStepAnalysisProps {
     customFrom?: string;
     customTo?: string;
     compareMode?: 'prev-period' | 'prev-year';
+    /**
+     * When true, hides the internal title & icon so a parent container can supply its own
+     * header (avoids duplicate "Flow Step Analysis" headings when used in a collapsible shell).
+     */
+    suppressTitle?: boolean;
 }
 
 interface FlowStepMetrics {
@@ -30,7 +35,7 @@ interface FlowStepMetrics {
     totalClicks: number;
 }
 
-export default function FlowStepAnalysis({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period' }: FlowStepAnalysisProps) {
+export default function FlowStepAnalysis({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period', suppressTitle = false }: FlowStepAnalysisProps) {
     const [hoveredPoint, setHoveredPoint] = useState<{
         chartIndex: number;
         x: number;
@@ -661,11 +666,13 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
     return (
         <section>
-            <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                    <Workflow className="w-6 h-6 text-purple-600" />
-                    <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Flow Step Analysis</h3>
-                </div>
+            <div className={`flex items-center ${suppressTitle ? 'justify-end' : 'justify-between'} mb-2 flex-wrap gap-3`}>
+                {!suppressTitle && (
+                    <div className="flex items-center gap-2">
+                        <Workflow className="w-6 h-6 text-purple-600" />
+                        <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Flow Step Analysis</h3>
+                    </div>
+                )}
                 <div className="flex items-center gap-4">
                     <div className="relative">
                         <select value={selectedFlow} onChange={(e) => setSelectedFlow(e.target.value)} className="appearance-none px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
