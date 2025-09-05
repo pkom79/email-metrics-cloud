@@ -78,7 +78,8 @@ function useDebugState<T>(label: string, initial: T): [T, React.Dispatch<React.S
     const setWrapped = useCallback((next: React.SetStateAction<T>) => {
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
-            if (params.get('debug')?.includes('state')) {
+            const all = params.getAll('debug');
+            if (all.some(v => v.includes('state'))) {
                 const prev = val;
                 const resolved = (typeof next === 'function' ? (next as any)(prev) : next) as T;
                 // eslint-disable-next-line no-console
@@ -91,8 +92,12 @@ function useDebugState<T>(label: string, initial: T): [T, React.Dispatch<React.S
 }
 
 export default function DashboardHeavy({ businessName, userId }: { businessName?: string; userId?: string }) {
-    // Debug flag (enable by adding ?debug=1 to URL) to instrument potential render loops
-    const debugMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1';
+    // Debug flag (supports multiple ?debug= params, e.g. ?debug=1&debug=state&debug=series)
+    const debugMode = typeof window !== 'undefined' && (() => {
+        const params = new URLSearchParams(window.location.search);
+        const all = params.getAll('debug');
+        return all.some(v => v === '1' || v === 'true' || v === 'yes');
+    })();
     if (debugMode) {
         // Count renders (avoid overwhelming logs by sampling)
         // eslint-disable-next-line no-console
@@ -144,7 +149,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     function useDebugMemo<T>(name: string, factory: () => T, deps: any[]) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
         return useMemo(() => {
-            const enabled = typeof window !== 'undefined' && (window as any).__EM_DEBUG && window.location.search.includes('debug=series');
+            const enabled = typeof window !== 'undefined' && (window as any).__EM_DEBUG && (() => { const p = new URLSearchParams(window.location.search); return p.getAll('debug').some(v => v.includes('series')); })();
             if (enabled) {
                 // eslint-disable-next-line no-console
                 console.log('[EM Debug][memo start]', name);
@@ -190,7 +195,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     useEffect(() => {
         if (typeof window === 'undefined') return;
         const params = new URLSearchParams(window.location.search);
-        if (!params.get('debug')?.includes('state')) return;
+        const all = params.getAll('debug');
+        if (!all.some(v => v.includes('state'))) return;
         const snapshot = {
             dashboardError,
             forceEmpty,
