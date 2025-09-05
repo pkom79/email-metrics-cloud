@@ -11,7 +11,7 @@ import React, { useMemo, useState } from 'react';
 // - Colors: All Emails = purple, Campaigns = blue, Flows = green
 // - Placed under Email Performance Overview (invoked from DashboardHeavy)
 
-interface SeriesPoint { value: number; date: string; iso?: string; }
+interface SeriesPoint { value: number; date: string; iso?: string; endIso?: string; clusterSize?: number; }
 
 export interface RevenueReliabilityProps {
     // Pre-filtered arrays passed for consistency with other modules
@@ -41,7 +41,8 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
 
     // Reconstruct approximate start/end boundaries used by DataManager for trimming logic
     const rangeBoundary = useMemo(() => {
-        if (dateRange === 'custom' && customFrom && customTo) {
+        // Always respect explicit picker values if both provided (even when dateRange is 'all' or preset)
+        if (customFrom && customTo) {
             return { start: new Date(customFrom + 'T00:00:00'), end: new Date(customTo + 'T23:59:59') };
         }
         const now = new Date();
@@ -94,26 +95,44 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
         const flowsSeries: SeriesPoint[] = [];
 
         if (granularity === 'daily') {
-            // Every calendar day inclusive
-            const cur = new Date(start); cur.setHours(0, 0, 0, 0);
+            // Calendar days inclusive; cluster into 2-3 day buckets if many days so chart fits width (no horizontal scroll)
+            const startDay = new Date(start); startDay.setHours(0, 0, 0, 0);
             const endDay = new Date(end); endDay.setHours(0, 0, 0, 0);
-            while (cur <= endDay) {
-                const iso = dateToISO(cur);
-                const label = cur.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                all.push({ iso, date: label, value: mapAll.get(iso) ?? 0 });
-                campaignsSeries.push({ iso, date: label, value: mapCamp.get(iso) ?? 0 });
-                flowsSeries.push({ iso, date: label, value: mapFlows.get(iso) ?? 0 });
-                cur.setDate(cur.getDate() + 1);
+            const totalDays = Math.floor((endDay.getTime() - startDay.getTime()) / 86400000) + 1;
+            const MAX_BARS = 110; // approximate capacity
+            let clusterSize = 1;
+            if (totalDays > MAX_BARS) {
+                // escalate to 2 or 3 day clusters
+                clusterSize = Math.min(3, Math.max(2, Math.ceil(totalDays / MAX_BARS)));
+            }
+            for (let offset = 0; offset < totalDays; offset += clusterSize) {
+                const cStart = new Date(startDay); cStart.setDate(cStart.getDate() + offset);
+                let cEnd = new Date(cStart); cEnd.setDate(cEnd.getDate() + clusterSize - 1);
+                if (cEnd > endDay) cEnd = new Date(endDay);
+                let sumAll = 0, sumCamp = 0, sumFlows = 0;
+                for (let d = new Date(cStart); d <= cEnd; d.setDate(d.getDate() + 1)) {
+                    const iso = dateToISO(d);
+                    sumAll += mapAll.get(iso) ?? 0;
+                    sumCamp += mapCamp.get(iso) ?? 0;
+                    sumFlows += mapFlows.get(iso) ?? 0;
+                }
+                const startIso = dateToISO(cStart);
+                const endIso = dateToISO(cEnd);
+                const label = cStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const base = { iso: startIso, endIso, date: label, clusterSize };
+                all.push({ ...base, value: sumAll });
+                campaignsSeries.push({ ...base, value: sumCamp });
+                flowsSeries.push({ ...base, value: sumFlows });
             }
         } else if (granularity === 'weekly') {
-            // Only full Monday-Sunday weeks wholly inside range
+            // Only FULL in-range Monday-Sunday weeks
             let firstMon = mondayOf(start);
-            if (firstMon < start) { firstMon.setDate(firstMon.getDate() + 7); }
+            if (firstMon < start) firstMon.setDate(firstMon.getDate() + 7);
             let lastSun = sundayOf(end);
-            if (lastSun > end) { lastSun.setDate(lastSun.getDate() - 7); }
+            if (lastSun > end) lastSun.setDate(lastSun.getDate() - 7);
             for (let wkStart = new Date(firstMon); wkStart <= lastSun; wkStart.setDate(wkStart.getDate() + 7)) {
                 const weekEnd = new Date(wkStart); weekEnd.setDate(weekEnd.getDate() + 6);
-                const iso = dateToISO(weekEnd); // we use week end iso to match existing data
+                const iso = dateToISO(weekEnd);
                 const label = weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 all.push({ iso, date: label, value: mapAll.get(iso) ?? 0 });
                 campaignsSeries.push({ iso, date: label, value: mapCamp.get(iso) ?? 0 });
@@ -160,7 +179,7 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
     const topPad = 8;
     const bottomPad = 42;
     const innerTarget = targetWidth - leftPad - rightPad;
-    const barGap = 6;
+    const barGap = 6; // clustering ensures count manageable
     const barCount = activeSeries.length;
     const barWidth = barCount > 0 ? Math.max(4, Math.min(36, (innerTarget - barGap * (barCount - 1)) / barCount)) : 0;
     const innerWidth = barCount > 0 ? barWidth * barCount + barGap * (barCount - 1) : innerTarget;
@@ -172,16 +191,27 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
     const yTicks = useMemo(() => {
         if (maxVal <= 0) return [0];
         const desired = 5;
-        const rawStep = maxVal / (desired - 1);
+        const rawStep = maxVal / desired;
         const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
         const norm = rawStep / mag;
         let step: number;
-        if (norm < 1.5) step = 1 * mag; else if (norm < 3.5) step = 2 * mag; else if (norm < 7.5) step = 5 * mag; else step = 10 * mag;
+        if (norm < 1.2) step = 1 * mag; else if (norm < 2.5) step = 2 * mag; else if (norm < 5) step = 5 * mag; else step = 10 * mag;
+        const top = Math.ceil(maxVal / step) * step; // round up so last tick not squeezed against previous
         const ticks: number[] = [];
-        for (let v = 0; v <= maxVal * 1.001; v += step) ticks.push(v);
-        if (ticks[ticks.length - 1] < maxVal) ticks.push(maxVal);
-        return ticks;
-    }, [maxVal]);
+        for (let v = 0; v <= top + 0.0001; v += step) ticks.push(v);
+        // Safety filter: remove any ticks that would render closer than 14px vertically
+        const minPxGap = 14;
+        const filtered: number[] = [];
+        let lastY = Infinity;
+        ticks.forEach(v => {
+            const h = (v / top) * (chartHeight - topPad - bottomPad);
+            const y = chartHeight - bottomPad - h;
+            if (Math.abs(y - lastY) < minPxGap) return; // skip crowded
+            filtered.push(v);
+            lastY = y;
+        });
+        return filtered;
+    }, [maxVal, chartHeight]);
 
     // X label sampling
     const xLabelStep = useMemo(() => {
@@ -228,7 +258,7 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                     ) : barCount === 0 ? (
                         <div className="p-6 text-center text-sm text-gray-600 dark:text-gray-300">No data available for the selected filters.</div>
                     ) : (
-                        <div className="overflow-x-auto relative">
+                        <div className="relative">
                             <div className="mx-auto relative" style={{ width: Math.min(svgWidth, targetWidth) }}>
                                 <svg width={Math.min(svgWidth, targetWidth)} height={chartHeight} className="block select-none">
                                     {/* Y grid & labels */}
@@ -272,6 +302,7 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                                                 <div style={{ position: 'absolute', transform: `translateX(${Math.min(Math.max(0, x - 110), (Math.min(svgWidth, targetWidth)) - 220)}px) translateY(${Math.max(0, y - 70)}px)` }} className="w-56 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg p-3 text-[11px] leading-snug text-gray-700 dark:text-gray-200">
                                                     <div className="font-medium mb-1">{rangeLabel}</div>
                                                     <div className="flex justify-between"><span>Revenue</span><span className="font-semibold">{formatCurrencyFull(p.value)}</span></div>
+                                                    {granularity === 'daily' && p.clusterSize && p.clusterSize > 1 && <div className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">{p.clusterSize}-day cluster</div>}
                                                     {mode === 'all' && <div className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">All Emails (Campaigns + Flows)</div>}
                                                 </div>
                                             );
@@ -288,8 +319,16 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
 }
 
 function formatCurrencyShort(v: number): string {
-    if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-    if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}k`;
+    if (v >= 1_000_000) {
+        const m = v / 1_000_000;
+        const txt = (Math.abs(m - Math.round(m)) < 0.05) ? m.toFixed(0) : m.toFixed(1);
+        return `$${txt}M`;
+    }
+    if (v >= 1_000) {
+        const k = v / 1_000;
+        const txt = (Math.abs(k - Math.round(k)) < 0.05) ? k.toFixed(0) : k.toFixed(1);
+        return `$${txt}k`;
+    }
     return `$${Math.round(v).toLocaleString('en-US')}`;
 }
 
@@ -299,14 +338,18 @@ function formatCurrencyFull(v: number): string {
 
 function buildRangeLabel(p: SeriesPoint, granularity: 'daily' | 'weekly' | 'monthly'): string {
     if (!p.iso) return p.date;
-    const d = new Date(p.iso + 'T00:00:00');
+    const startDate = new Date(p.iso + 'T00:00:00');
     if (granularity === 'daily') {
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        if (p.endIso && p.endIso !== p.iso) {
+            const endDate = new Date(p.endIso + 'T00:00:00');
+            return `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+        }
+        return startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     } else if (granularity === 'weekly') {
-        const end = d; // iso is week end
-        const start = new Date(end); start.setDate(start.getDate() - 6);
-        return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+        const end = startDate; // iso is week end
+        const s = new Date(end); s.setDate(s.getDate() - 6);
+        return `${s.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
     } else { // monthly
-        return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        return startDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
     }
 }
