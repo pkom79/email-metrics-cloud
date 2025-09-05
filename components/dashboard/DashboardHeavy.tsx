@@ -5,7 +5,7 @@ import MetricCard from './MetricCard';
 import DayOfWeekPerformance from './DayOfWeekPerformance';
 import HourOfDayPerformance from './HourOfDayPerformance';
 import RevenueSplitBar from './RevenueSplitBar';
-import RevenueReliability from './RevenueReliability';
+import RevenueReliabilityV2 from './RevenueReliabilityV2';
 import SendVolumeImpact from './SendVolumeImpact';
 import AudienceCharts from './AudienceCharts';
 import FlowStepAnalysis from './FlowStepAnalysis';
@@ -590,8 +590,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             <MetricCard title="Spam Rate" value={formatPercent(overviewMetrics.spamRate.value)} change={overviewMetrics.spamRate.change} isPositive={overviewMetrics.spamRate.isPositive} previousValue={overviewMetrics.spamRate.previousValue} previousPeriod={overviewMetrics.spamRate.previousPeriod} dateRange={dateRange} metricKey="spamRate" sparklineData={overviewSeries.spamRate} compareMode={compareMode} />
                             <MetricCard title="Bounce Rate" value={formatPercent(overviewMetrics.bounceRate.value)} change={overviewMetrics.bounceRate.change} isPositive={overviewMetrics.bounceRate.isPositive} previousValue={overviewMetrics.bounceRate.previousValue} previousPeriod={overviewMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={overviewSeries.bounceRate} compareMode={compareMode} />
                         </div>
-                        {/* Weekly Revenue Reliability (moved up) */}
-                        <RevenueReliability campaigns={filteredCampaigns} flows={filteredFlowEmails} dateRange={dateRange} />
+                        {/* Weekly Revenue Reliability V2 */}
+                        <RevenueReliabilityV2 campaigns={filteredCampaigns as any} flows={filteredFlowEmails as any} dateRange={dateRange} />
                         <SendVolumeImpact dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
                     </section>
                 )}
