@@ -1,1 +1,1 @@
-export { default } from '../RevenueReliabilityV2';
+// Deprecated stub index intentionally left blank.
