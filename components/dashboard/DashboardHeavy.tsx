@@ -103,6 +103,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const customActive = dateRange === 'custom' && customFrom && customTo;
     const customDays = useMemo(() => { if (!customActive) return 0; const from = new Date(customFrom!); from.setHours(0, 0, 0, 0); const to = new Date(customTo!); to.setHours(23, 59, 59, 999); const diff = Math.floor((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1; return Math.max(diff, 1); }, [customActive, customFrom, customTo]);
     const [granularity, setGranularity] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+    const granularitySetCountRef = useRef(0);
     const [compareMode, setCompareMode] = useState<'prev-period' | 'prev-year'>('prev-period');
     const [selectedFlow, setSelectedFlow] = useState('all');
     const [selectedCampaignMetric, setSelectedCampaignMetric] = useState('revenue');
@@ -304,9 +305,35 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     }, [dm, isAdmin, adminCheckComplete]);
 
     // Safe granularity
-    const safeGranularity = useMemo(() => { try { if (dm.getCampaigns().length === 0 && dm.getFlowEmails().length === 0) return 'daily'; if (customActive && customDays > 0) return dm.getGranularityForDateRange(`${customDays}d`); if (dateRange === 'all') return dm.getGranularityForDateRange('all'); return dm.getGranularityForDateRange(dateRange === 'custom' ? '30d' : dateRange); } catch { return 'daily'; } }, [dateRange, customActive, customDays, dm]);
-    // Guard state update to prevent render feedback loops on heavy accounts
-    useEffect(() => { if (granularity !== safeGranularity) setGranularity(safeGranularity); }, [safeGranularity, granularity]);
+    const safeGranularity = useMemo(() => {
+        try {
+            if (dm.getCampaigns().length === 0 && dm.getFlowEmails().length === 0) return 'daily';
+            if (customActive && customDays > 0) return dm.getGranularityForDateRange(`${customDays}d`);
+            if (dateRange === 'all') return dm.getGranularityForDateRange('all');
+            return dm.getGranularityForDateRange(dateRange === 'custom' ? '30d' : dateRange);
+        } catch {
+            return 'daily';
+        }
+    }, [dateRange, customActive, customDays, dm]);
+    // Guard + throttle state update to prevent render feedback loops on heavy accounts
+    useEffect(() => {
+        if (granularity !== safeGranularity) {
+            if (granularitySetCountRef.current < 8) {
+                if (debugMode) {
+                    // eslint-disable-next-line no-console
+                    console.log('[EM Debug] granularity update', { from: granularity, to: safeGranularity, count: granularitySetCountRef.current + 1 });
+                }
+                granularitySetCountRef.current += 1;
+                setGranularity(safeGranularity);
+            } else if (debugMode) {
+                // eslint-disable-next-line no-console
+                console.warn('[EM Debug] granularity update suppressed after 8 changes in one session', { attempted: safeGranularity });
+            }
+        } else if (debugMode) {
+            // eslint-disable-next-line no-console
+            console.log('[EM Debug] granularity stable', granularity);
+        }
+    }, [safeGranularity, granularity, debugMode]);
 
     // Sticky observer (desktop only now)
     useEffect(() => {

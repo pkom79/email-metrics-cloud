@@ -31,6 +31,17 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
     if (debugMode) {
         // eslint-disable-next-line no-console
         console.count?.('[EM Debug] RevenueReliability render');
+        try {
+            const w: any = window;
+            w.__EM_RR_RC = (w.__EM_RR_RC || 0) + 1;
+            if (w.__EM_RR_RC === 25) {
+                console.warn('[EM Debug] RevenueReliability rendered 25 times; dumping props snapshot.');
+                console.log({ dateRange, granularity, customFrom, customTo, campaignsCount: campaigns.length, flowsCount: flows.length });
+            } else if (w.__EM_RR_RC > 60) {
+                console.error('[EM Debug] RevenueReliability render hard stop (>60). Returning null to break loop.');
+                return null as any;
+            }
+        } catch { /* ignore */ }
     }
     const [mode, setMode] = useState<ViewMode>('all');
     const [hoverIndex, setHoverIndex] = useState<number | null>(null);

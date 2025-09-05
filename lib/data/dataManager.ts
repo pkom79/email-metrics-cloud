@@ -515,6 +515,15 @@ export class DataManager {
             if (!range) return [];
             const { startDate, endDate } = range;
 
+            // Debug hard-stop: if a component exceeded render threshold, avoid further heavy processing this frame.
+            if (typeof window !== 'undefined') {
+                const w: any = window;
+                if (w.__EM_DEBUG && w.__EM_RR_RC > 60) {
+                    console.warn('[EM Debug] getMetricTimeSeries short-circuit (component render hard-stop active).');
+                    return [];
+                }
+            }
+
             // Dataset signature (for invalidation when base data changes)
             const dataSig = `${this.campaigns.length}:${this.flowEmails.length}`;
             if (this._dailyAggVersion !== dataSig) this._rebuildDailyAggregates();
