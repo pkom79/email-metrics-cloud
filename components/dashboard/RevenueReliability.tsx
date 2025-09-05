@@ -28,11 +28,16 @@ type ViewMode = 'all' | 'campaigns' | 'flows';
 
 export default function RevenueReliability({ campaigns, flows, dm, dateRange, granularity, customFrom, customTo }: RevenueReliabilityProps) {
     const [mode, setMode] = useState<ViewMode>('all');
+    const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
     // Build raw series (DataManager provides end-of-week iso for weekly, month label for monthly)
-    const rawAll = useMemo<SeriesPoint[]>(() => dm.getMetricTimeSeries(campaigns, flows, 'revenue', dateRange, granularity, customFrom, customTo) || [], [campaigns, flows, dm, dateRange, granularity, customFrom, customTo]);
-    const rawCampaigns = useMemo<SeriesPoint[]>(() => dm.getMetricTimeSeries(campaigns, [], 'revenue', dateRange, granularity, customFrom, customTo) || [], [campaigns, dm, dateRange, granularity, customFrom, customTo]);
-    const rawFlows = useMemo<SeriesPoint[]>(() => dm.getMetricTimeSeries([], flows, 'revenue', dateRange, granularity, customFrom, customTo) || [], [flows, dm, dateRange, granularity, customFrom, customTo]);
+    const rawAll = useMemo<SeriesPoint[]>(() => (dm.getMetricTimeSeries(campaigns, flows, 'revenue', dateRange, granularity, customFrom, customTo) || []).slice(), [campaigns, flows, dm, dateRange, granularity, customFrom, customTo]);
+    const rawCampaigns = useMemo<SeriesPoint[]>(() => (dm.getMetricTimeSeries(campaigns, [], 'revenue', dateRange, granularity, customFrom, customTo) || []).slice(), [campaigns, dm, dateRange, granularity, customFrom, customTo]);
+    const rawFlows = useMemo<SeriesPoint[]>(() => (dm.getMetricTimeSeries([], flows, 'revenue', dateRange, granularity, customFrom, customTo) || []).slice(), [flows, dm, dateRange, granularity, customFrom, customTo]);
+
+    // Ensure chronological order by iso (if provided)
+    const sortByIso = (arr: SeriesPoint[]) => arr.sort((a, b) => (a.iso || '').localeCompare(b.iso || ''));
+    sortByIso(rawAll); sortByIso(rawCampaigns); sortByIso(rawFlows);
 
     // Reconstruct approximate start/end boundaries used by DataManager for trimming logic
     const rangeBoundary = useMemo(() => {
@@ -51,14 +56,20 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
             case '180d': return { start: makeStart(180), end };
             case '365d': return { start: makeStart(365), end };
             case 'all': {
-                // Fallback: use earliest record among series
-                const allIso = [...rawAll].map(p => p.iso).filter(Boolean) as string[];
-                const earliest = allIso.length ? new Date(allIso[0]) : makeStart(90);
+                const allIso = rawAll.map(p => p.iso).filter(Boolean) as string[];
+                if (!allIso.length) return { start: makeStart(90), end };
+                let earliest = new Date(allIso[0] + 'T00:00:00');
+                if (granularity === 'weekly') {
+                    // earliest iso is week end (Sunday); adjust to Monday start
+                    earliest = new Date(earliest); earliest.setDate(earliest.getDate() - 6);
+                } else if (granularity === 'monthly') {
+                    earliest = new Date(earliest.getFullYear(), earliest.getMonth(), 1);
+                }
                 return { start: earliest, end };
             }
             default: return { start: makeStart(90), end };
         }
-    }, [dateRange, customFrom, customTo, rawAll]);
+    }, [dateRange, customFrom, customTo, rawAll, granularity]);
 
     function mondayOf(d: Date) { const dt = new Date(d); const wd = dt.getDay(); const diff = (wd + 6) % 7; dt.setDate(dt.getDate() - diff); dt.setHours(0, 0, 0, 0); return dt; }
     function sundayOf(d: Date) { const m = mondayOf(d); const s = new Date(m); s.setDate(s.getDate() + 6); s.setHours(23, 59, 59, 999); return s; }
@@ -68,31 +79,20 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
         if (!series.length) return series;
         const { start, end } = rangeBoundary;
         if (granularity === 'weekly') {
-            // iso value is end-of-week (Sunday). Derive Monday by subtract 6 days.
-            const full: SeriesPoint[] = [];
-            for (const p of series) {
-                const iso = p.iso ? new Date(p.iso + 'T00:00:00') : null;
-                if (!iso) continue;
-                const mon = new Date(iso); mon.setDate(mon.getDate() - 6); mon.setHours(0, 0, 0, 0);
-                const sun = new Date(iso); sun.setHours(23, 59, 59, 999);
-                if (mon < start) continue; // leading partial
-                if (sun > end) continue;   // trailing partial
-                full.push(p);
-            }
-            return full;
+            return series.filter(p => {
+                if (!p.iso) return false;
+                const isoDate = new Date(p.iso + 'T00:00:00');
+                const mon = new Date(isoDate); mon.setDate(mon.getDate() - 6); mon.setHours(0, 0, 0, 0);
+                const sun = new Date(isoDate); sun.setHours(23, 59, 59, 999);
+                return mon >= start && sun <= end;
+            });
         } else if (granularity === 'monthly') {
-            const full: SeriesPoint[] = [];
-            for (const p of series) {
-                // label like "Aug 24" (month + yy) from DataManager; we rely on iso if provided
-                const iso = p.iso ? new Date(p.iso + 'T00:00:00') : null; // first of month
-                if (!iso) continue;
-                const firstDay = new Date(iso.getFullYear(), iso.getMonth(), 1, 0, 0, 0, 0);
-                const lastDay = new Date(iso.getFullYear(), iso.getMonth() + 1, 0, 23, 59, 59, 999);
-                if (firstDay < mondayOf(rangeBoundary.start) && rangeBoundary.start > firstDay) continue; // partial leading month
-                if (lastDay > rangeBoundary.end) continue; // partial trailing month
-                full.push(p);
-            }
-            return full;
+            return series.filter(p => {
+                if (!p.iso) return false;
+                const first = new Date(p.iso + 'T00:00:00'); // first of month from DataManager
+                const last = new Date(first.getFullYear(), first.getMonth() + 1, 0, 23, 59, 59, 999);
+                return first >= start && last <= end;
+            });
         }
         // daily: no trimming; threshold uses raw length
         return series;
@@ -115,15 +115,44 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
     const activeSeries = mode === 'all' ? trimmed.all : mode === 'campaigns' ? trimmed.campaigns : trimmed.flows;
     const maxVal = activeSeries.reduce((m, p) => Math.max(m, p.value), 0);
 
-    // Layout calcs
+    // Layout + axes geometry
     const targetWidth = 1100;
+    const leftPad = 56;
+    const rightPad = 8;
+    const topPad = 8;
+    const bottomPad = 42;
+    const innerTarget = targetWidth - leftPad - rightPad;
     const barGap = 6;
     const barCount = activeSeries.length;
-    const barWidth = barCount > 0 ? Math.max(4, Math.min(40, (targetWidth - barGap * (barCount - 1)) / barCount)) : 0;
-    const chartWidth = barCount > 0 ? barWidth * barCount + barGap * (barCount - 1) : targetWidth;
-    const chartHeight = 280; // fixed height
+    const barWidth = barCount > 0 ? Math.max(4, Math.min(36, (innerTarget - barGap * (barCount - 1)) / barCount)) : 0;
+    const innerWidth = barCount > 0 ? barWidth * barCount + barGap * (barCount - 1) : innerTarget;
+    const svgWidth = innerWidth + leftPad + rightPad;
+    const chartHeight = 320;
+    const innerHeight = chartHeight - topPad - bottomPad;
 
-    const gradientId = mode === 'all' ? 'gradAll' : mode === 'campaigns' ? 'gradCampaigns' : 'gradFlows';
+    // Y ticks
+    const yTicks = useMemo(() => {
+        if (maxVal <= 0) return [0];
+        const desired = 5;
+        const rawStep = maxVal / (desired - 1);
+        const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+        const norm = rawStep / mag;
+        let step: number;
+        if (norm < 1.5) step = 1 * mag; else if (norm < 3.5) step = 2 * mag; else if (norm < 7.5) step = 5 * mag; else step = 10 * mag;
+        const ticks: number[] = [];
+        for (let v = 0; v <= maxVal * 1.001; v += step) ticks.push(v);
+        if (ticks[ticks.length - 1] < maxVal) ticks.push(maxVal);
+        return ticks;
+    }, [maxVal]);
+
+    // X label sampling
+    const xLabelStep = useMemo(() => {
+        const maxLabels = 12;
+        if (barCount <= maxLabels) return 1;
+        return Math.ceil(barCount / maxLabels);
+    }, [barCount]);
+
+    const fillColor = mode === 'all' ? '#8b5cf6' : mode === 'campaigns' ? '#2563eb' : '#16a34a';
 
     return (
         <div className="mt-6">
@@ -161,34 +190,56 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                     ) : barCount === 0 ? (
                         <div className="p-6 text-center text-sm text-gray-600 dark:text-gray-300">No data available for the selected filters.</div>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <div className="mx-auto" style={{ width: Math.min(chartWidth, targetWidth) }}>
-                                <svg width={Math.min(chartWidth, targetWidth)} height={chartHeight} className="block">
-                                    <defs>
-                                        <linearGradient id="gradAll" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#a855f7" /><stop offset="100%" stopColor="#7e22ce" /></linearGradient>
-                                        <linearGradient id="gradCampaigns" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#3b82f6" /><stop offset="100%" stopColor="#2563eb" /></linearGradient>
-                                        <linearGradient id="gradFlows" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#22c55e" /><stop offset="100%" stopColor="#15803d" /></linearGradient>
-                                    </defs>
-                                    {activeSeries.map((p, i) => {
-                                        const h = maxVal > 0 ? (p.value / maxVal) * (chartHeight - 40) : 0;
-                                        const x = i * (barWidth + barGap);
-                                        const y = chartHeight - h - 20;
+                        <div className="overflow-x-auto relative">
+                            <div className="mx-auto relative" style={{ width: Math.min(svgWidth, targetWidth) }}>
+                                <svg width={Math.min(svgWidth, targetWidth)} height={chartHeight} className="block select-none">
+                                    {/* Y grid & labels */}
+                                    {yTicks.map((t, i) => {
+                                        const h = maxVal > 0 ? (t / maxVal) * innerHeight : 0;
+                                        const y = chartHeight - bottomPad - h;
                                         return (
                                             <g key={i}>
-                                                <rect x={x} y={y} width={barWidth} height={h} rx={3} className="transition-opacity" fill={`url(#${gradientId})`} />
-                                                {barWidth >= 20 && (
-                                                    <text x={x + barWidth / 2} y={chartHeight - 6} textAnchor="middle" fontSize={10} className="fill-gray-600 dark:fill-gray-400 select-none">{p.date}</text>
-                                                )}
-                                                {h > 22 && barWidth >= 24 && (
-                                                    <text x={x + barWidth / 2} y={y + 14} textAnchor="middle" fontSize={11} className="fill-white font-medium select-none">{formatCurrencyShort(p.value)}</text>
+                                                <line x1={leftPad} x2={leftPad + innerWidth} y1={y} y2={y} className={i === 0 ? 'stroke-gray-300 dark:stroke-gray-700' : 'stroke-gray-200 dark:stroke-gray-800'} strokeWidth={i === 0 ? 1.2 : 1} />
+                                                <text x={leftPad - 6} y={y + 4} fontSize={10} textAnchor="end" className="fill-gray-500">{formatCurrencyShort(t)}</text>
+                                            </g>
+                                        );
+                                    })}
+                                    {/* X axis */}
+                                    <line x1={leftPad} x2={leftPad + innerWidth} y1={chartHeight - bottomPad} y2={chartHeight - bottomPad} className="stroke-gray-300 dark:stroke-gray-700" />
+                                    {/* Bars */}
+                                    {activeSeries.map((p, i) => {
+                                        const h = maxVal > 0 ? (p.value / maxVal) * innerHeight : 0;
+                                        const x = leftPad + i * (barWidth + barGap);
+                                        const y = chartHeight - bottomPad - h;
+                                        const showLabel = i % xLabelStep === 0;
+                                        return (
+                                            <g key={i} onMouseEnter={() => setHoverIndex(i)} onMouseLeave={() => setHoverIndex(null)} className="cursor-pointer">
+                                                <rect x={x} y={y} width={barWidth} height={h} rx={3} fill={fillColor} />
+                                                {showLabel && barWidth >= 12 && (
+                                                    <text x={x + barWidth / 2} y={chartHeight - 22} textAnchor="middle" fontSize={10} className="fill-gray-600 dark:fill-gray-400">{p.date}</text>
                                                 )}
                                             </g>
                                         );
                                     })}
-                                    {/* Y-axis labels (simple 0 / max) */}
-                                    <text x={0} y={chartHeight - 8} fontSize={10} className="fill-gray-500">0</text>
-                                    <text x={0} y={12} fontSize={10} className="fill-gray-500">{formatCurrencyShort(maxVal)}</text>
                                 </svg>
+                                {hoverIndex !== null && activeSeries[hoverIndex] && (
+                                    <div className="pointer-events-none absolute inset-0" style={{ width: Math.min(svgWidth, targetWidth) }}>
+                                        {(() => {
+                                            const p = activeSeries[hoverIndex];
+                                            const x = leftPad + hoverIndex * (barWidth + barGap) + barWidth / 2;
+                                            const h = maxVal > 0 ? (p.value / maxVal) * innerHeight : 0;
+                                            const y = chartHeight - bottomPad - h - 8;
+                                            const rangeLabel = buildRangeLabel(p, granularity);
+                                            return (
+                                                <div style={{ position: 'absolute', transform: `translateX(${Math.min(Math.max(0, x - 110), (Math.min(svgWidth, targetWidth)) - 220)}px) translateY(${Math.max(0, y - 70)}px)` }} className="w-56 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg p-3 text-[11px] leading-snug text-gray-700 dark:text-gray-200">
+                                                    <div className="font-medium mb-1">{rangeLabel}</div>
+                                                    <div className="flex justify-between"><span>Revenue</span><span className="font-semibold">{formatCurrencyFull(p.value)}</span></div>
+                                                    {mode === 'all' && <div className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">All Emails (Campaigns + Flows)</div>}
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -202,4 +253,22 @@ function formatCurrencyShort(v: number): string {
     if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
     if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}k`;
     return `$${Math.round(v).toLocaleString('en-US')}`;
+}
+
+function formatCurrencyFull(v: number): string {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+}
+
+function buildRangeLabel(p: SeriesPoint, granularity: 'daily' | 'weekly' | 'monthly'): string {
+    if (!p.iso) return p.date;
+    const d = new Date(p.iso + 'T00:00:00');
+    if (granularity === 'daily') {
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } else if (granularity === 'weekly') {
+        const end = d; // iso is week end
+        const start = new Date(end); start.setDate(start.getDate() - 6);
+        return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    } else { // monthly
+        return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    }
 }
