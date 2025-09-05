@@ -302,16 +302,22 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                     <div className="flex items-center gap-2">
                         {/* Left icon */}
                         <svg width="18" height="18" viewBox="0 0 24 24" className="text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="6" height="13" /><rect x="15" y="3" width="6" height="9" /><rect x="9" y="3" width="6" height="18" /></svg>
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                            Revenue Reliability
-                            {/* Info tooltip */}
-                            <span className="relative group inline-flex">
-                                <svg width="16" height="16" viewBox="0 0 24 24" className="text-gray-400 group-hover:text-gray-600 dark:text-gray-500 dark:group-hover:text-gray-300 cursor-help" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="8" /><path d="M10.9 12.2c.1-.9.8-1.2 1.5-1.2.9 0 1.6.6 1.6 1.5 0 1-.6 1.4-1.2 1.8-.6.4-1 .7-1 1.7" /></svg>
-                                <div className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity absolute left-1/2 -translate-x-1/2 top-6 z-10 w-64 p-3 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg text-[11px] leading-snug text-gray-700 dark:text-gray-200">
-                                    This module visualizes revenue consistency across periods. Lower variability relative to the average produces a higher reliability score. Daily ranges may be clustered for readability; mean line and stats exclude partial periods. Campaign mode additionally flags zero-revenue periods and estimates conservative lost revenue.
-                                </div>
-                            </span>
-                        </h3>
+                        <div className="flex flex-col">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                                Revenue Reliability
+                                {/* Info tooltip */}
+                                <span className="relative group inline-flex">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" className="text-gray-400 group-hover:text-gray-600 dark:text-gray-500 dark:group-hover:text-gray-300 cursor-help" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="8" /><path d="M10.9 12.2c.1-.9.8-1.2 1.5-1.2.9 0 1.6.6 1.6 1.5 0 1-.6 1.4-1.2 1.8-.6.4-1 .7-1 1.7" /></svg>
+                                    <div className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity absolute left-1/2 -translate-x-1/2 top-6 z-10 w-64 p-3 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg text-[11px] leading-snug text-gray-700 dark:text-gray-200">
+                                        This module visualizes revenue consistency across periods. Lower variability relative to the average produces a higher reliability score. Daily ranges may be clustered for readability; mean line and stats exclude partial periods. Campaign mode additionally flags zero-campaign weeks and estimates conservative lost revenue.
+                                    </div>
+                                </span>
+                            </h3>
+                            <div className="mt-1">
+                                <div className="text-[10px] font-semibold tracking-wide text-gray-600 dark:text-gray-400 uppercase">Avg {granularity === 'daily' ? 'Daily' : granularity === 'weekly' ? 'Weekly' : 'Monthly'} Revenue</div>
+                                <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">{formatCurrencyTwo(avgPerPeriod)}</div>
+                            </div>
+                        </div>
                     </div>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-4 w-full lg:w-auto">
                         <div className="inline-flex rounded-lg overflow-hidden border border-purple-300 dark:border-purple-700 text-sm self-start">
@@ -323,7 +329,7 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                                         key={v}
                                         onClick={() => setMode(v)}
                                         className={
-                                            'px-3 py-1.5 font-medium transition-colors ' +
+                                            'px-4 py-1.5 font-medium transition-colors ' +
                                             (active
                                                 ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white'
                                                 : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-gray-700') +
@@ -333,9 +339,6 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                                     >{label}</button>
                                 );
                             })}
-                        </div>
-                        <div className="text-[10px] sm:text-xs font-semibold tracking-wide text-gray-600 dark:text-gray-400 uppercase">
-                            AVG {granularity === 'daily' ? 'DAILY' : granularity === 'weekly' ? 'WEEKLY' : 'MONTHLY'} REVENUE: <span className="text-xl font-bold text-gray-900 dark:text-gray-100 align-middle ml-1">{formatCurrencyFull(avgPerPeriod)}</span>
                         </div>
                     </div>
                 </div>
@@ -476,6 +479,10 @@ function formatCurrencyShort(v: number): string {
 
 function formatCurrencyFull(v: number): string {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+}
+
+function formatCurrencyTwo(v: number): string {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
 }
 
 function buildRangeLabel(p: SeriesPoint, granularity: 'daily' | 'weekly' | 'monthly'): string {
