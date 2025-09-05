@@ -617,34 +617,50 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                             </svg>
                             {/* Tooltip */}
                             {hoveredPoint && hoveredPoint.chartIndex === index && (
-                                <div
-                                    className="absolute z-20 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl pointer-events-none border border-gray-700"
-                                    style={{
-                                        left: `${(hoveredPoint.x / 900) * 100}%`,
-                                        top: `${Math.max(0, (hoveredPoint.y / 160) * 100 - 10)}%`,
-                                        transform: 'translate(-50%, -100%)',
-                                        marginTop: '-12px',
-                                        whiteSpace: 'nowrap'
-                                    }}
-                                >
-                                    <div className="font-medium">{new Date(hoveredPoint.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
-                                    <div className="text-xs opacity-90">{(() => {
-                                        const metricConfig = metricOptions.find(m => m.value === selectedMetric);
-                                        switch (metricConfig?.format) {
-                                            case 'currency':
-                                                return hoveredPoint.value >= 1000
-                                                    ? `$${hoveredPoint.value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`
-                                                    : `$${hoveredPoint.value.toFixed(1)}`;
-                                            case 'percentage':
-                                                const formatted = hoveredPoint.value.toFixed(1);
-                                                const num = parseFloat(formatted);
-                                                return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : `${formatted}%`;
-                                            case 'number':
-                                            default:
-                                                return hoveredPoint.value.toLocaleString('en-US');
-                                        }
-                                    })()}</div>
-                                </div>
+                                (() => {
+                                    // Heuristic tooltip width (kept constant to avoid hooks for measurement inside render function)
+                                    const EST_WIDTH = 200; // px
+                                    // Compute left in px within 0..900 coordinate space then clamp
+                                    let leftPx = hoveredPoint.x - EST_WIDTH / 2;
+                                    if (leftPx < 4) leftPx = 4;
+                                    if (leftPx + EST_WIDTH > 900 - 4) leftPx = 900 - EST_WIDTH - 4;
+                                    // Compute top (anchor above point) and clamp to stay in viewport of chart
+                                    let topPx = hoveredPoint.y - 14; // raise above point
+                                    if (topPx < 8) topPx = 8; // padding from top
+                                    // Convert px to percentage relative to 900x160 viewBox for responsiveness
+                                    const leftPercent = (leftPx / 900) * 100;
+                                    const topPercent = (topPx / 160) * 100;
+                                    return (
+                                        <div
+                                            className="absolute z-20 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl pointer-events-none border border-gray-700"
+                                            style={{
+                                                left: `${leftPercent}%`,
+                                                top: `${topPercent}%`,
+                                                transform: 'translate(0,-100%)',
+                                                maxWidth: EST_WIDTH,
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                        >
+                                            <div className="font-medium">{new Date(hoveredPoint.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                                            <div className="text-xs opacity-90">{(() => {
+                                                const metricConfig = metricOptions.find(m => m.value === selectedMetric);
+                                                switch (metricConfig?.format) {
+                                                    case 'currency':
+                                                        return hoveredPoint.value >= 1000
+                                                            ? `$${hoveredPoint.value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`
+                                                            : `$${hoveredPoint.value.toFixed(1)}`;
+                                                    case 'percentage':
+                                                        const formatted = hoveredPoint.value.toFixed(1);
+                                                        const num = parseFloat(formatted);
+                                                        return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : `${formatted}%`;
+                                                    case 'number':
+                                                    default:
+                                                        return hoveredPoint.value.toLocaleString('en-US');
+                                                }
+                                            })()}</div>
+                                        </div>
+                                    );
+                                })()
                             )}
                         </div>
                     ) : value === 0 ? (
