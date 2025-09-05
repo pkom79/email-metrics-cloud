@@ -74,50 +74,83 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
     function mondayOf(d: Date) { const dt = new Date(d); const wd = dt.getDay(); const diff = (wd + 6) % 7; dt.setDate(dt.getDate() - diff); dt.setHours(0, 0, 0, 0); return dt; }
     function sundayOf(d: Date) { const m = mondayOf(d); const s = new Date(m); s.setDate(s.getDate() + 6); s.setHours(23, 59, 59, 999); return s; }
 
-    // Trim partial buckets for weekly & monthly
-    function trimSeries(series: SeriesPoint[]): SeriesPoint[] {
-        if (!series.length) return series;
+    // Build full bucket sequences (zero-filling) so we never skip days/weeks/months with zero revenue.
+    const fullBuckets = useMemo(() => {
+        const dateToISO = (d: Date) => d.toISOString().slice(0, 10);
         const { start, end } = rangeBoundary;
-        if (granularity === 'weekly') {
-            return series.filter(p => {
-                if (!p.iso) return false;
-                const isoDate = new Date(p.iso + 'T00:00:00');
-                const mon = new Date(isoDate); mon.setDate(mon.getDate() - 6); mon.setHours(0, 0, 0, 0);
-                const sun = new Date(isoDate); sun.setHours(23, 59, 59, 999);
-                return mon >= start && sun <= end;
-            });
-        } else if (granularity === 'monthly') {
-            return series.filter(p => {
-                if (!p.iso) return false;
-                const first = new Date(p.iso + 'T00:00:00'); // first of month from DataManager
-                const last = new Date(first.getFullYear(), first.getMonth() + 1, 0, 23, 59, 59, 999);
-                return first >= start && last <= end;
-            });
-        }
-        // daily: no trimming; threshold uses raw length
-        return series;
-    }
 
-    const trimmed = useMemo(() => ({
-        all: trimSeries(rawAll),
-        campaigns: trimSeries(rawCampaigns),
-        flows: trimSeries(rawFlows)
-    }), [rawAll, rawCampaigns, rawFlows, granularity, rangeBoundary]);
+        // Maps from iso -> value for existing data
+        const mapFrom = (arr: SeriesPoint[]) => {
+            const m = new Map<string, number>();
+            for (const p of arr) if (p.iso) m.set(p.iso, p.value);
+            return m;
+        };
+        const mapAll = mapFrom(rawAll);
+        const mapCamp = mapFrom(rawCampaigns);
+        const mapFlows = mapFrom(rawFlows);
+
+        const all: SeriesPoint[] = [];
+        const campaignsSeries: SeriesPoint[] = [];
+        const flowsSeries: SeriesPoint[] = [];
+
+        if (granularity === 'daily') {
+            // Every calendar day inclusive
+            const cur = new Date(start); cur.setHours(0, 0, 0, 0);
+            const endDay = new Date(end); endDay.setHours(0, 0, 0, 0);
+            while (cur <= endDay) {
+                const iso = dateToISO(cur);
+                const label = cur.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                all.push({ iso, date: label, value: mapAll.get(iso) ?? 0 });
+                campaignsSeries.push({ iso, date: label, value: mapCamp.get(iso) ?? 0 });
+                flowsSeries.push({ iso, date: label, value: mapFlows.get(iso) ?? 0 });
+                cur.setDate(cur.getDate() + 1);
+            }
+        } else if (granularity === 'weekly') {
+            // Only full Monday-Sunday weeks wholly inside range
+            let firstMon = mondayOf(start);
+            if (firstMon < start) { firstMon.setDate(firstMon.getDate() + 7); }
+            let lastSun = sundayOf(end);
+            if (lastSun > end) { lastSun.setDate(lastSun.getDate() - 7); }
+            for (let wkStart = new Date(firstMon); wkStart <= lastSun; wkStart.setDate(wkStart.getDate() + 7)) {
+                const weekEnd = new Date(wkStart); weekEnd.setDate(weekEnd.getDate() + 6);
+                const iso = dateToISO(weekEnd); // we use week end iso to match existing data
+                const label = weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                all.push({ iso, date: label, value: mapAll.get(iso) ?? 0 });
+                campaignsSeries.push({ iso, date: label, value: mapCamp.get(iso) ?? 0 });
+                flowsSeries.push({ iso, date: label, value: mapFlows.get(iso) ?? 0 });
+            }
+        } else if (granularity === 'monthly') {
+            // Only full months fully contained in range
+            let first = new Date(start.getFullYear(), start.getMonth(), 1);
+            if (first < start) first = new Date(first.getFullYear(), first.getMonth() + 1, 1); // start month partial -> next month
+            let last = new Date(end.getFullYear(), end.getMonth(), 1);
+            const lastMonthEnd = new Date(last.getFullYear(), last.getMonth() + 1, 0, 23, 59, 59, 999);
+            if (lastMonthEnd > end) last = new Date(last.getFullYear(), last.getMonth() - 1, 1); // end month partial -> previous month
+            for (let m = new Date(first); m <= last; m = new Date(m.getFullYear(), m.getMonth() + 1, 1)) {
+                const iso = dateToISO(m); // first of month
+                const label = m.toLocaleDateString('en-US', { month: 'short' });
+                all.push({ iso, date: label, value: mapAll.get(iso) ?? 0 });
+                campaignsSeries.push({ iso, date: label, value: mapCamp.get(iso) ?? 0 });
+                flowsSeries.push({ iso, date: label, value: mapFlows.get(iso) ?? 0 });
+            }
+        }
+
+        return { all, campaigns: campaignsSeries, flows: flowsSeries };
+    }, [granularity, rangeBoundary, rawAll, rawCampaigns, rawFlows]);
 
     // Minimum threshold check
     // Daily uses actual span of selected date range (inclusive) rather than count of returned points
     // to avoid false negatives when some days have no data and might be omitted by DataManager.
     const meetsThreshold = useMemo(() => {
-        if (granularity === 'monthly') return trimmed.all.length >= 3; // 3 full months
-        if (granularity === 'weekly') return trimmed.all.length >= 12; // 12 full weeks
+        if (granularity === 'monthly') return fullBuckets.all.length >= 3; // 3 full months
+        if (granularity === 'weekly') return fullBuckets.all.length >= 12; // 12 full weeks
         if (granularity === 'daily') {
             const daySpan = Math.floor((rangeBoundary.end.getTime() - rangeBoundary.start.getTime()) / 86400000) + 1; // inclusive
             return daySpan >= 90; // 90 calendar days selected
         }
         return false;
-    }, [granularity, trimmed.all.length, rangeBoundary]);
-
-    const activeSeries = mode === 'all' ? trimmed.all : mode === 'campaigns' ? trimmed.campaigns : trimmed.flows;
+    }, [granularity, fullBuckets.all.length, rangeBoundary]);
+    const activeSeries = mode === 'all' ? fullBuckets.all : mode === 'campaigns' ? fullBuckets.campaigns : fullBuckets.flows;
     const maxVal = activeSeries.reduce((m, p) => Math.max(m, p.value), 0);
 
     // Layout + axes geometry
