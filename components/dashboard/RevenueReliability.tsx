@@ -221,38 +221,73 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
         return `${base} High variability observed.`;
     })();
 
-    // --- Campaign zero-revenue period detection & conservative lost revenue estimate ---
+    // --- Weekly-only zero campaign weeks & conservative lost revenue estimate ---
     const campaignLost = useMemo(() => {
-        if (mode !== 'campaigns') return { zeroPeriods: 0, estimatedLost: 0 };
-        const series = granularity === 'daily' ? (fullBuckets.rawDailyCampaigns || []) : fullBuckets.campaigns;
-        if (!series.length) return { zeroPeriods: 0, estimatedLost: 0 };
-        const nonZeroValues = series.filter(p => p.value > 0).map(p => p.value).sort((a, b) => a - b);
-        if (!nonZeroValues.length) return { zeroPeriods: 0, estimatedLost: 0 };
-        const median = nonZeroValues[Math.floor(nonZeroValues.length / 2)];
-        const clamp = (v: number) => Math.min(v, median * 1.2); // don't exceed 120% of median (conservative)
-        let zeroPeriods = 0;
-        let estimatedLost = 0;
-        for (let i = 0; i < series.length; i++) {
-            if (series[i].value !== 0) continue;
-            // find nearest non-zero neighbors
-            let left: number | null = null, right: number | null = null;
-            for (let l = i - 1; l >= 0; l--) { if (series[l].value > 0) { left = series[l].value; break; } }
-            for (let r = i + 1; r < series.length; r++) { if (series[r].value > 0) { right = series[r].value; break; } }
-            if (left == null && right == null) continue; // cannot infer
-            zeroPeriods++;
-            let estimate: number;
-            if (left != null && right != null) {
-                // conservative: min of neighbors * 0.6
-                estimate = Math.min(left, right) * 0.6;
-            } else {
-                const only = (left != null ? left : right!);
-                estimate = only * 0.4; // single neighbor => more conservative
+        if (mode !== 'campaigns' || granularity !== 'weekly') return { zeroCampaignWeeks: 0, estimatedLost: 0 };
+        const weeklyBuckets = fullBuckets.campaigns;
+        if (!weeklyBuckets.length) return { zeroCampaignWeeks: 0, estimatedLost: 0 };
+
+        // Extract send date from campaign objects (heuristic across possible fields)
+        const extractSendDate = (c: any): Date | null => {
+            const candidates = ['sendDate', 'sentAt', 'sent_at', 'scheduledAt', 'scheduled_at', 'created_at', 'createdAt'];
+            for (const k of candidates) {
+                if (c && c[k]) {
+                    const d = new Date(c[k]);
+                    if (!isNaN(d.getTime())) return d;
+                }
             }
-            estimate = clamp(estimate);
-            estimatedLost += estimate;
+            return null;
+        };
+
+        // Build a set of week-end ISO strings (Sunday) that had at least one campaign send
+        const weekHasCampaign = new Set<string>();
+        for (const c of campaigns) {
+            const sd = extractSendDate(c);
+            if (!sd) continue;
+            const monday = new Date(sd);
+            const diff = (monday.getDay() + 6) % 7; // shift to Monday
+            monday.setDate(monday.getDate() - diff);
+            monday.setHours(0, 0, 0, 0);
+            const sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6); sunday.setHours(0, 0, 0, 0);
+            const iso = sunday.toISOString().slice(0, 10);
+            weekHasCampaign.add(iso);
         }
-        return { zeroPeriods, estimatedLost };
-    }, [mode, granularity, fullBuckets]);
+
+        // Collect revenue for weeks that had campaigns (positive or zero) to derive median of productive context
+        const withCampaignRevenues: number[] = [];
+        for (const b of weeklyBuckets) {
+            if (weekHasCampaign.has(b.iso || '')) withCampaignRevenues.push(b.value);
+        }
+        const positive = withCampaignRevenues.filter(v => v > 0).sort((a, b) => a - b);
+        if (!positive.length) return { zeroCampaignWeeks: 0, estimatedLost: 0 };
+        const median = positive[Math.floor(positive.length / 2)];
+        const cap = median * 0.8; // 80% median cap (conservative upper bound)
+
+        let zeroCampaignWeeks = 0;
+        let estimatedLost = 0;
+        for (let idx = 0; idx < weeklyBuckets.length; idx++) {
+            const bucket = weeklyBuckets[idx];
+            const iso = bucket.iso || '';
+            if (weekHasCampaign.has(iso)) continue; // campaigns existed that week
+            zeroCampaignWeeks++;
+            // Determine base using neighbor weeks that had campaigns with positive revenue
+            let left: number | null = null, right: number | null = null;
+            for (let l = idx - 1; l >= 0; l--) {
+                const isoL = weeklyBuckets[l].iso || '';
+                if (weekHasCampaign.has(isoL) && weeklyBuckets[l].value > 0) { left = weeklyBuckets[l].value; break; }
+            }
+            for (let r = idx + 1; r < weeklyBuckets.length; r++) {
+                const isoR = weeklyBuckets[r].iso || '';
+                if (weekHasCampaign.has(isoR) && weeklyBuckets[r].value > 0) { right = weeklyBuckets[r].value; break; }
+            }
+            let base: number;
+            if (left != null && right != null) base = Math.min(left, right); else if (left != null || right != null) base = (left ?? right)!; else base = median;
+            let est = base * 0.6; // attenuation for conservatism
+            if (est > cap) est = cap;
+            estimatedLost += est;
+        }
+        return { zeroCampaignWeeks, estimatedLost };
+    }, [mode, granularity, fullBuckets, campaigns]);
 
     // Layout + axes geometry
     const targetWidth = 1100;
@@ -443,17 +478,17 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                             </div>
                         </div>
                     )}
-                    {mode === 'campaigns' && campaignLost.zeroPeriods > 0 && (
+                    {mode === 'campaigns' && granularity === 'weekly' && campaignLost.zeroCampaignWeeks > 0 && (
                         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
-                                <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Zero Revenue Periods</div>
-                                <div className="text-lg font-bold text-gray-900 dark:text-gray-100">{campaignLost.zeroPeriods}</div>
-                                <div className="text-[11px] text-gray-500 mt-1">Full {granularity} periods with no campaign revenue</div>
+                                <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Zero Campaign Weeks</div>
+                                <div className="text-lg font-bold text-gray-900 dark:text-gray-100">{campaignLost.zeroCampaignWeeks}</div>
+                                <div className="text-[11px] text-gray-500 mt-1 leading-snug">Full Mon–Sun weeks with no campaigns sent.</div>
                             </div>
                             <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
                                 <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Estimated Lost Revenue</div>
                                 <div className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrencyFull(campaignLost.estimatedLost)}</div>
-                                <div className="text-[11px] text-gray-500 mt-1 leading-snug">Conservative estimate based on nearby periods (capped at 120% median).</div>
+                                <div className="text-[11px] text-gray-500 mt-1 leading-snug">Conservative (≤80% median week, neighbor/min basis ×0.6).</div>
                             </div>
                         </div>
                     )}
