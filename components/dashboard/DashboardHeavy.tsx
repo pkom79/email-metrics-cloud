@@ -192,11 +192,16 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // Logs which tracked state keys changed between renders to isolate render loop cause.
     // --------------------------------------------------
     const prevStateRef = useRef<any | null>(null);
+    const renderSeqRef = useRef(0);
     useEffect(() => {
         if (typeof window === 'undefined') return;
         const params = new URLSearchParams(window.location.search);
         const all = params.getAll('debug');
         if (!all.some(v => v.includes('state'))) return;
+        renderSeqRef.current += 1;
+        const w: any = window as any;
+        w.__EM_DASHBOARD_MOUNT_ID = w.__EM_DASHBOARD_MOUNT_ID || Math.random().toString(36).slice(2, 9);
+        const mountId = w.__EM_DASHBOARD_MOUNT_ID;
         const snapshot = {
             dashboardError,
             forceEmpty,
@@ -223,22 +228,24 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             linkDebugInfoPresent: !!linkDebugInfo,
         };
         if (prevStateRef.current) {
-            const changed: Record<string, { prev: any; next: any }> = {};
+            const changedKeys: string[] = [];
+            const changedDetail: Record<string, { prev: any; next: any }> = {};
             for (const k of Object.keys(snapshot)) {
                 if (prevStateRef.current[k] !== (snapshot as any)[k]) {
-                    changed[k] = { prev: prevStateRef.current[k], next: (snapshot as any)[k] };
+                    changedKeys.push(k);
+                    changedDetail[k] = { prev: prevStateRef.current[k], next: (snapshot as any)[k] };
                 }
             }
-            if (Object.keys(changed).length) {
+            if (changedKeys.length) {
                 // eslint-disable-next-line no-console
-                console.log('[EM Debug][state changes]', changed);
+                console.log('[EM Debug][state changes]', { renderSeq: renderSeqRef.current, mountId, keys: changedKeys, detail: changedDetail });
             } else {
                 // eslint-disable-next-line no-console
-                console.log('[EM Debug][state changes] (none)');
+                console.log('[EM Debug][state changes] (none)', { renderSeq: renderSeqRef.current, mountId });
             }
         } else {
             // eslint-disable-next-line no-console
-            console.log('[EM Debug][state tracer] initial snapshot');
+            console.log('[EM Debug][state tracer] initial snapshot', { mountId });
         }
         prevStateRef.current = snapshot;
     });
