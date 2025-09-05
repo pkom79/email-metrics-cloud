@@ -696,18 +696,33 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                         }
                     };
                     const widthPx = 220;
+                    const approxHeight = 60; // heuristic height
                     const { svgRect } = hoveredPoint;
-                    // Convert svg local (viewBox 900x160) to screen coords
-                    const relX = hoveredPoint.x / 900; // 0..1
-                    const relY = hoveredPoint.y / 160; // 0..1
-                    let left = svgRect.left + relX * svgRect.width - widthPx / 2;
-                    let top = svgRect.top + relY * svgRect.height - 12; // 12px above point baseline
+                    const pointScreenX = svgRect.left + (hoveredPoint.x / 900) * svgRect.width;
+                    const pointScreenY = svgRect.top + (hoveredPoint.y / 160) * svgRect.height;
+                    let left = pointScreenX - widthPx / 2;
                     const pad = 8;
                     if (left < pad) left = pad;
                     if (left + widthPx + pad > window.innerWidth) left = window.innerWidth - widthPx - pad;
-                    if (top < pad) top = svgRect.top + relY * svgRect.height + 20; // place below point if near top
+                    // Decide orientation:
+                    // Prefer above. Flip below only if would clip top.
+                    // If near bottom viewport, force above to avoid bottom clipping by page edge / chips area.
+                    const wouldClipTop = pointScreenY - approxHeight - 12 < 0;
+                    const nearBottom = pointScreenY + approxHeight + 12 > window.innerHeight - 40; // 40px safety
+                    const placeBelow = wouldClipTop && !nearBottom;
+                    const top = placeBelow ? (pointScreenY + 12) : (pointScreenY - 12 - 4); // slight gap when above
                     return (
-                        <div className="fixed z-[999] px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl border border-gray-700 pointer-events-none" style={{ left, top, width: widthPx, transform: 'translateY(-100%)' }}>
+                        <div
+                            className={
+                                'fixed z-[999] px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl border border-gray-700 pointer-events-none transition-transform'
+                            }
+                            style={{
+                                left,
+                                top: placeBelow ? top : top, // explicit for clarity
+                                width: widthPx,
+                                transform: placeBelow ? 'translateY(0)' : 'translateY(-100%)'
+                            }}
+                        >
                             <div className="font-medium mb-0.5">{new Date(hoveredPoint.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
                             <div className="text-xs opacity-90">{formatVal(hoveredPoint.value)}</div>
                         </div>
