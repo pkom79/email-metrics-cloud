@@ -12,3 +12,6 @@ out
 # OS/Tooling
 .DS_Store
 .vercel
+
+# TypeScript build info
+tsconfig.tsbuildinfo
