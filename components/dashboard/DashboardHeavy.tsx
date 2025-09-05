@@ -75,6 +75,9 @@ async function loadAccountData(dm: any, accountId: string): Promise<boolean> {
 // Debug helper: wrap useState to log transitions (activated with ?debug=state)
 function useDebugState<T>(label: string, initial: T): [T, React.Dispatch<React.SetStateAction<T>>] {
     const [val, setVal] = useState<T>(initial);
+    // Special handling for isInitialLoading runaway loop detection
+    const toggleCountRef = useRef(0);
+    const frozenRef = useRef(false);
     const setWrapped = useCallback((next: React.SetStateAction<T>) => {
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
@@ -82,6 +85,22 @@ function useDebugState<T>(label: string, initial: T): [T, React.Dispatch<React.S
             if (all.some(v => v.includes('state'))) {
                 const prev = val;
                 const resolved = (typeof next === 'function' ? (next as any)(prev) : next) as T;
+                if (label === 'isInitialLoading') {
+                    if (prev !== resolved) toggleCountRef.current += 1;
+                    if (!frozenRef.current && toggleCountRef.current > 6) {
+                        // Freeze further changes to break loop and surface cause
+                        frozenRef.current = true;
+                        // eslint-disable-next-line no-console
+                        console.warn('[EM Debug][isInitialLoading] freeze after excessive toggles', { toggles: toggleCountRef.current, prev, attempted: resolved });
+                        console.trace('[EM Debug][isInitialLoading] freeze stack trace');
+                        return; // swallow update
+                    }
+                    if (!frozenRef.current && toggleCountRef.current > 3 && prev !== resolved) {
+                        // eslint-disable-next-line no-console
+                        console.debug('[EM Debug][isInitialLoading] toggle', { count: toggleCountRef.current, prev, next: resolved });
+                        if (toggleCountRef.current === 4) console.trace('[EM Debug][isInitialLoading] first excessive toggle trace');
+                    }
+                }
                 // eslint-disable-next-line no-console
                 console.log('[EM Debug][setState]', label, { prev, next: resolved });
             }
@@ -238,7 +257,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             }
             if (changedKeys.length) {
                 // eslint-disable-next-line no-console
-                console.log('[EM Debug][state changes]', { renderSeq: renderSeqRef.current, mountId, keys: changedKeys, detail: changedDetail });
+                try {
+                    const compact = changedKeys.reduce((acc, k) => { acc[k] = { p: changedDetail[k].prev, n: changedDetail[k].next }; return acc; }, {} as any);
+                    console.log('[EM Debug][state changes]', { renderSeq: renderSeqRef.current, mountId, keys: changedKeys, compact: JSON.stringify(compact) });
+                } catch {
+                    console.log('[EM Debug][state changes]', { renderSeq: renderSeqRef.current, mountId, keys: changedKeys });
+                }
             } else {
                 // eslint-disable-next-line no-console
                 console.log('[EM Debug][state changes] (none)', { renderSeq: renderSeqRef.current, mountId });
