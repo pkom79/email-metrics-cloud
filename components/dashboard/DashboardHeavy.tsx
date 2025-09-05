@@ -407,8 +407,59 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const defCampaigns = useDeferredValue(filteredCampaigns);
     const defFlows = useDeferredValue(filteredFlowEmails);
 
-    // Sync custom inputs with preset
-    useEffect(() => { if (!hasData) return; if (dateRange === 'custom') return; const to = new Date(REFERENCE_DATE); const toISO = (d: Date) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const da = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${da}`; }; if (dateRange === 'all') { const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow); const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime()); const flowTs = flowSubset.map(f => f.sentDate.getTime()); const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n)); if (all.length) { const from = new Date(Math.min(...all)); setCustomFrom(toISO(from)); setCustomTo(toISO(to)); } else { setCustomFrom(undefined); setCustomTo(undefined); } } else { const days = parseInt(String(dateRange).replace('d', '')); if (Number.isFinite(days)) { const from = new Date(to); from.setDate(from.getDate() - days + 1); setCustomFrom(toISO(from)); setCustomTo(toISO(to)); } } }, [dateRange, REFERENCE_DATE, selectedFlow, ALL_CAMPAIGNS, ALL_FLOWS, hasData]);
+    // Sync custom inputs with preset (avoid unconditional state changes -> render loop)
+    useEffect(() => {
+        if (!hasData) return;
+        if (dateRange === 'custom') return; // user controls these directly
+
+        const to = new Date(REFERENCE_DATE);
+        const toISO = (d: Date) => {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const da = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${da}`;
+        };
+
+        let nextFrom: string | undefined = undefined;
+        let nextTo: string | undefined = undefined;
+
+        if (dateRange === 'all') {
+            const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow);
+            const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime());
+            const flowTs = flowSubset.map(f => f.sentDate.getTime());
+            const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n));
+            if (all.length) {
+                const from = new Date(Math.min(...all));
+                nextFrom = toISO(from);
+                nextTo = toISO(to);
+            } else {
+                nextFrom = undefined;
+                nextTo = undefined;
+            }
+        } else {
+            const days = parseInt(String(dateRange).replace('d', ''));
+            if (Number.isFinite(days)) {
+                const from = new Date(to);
+                from.setDate(from.getDate() - days + 1);
+                nextFrom = toISO(from);
+                nextTo = toISO(to);
+            }
+        }
+
+        // Only update when values actually change to prevent cascading renders
+        const changed = nextFrom !== customFrom || nextTo !== customTo;
+        if (changed) {
+            setCustomFrom(nextFrom);
+            setCustomTo(nextTo);
+            if (debugMode) {
+                // eslint-disable-next-line no-console
+                console.log('[EM Debug] sync custom range -> set', { nextFrom, nextTo });
+            }
+        } else if (debugMode) {
+            // eslint-disable-next-line no-console
+            console.log('[EM Debug] sync custom range -> skipped (stable)');
+        }
+    }, [dateRange, REFERENCE_DATE, selectedFlow, ALL_CAMPAIGNS, ALL_FLOWS, hasData, customFrom, customTo, debugMode]);
 
     // Metrics calculations
     const overviewMetrics = useMemo(() => { const all = [...defCampaigns, ...defFlows]; if (!all.length) return null as any; const totalRevenue = all.reduce((s, e) => s + e.revenue, 0); const totalEmailsSent = all.reduce((s, e) => s + e.emailsSent, 0); const totalOrders = all.reduce((s, e) => s + e.totalOrders, 0); const totalOpens = all.reduce((s, e) => s + e.uniqueOpens, 0); const totalClicks = all.reduce((s, e) => s + e.uniqueClicks, 0); const totalUnsubs = all.reduce((s, e) => s + e.unsubscribesCount, 0); const totalSpam = all.reduce((s, e) => s + e.spamComplaintsCount, 0); const totalBounces = all.reduce((s, e) => s + e.bouncesCount, 0); const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0; const revenuePerEmail = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0; const openRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0; const clickRate = totalEmailsSent > 0 ? (totalClicks / totalEmailsSent) * 100 : 0; const clickToOpenRate = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0; const conversionRate = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0; const unsubscribeRate = totalEmailsSent > 0 ? (totalUnsubs / totalEmailsSent) * 100 : 0; const spamRate = totalEmailsSent > 0 ? (totalSpam / totalEmailsSent) * 100 : 0; const bounceRate = totalEmailsSent > 0 ? (totalBounces / totalEmailsSent) * 100 : 0; const mk = (k: string, v: number) => { const d = calcPoP(k, 'all'); return { value: v, change: d.changePercent, isPositive: d.isPositive, previousValue: d.previousValue, previousPeriod: d.previousPeriod }; }; return { totalRevenue: mk('totalRevenue', totalRevenue), averageOrderValue: mk('avgOrderValue', avgOrderValue), revenuePerEmail: mk('revenuePerEmail', revenuePerEmail), openRate: mk('openRate', openRate), clickRate: mk('clickRate', clickRate), clickToOpenRate: mk('clickToOpenRate', clickToOpenRate), emailsSent: mk('emailsSent', totalEmailsSent), totalOrders: mk('totalOrders', totalOrders), conversionRate: mk('conversionRate', conversionRate), unsubscribeRate: mk('unsubscribeRate', unsubscribeRate), spamRate: mk('spamRate', spamRate), bounceRate: mk('bounceRate', bounceRate) }; }, [defCampaigns, defFlows, calcPoP]);
