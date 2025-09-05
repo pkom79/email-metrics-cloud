@@ -137,6 +137,27 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     }, []);
     const [dataVersion, setDataVersion] = useDebugState('dataVersion', 0);
     const [isInitialLoading, setIsInitialLoading] = useDebugState('isInitialLoading', true);
+    // Wrapper to annotate why isInitialLoading changes & prevent re-flips to true after completion
+    const hasCompletedInitialRef = useRef(false);
+    const setIsInitialLoadingReason = useCallback((val: boolean, reason: string) => {
+        if (val === false) hasCompletedInitialRef.current = true;
+        if (hasCompletedInitialRef.current && val === true) {
+            if (typeof window !== 'undefined') {
+                // eslint-disable-next-line no-console
+                console.warn('[EM Debug][isInitialLoading] prevented revert to true', { reason });
+            }
+            return;
+        }
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const all = params.getAll('debug');
+            if (all.some(v => v.includes('state'))) {
+                // eslint-disable-next-line no-console
+                console.log('[EM Debug][isInitialLoading][reason]', { to: val, reason });
+            }
+        }
+        setIsInitialLoading(val);
+    }, [setIsInitialLoading]);
     // Additional readiness flag to avoid rendering charts before hydration attempts complete
     const [initialLoadComplete, setInitialLoadComplete] = useDebugState('initialLoadComplete', false);
     const [dateRange, setDateRange] = useDebugState<'30d' | '60d' | '90d' | '120d' | '180d' | '365d' | 'all' | 'custom'>('dateRange', '30d');
@@ -332,7 +353,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         if (!isAdmin || !selectedAccountId) return;
         let cancelled = false;
         (async () => {
-            setIsInitialLoading(true);
+            setIsInitialLoadingReason(true, 'admin account hydration start');
             try {
                 (dm as any).clearAllData?.();
             } catch { /* ignore */ }
@@ -363,7 +384,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             })();
             if (!cancelled) {
                 if (success) setDataVersion(v => v + 1);
-                setIsInitialLoading(false);
+                setIsInitialLoadingReason(false, 'admin account hydration complete');
             }
         })();
         return () => { cancelled = true; };
@@ -380,21 +401,21 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         // Wait until we know admin status
         if (!adminCheckComplete) return;
         // Admin with no selected account: nothing to hydrate
-        if (isAdmin && !selectedAccountId) { setIsInitialLoading(false); return; }
+        if (isAdmin && !selectedAccountId) { setIsInitialLoadingReason(false, 'admin no account selected'); return; }
         // Non-admin path OR admin + selected account (account-specific hydration handled in separate effect already)
         if (isAdmin) return; // Avoid double-hydration; admin account hydration is in another effect.
         const onCreated = () => { setDataVersion(v => v + 1); setShowUploadModal(false); };
-        const onHydrated = () => { setDataVersion(v => v + 1); setIsInitialLoading(false); };
+        const onHydrated = () => { setDataVersion(v => v + 1); setIsInitialLoadingReason(false, 'snapshot hydrated event'); };
         window.addEventListener('em:snapshot-created', onCreated as EventListener);
         window.addEventListener('em:dataset-hydrated', onHydrated as EventListener);
         let active = true;
         (async () => {
             for (let i = 0; i < 5 && active; i++) {
                 const ok = await DataManager.getInstance().ensureHydrated();
-                if (ok) { setDataVersion(v => v + 1); setIsInitialLoading(false); break; }
+                if (ok) { setDataVersion(v => v + 1); setIsInitialLoadingReason(false, 'ensureHydrated success'); break; }
                 await new Promise(r => setTimeout(r, 150));
             }
-            if (active && !DataManager.getInstance().hasRealData()) setIsInitialLoading(false);
+            if (active && !DataManager.getInstance().hasRealData()) setIsInitialLoadingReason(false, 'no real data after ensureHydrated attempts');
             if (active) setInitialLoadComplete(true);
         })();
         return () => {
@@ -412,12 +433,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         let cancelled = false;
         (async () => {
             try {
-                if (dm.getCampaigns().length || dm.getFlowEmails().length || dm.getSubscribers().length) { setIsInitialLoading(false); return; }
+                if (dm.getCampaigns().length || dm.getFlowEmails().length || dm.getSubscribers().length) { setIsInitialLoadingReason(false, 'server fallback early data present'); return; }
                 const list = await fetch('/api/snapshots/list', { cache: 'no-store' });
-                if (!list.ok) { setIsInitialLoading(false); return; }
+                if (!list.ok) { setIsInitialLoadingReason(false, 'snapshot list fetch failed'); return; }
                 const j = await list.json().catch(() => ({}));
                 const latest = (j.snapshots || []).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-                if (!latest?.id) { setIsInitialLoading(false); return; }
+                if (!latest?.id) { setIsInitialLoadingReason(false, 'no latest snapshot id'); return; }
                 const csvTypes = ['campaigns', 'flows', 'subscribers'];
                 const csvFiles: Record<string, File> = {};
                 for (const t of csvTypes) {
@@ -437,18 +458,18 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     if (result.success) {
                         if (cancelled) return;
                         setDataVersion(v => v + 1);
-                        setIsInitialLoading(false);
+                        setIsInitialLoadingReason(false, 'server fallback success');
                         window.dispatchEvent(new CustomEvent('em:dataset-hydrated'));
                     } else {
                         setDashboardError('Failed to process server data');
-                        setIsInitialLoading(false);
+                        setIsInitialLoadingReason(false, 'server fallback process failure');
                     }
                 } else {
-                    setIsInitialLoading(false);
+                    setIsInitialLoadingReason(false, 'server fallback no csv files');
                 }
             } catch (e: any) {
                 setDashboardError(`Failed to load data: ${e?.message || 'Unknown'}`);
-                setIsInitialLoading(false);
+                setIsInitialLoadingReason(false, 'server fallback exception');
             }
         })();
         return () => { cancelled = true };
