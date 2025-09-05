@@ -564,7 +564,7 @@ export class DataManager {
                 }
             }
 
-            const series = buckets.map(b => {
+            let series = buckets.map(b => {
                 // Derive an ISO date for range computations (avoid parsing label like "Aug 04" -> year 2001)
                 let isoDate: string;
                 if (granularity === 'daily') {
@@ -583,6 +583,17 @@ export class DataManager {
                 }
                 return { value: this._deriveMetricFromSums(metricKey, b.sums as any), date: b.label, iso: isoDate };
             });
+            // Downsample pathological large daily series (>800 points) to reduce render cost
+            if (granularity === 'daily' && series.length > 800) {
+                const stride = Math.ceil(series.length / 800);
+                const reduced: typeof series = [];
+                for (let i = 0; i < series.length; i += stride) {
+                    const slice = series.slice(i, i + stride);
+                    const avgValue = slice.reduce((s, p) => s + p.value, 0) / slice.length;
+                    reduced.push({ value: avgValue, date: slice[slice.length - 1].date, iso: slice[slice.length - 1].iso });
+                }
+                series = reduced;
+            }
             this._timeSeriesCache.set(tsCacheKey, { built: Date.now(), data: series });
             return series;
         } catch (err) {
