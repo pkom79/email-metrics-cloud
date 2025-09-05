@@ -187,31 +187,22 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
     const chartHeight = 320;
     const innerHeight = chartHeight - topPad - bottomPad;
 
-    // Y ticks
-    const yTicks = useMemo(() => {
-        if (maxVal <= 0) return [0];
-        const desired = 5;
-        const rawStep = maxVal / desired;
+    // Unified nice scaling (avoids mismatch between grid & bar heights)
+    const { yTicks, scaleMax } = useMemo(() => {
+        if (maxVal <= 0) return { yTicks: [0], scaleMax: 0 };
+        const desired = 5; // target tick count (approx)
+        const rawStep = maxVal / (desired - 1);
         const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
         const norm = rawStep / mag;
         let step: number;
-        if (norm < 1.2) step = 1 * mag; else if (norm < 2.5) step = 2 * mag; else if (norm < 5) step = 5 * mag; else step = 10 * mag;
-        const top = Math.ceil(maxVal / step) * step; // round up so last tick not squeezed against previous
+        if (norm < 1.5) step = 1 * mag; else if (norm < 3) step = 2 * mag; else if (norm < 7.5) step = 5 * mag; else step = 10 * mag;
+        let top = Math.ceil(maxVal / step) * step;
+        // Reduce excessive overshoot (>20% above data max) by stepping down once if safe.
+        if (top / maxVal > 1.2 && top - step >= maxVal) top -= step;
         const ticks: number[] = [];
         for (let v = 0; v <= top + 0.0001; v += step) ticks.push(v);
-        // Safety filter: remove any ticks that would render closer than 14px vertically
-        const minPxGap = 14;
-        const filtered: number[] = [];
-        let lastY = Infinity;
-        ticks.forEach(v => {
-            const h = (v / top) * (chartHeight - topPad - bottomPad);
-            const y = chartHeight - bottomPad - h;
-            if (Math.abs(y - lastY) < minPxGap) return; // skip crowded
-            filtered.push(v);
-            lastY = y;
-        });
-        return filtered;
-    }, [maxVal, chartHeight]);
+        return { yTicks: ticks, scaleMax: top };
+    }, [maxVal]);
 
     // X label sampling
     const xLabelStep = useMemo(() => {
@@ -263,7 +254,7 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                                 <svg width={Math.min(svgWidth, targetWidth)} height={chartHeight} className="block select-none">
                                     {/* Y grid & labels */}
                                     {yTicks.map((t, i) => {
-                                        const h = maxVal > 0 ? (t / maxVal) * innerHeight : 0;
+                                        const h = scaleMax > 0 ? (t / scaleMax) * innerHeight : 0;
                                         const y = chartHeight - bottomPad - h;
                                         return (
                                             <g key={i}>
@@ -276,7 +267,8 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                                     <line x1={leftPad} x2={leftPad + innerWidth} y1={chartHeight - bottomPad} y2={chartHeight - bottomPad} className="stroke-gray-300 dark:stroke-gray-700" />
                                     {/* Bars */}
                                     {activeSeries.map((p, i) => {
-                                        const h = maxVal > 0 ? (p.value / maxVal) * innerHeight : 0;
+                                        const hRaw = scaleMax > 0 ? (p.value / scaleMax) * innerHeight : 0;
+                                        const h = p.value === 0 ? Math.max(1, hRaw) : hRaw; // ensure hit area for zero value
                                         const x = leftPad + i * (barWidth + barGap);
                                         const y = chartHeight - bottomPad - h;
                                         const showLabel = i % xLabelStep === 0;
@@ -295,7 +287,7 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                                         {(() => {
                                             const p = activeSeries[hoverIndex];
                                             const x = leftPad + hoverIndex * (barWidth + barGap) + barWidth / 2;
-                                            const h = maxVal > 0 ? (p.value / maxVal) * innerHeight : 0;
+                                            const h = scaleMax > 0 ? (p.value / scaleMax) * innerHeight : 0;
                                             const y = chartHeight - bottomPad - h - 8;
                                             const rangeLabel = buildRangeLabel(p, granularity);
                                             return (
