@@ -297,7 +297,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     // Safe granularity
     const safeGranularity = useMemo(() => { try { if (dm.getCampaigns().length === 0 && dm.getFlowEmails().length === 0) return 'daily'; if (customActive && customDays > 0) return dm.getGranularityForDateRange(`${customDays}d`); if (dateRange === 'all') return dm.getGranularityForDateRange('all'); return dm.getGranularityForDateRange(dateRange === 'custom' ? '30d' : dateRange); } catch { return 'daily'; } }, [dateRange, customActive, customDays, dm]);
-    useEffect(() => { setGranularity(safeGranularity); }, [safeGranularity]);
+    // Guard state update to prevent render feedback loops on heavy accounts
+    useEffect(() => { if (granularity !== safeGranularity) setGranularity(safeGranularity); }, [safeGranularity, granularity]);
 
     // Sticky observer (desktop only now)
     useEffect(() => {

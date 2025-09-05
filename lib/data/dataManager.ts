@@ -668,75 +668,32 @@ export class DataManager {
 
     getGranularityForDateRange(dateRange: string): 'daily' | 'weekly' | 'monthly' {
         try {
-            console.log('getGranularityForDateRange called with:', dateRange);
-
             if (dateRange === 'all') {
-                // Safely handle case where no data exists yet
-                if (this.campaigns.length === 0 && this.flowEmails.length === 0) {
-                    console.log('No data available, returning daily granularity');
-                    return 'daily'; // Safe fallback
-                }
-
-                // Get valid timestamps with better error handling
-                const campaignDates = this.campaigns
-                    .map(c => {
-                        try {
-                            const time = c.sentDate instanceof Date ? c.sentDate.getTime() : NaN;
-                            return !isNaN(time) && isFinite(time) ? time : null;
-                        } catch {
-                            return null;
-                        }
-                    })
-                    .filter((t): t is number => t !== null);
-
-                const flowDates = this.flowEmails
-                    .map(f => {
-                        try {
-                            const time = f.sentDate instanceof Date ? f.sentDate.getTime() : NaN;
-                            return !isNaN(time) && isFinite(time) ? time : null;
-                        } catch {
-                            return null;
-                        }
-                    })
-                    .filter((t): t is number => t !== null);
-
+                if (this.campaigns.length === 0 && this.flowEmails.length === 0) return 'daily';
+                const campaignDates = this.campaigns.map(c => c.sentDate instanceof Date ? c.sentDate.getTime() : NaN).filter(t => Number.isFinite(t));
+                const flowDates = this.flowEmails.map(f => f.sentDate instanceof Date ? f.sentDate.getTime() : NaN).filter(t => Number.isFinite(t));
                 const allDates = [...campaignDates, ...flowDates];
-                console.log('Valid dates found:', allDates.length);
-
-                if (allDates.length === 0) {
-                    console.log('No valid dates found, returning daily granularity');
-                    return 'daily'; // Safe fallback
-                }
-
-                const oldestTime = Math.min(...allDates);
+                if (!allDates.length) return 'daily';
+                let oldestTime = Math.min(...allDates);
                 const newestTime = Math.max(...allDates);
-
-                // Validate timestamps
-                if (!isFinite(oldestTime) || !isFinite(newestTime) || isNaN(oldestTime) || isNaN(newestTime)) {
-                    console.warn('Invalid timestamps calculated, returning daily granularity');
-                    return 'daily';
+                if (!Number.isFinite(oldestTime) || !Number.isFinite(newestTime)) return 'daily';
+                // Apply same 2-year cap used in time series so granularity logic aligns
+                const maxSpanMs = DataManager.MAX_HISTORY_DAYS * 86400000;
+                if (newestTime - oldestTime > maxSpanMs) {
+                    oldestTime = newestTime - maxSpanMs + 1;
                 }
-
-                const daysDiff = Math.floor((newestTime - oldestTime) / (1000 * 60 * 60 * 24));
-                console.log('Days difference calculated:', daysDiff);
-
+                const daysDiff = Math.floor((newestTime - oldestTime) / 86400000);
                 if (daysDiff <= 60) return 'daily';
                 if (daysDiff <= 365) return 'weekly';
                 return 'monthly';
             }
-
             const days = parseInt(dateRange.replace('d', ''));
-            if (isNaN(days) || days <= 0) {
-                console.warn('Invalid day range, returning daily granularity');
-                return 'daily'; // Safe fallback
-            }
-
+            if (!Number.isFinite(days) || days <= 0) return 'daily';
             if (days <= 60) return 'daily';
             if (days <= 365) return 'weekly';
             return 'monthly';
-        } catch (error) {
-            console.error('Error in getGranularityForDateRange:', error, 'for dateRange:', dateRange);
-            return 'daily'; // Safe fallback
+        } catch {
+            return 'daily';
         }
     }
 
