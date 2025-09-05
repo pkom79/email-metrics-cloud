@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ChevronDown, Workflow, GitBranch, AlertTriangle, ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 
@@ -181,11 +181,16 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         return Object.entries(map).map(([flowName, metrics]) => ({ flowName, metrics }));
     }, [currentFlowEmails]);
 
+    // Guard against excessive recomputation causing deep stacks by caching last inputs
+    const lastMetricsRef = useRef<{ key: string; data: FlowStepMetrics[] } | null>(null);
     const flowStepMetrics = useMemo((): FlowStepMetrics[] => {
         if (!selectedFlow || !flowSequenceInfo) {
             return [];
         }
-
+        const cacheKey = `${selectedFlow}|${dateRange}|${granularity}|${customFrom || ''}|${customTo || ''}|${currentFlowEmails.length}`;
+        if (lastMetricsRef.current && lastMetricsRef.current.key === cacheKey) {
+            return lastMetricsRef.current.data;
+        }
         const flowEmails = currentFlowEmails.filter(email => email.flowName === selectedFlow);
         console.log(`Flow emails for ${selectedFlow}:`, flowEmails.length);
 
@@ -285,13 +290,27 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         });
 
         console.log(`Generated ${stepMetrics.length} step metrics for ${selectedFlow}`);
+        lastMetricsRef.current = { key: cacheKey, data: stepMetrics };
         return stepMetrics;
-    }, [selectedFlow, currentFlowEmails, flowSequenceInfo]);
+    }, [selectedFlow, currentFlowEmails, flowSequenceInfo, dateRange, granularity, customFrom, customTo]);
 
+    // Sparkline cache with downsampling to prevent excessive point counts & deep render stacks
+    const sparklineCacheRef = useRef<Map<string, { value: number; date: string }[]>>(new Map());
     const getStepSparklineData = React.useCallback((sequencePosition: number, metric: string) => {
         if (!selectedFlow) return [] as { value: number; date: string }[];
-        const chartEmails = currentFlowEmails;
-        return dataManager.getFlowStepTimeSeries(chartEmails, selectedFlow, sequencePosition, metric, dateRange, granularity, customFrom, customTo);
+        const baseKey = `${selectedFlow}|${sequencePosition}|${metric}|${dateRange}|${granularity}|${customFrom || ''}|${customTo || ''}`;
+        const cached = sparklineCacheRef.current.get(baseKey);
+        if (cached) return cached;
+        const raw = dataManager.getFlowStepTimeSeries(currentFlowEmails, selectedFlow, sequencePosition, metric, dateRange, granularity, customFrom, customTo) || [];
+        // Downsample if more than 600 points (safety threshold)
+        const MAX_POINTS = 600;
+        let processed = raw;
+        if (raw.length > MAX_POINTS) {
+            const stride = Math.ceil(raw.length / MAX_POINTS);
+            processed = raw.filter((_, i) => i % stride === 0);
+        }
+        sparklineCacheRef.current.set(baseKey, processed);
+        return processed;
     }, [selectedFlow, currentFlowEmails, dataManager, dateRange, granularity, customFrom, customTo]);
 
     const sharedYAxisRange = useMemo(() => {
