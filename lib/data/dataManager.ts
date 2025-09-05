@@ -160,11 +160,19 @@ export class DataManager {
         this._seriesBaseCache.clear();
     }
 
+    private static readonly MAX_HISTORY_DAYS = 365 * 2; // 2-year cap
+
     private _computeDateRangeForTimeSeries(dateRange: string, customFrom?: string, customTo?: string): { startDate: Date; endDate: Date } | null {
         try {
             if (dateRange === 'custom' && customFrom && customTo) {
-                const startDate = new Date(customFrom + 'T00:00:00');
-                const endDate = new Date(customTo + 'T23:59:59');
+                let startDate = new Date(customFrom + 'T00:00:00');
+                let endDate = new Date(customTo + 'T23:59:59');
+                // Enforce 2-year cap relative to endDate
+                const maxSpanMs = DataManager.MAX_HISTORY_DAYS * 86400000;
+                if (endDate.getTime() - startDate.getTime() > maxSpanMs) {
+                    startDate = new Date(endDate.getTime() - maxSpanMs + 1);
+                    startDate.setHours(0,0,0,0);
+                }
                 return { startDate, endDate };
             }
             const allEmails = [...this.campaigns, ...this.flowEmails].filter(e => e.sentDate instanceof Date && !isNaN(e.sentDate.getTime()));
@@ -179,6 +187,13 @@ export class DataManager {
                 endDate = new Date(Math.max(...times)); endDate.setHours(23, 59, 59, 999);
                 const days = parseInt(dateRange.replace('d', ''));
                 startDate = new Date(endDate); startDate.setDate(startDate.getDate() - days + 1); startDate.setHours(0, 0, 0, 0);
+            }
+            // Apply 2-year cap
+            const spanMs = endDate.getTime() - startDate.getTime();
+            const maxSpanMs = DataManager.MAX_HISTORY_DAYS * 86400000;
+            if (spanMs > maxSpanMs) {
+                startDate = new Date(endDate.getTime() - maxSpanMs + 1);
+                startDate.setHours(0,0,0,0);
             }
             return { startDate, endDate };
         } catch { return null; }
