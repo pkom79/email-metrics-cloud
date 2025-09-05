@@ -212,6 +212,14 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
         if (s >= 40) return { label: 'OK', color: 'text-amber-600 dark:text-amber-400' };
         return { label: 'Poor', color: 'text-rose-600 dark:text-rose-400' };
     })();
+    const reliabilityExplanation = (() => {
+        const reliable = stats.reliabilityScore >= 60; // Good or Excellent
+        const base = reliable ? 'Revenue appears reliable for the selected range.' : 'Revenue is not yet reliable for the selected range.';
+        if (reliabilityClass.label === 'Excellent') return `${base} Variability is very low.`;
+        if (reliabilityClass.label === 'Good') return `${base} Variability is modest.`;
+        if (reliabilityClass.label === 'OK') return `${base} Moderate variability present.`;
+        return `${base} High variability observed.`;
+    })();
 
     // Layout + axes geometry
     const targetWidth = 1100;
@@ -296,7 +304,7 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                         <div className="p-6 text-center text-sm text-gray-600 dark:text-gray-300">No data available for the selected filters.</div>
                     ) : (
                         <div className="relative">
-                            {granularity === 'daily' && fullBuckets.clusterSize && (
+                            {granularity === 'daily' && fullBuckets.clusterSize && fullBuckets.clusterSize > 1 && (
                                 <div className="absolute -top-4 left-4 text-[10px] italic text-gray-500 dark:text-gray-400">* Daily data clustered into {fullBuckets.clusterSize}-day buckets.</div>
                             )}
                             <div className="mx-auto relative" style={{ width: Math.min(svgWidth, targetWidth) }}>
@@ -314,6 +322,20 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                                     })}
                                     {/* X axis */}
                                     <line x1={leftPad} x2={leftPad + innerWidth} y1={chartHeight - bottomPad} y2={chartHeight - bottomPad} className="stroke-gray-300 dark:stroke-gray-700" />
+                                    {/* Mean line */}
+                                    {stats.count > 0 && scaleMax > 0 && (
+                                        (() => {
+                                            const meanY = chartHeight - bottomPad - (stats.mean / scaleMax) * innerHeight;
+                                            return (
+                                                <g>
+                                                    <line x1={leftPad} x2={leftPad + innerWidth} y1={meanY} y2={meanY} stroke="#d8b4fe" strokeWidth={1} strokeDasharray="4 4" />
+                                                    {innerHeight > 40 && (
+                                                        <text x={leftPad + 4} y={meanY - 4} fontSize={10} className="fill-purple-400">Mean</text>
+                                                    )}
+                                                </g>
+                                            );
+                                        })()
+                                    )}
                                     {/* Bars */}
                                     {activeSeries.map((p, i) => {
                                         const hRaw = scaleMax > 0 ? (p.value / scaleMax) * innerHeight : 0;
@@ -355,20 +377,20 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                     )}
                     {meetsThreshold && stats.count > 1 && (
                         <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 p-4">
-                                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Mean</div>
+                            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+                                <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Mean</div>
                                 <div className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrencyFull(stats.mean)}</div>
                                 <div className="text-[11px] text-gray-500 mt-1">Average {granularity} revenue (full periods)</div>
                             </div>
-                            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 p-4">
-                                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Std Dev</div>
+                            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+                                <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Std Dev</div>
                                 <div className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrencyFull(stats.stdDev)}</div>
                                 <div className="text-[11px] text-gray-500 mt-1">Variability across full periods</div>
                             </div>
-                            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 p-4">
-                                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Reliability Score</div>
+                            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+                                <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Reliability Score</div>
                                 <div className={`text-lg font-bold ${reliabilityClass.color}`}>{stats.reliabilityScore.toFixed(0)}%</div>
-                                <div className="text-[11px] text-gray-500 mt-1">1 - (Std Dev / Mean)</div>
+                                <div className="text-[11px] text-gray-500 mt-1 leading-snug">{reliabilityExplanation}</div>
                             </div>
                         </div>
                     )}
