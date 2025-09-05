@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Workflow, GitBranch, AlertTriangle, ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 
@@ -38,10 +39,11 @@ interface FlowStepMetrics {
 export default function FlowStepAnalysis({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period', suppressTitle = false }: FlowStepAnalysisProps) {
     const [hoveredPoint, setHoveredPoint] = useState<{
         chartIndex: number;
-        x: number;
-        y: number;
+        x: number; // svg local
+        y: number; // svg local
         value: number;
         date: string;
+        svgRect: { left: number; top: number; width: number; height: number };
     } | null>(null);
 
     const metricOptions = [
@@ -586,12 +588,15 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                                     style={{ cursor: 'pointer' }}
                                                     onMouseEnter={(e) => {
                                                         e.stopPropagation();
+                                                        const svgEl = (e.currentTarget.ownerSVGElement || (e.currentTarget as any));
+                                                        const rect = svgEl.getBoundingClientRect();
                                                         setHoveredPoint({
                                                             chartIndex: index,
                                                             x: point.x,
                                                             y: point.y,
                                                             value: point.value,
-                                                            date: point.date
+                                                            date: point.date,
+                                                            svgRect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
                                                         });
                                                     }}
                                                     onMouseLeave={(e) => {
@@ -615,53 +620,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                     );
                                 })()}
                             </svg>
-                            {/* Tooltip */}
-                            {hoveredPoint && hoveredPoint.chartIndex === index && (
-                                (() => {
-                                    // Heuristic tooltip width (kept constant to avoid hooks for measurement inside render function)
-                                    const EST_WIDTH = 200; // px
-                                    // Compute left in px within 0..900 coordinate space then clamp
-                                    let leftPx = hoveredPoint.x - EST_WIDTH / 2;
-                                    if (leftPx < 4) leftPx = 4;
-                                    if (leftPx + EST_WIDTH > 900 - 4) leftPx = 900 - EST_WIDTH - 4;
-                                    // Compute top (anchor above point) and clamp to stay in viewport of chart
-                                    let topPx = hoveredPoint.y - 14; // raise above point
-                                    if (topPx < 8) topPx = 8; // padding from top
-                                    // Convert px to percentage relative to 900x160 viewBox for responsiveness
-                                    const leftPercent = (leftPx / 900) * 100;
-                                    const topPercent = (topPx / 160) * 100;
-                                    return (
-                                        <div
-                                            className="absolute z-20 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl pointer-events-none border border-gray-700"
-                                            style={{
-                                                left: `${leftPercent}%`,
-                                                top: `${topPercent}%`,
-                                                transform: 'translate(0,-100%)',
-                                                maxWidth: EST_WIDTH,
-                                                whiteSpace: 'nowrap'
-                                            }}
-                                        >
-                                            <div className="font-medium">{new Date(hoveredPoint.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
-                                            <div className="text-xs opacity-90">{(() => {
-                                                const metricConfig = metricOptions.find(m => m.value === selectedMetric);
-                                                switch (metricConfig?.format) {
-                                                    case 'currency':
-                                                        return hoveredPoint.value >= 1000
-                                                            ? `$${hoveredPoint.value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`
-                                                            : `$${hoveredPoint.value.toFixed(1)}`;
-                                                    case 'percentage':
-                                                        const formatted = hoveredPoint.value.toFixed(1);
-                                                        const num = parseFloat(formatted);
-                                                        return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : `${formatted}%`;
-                                                    case 'number':
-                                                    default:
-                                                        return hoveredPoint.value.toLocaleString('en-US');
-                                                }
-                                            })()}</div>
-                                        </div>
-                                    );
-                                })()
-                            )}
+                            {/* Tooltip moved to portal */}
                         </div>
                     ) : value === 0 ? (
                         <div className="flex items-center justify-center h-full">
@@ -723,6 +682,38 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 <div className="space-y-4">
                     {flowStepMetrics.map((step, index) => renderStepChart(step, index))}
                 </div>
+            )}
+            {typeof document !== 'undefined' && hoveredPoint && createPortal(
+                (() => {
+                    const metricConfig = (metricOptions as any).find((m: any) => m.value === selectedMetric);
+                    const formatVal = (val: number) => {
+                        switch (metricConfig?.format) {
+                            case 'currency': return val >= 1000 ? `$${val.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}` : `$${val.toFixed(1)}`;
+                            case 'percentage': {
+                                const f = val.toFixed(1); const num = parseFloat(f); return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : `${f}%`;
+                            }
+                            case 'number': default: return val.toLocaleString('en-US');
+                        }
+                    };
+                    const widthPx = 220;
+                    const { svgRect } = hoveredPoint;
+                    // Convert svg local (viewBox 900x160) to screen coords
+                    const relX = hoveredPoint.x / 900; // 0..1
+                    const relY = hoveredPoint.y / 160; // 0..1
+                    let left = svgRect.left + relX * svgRect.width - widthPx / 2;
+                    let top = svgRect.top + relY * svgRect.height - 12; // 12px above point baseline
+                    const pad = 8;
+                    if (left < pad) left = pad;
+                    if (left + widthPx + pad > window.innerWidth) left = window.innerWidth - widthPx - pad;
+                    if (top < pad) top = svgRect.top + relY * svgRect.height + 20; // place below point if near top
+                    return (
+                        <div className="fixed z-[999] px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl border border-gray-700 pointer-events-none" style={{ left, top, width: widthPx, transform: 'translateY(-100%)' }}>
+                            <div className="font-medium mb-0.5">{new Date(hoveredPoint.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+                            <div className="text-xs opacity-90">{formatVal(hoveredPoint.value)}</div>
+                        </div>
+                    );
+                })(),
+                document.body
             )}
         </section>
     );
