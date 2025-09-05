@@ -105,12 +105,17 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
     }), [rawAll, rawCampaigns, rawFlows, granularity, rangeBoundary]);
 
     // Minimum threshold check
+    // Daily uses actual span of selected date range (inclusive) rather than count of returned points
+    // to avoid false negatives when some days have no data and might be omitted by DataManager.
     const meetsThreshold = useMemo(() => {
         if (granularity === 'monthly') return trimmed.all.length >= 3; // 3 full months
         if (granularity === 'weekly') return trimmed.all.length >= 12; // 12 full weeks
-        if (granularity === 'daily') return rawAll.length >= 90;       // 90 days
+        if (granularity === 'daily') {
+            const daySpan = Math.floor((rangeBoundary.end.getTime() - rangeBoundary.start.getTime()) / 86400000) + 1; // inclusive
+            return daySpan >= 90; // 90 calendar days selected
+        }
         return false;
-    }, [granularity, trimmed, rawAll.length]);
+    }, [granularity, trimmed.all.length, rangeBoundary]);
 
     const activeSeries = mode === 'all' ? trimmed.all : mode === 'campaigns' ? trimmed.campaigns : trimmed.flows;
     const maxVal = activeSeries.reduce((m, p) => Math.max(m, p.value), 0);
