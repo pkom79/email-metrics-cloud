@@ -6,6 +6,7 @@ import DayOfWeekPerformance from './DayOfWeekPerformance';
 import HourOfDayPerformance from './HourOfDayPerformance';
 import RevenueSplitBar from './RevenueSplitBar';
 import SendVolumeImpact from './SendVolumeImpact';
+import RevenueReliability from './RevenueReliability';
 import AudienceCharts from './AudienceCharts';
 import FlowStepAnalysis from './FlowStepAnalysis';
 import FlowStepDropOff from './FlowStepDropOff';
@@ -589,7 +590,16 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             <MetricCard title="Spam Rate" value={formatPercent(overviewMetrics.spamRate.value)} change={overviewMetrics.spamRate.change} isPositive={overviewMetrics.spamRate.isPositive} previousValue={overviewMetrics.spamRate.previousValue} previousPeriod={overviewMetrics.spamRate.previousPeriod} dateRange={dateRange} metricKey="spamRate" sparklineData={overviewSeries.spamRate} compareMode={compareMode} />
                             <MetricCard title="Bounce Rate" value={formatPercent(overviewMetrics.bounceRate.value)} change={overviewMetrics.bounceRate.change} isPositive={overviewMetrics.bounceRate.isPositive} previousValue={overviewMetrics.bounceRate.previousValue} previousPeriod={overviewMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={overviewSeries.bounceRate} compareMode={compareMode} />
                         </div>
-                        {/* Weekly Revenue Reliability module removed */}
+                        {/* Revenue Reliability (new module) */}
+                        <RevenueReliability
+                            campaigns={filteredCampaigns}
+                            flows={filteredFlowEmails}
+                            dm={dm}
+                            dateRange={dateRange}
+                            granularity={granularity}
+                            customFrom={customFrom}
+                            customTo={customTo}
+                        />
                         <SendVolumeImpact dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
                     </section>
                 )}
