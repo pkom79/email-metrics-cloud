@@ -25,6 +25,8 @@ export interface ReliabilityResult {
   points: ReliabilityPoint[];
   median: number | null;
   mad: number | null;
+  zeroCampaignWeeks?: number; // count of genuine zero campaign weeks in analysis range
+  estLostCampaignRevenue?: number; // conservative estimate of revenue lost due to zero campaign weeks
 }
 
 const ONE_DAY = 24 * 60 * 60 * 1000;
@@ -86,6 +88,66 @@ export function buildWeeklyAggregates(campaigns: ProcessedCampaign[], flows: Pro
   return weeks;
 }
 
+/** Build a continuous sequence of full Monday-start weeks between startDate and endDate (inclusive) using raw sends; does NOT fabricate zero weeks beyond needed timeline. */
+export function buildWeeklyAggregatesInRange(
+  campaigns: ProcessedCampaign[],
+  flows: ProcessedFlowEmail[],
+  startDate: Date,
+  endDate: Date
+): WeeklyAggregate[] {
+  if (endDate < startDate) return [];
+  const startMonday = startOfMonday(startDate);
+  // Ensure end boundary covers entire last week
+  const endMonday = startOfMonday(endDate);
+  const ONE_WEEK = 7 * ONE_DAY;
+  // Aggregate raw sends first by canonical Monday key
+  interface Bucket { totalRevenue: number; campaignRevenue: number; flowRevenue: number; daySet: Set<string>; weekStart: Date; }
+  const map: Record<string, Bucket> = {};
+  const add = (dt: Date, revenue: number | undefined, type: 'campaign' | 'flow') => {
+    if (dt < startMonday || dt > endDate) return; // outside
+    const ws = startOfMonday(dt);
+    if (ws < startMonday || ws > endMonday) return;
+    const key = ws.toISOString();
+    if (!map[key]) map[key] = { totalRevenue: 0, campaignRevenue: 0, flowRevenue: 0, daySet: new Set(), weekStart: ws };
+    const b = map[key];
+    const r = revenue || 0;
+    b.totalRevenue += r;
+    if (type === 'campaign') b.campaignRevenue += r; else b.flowRevenue += r;
+    b.daySet.add(dt.toISOString().slice(0,10));
+  };
+  for (const c of campaigns) add(c.sentDate, c.revenue, 'campaign');
+  for (const f of flows) add(f.sentDate, f.revenue, 'flow');
+  const weeks: WeeklyAggregate[] = [];
+  for (let t = startMonday.getTime(); t <= endMonday.getTime(); t += ONE_WEEK) {
+    const ws = new Date(t);
+    const key = ws.toISOString();
+    if (map[key]) {
+      const b = map[key];
+      weeks.push({
+        weekStart: b.weekStart,
+        label: b.weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        totalRevenue: b.totalRevenue,
+        campaignRevenue: b.campaignRevenue,
+        flowRevenue: b.flowRevenue,
+        daySet: b.daySet,
+        isCompleteWeek: (b.weekStart.getTime() + 7*ONE_DAY) <= Date.now()
+      });
+    } else {
+      // Only include a zero week if it lies wholly within range; genuine zero (no sends of either type)
+      weeks.push({
+        weekStart: ws,
+        label: ws.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        totalRevenue: 0,
+        campaignRevenue: 0,
+        flowRevenue: 0,
+        daySet: new Set(),
+        isCompleteWeek: (ws.getTime() + 7*ONE_DAY) <= Date.now()
+      });
+    }
+  }
+  return weeks;
+}
+
 /** Median helper */
 function median(nums: number[]): number { if (!nums.length) return 0; const s=[...nums].sort((a,b)=>a-b); const m=Math.floor(s.length/2); return s.length%2? s[m] : (s[m-1]+s[m])/2; }
 
@@ -141,5 +203,35 @@ export function computeReliability(weeks: WeeklyAggregate[], options: ComputeRel
     }
     return { label: w.label, revenue, index: scaleMed>0? revenue/scaleMed : 0, isAnomaly: anomaly, zScore: z };
   });
-  return { reliability, trendDelta, windowWeeks: useWindow.length, points, median: med, mad };
+  // Zero campaign week analysis (only meaningful when scope is campaigns or all)
+  let zeroWeeks = 0;
+  let lostRev = 0;
+  if (options.scope === 'campaigns' || options.scope === 'all') {
+    // Build campaign revenue list aligned with weeks
+    const campaignSeries = weeks.map(w => w.campaignRevenue);
+    // Identify indices of zero campaign weeks that are complete weeks
+    const zeroIdx = weeks.map((w,i)=> (w.isCompleteWeek && w.campaignRevenue === 0)? i : -1).filter(i=>i>=0);
+    // For each zero week ensure there exists at least one non-zero campaign week in total period to avoid skew if no campaigns ever
+    const anyCampaign = campaignSeries.some(v=>v>0);
+    if (anyCampaign) {
+      zeroWeeks = zeroIdx.length;
+      // Precompute nearest non-zero neighbors for each zero week
+      const nonZeroIndices = campaignSeries.map((v,i)=> v>0? i : -1).filter(i=>i>=0);
+      for (const zi of zeroIdx) {
+        // Find prev
+        let prevIdx: number | null = null; for (let i=nonZeroIndices.length-1;i>=0;i--) { if (nonZeroIndices[i] < zi) { prevIdx = nonZeroIndices[i]; break; } }
+        let nextIdx: number | null = null; for (let i=0;i<nonZeroIndices.length;i++) { if (nonZeroIndices[i] > zi) { nextIdx = nonZeroIndices[i]; break; } }
+        let estimate = 0;
+        if (prevIdx != null && nextIdx != null) {
+          estimate = 0.75 * ((campaignSeries[prevIdx] + campaignSeries[nextIdx]) / 2);
+        } else if (prevIdx != null) {
+          estimate = 0.75 * campaignSeries[prevIdx];
+        } else if (nextIdx != null) {
+          estimate = 0.75 * campaignSeries[nextIdx];
+        }
+        lostRev += estimate;
+      }
+    }
+  }
+  return { reliability, trendDelta, windowWeeks: useWindow.length, points, median: med, mad, zeroCampaignWeeks: zeroWeeks, estLostCampaignRevenue: lostRev>0? lostRev : undefined };
 }
