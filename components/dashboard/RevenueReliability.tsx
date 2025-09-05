@@ -333,8 +333,8 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
     return (
         <div className="mt-6">
             <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
-                <div className="px-4 py-4 sm:px-6 sm:py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4" style={{ padding: 16 }}>
-                    <div className="flex items-center gap-2">
+                <div className="px-4 py-4 sm:px-6 sm:py-4 flex flex-col lg:flex-row lg:items-start justify-between gap-6" style={{ padding: 16 }}>
+                    <div className="flex items-start gap-2">
                         {/* Left icon */}
                         <svg width="18" height="18" viewBox="0 0 24 24" className="text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="6" height="13" /><rect x="15" y="3" width="6" height="9" /><rect x="9" y="3" width="6" height="18" /></svg>
                         <div className="flex flex-col">
@@ -348,13 +348,10 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                                     </div>
                                 </span>
                             </h3>
-                            <div className="mt-1">
-                                <div className="text-[10px] font-semibold tracking-wide text-gray-600 dark:text-gray-400 uppercase">Avg {granularity === 'daily' ? 'Daily' : granularity === 'weekly' ? 'Weekly' : 'Monthly'} Revenue</div>
-                                <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">{formatCurrencyTwo(avgPerPeriod)}</div>
-                            </div>
+                            {/* Average moved to right block */}
                         </div>
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 w-full lg:w-auto">
+                    <div className="flex flex-col items-start lg:items-end gap-2 w-full lg:w-auto">
                         <div className="inline-flex rounded-lg overflow-hidden border border-purple-300 dark:border-purple-700 text-sm self-start">
                             {(['all', 'campaigns', 'flows'] as ViewMode[]).map(v => {
                                 const active = mode === v;
@@ -374,6 +371,10 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                                     >{label}</button>
                                 );
                             })}
+                        </div>
+                        <div className="mt-2 pt-1">
+                            <div className="text-[10px] font-semibold tracking-wide text-gray-600 dark:text-gray-400 uppercase text-left lg:text-right">Avg {granularity === 'daily' ? 'Daily' : granularity === 'weekly' ? 'Weekly' : 'Monthly'} Revenue</div>
+                            <div className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight text-left lg:text-right">{formatCurrencyTwo(avgPerPeriod)}</div>
                         </div>
                     </div>
                 </div>
