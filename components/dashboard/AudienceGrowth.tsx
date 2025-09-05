@@ -102,7 +102,25 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
     const yScale = (v: number) => innerH - (v / maxVal) * (innerH - 10);
     const seriesVals = buckets.map((b, i) => ({ x: i, v: metric === 'created' ? b.countCreated : metric === 'firstActive' ? b.countFirst : b.countSubscribed }));
     const seriesCompareVals = compareBuckets.length === buckets.length ? compareBuckets.map((b, i) => ({ x: i, v: metric === 'created' ? b.countCreated : metric === 'firstActive' ? b.countFirst : b.countSubscribed })) : [];
-    const buildPath = (pts: { x: number; v: number }[]) => { const pts2 = pts.filter(p => p.v > 0).map(p => ({ x: xScale(p.x), y: yScale(p.v) })); if (pts2.length < 2) return ''; const d = [`M${pts2[0].x} ${pts2[0].y}`]; for (let i = 0; i < pts2.length - 1; i++) { const p0 = pts2[i - 1] || pts2[i]; const p1 = pts2[i]; const p2 = pts2[i + 1]; const p3 = pts2[i + 2] || p2; const cp1x = p1.x + (p2.x - p0.x) / 6; const cp1y = p1.y + (p2.y - p0.y) / 6; const cp2x = p2.x - (p3.x - p1.x) / 6; const cp2y = p2.y - (p3.y - p1.y) / 6; d.push(`C${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x} ${p2.y}`); } return d.join(' '); };
+    // Monotone-ish cubic with clamped control points (Option B) – keeps zero points and prevents overshoot below 0 or above chart height.
+    const buildPath = (pts: { x: number; v: number }[]) => {
+        if (pts.length < 2) return '';
+        const P = pts.map(p => ({ x: xScale(p.x), y: yScale(p.v) }));
+        const clampY = (y: number) => Math.min(innerH, Math.max(0, y));
+        let d = `M${P[0].x} ${P[0].y}`;
+        for (let i = 0; i < P.length - 1; i++) {
+            const p0 = P[i - 1] || P[i];
+            const p1 = P[i];
+            const p2 = P[i + 1];
+            const p3 = P[i + 2] || p2;
+            const cp1x = p1.x + (p2.x - p0.x) / 6;
+            const cp1y = clampY(p1.y + (p2.y - p0.y) / 6);
+            const cp2x = p2.x - (p3.x - p1.x) / 6;
+            const cp2y = clampY(p2.y - (p3.y - p1.y) / 6);
+            d += ` C${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x} ${p2.y}`;
+        }
+        return d;
+    };
     const pathD = buildPath(seriesVals);
     // Compare path removed (only used for pct change summary)
     const comparePathD = '';
