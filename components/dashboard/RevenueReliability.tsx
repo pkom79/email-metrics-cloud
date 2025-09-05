@@ -221,6 +221,39 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
         return `${base} High variability observed.`;
     })();
 
+    // --- Campaign zero-revenue period detection & conservative lost revenue estimate ---
+    const campaignLost = useMemo(() => {
+        if (mode !== 'campaigns') return { zeroPeriods: 0, estimatedLost: 0 };
+        const series = granularity === 'daily' ? (fullBuckets.rawDailyCampaigns || []) : fullBuckets.campaigns;
+        if (!series.length) return { zeroPeriods: 0, estimatedLost: 0 };
+        const nonZeroValues = series.filter(p => p.value > 0).map(p => p.value).sort((a, b) => a - b);
+        if (!nonZeroValues.length) return { zeroPeriods: 0, estimatedLost: 0 };
+        const median = nonZeroValues[Math.floor(nonZeroValues.length / 2)];
+        const clamp = (v: number) => Math.min(v, median * 1.2); // don't exceed 120% of median (conservative)
+        let zeroPeriods = 0;
+        let estimatedLost = 0;
+        for (let i = 0; i < series.length; i++) {
+            if (series[i].value !== 0) continue;
+            // find nearest non-zero neighbors
+            let left: number | null = null, right: number | null = null;
+            for (let l = i - 1; l >= 0; l--) { if (series[l].value > 0) { left = series[l].value; break; } }
+            for (let r = i + 1; r < series.length; r++) { if (series[r].value > 0) { right = series[r].value; break; } }
+            if (left == null && right == null) continue; // cannot infer
+            zeroPeriods++;
+            let estimate: number;
+            if (left != null && right != null) {
+                // conservative: min of neighbors * 0.6
+                estimate = Math.min(left, right) * 0.6;
+            } else {
+                const only = (left != null ? left : right!);
+                estimate = only * 0.4; // single neighbor => more conservative
+            }
+            estimate = clamp(estimate);
+            estimatedLost += estimate;
+        }
+        return { zeroPeriods, estimatedLost };
+    }, [mode, granularity, fullBuckets]);
+
     // Layout + axes geometry
     const targetWidth = 1100;
     const leftPad = 56;
@@ -266,7 +299,20 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
         <div className="mt-6">
             <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
                 <div className="px-4 py-4 sm:px-6 sm:py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4" style={{ padding: 16 }}>
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Revenue Reliability</h3>
+                    <div className="flex items-center gap-2">
+                        {/* Left icon */}
+                        <svg width="18" height="18" viewBox="0 0 24 24" className="text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="6" height="13" /><rect x="15" y="3" width="6" height="9" /><rect x="9" y="3" width="6" height="18" /></svg>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                            Revenue Reliability
+                            {/* Info tooltip */}
+                            <span className="relative group inline-flex">
+                                <svg width="16" height="16" viewBox="0 0 24 24" className="text-gray-400 group-hover:text-gray-600 dark:text-gray-500 dark:group-hover:text-gray-300 cursor-help" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="8" /><path d="M10.9 12.2c.1-.9.8-1.2 1.5-1.2.9 0 1.6.6 1.6 1.5 0 1-.6 1.4-1.2 1.8-.6.4-1 .7-1 1.7" /></svg>
+                                <div className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity absolute left-1/2 -translate-x-1/2 top-6 z-10 w-64 p-3 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg text-[11px] leading-snug text-gray-700 dark:text-gray-200">
+                                    This module visualizes revenue consistency across periods. Lower variability relative to the average produces a higher reliability score. Daily ranges may be clustered for readability; mean line and stats exclude partial periods. Campaign mode additionally flags zero-revenue periods and estimates conservative lost revenue.
+                                </div>
+                            </span>
+                        </h3>
+                    </div>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-4 w-full lg:w-auto">
                         <div className="inline-flex rounded-lg overflow-hidden border border-purple-300 dark:border-purple-700 text-sm self-start">
                             {(['all', 'campaigns', 'flows'] as ViewMode[]).map(v => {
@@ -288,8 +334,8 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                                 );
                             })}
                         </div>
-                        <div className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Avg {granularity === 'daily' ? 'Daily' : granularity === 'weekly' ? 'Weekly' : 'Monthly'} Revenue: <span className="text-gray-900 dark:text-gray-100">{formatCurrencyFull(avgPerPeriod)}</span>
+                        <div className="text-[10px] sm:text-xs font-semibold tracking-wide text-gray-600 dark:text-gray-400 uppercase">
+                            AVG {granularity === 'daily' ? 'DAILY' : granularity === 'weekly' ? 'WEEKLY' : 'MONTHLY'} REVENUE: <span className="text-xl font-bold text-gray-900 dark:text-gray-100 align-middle ml-1">{formatCurrencyFull(avgPerPeriod)}</span>
                         </div>
                     </div>
                 </div>
@@ -391,6 +437,20 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
                                 <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Reliability Score</div>
                                 <div className={`text-lg font-bold ${reliabilityClass.color}`}>{stats.reliabilityScore.toFixed(0)}%</div>
                                 <div className="text-[11px] text-gray-500 mt-1 leading-snug">{reliabilityExplanation}</div>
+                            </div>
+                        </div>
+                    )}
+                    {mode === 'campaigns' && campaignLost.zeroPeriods > 0 && (
+                        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+                                <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Zero Revenue Periods</div>
+                                <div className="text-lg font-bold text-gray-900 dark:text-gray-100">{campaignLost.zeroPeriods}</div>
+                                <div className="text-[11px] text-gray-500 mt-1">Full {granularity} periods with no campaign revenue</div>
+                            </div>
+                            <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+                                <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Estimated Lost Revenue</div>
+                                <div className="text-lg font-bold text-gray-900 dark:text-gray-100">{formatCurrencyFull(campaignLost.estimatedLost)}</div>
+                                <div className="text-[11px] text-gray-500 mt-1 leading-snug">Conservative estimate based on nearby periods (capped at 120% median).</div>
                             </div>
                         </div>
                     )}
