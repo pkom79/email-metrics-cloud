@@ -95,15 +95,17 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
         const flowsSeries: SeriesPoint[] = [];
 
         if (granularity === 'daily') {
-            // Calendar days inclusive; cluster into 2-3 day buckets if many days so chart fits width (no horizontal scroll)
+            // Adaptive clustering for long ranges; widen cluster size progressively (up to 14 days) so chart stays within width.
             const startDay = new Date(start); startDay.setHours(0, 0, 0, 0);
             const endDay = new Date(end); endDay.setHours(0, 0, 0, 0);
             const totalDays = Math.floor((endDay.getTime() - startDay.getTime()) / 86400000) + 1;
-            const MAX_BARS = 110; // approximate capacity
+            const MAX_BARS = 120;
+            const maxClusterAllowed = totalDays > 1200 ? 14 : totalDays > 600 ? 10 : totalDays > 365 ? 7 : 5;
             let clusterSize = 1;
             if (totalDays > MAX_BARS) {
-                // escalate to 2 or 3 day clusters
-                clusterSize = Math.min(3, Math.max(2, Math.ceil(totalDays / MAX_BARS)));
+                clusterSize = Math.ceil(totalDays / MAX_BARS);
+                if (clusterSize < 2) clusterSize = 2;
+                if (clusterSize > maxClusterAllowed) clusterSize = maxClusterAllowed;
             }
             for (let offset = 0; offset < totalDays; offset += clusterSize) {
                 const cStart = new Date(startDay); cStart.setDate(cStart.getDate() + offset);
@@ -181,7 +183,7 @@ export default function RevenueReliability({ campaigns, flows, dm, dateRange, gr
     const innerTarget = targetWidth - leftPad - rightPad;
     const barGap = 6; // clustering ensures count manageable
     const barCount = activeSeries.length;
-    const barWidth = barCount > 0 ? Math.max(4, Math.min(36, (innerTarget - barGap * (barCount - 1)) / barCount)) : 0;
+    const barWidth = barCount > 0 ? Math.max(2, Math.min(36, (innerTarget - barGap * (barCount - 1)) / barCount)) : 0;
     const innerWidth = barCount > 0 ? barWidth * barCount + barGap * (barCount - 1) : innerTarget;
     const svgWidth = innerWidth + leftPad + rightPad;
     const chartHeight = 320;
