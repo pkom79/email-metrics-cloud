@@ -27,6 +27,11 @@ export interface RevenueReliabilityProps {
 type ViewMode = 'all' | 'campaigns' | 'flows';
 
 export default function RevenueReliability({ campaigns, flows, dm, dateRange, granularity, customFrom, customTo }: RevenueReliabilityProps) {
+    const debugMode = typeof window !== 'undefined' && (window as any).__EM_DEBUG;
+    if (debugMode) {
+        // eslint-disable-next-line no-console
+        console.count?.('[EM Debug] RevenueReliability render');
+    }
     const [mode, setMode] = useState<ViewMode>('all');
     const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 

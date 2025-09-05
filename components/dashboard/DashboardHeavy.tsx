@@ -73,6 +73,14 @@ async function loadAccountData(dm: any, accountId: string): Promise<boolean> {
 }
 
 export default function DashboardHeavy({ businessName, userId }: { businessName?: string; userId?: string }) {
+    // Debug flag (enable by adding ?debug=1 to URL) to instrument potential render loops
+    const debugMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1';
+    if (debugMode) {
+        // Count renders (avoid overwhelming logs by sampling)
+        // eslint-disable-next-line no-console
+        console.count?.('[EM Debug] DashboardHeavy render');
+        if (typeof window !== 'undefined') (window as any).__EM_DEBUG = true;
+    }
     // Set user ID for data isolation
     useEffect(() => { if (userId) DataManager.setUserId(userId); }, [userId]);
     const dm = useMemo(() => DataManager.getInstance(), []);

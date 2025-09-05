@@ -479,6 +479,38 @@ export class DataManager {
         customTo?: string
     ): { value: number; date: string }[] {
         try {
+            // Debug instrumentation: track per-frame invocation volume to surface potential render loops.
+            if (typeof window !== 'undefined') {
+                const w: any = window as any;
+                if (w.__EM_DEBUG) {
+                    // Initialize frame counter + schedule reset on next animation frame.
+                    if (typeof w.__EM_TS_FRAME_COUNT !== 'number') w.__EM_TS_FRAME_COUNT = 0;
+                    if (!w.__EM_TS_RESET_SCHED) {
+                        w.__EM_TS_RESET_SCHED = true;
+                        try {
+                            (window.requestAnimationFrame || function (cb) { return setTimeout(cb, 16); })(() => {
+                                w.__EM_TS_FRAME_COUNT = 0;
+                                w.__EM_TS_RESET_SCHED = false;
+                            });
+                        } catch {
+                            w.__EM_TS_FRAME_COUNT = 0;
+                            w.__EM_TS_RESET_SCHED = false;
+                        }
+                    }
+                    w.__EM_TS_FRAME_COUNT++;
+                    if (w.__EM_TS_FRAME_COUNT === 200) {
+                        console.warn('[EM Debug] High getMetricTimeSeries call volume: 200+ in same frame (possible expensive render).');
+                    } else if (w.__EM_TS_FRAME_COUNT === 400) {
+                        console.warn('[EM Debug] getMetricTimeSeries reached 400 calls in one frame. Investigate repeated useMemo recalculations.');
+                    } else if (w.__EM_TS_FRAME_COUNT === 600) {
+                        console.error('[EM Debug] getMetricTimeSeries exceeded 600 calls in one frame – likely render loop. Capturing diagnostic stack once.');
+                        if (!w.__EM_TS_OVERFLOW_REPORTED) {
+                            w.__EM_TS_OVERFLOW_REPORTED = true;
+                            try { throw new Error('Diagnostic: excessive getMetricTimeSeries calls (>600 in frame)'); } catch (e) { console.error(e); }
+                        }
+                    }
+                }
+            }
             const range = this._computeDateRangeForTimeSeries(dateRange, customFrom, customTo);
             if (!range) return [];
             const { startDate, endDate } = range;
