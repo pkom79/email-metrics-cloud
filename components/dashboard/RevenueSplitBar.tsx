@@ -40,7 +40,7 @@ export default function RevenueSplitBar({ campaigns, flows }: RevenueSplitBarPro
                         <div className="h-5 w-full rounded-md overflow-hidden flex text-[11px] font-medium tracking-tight select-none">
                             {/* Campaign segment */}
                             <div
-                                className="flex items-center justify-end pr-1 text-white bg-gradient-to-r from-purple-600 to-purple-500 transition-all"
+                                className="flex items-center justify-end pr-1 text-white bg-gradient-to-r from-indigo-600 to-indigo-500 transition-all"
                                 style={{ width: `${campaignPct}%` }}
                                 aria-label={`Campaign revenue ${campaignPct.toFixed(1)}%`}
                             >
@@ -48,7 +48,7 @@ export default function RevenueSplitBar({ campaigns, flows }: RevenueSplitBarPro
                             </div>
                             {/* Flow segment */}
                             <div
-                                className="flex items-center justify-start pl-1 text-white bg-gradient-to-r from-indigo-500 to-indigo-400 transition-all"
+                                className="flex items-center justify-start pl-1 text-white bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all"
                                 style={{ width: `${flowPct}%` }}
                                 aria-label={`Flow revenue ${flowPct.toFixed(1)}%`}
                             >
@@ -57,11 +57,11 @@ export default function RevenueSplitBar({ campaigns, flows }: RevenueSplitBarPro
                         </div>
                         <div className="flex items-center justify-between text-xs">
                             <div className="flex items-center gap-2">
-                                <span className="inline-block w-3 h-3 rounded-sm bg-purple-600" />
+                                <span className="inline-block w-3 h-3 rounded-sm bg-indigo-600" />
                                 <span className="text-gray-600 dark:text-gray-400">Campaigns: <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(campaignRevenue)}</span> ({campaignPct.toFixed(1)}%)</span>
                             </div>
                             <div className="flex items-center gap-2">
-                                <span className="inline-block w-3 h-3 rounded-sm bg-indigo-500" />
+                                <span className="inline-block w-3 h-3 rounded-sm bg-emerald-500" />
                                 <span className="text-gray-600 dark:text-gray-400">Flows: <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(flowRevenue)}</span> ({flowPct.toFixed(1)}%)</span>
                             </div>
                         </div>

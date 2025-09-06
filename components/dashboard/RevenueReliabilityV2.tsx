@@ -34,7 +34,7 @@ export default function RevenueReliabilityV2({ campaigns, flows, dateRange }: Pr
     const maxRevenue = Math.max(...revenues.filter(r => r > 0), 1);
     const median = result.median || 0;
     const mad = result.mad || 0;
-    const VIEW_W = 1000; const VIEW_H = 170; const GRAPH_H = 130; const PAD_L = 50; const PAD_R = 16;
+    const VIEW_W = 850; const VIEW_H = 190; const GRAPH_H = 130; const PAD_L = 50; const PAD_R = 16;
     const innerW = VIEW_W - PAD_L - PAD_R;
     const xScale = (i: number) => chartPoints.length <= 1 ? PAD_L + innerW / 2 : PAD_L + (i / (chartPoints.length - 1)) * innerW;
     const yScale = (rev: number) => GRAPH_H - (rev / maxRevenue) * (GRAPH_H - 10);
@@ -106,7 +106,7 @@ export default function RevenueReliabilityV2({ campaigns, flows, dateRange }: Pr
                         {(() => {
                             const count = Math.min(6, chartPoints.length);
                             const els: React.ReactElement[] = [];
-                            for (let i = 0; i < count; i++) { const idx = Math.round((i / (count - 1)) * (chartPoints.length - 1)); const w = chartPoints[idx]; const x = xScale(idx); els.push(<text key={i} x={x} y={GRAPH_H + 28} textAnchor="middle" fontSize={11} fill="#6b7280">{w.label}</text>); }
+                            for (let i = 0; i < count; i++) { const idx = Math.round((i / (count - 1)) * (chartPoints.length - 1)); const w = chartPoints[idx]; const x = xScale(idx) - 30; els.push(<text key={i} x={x} y={GRAPH_H + 35} textAnchor="start" fontSize={11} fill="#6b7280">{w.label}</text>); }
                             return els;
                         })()}
                         {/* Revenue axis ticks (left) */}

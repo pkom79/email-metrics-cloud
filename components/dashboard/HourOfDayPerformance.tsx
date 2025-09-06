@@ -53,21 +53,8 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
 
     // Match color scheme logic from DayOfWeekPerformance so colors stay consistent across charts
     const getColorScheme = (metric: string) => {
-        const colorSchemes = {
-            revenue: { primary: '#8b5cf6', secondary: '#a78bfa', light: '#c4b5fd' },
-            avgOrderValue: { primary: '#06b6d4', secondary: '#67e8f9', light: '#a7f3d0' },
-            revenuePerEmail: { primary: '#10b981', secondary: '#34d399', light: '#6ee7b7' },
-            openRate: { primary: '#f59e0b', secondary: '#fbbf24', light: '#fde047' },
-            clickRate: { primary: '#ef4444', secondary: '#f87171', light: '#fca5a5' },
-            clickToOpenRate: { primary: '#8b5cf6', secondary: '#a78bfa', light: '#c4b5fd' },
-            emailsSent: { primary: '#3b82f6', secondary: '#60a5fa', light: '#93c5fd' },
-            totalOrders: { primary: '#10b981', secondary: '#34d399', light: '#6ee7b7' },
-            conversionRate: { primary: '#f97316', secondary: '#fb923c', light: '#fdba74' },
-            unsubscribeRate: { primary: '#ef4444', secondary: '#f87171', light: '#fca5a5' },
-            spamRate: { primary: '#dc2626', secondary: '#ef4444', light: '#f87171' },
-            bounceRate: { primary: '#991b1b', secondary: '#dc2626', light: '#ef4444' }
-        } as const;
-        return (colorSchemes as any)[metric] || colorSchemes.revenue;
+        // All bars use indigo color for campaign performance section
+        return { primary: '#6366f1', secondary: '#6366f1', light: '#6366f1' };
     };
     const currentColorScheme = getColorScheme(selectedMetric);
 
@@ -212,7 +199,7 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
                                         y={y}
                                         width={Math.max(barWidth, 2)}
                                         height={barHeight}
-                                        fill={`url(#hourBarGradient-${selectedMetric})`}
+                                        fill={currentColorScheme.primary}
                                         className="cursor-pointer transition-all duration-200 hover:opacity-90"
                                         filter="url(#hourDropShadow)"
                                         rx="4"

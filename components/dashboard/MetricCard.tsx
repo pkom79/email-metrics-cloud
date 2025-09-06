@@ -20,6 +20,7 @@ interface MetricCardProps {
     previousPeriod?: { startDate: Date; endDate: Date };
     compareMode?: 'prev-period' | 'prev-year';
     benchmarkCategory?: 'Campaigns' | 'Flows' | 'Combined';
+    category?: 'email' | 'campaign' | 'flow';
 }
 
 const MetricCard: React.FC<MetricCardProps> = ({
@@ -34,7 +35,8 @@ const MetricCard: React.FC<MetricCardProps> = ({
     previousValue,
     previousPeriod,
     compareMode = 'prev-period',
-    benchmarkCategory = 'Campaigns'
+    benchmarkCategory = 'Campaigns',
+    category
 }) => {
     const isAllTime = dateRange === 'all';
     const DISPLAY_EPS = 0.05; // <0.05% rounds to 0.0%
@@ -108,6 +110,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
                 valueFormat={valueFormat as any}
                 hasInsufficientData={hasInsufficientData}
                 forceZeroStyle={showChangeBlock ? isZeroDisplay : true /* if we hide arrow treat as purple */}
+                category={category}
             />
 
             <div className="flex items-end justify-between">

@@ -404,7 +404,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const metricConfig = (metricOptions as any).find((m: any) => m.value === selectedMetric);
         const value = step[selectedMetric as keyof FlowStepMetrics] as number;
         const yAxisRange = sharedYAxisRange;
-        let chartColor = '#8b5cf6';
+        let chartColor = '#10b981';
         let dotColor = chartColor;
         let changeNode: React.ReactNode = null;
         if (periodChange && dateRange !== 'all') {
@@ -421,8 +421,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 // Gray arrow for exactly 0% change
                 colorClass = 'text-gray-600 dark:text-gray-400';
             } else if (hasInsufficientData) {
-                // Purple arrow for insufficient data
-                colorClass = 'text-purple-600 dark:text-purple-400';
+                // Emerald for insufficient data
+                colorClass = 'text-emerald-600 dark:text-emerald-400';
             } else {
                 // Normal green/red for actual changes
                 colorClass = isGood ? 'text-green-600' : 'text-red-600';
@@ -434,11 +434,11 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 ? `${label} (${formatDate(periodChange.previousPeriod.startDate)}): ${formatMetricValue(periodChange.previousValue, selectedMetric)}`
                 : `${label} (${formatDate(periodChange.previousPeriod.startDate)} – ${formatDate(periodChange.previousPeriod.endDate)}): ${formatMetricValue(periodChange.previousValue, selectedMetric)}`;
 
-            // Chart color: Purple for both 0% change AND insufficient data
+            // Chart color: Keep emerald for neutral cases, use proper red/green for actual changes
             if (isZeroChange || hasInsufficientData) {
-                chartColor = '#8b5cf6'; // Purple for both cases
+                chartColor = '#10b981'; // Emerald for neutral cases
             } else {
-                chartColor = isGood ? '#10b981' : '#ef4444';
+                chartColor = isGood ? '#10b981' : '#10b981'; // Keep emerald for charts, compare arrows will show the proper colors
             }
             dotColor = chartColor;
 
@@ -460,13 +460,13 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 </span>
             );
         }
-        // Change from gray to purple for no data cases to match global chart color scheme
-        if (value === 0 && sparklineData.length === 0) { chartColor = '#8b5cf6'; dotColor = chartColor; }
+        // Change from gray to emerald for no data cases to match global chart color scheme
+        if (value === 0 && sparklineData.length === 0) { chartColor = '#10b981'; dotColor = chartColor; }
         const chartGradient = `linear-gradient(180deg, ${chartColor}40 0%, ${chartColor}10 100%)`;
         let xTicks: { x: number; label: string }[] = [];
         if (sparklineData.length > 1) {
             const tickCount = Math.min(6, sparklineData.length);
-            for (let i = 0; i < tickCount; i++) { const idx = Math.round((i / (tickCount - 1)) * (sparklineData.length - 1)); const point = sparklineData[idx]; const x = (idx / (sparklineData.length - 1)) * 900; const label = new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); xTicks.push({ x, label }); }
+            for (let i = 0; i < tickCount; i++) { const idx = Math.round((i / (tickCount - 1)) * (sparklineData.length - 1)); const point = sparklineData[idx]; const x = (idx / (sparklineData.length - 1)) * 850; const label = new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); xTicks.push({ x, label }); }
         }
         let yTicks: { y: number; label: string }[] = [];
         if (yAxisRange.max > yAxisRange.min) {
@@ -477,7 +477,6 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             <div key={step.sequencePosition} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: dotColor, display: 'inline-block' }} />
                         <span className="font-semibold text-gray-900 dark:text-gray-100">{step.emailName}</span>
                         {duplicateNameCounts[step.emailName] > 1 && (
                             <span className="inline-flex items-center" title={`Multiple emails share the name "${step.emailName}" (${duplicateNameCounts[step.emailName]}).`} aria-label="Duplicate step name warning">
@@ -489,7 +488,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                         <div className="flex items-center gap-2">
                             <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatMetricValue(value, selectedMetric)}</span>
                             {selectedMetric === 'conversionRate' && value > 100 && (
-                                <span className="text-xs px-2 py-0.5 rounded-full border border-purple-200 text-purple-700 bg-purple-50 dark:border-purple-700 dark:text-purple-200 dark:bg-purple-900/30">Includes view-through</span>
+                                <span className="text-xs px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-700 bg-emerald-50 dark:border-emerald-700 dark:text-emerald-200 dark:bg-emerald-900/30">Includes view-through</span>
                             )}
                             {periodChange && dateRange !== 'all' && (
                                 <span className="text-lg font-bold px-2 py-1 rounded" style={{ color: chartColor, background: 'transparent' }}>{changeNode}</span>
@@ -501,7 +500,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 <div className="mt-6 relative" style={{ height: '160px' }}>
                     {sparklineData.length > 1 ? (
                         <div className="relative h-full flex">
-                            <svg width="100%" height="100%" viewBox="0 0 900 160" style={{ position: 'absolute', left: 0, top: 0 }}>
+                            <svg width="100%" height="100%" viewBox="0 0 850 160" style={{ position: 'absolute', left: 0, top: 0 }}>
                                 <defs>
                                     <linearGradient id={`gradient-${index}`} x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="0%" stopColor={chartColor} stopOpacity="0.25" />
@@ -510,7 +509,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 </defs>
                                 {yTicks.map((tick, i) => (
                                     <g key={i}>
-                                        <line x1={0} y1={tick.y} x2={900} y2={tick.y} stroke="#e5e7eb" strokeDasharray="2,2" />
+                                        <line x1={0} y1={tick.y} x2={850} y2={tick.y} stroke="#e5e7eb" strokeDasharray="2,2" />
                                         <text x={-5} y={tick.y + 4} textAnchor="end" fontSize="12" fill="#6b7280">{tick.label}</text>
                                     </g>
                                 ))}
@@ -521,7 +520,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                     </g>
                                 ))}
                                 {(() => {
-                                    const points = sparklineData.map((point, i) => { const x = (i / (sparklineData.length - 1)) * 900; const y = 120 - ((point.value - yAxisRange.min) / (yAxisRange.max - yAxisRange.min)) * 100; return { x, y, value: point.value, date: point.date }; });
+                                    const points = sparklineData.map((point, i) => { const x = (i / (sparklineData.length - 1)) * 850; const y = 120 - ((point.value - yAxisRange.min) / (yAxisRange.max - yAxisRange.min)) * 100; return { x, y, value: point.value, date: point.date }; });
                                     if (points.length === 0) return null;
                                     let pathD = `M ${points[0].x},${points[0].y}`;
                                     for (let i = 1; i < points.length; i++) {
@@ -531,7 +530,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         const cp2y = points[i].y;
                                         pathD += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${points[i].x},${points[i].y}`;
                                     }
-                                    const areaPath = pathD + ` L 900,120 L 0,120 Z`;
+                                    const areaPath = pathD + ` L 850,120 L 0,120 Z`;
 
                                     const formatTooltipValue = (value: number): string => {
                                         const metricConfig = metricOptions.find(m => m.value === selectedMetric);
@@ -552,7 +551,6 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
                                     return (
                                         <g>
-                                            <path d={areaPath} fill={`url(#gradient-${index})`} />
                                             <path d={pathD} fill="none" stroke={chartColor} strokeWidth="2" />
                                             {/* Hover points */}
                                             {points.map((point, i) => (
@@ -599,7 +597,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 <div
                                     className="absolute z-20 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl pointer-events-none border border-gray-700"
                                     style={{
-                                        left: `${(hoveredPoint.x / 900) * 100}%`,
+                                        left: `${(hoveredPoint.x / 850) * 100}%`,
                                         top: `${Math.max(0, (hoveredPoint.y / 160) * 100 - 10)}%`,
                                         transform: 'translate(-50%, -100%)',
                                         marginTop: '-12px',
@@ -652,18 +650,18 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         <section>
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                    <Workflow className="w-6 h-6 text-purple-600" />
+                    <Workflow className="w-6 h-6 text-emerald-600" />
                     <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Flow Step Analysis</h3>
                 </div>
                 <div className="flex items-center gap-4">
                     <div className="relative">
-                        <select value={selectedFlow} onChange={(e) => setSelectedFlow(e.target.value)} className="appearance-none px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                        <select value={selectedFlow} onChange={(e) => setSelectedFlow(e.target.value)} className="appearance-none px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
                             {uniqueFlowNames.map((flow: string) => (<option key={flow} value={flow}>{flow}</option>))}
                         </select>
                         <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
                     </div>
                     <div className="relative">
-                        <select value={selectedMetric} onChange={(e) => setSelectedMetric(e.target.value)} className="appearance-none px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                        <select value={selectedMetric} onChange={(e) => setSelectedMetric(e.target.value)} className="appearance-none px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
                             {metricOptions.map(metric => (<option key={metric.value} value={metric.value}>{metric.label}</option>))}
                         </select>
                         <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />

@@ -55,7 +55,7 @@ const fmtNum = (v: number, d = 2) => Number.isFinite(v) ? v.toFixed(d) : '—';
 
 // ChartContainer renders dual-axis SVG + tooltip + baseline band
 interface ChartSeriesPoint { x: number; value: number | null; emails?: number; label: string; dateLabel?: string; faded?: boolean; }
-interface ChartContainerProps { points: ChartSeriesPoint[]; metric: MetricKey; emailsMax: number; metricMax: number; formatValue: (v: number | null) => string; compareSeries?: (number | null)[]; axisMode: 'time' | 'volume'; }
+interface ChartContainerProps { points: ChartSeriesPoint[]; metric: MetricKey; emailsMax: number; metricMax: number; formatValue: (v: number | null) => string; compareSeries?: (number | null)[]; axisMode: 'time' | 'volume'; scope: SourceScope; }
 
 // Simple Catmull-Rom spline to Bezier for smoother line
 function catmullRom2bezier(points: { x: number, y: number }[]) {
@@ -76,9 +76,9 @@ function catmullRom2bezier(points: { x: number, y: number }[]) {
     return d.join(' ');
 }
 
-const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsMax, metricMax, formatValue, compareSeries, axisMode }) => {
+const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsMax, metricMax, formatValue, compareSeries, axisMode, scope }) => {
     // Match FlowStepAnalysis dimensions (graph height 160, drawing area 120 baseline)
-    const VIEW_W = 900; const VIEW_H = 160; const GRAPH_H = 120; // baseline at y=120
+    const VIEW_W = 850; const VIEW_H = 160; const GRAPH_H = 120; // baseline at y=120
     const PADDING_LEFT = 50; // space for y ticks
     const PADDING_RIGHT = 20;
     const innerW = VIEW_W - PADDING_LEFT - PADDING_RIGHT;
@@ -130,12 +130,12 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
             <svg width="100%" viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="block select-none">
                 <defs>
                     <linearGradient id="svi-emails" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.25" />
-                        <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.05" />
+                        <stop offset="0%" stopColor={scope === 'campaigns' ? '#6366F1' : scope === 'flows' ? '#10B981' : '#8b5cf6'} stopOpacity="0.25" />
+                        <stop offset="100%" stopColor={scope === 'campaigns' ? '#6366F1' : scope === 'flows' ? '#10B981' : '#8b5cf6'} stopOpacity="0.05" />
                     </linearGradient>
                     <linearGradient id="svi-metric" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.18" />
-                        <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.04" />
+                        <stop offset="0%" stopColor={scope === 'campaigns' ? '#6366F1' : scope === 'flows' ? '#10B981' : '#8b5cf6'} stopOpacity="0.18" />
+                        <stop offset="100%" stopColor={scope === 'campaigns' ? '#6366F1' : scope === 'flows' ? '#10B981' : '#8b5cf6'} stopOpacity="0.04" />
                     </linearGradient>
                 </defs>
                 {/* Grid + Y ticks */}
@@ -164,7 +164,7 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
                 {/* Emails area */}
                 {emailsArea && <path d={emailsArea} fill="url(#svi-emails)" stroke="none" />}
                 {/* Metric line */}
-                {metricPath && <path d={metricPath} fill="none" stroke="#8b5cf6" strokeWidth={2} />}
+                {metricPath && <path d={metricPath} fill="none" stroke={scope === 'campaigns' ? '#6366F1' : scope === 'flows' ? '#10B981' : '#8b5cf6'} strokeWidth={2} />}
                 {/* Compare ghost line removed per simplification (kept for delta calc only) */}
                 {/* Invisible hover zones (no white dots) */}
                 {points.map((p, i) => { if (p.value == null) return null; const x = xScale(i); const y = yMetric(p.value); const cellW = innerW / Math.max(1, (points.length - 1)); return <rect key={i} x={x - cellW / 2} y={0} width={cellW} height={GRAPH_H + 30} fill="transparent" onMouseEnter={() => setHover({ idx: i, x, y })} onMouseLeave={() => setHover(null)} />; })}
@@ -457,7 +457,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                         <div className="text-3xl font-bold text-gray-900 tabular-nums">{formatValue(avgValue)}</div>
                     </div>
                 </div>
-                <ChartContainer points={points} metric={metric} emailsMax={emailsMax} metricMax={metricMax} formatValue={formatValue} compareSeries={sortMode === 'time' ? compareSeries : undefined} axisMode={sortMode} />
+                <ChartContainer points={points} metric={metric} emailsMax={emailsMax} metricMax={metricMax} formatValue={formatValue} compareSeries={sortMode === 'time' ? compareSeries : undefined} axisMode={sortMode} scope={scope} />
                 {!baseSeries.length && (<div className="mt-4 text-xs text-gray-500">No sends in selected range.</div>)}
                 <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 text-[11px]">
                     <div className="relative border border-gray-200 rounded-lg p-3 bg-white flex flex-col justify-between">

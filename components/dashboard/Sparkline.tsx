@@ -10,9 +10,10 @@ interface SparklineProps {
     valueFormat?: 'currency' | 'percentage' | 'number';
     hasInsufficientData?: boolean;
     forceZeroStyle?: boolean; // treat as displayed zero (purple style)
+    category?: 'email' | 'campaign' | 'flow';
 }
 
-const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, isNegativeMetric = false, data, valueFormat = 'number', hasInsufficientData = false, forceZeroStyle = false }) => {
+const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, isNegativeMetric = false, data, valueFormat = 'number', hasInsufficientData = false, forceZeroStyle = false, category }) => {
     const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; value: number; date: string } | null>(null);
     const svgRef = useRef<SVGSVGElement>(null);
 
@@ -34,11 +35,27 @@ const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, is
 
     const getColorScheme = () => {
         const isZeroDisplay = forceZeroStyle || Math.abs(change) < 1e-9; // true zero or forced small rounded-to-zero
-        if (isAllTime || hasInsufficientData || isZeroDisplay) {
+
+        // Use category colors by default
+        if (category === 'email') {
             return { stroke: '#8b5cf6', gradientStart: '#8b5cf6', gradientEnd: '#c084fc' };
         }
-        if (isPositive) return { stroke: '#10b981', gradientStart: '#10b981', gradientEnd: '#6ee7b7' };
-        return { stroke: '#ef4444', gradientStart: '#ef4444', gradientEnd: '#fca5a5' };
+        if (category === 'campaign') {
+            return { stroke: '#6366f1', gradientStart: '#6366f1', gradientEnd: '#a5b4fc' };
+        }
+        if (category === 'flow') {
+            return { stroke: '#10b981', gradientStart: '#10b981', gradientEnd: '#6ee7b7' };
+        }
+
+        // For compare mode (when not all-time and has sufficient data), keep existing green/red logic
+        // Only use compare colors if no category is specified
+        if (!isAllTime && !hasInsufficientData && !isZeroDisplay) {
+            if (isPositive) return { stroke: '#10b981', gradientStart: '#10b981', gradientEnd: '#6ee7b7' };
+            return { stroke: '#ef4444', gradientStart: '#ef4444', gradientEnd: '#fca5a5' };
+        }
+
+        // Default fallback (purple)
+        return { stroke: '#8b5cf6', gradientStart: '#8b5cf6', gradientEnd: '#c084fc' };
     };
 
     const colorScheme = getColorScheme();
@@ -145,7 +162,6 @@ const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, is
                         <stop offset="100%" stopColor={colorScheme.gradientEnd} stopOpacity={0.05} />
                     </linearGradient>
                 </defs>
-                {areaPath && <path d={areaPath} fill={`url(#${gradientId})`} />}
                 {curvePath && <path d={curvePath} stroke={colorScheme.stroke} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />}
                 {hoveredPoint && (
                     <circle cx={hoveredPoint.x} cy={hoveredPoint.y} r="4" fill={colorScheme.stroke} stroke="white" strokeWidth="2" className="drop-shadow-sm" />

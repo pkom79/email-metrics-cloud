@@ -49,7 +49,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
         } else if (granularity === 'weekly') {
             while (cursor <= end) { push(cursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), cursor); cursor.setDate(cursor.getDate() + 7); }
         } else {
-            while (cursor <= end) { push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`, cursor); cursor.setMonth(cursor.getMonth() + 1); }
+            while (cursor <= end) { push(cursor.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }), cursor); cursor.setMonth(cursor.getMonth() + 1); }
         }
         const idxFor = (d: Date) => {
             if (granularity === 'daily') return Math.floor((d.getTime() - start.getTime()) / 86400000);
@@ -67,10 +67,6 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                 const i = idxFor(created); if (res[i]) res[i].countSubscribed++;
             }
         });
-        // Enhance monthly labels with year markers when year changes
-        if (granularity === 'monthly') {
-            let lastYear = -1; res.forEach((b, i) => { const y = b.start.getFullYear(); if (i === 0 || y !== lastYear) { b.label = b.label + ` '${String(y).slice(-2)}`; lastYear = y; } });
-        }
         return res;
     }, [granularity, activeSubs]);
 
@@ -97,7 +93,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
 
     // Scale now based only on selected metric for better visual variation
     const maxVal = Math.max(1, ...buckets.map(b => metric === 'created' ? b.countCreated : metric === 'firstActive' ? b.countFirst : b.countSubscribed));
-    const width = 900; const height = 160; const innerH = 120; const padLeft = 40; const padRight = 20; const innerW = width - padLeft - padRight;
+    const width = 850; const height = 170; const innerH = 120; const padLeft = 40; const padRight = 20; const innerW = width - padLeft - padRight;
     const xScale = (i: number) => buckets.length <= 1 ? padLeft + innerW / 2 : padLeft + (i / (buckets.length - 1)) * innerW;
     const yScale = (v: number) => innerH - (v / maxVal) * (innerH - 10);
     const seriesVals = buckets.map((b, i) => ({ x: i, v: metric === 'created' ? b.countCreated : metric === 'firstActive' ? b.countFirst : b.countSubscribed }));
@@ -184,8 +180,8 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                     {/* X axis ticks */}
                     {tickIndices.map(i => {
                         const b = buckets[i];
-                        const x = xScale(i);
-                        return <text key={i} x={x} y={height - 10} fontSize={11} fill="#6b7280" textAnchor="middle">{b.label}</text>;
+                        const x = xScale(i) - 30;
+                        return <text key={i} x={x} y={height - 15} fontSize={11} fill="#6b7280" textAnchor="start">{b.label}</text>;
                     })}
                     {/* Hover hit zones */}
                     {buckets.map((b, i) => { const x = xScale(i); const cellW = innerW / Math.max(1, (buckets.length - 1)); return <rect key={i} x={x - cellW / 2} y={0} width={cellW} height={height} fill="transparent" onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)} />; })}

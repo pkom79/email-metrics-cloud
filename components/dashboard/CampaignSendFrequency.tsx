@@ -203,7 +203,7 @@ export default function CampaignSendFrequency({ campaigns }: Props) {
                         <div key={b.key} className="flex flex-col">
                             <div className="group relative flex-1 flex flex-col justify-end min-h-[160px]">
                                 <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-lg overflow-hidden flex items-end" style={{ minHeight: '160px' }}>
-                                    <div className="w-full rounded-t-lg bg-gradient-to-b from-purple-400 to-purple-600 transition-all duration-500" style={{ height: `${heightPct}%` }} aria-label={`${bucketLabel(b.key)}: ${formatVal(val)}`} />
+                                    <div className="w-full rounded-t-lg bg-indigo-500 transition-all duration-500" style={{ height: `${heightPct}%` }} aria-label={`${bucketLabel(b.key)}: ${formatVal(val)}`} />
                                 </div>
                                 <div className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">{formatVal(val)}</div>
                                 <div className="text-xs text-gray-600 dark:text-gray-400">{bucketLabel(b.key)}</div>
