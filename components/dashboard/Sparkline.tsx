@@ -57,8 +57,12 @@ const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, is
     }
 
     const values = sparklineData.map(d => d.value);
-    const minValue = Math.min(...values);
-    const maxValue = Math.max(...values);
+    let minValue = values[0] ?? 0;
+    let maxValue = values[0] ?? 0;
+    for (let i = 1; i < values.length; i++) {
+        if (values[i] < minValue) minValue = values[i];
+        if (values[i] > maxValue) maxValue = values[i];
+    }
     const range = maxValue - minValue;
 
     const normalizedData = sparklineData.map(point => ({

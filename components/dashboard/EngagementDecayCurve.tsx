@@ -75,7 +75,10 @@ export default function EngagementDecayCurve({ campaigns, dateRange }: Engagemen
     const w = 520; const h = 80; const pad = 6;
     const x = (i: number) => pad + (i / Math.max(1, data.length - 1)) * (w - pad * 2);
     const yFactory = (vals: number[]) => {
-        const maxVal = Math.max(...vals, 1);
+        let maxVal = 1;
+        for (let i = 0; i < vals.length; i++) {
+            if (vals[i] > maxVal) maxVal = vals[i];
+        }
         const minVal = 0;
         return (v: number) => h - pad - ((v - minVal) / (maxVal - minVal)) * (h - pad * 2);
     };

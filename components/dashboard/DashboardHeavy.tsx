@@ -21,6 +21,11 @@ import { supabase } from '../../lib/supabase/client';
 function formatCurrency(value: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value); }
 function formatPercent(value: number) { const formatted = value.toFixed(2); const num = parseFloat(formatted); return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : `${formatted}%`; }
 function formatNumber(value: number) { return Math.round(value).toLocaleString('en-US'); }
+function formatCompactCurrency(value: number) {
+    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `$${(value / 1000).toFixed(1)}k`;
+    return `$${Math.round(value)}`;
+}
 
 // Consolidated data loading function to prevent race conditions
 async function loadAccountData(dm: any, accountId: string): Promise<boolean> {
@@ -376,7 +381,22 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const ALL_FLOWS = useMemo(() => dm.getFlowEmails(), [dm, dataVersion]);
     const hasData = ALL_CAMPAIGNS.length > 0 || ALL_FLOWS.length > 0;
-    const REFERENCE_DATE = useMemo(() => { const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow); const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime()); const flowTs = flowSubset.map(f => f.sentDate.getTime()); const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n)); return all.length ? new Date(Math.max(...all)) : new Date(); }, [ALL_CAMPAIGNS, ALL_FLOWS, selectedFlow]);
+    const REFERENCE_DATE = useMemo(() => {
+        const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow);
+        const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime());
+        const flowTs = flowSubset.map(f => f.sentDate.getTime());
+        const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n));
+
+        if (!all.length) return new Date();
+
+        // Find max efficiently without spread operator
+        let maxTime = 0;
+        for (const time of all) {
+            if (time > maxTime) maxTime = time;
+        }
+
+        return new Date(maxTime);
+    }, [ALL_CAMPAIGNS, ALL_FLOWS, selectedFlow]);
     // Active flows: flows that have at least one send in the currently selected (or custom) date range
     // Mirror FlowStepAnalysis logic: restrict dropdown to *live* flows only, further filtered to current date window
     const liveFlows = useMemo(() => ALL_FLOWS.filter(f => (f as any).status && String((f as any).status).toLowerCase() === 'live'), [ALL_FLOWS]);
@@ -435,7 +455,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const defFlows = useDeferredValue(filteredFlowEmails);
 
     // Sync custom inputs with preset
-    useEffect(() => { if (!hasData) return; if (dateRange === 'custom') return; const to = new Date(REFERENCE_DATE); const toISO = (d: Date) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const da = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${da}`; }; if (dateRange === 'all') { const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow); const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime()); const flowTs = flowSubset.map(f => f.sentDate.getTime()); const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n)); if (all.length) { const from = new Date(Math.min(...all)); setCustomFrom(toISO(from)); setCustomTo(toISO(to)); } else { setCustomFrom(undefined); setCustomTo(undefined); } } else { const days = parseInt(String(dateRange).replace('d', '')); if (Number.isFinite(days)) { const from = new Date(to); from.setDate(from.getDate() - days + 1); setCustomFrom(toISO(from)); setCustomTo(toISO(to)); } } }, [dateRange, REFERENCE_DATE, selectedFlow, ALL_CAMPAIGNS, ALL_FLOWS, hasData]);
+    useEffect(() => { if (!hasData) return; if (dateRange === 'custom') return; const to = new Date(REFERENCE_DATE); const toISO = (d: Date) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const da = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${da}`; }; if (dateRange === 'all') { const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow); const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime()); const flowTs = flowSubset.map(f => f.sentDate.getTime()); const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n)); if (all.length) { let minTime = all[0]; for (let i = 1; i < all.length; i++) { if (all[i] < minTime) minTime = all[i]; } const from = new Date(minTime); setCustomFrom(toISO(from)); setCustomTo(toISO(to)); } else { setCustomFrom(undefined); setCustomTo(undefined); } } else { const days = parseInt(String(dateRange).replace('d', '')); if (Number.isFinite(days)) { const from = new Date(to); from.setDate(from.getDate() - days + 1); setCustomFrom(toISO(from)); setCustomTo(toISO(to)); } } }, [dateRange, REFERENCE_DATE, selectedFlow, ALL_CAMPAIGNS, ALL_FLOWS, hasData]);
+
+    // Optimized date range change handler - let useEffect handle calculations
+    const handleDateRangeChange = useCallback((value: string) => {
+        setDateRange(value as any);
+    }, []);
 
     // Metrics calculations
     const overviewMetrics = useMemo(() => { const all = [...defCampaigns, ...defFlows]; if (!all.length) return null as any; const totalRevenue = all.reduce((s, e) => s + e.revenue, 0); const totalEmailsSent = all.reduce((s, e) => s + e.emailsSent, 0); const totalOrders = all.reduce((s, e) => s + e.totalOrders, 0); const totalOpens = all.reduce((s, e) => s + e.uniqueOpens, 0); const totalClicks = all.reduce((s, e) => s + e.uniqueClicks, 0); const totalUnsubs = all.reduce((s, e) => s + e.unsubscribesCount, 0); const totalSpam = all.reduce((s, e) => s + e.spamComplaintsCount, 0); const totalBounces = all.reduce((s, e) => s + e.bouncesCount, 0); const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0; const revenuePerEmail = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0; const openRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0; const clickRate = totalEmailsSent > 0 ? (totalClicks / totalEmailsSent) * 100 : 0; const clickToOpenRate = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0; const conversionRate = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0; const unsubscribeRate = totalEmailsSent > 0 ? (totalUnsubs / totalEmailsSent) * 100 : 0; const spamRate = totalEmailsSent > 0 ? (totalSpam / totalEmailsSent) * 100 : 0; const bounceRate = totalEmailsSent > 0 ? (totalBounces / totalEmailsSent) * 100 : 0; const mk = (k: string, v: number) => { const d = calcPoP(k, 'all'); return { value: v, change: d.changePercent, isPositive: d.isPositive, previousValue: d.previousValue, previousPeriod: d.previousPeriod }; }; return { totalRevenue: mk('totalRevenue', totalRevenue), averageOrderValue: mk('avgOrderValue', avgOrderValue), revenuePerEmail: mk('revenuePerEmail', revenuePerEmail), openRate: mk('openRate', openRate), clickRate: mk('clickRate', clickRate), clickToOpenRate: mk('clickToOpenRate', clickToOpenRate), emailsSent: mk('emailsSent', totalEmailsSent), totalOrders: mk('totalOrders', totalOrders), conversionRate: mk('conversionRate', conversionRate), unsubscribeRate: mk('unsubscribeRate', unsubscribeRate), spamRate: mk('spamRate', spamRate), bounceRate: mk('bounceRate', bounceRate) }; }, [defCampaigns, defFlows, calcPoP]);
@@ -503,7 +528,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         { value: 'spamRate', label: 'Spam Rate' },
         { value: 'bounceRate', label: 'Bounce Rate' },
     ];
-    const formatMetricValue = (v: number, metric: string) => { if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric)) return formatCurrency(v); if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric)) return formatPercent(v); return formatNumber(v); };
+    const formatMetricValue = (v: number, metric: string) => {
+        if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric)) {
+            // Use compact format for revenue metrics in lists and displays
+            return formatCompactCurrency(v);
+        }
+        if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric)) return formatPercent(v);
+        return formatNumber(v);
+    };
     const getSortedCampaigns = () => [...defCampaigns].sort((a, b) => { const av = Number((a as any)[selectedCampaignMetric]) || 0; const bv = Number((b as any)[selectedCampaignMetric]) || 0; return bv - av; });
 
     // If admin and there are zero accounts, don't block UI with overlay after initial load
@@ -579,7 +611,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <input type="date" value={customTo || ''} onChange={e => { const v = e.target.value || undefined; setCustomTo(v); if (v && customFrom && new Date(v) < new Date(customFrom)) setCustomFrom(v); setDateRange('custom'); }} className="px-2 py-1 rounded text-xs border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
                         {customActive && <button onClick={() => { setCustomFrom(undefined); setCustomTo(undefined); setDateRange('30d'); }} className="ml-1 px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700">Clear</button>}
                     </div>
-                    <div className="flex flex-col items-start gap-1"><div className="relative"><select value={dateRange === 'custom' ? '' : dateRange} onChange={e => { const v = (e.target.value || '30d') as any; const to = new Date(REFERENCE_DATE); const toISO = (d: Date) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const da = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${da}`; }; if (v === 'all') { const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow); const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime()); const flowTs = flowSubset.map(f => f.sentDate.getTime()); const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n)); if (all.length) { const from = new Date(Math.min(...all)); setCustomFrom(toISO(from)); setCustomTo(toISO(to)); } else { setCustomFrom(undefined); setCustomTo(undefined); } } else { const days = parseInt(String(v).replace('d', '')); if (Number.isFinite(days)) { const from = new Date(to); from.setDate(from.getDate() - days + 1); setCustomFrom(toISO(from)); setCustomTo(toISO(to)); } } setDateRange(v); }} className="appearance-none px-2 py-1 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs">
+                    <div className="flex flex-col items-start gap-1"><div className="relative"><select value={dateRange === 'custom' ? '' : dateRange} onChange={e => handleDateRangeChange(e.target.value || '30d')} className="appearance-none px-2 py-1 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs">
                         <option value="" disabled>Presets</option>
                         <option value="30d">Last 30 days</option>
                         <option value="60d">Last 60 days</option>
@@ -626,7 +658,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 </div>
             )}
             {/* Data coverage notice */}
-            {hasData && (<div className="py-3"><div className="max-w-7xl mx-auto"><div className="mx-4 sm:mx-6"><div className="p-0 text-purple-700 dark:text-purple-200"><span className="text-xs"><span className="font-medium">Data Coverage Notice:</span>{(() => { const dates = [...defCampaigns, ...defFlows].map(e => e.sentDate.getTime()); const lastVisible = dates.length ? new Date(Math.max(...dates)) : dm.getLastEmailDate(); return ` All dashboard metrics reflect email channel performance only and exclude SMS-attributed revenue through ${lastVisible.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.`; })()}</span></div></div></div></div>)}
+            {hasData && (<div className="py-3"><div className="max-w-7xl mx-auto"><div className="mx-4 sm:mx-6"><div className="p-0 text-purple-700 dark:text-purple-200"><span className="text-xs"><span className="font-medium">Data Coverage Notice:</span>{(() => { const dates = [...defCampaigns, ...defFlows].map(e => e.sentDate.getTime()); let lastVisible = dm.getLastEmailDate(); if (dates.length) { let maxTime = dates[0]; for (let i = 1; i < dates.length; i++) { if (dates[i] > maxTime) maxTime = dates[i]; } lastVisible = new Date(maxTime); } return ` All dashboard metrics reflect email channel performance only and exclude SMS-attributed revenue through ${lastVisible.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.`; })()}</span></div></div></div></div>)}
             {/* Data age notice */}
             {hasData && <DataAgeNotice dataManager={dm} onUploadClick={() => setShowUploadModal(true)} />}
             {/* Main content */}

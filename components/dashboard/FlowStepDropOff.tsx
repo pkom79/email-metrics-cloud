@@ -36,7 +36,7 @@ const StepCell: React.FC<{
     return (
         <div className="relative group rounded-lg px-3 py-3 font-semibold text-gray-900 text-base leading-none select-none" style={{ background: bg }}>
             <span className="tabular-nums">{displayValue}</span>
-            <div className="pointer-events-none absolute left-1/2 bottom-full z-30 hidden -translate-x-1/2 -translate-y-2 group-hover:block">
+            <div className="pointer-events-none absolute left-1/2 bottom-full z-50 hidden -translate-x-1/2 -translate-y-2 group-hover:block">
                 <div className="w-64 rounded-xl border border-gray-200 bg-white shadow-xl p-4 text-[11px] text-gray-800">
                     <p className="font-semibold mb-2">{onHoverData.flow} • Step {onHoverData.step}</p>
                     <table className="w-full text-[11px]">
@@ -211,43 +211,49 @@ export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Pro
                     <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▼</span>
                 </div>
             </div>
-            <div className="overflow-x-auto">
-                <table className="min-w-full border-separate border-spacing-0">
-                    <thead>
-                        <tr className="text-xs text-gray-600">
-                            <th className="sticky left-0 z-10 bg-white text-left px-3 py-2 font-medium border-b border-gray-200 w-[320px]">Flow</th>
-                            {Array.from({ length: effectiveMax }, (_, i) => i + 1).map(step => (
-                                <th key={step} className="px-3 py-2 font-medium border-b border-gray-200 text-xs text-gray-600">S{step}</th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {flows.map((flow, rowIdx) => {
-                            const arr = byFlow[flow];
-                            return (
-                                <tr key={flow} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                    <td className="sticky left-0 bg-inherit border-b border-gray-200 px-3 py-3 align-top">
-                                        <div className="flex items-center gap-1 text-sm font-semibold text-gray-900 whitespace-nowrap">
-                                            {largestNegPosition[flow] && <span className="w-2 h-2 rounded-full bg-rose-500" aria-label={`Largest negative delta at step ${largestNegPosition[flow]}`}></span>}
-                                            <span title={flow}>{flow}</span>
-                                        </div>
-                                    </td>
-                                    {Array.from({ length: effectiveMax }, (_, i) => i + 1).map(step => {
-                                        const cell = arr.find(c => c.sequencePosition === step);
-                                        if (!cell) return <td key={step} className="px-3 py-3 border-b border-gray-200 text-center text-xs text-gray-400" aria-label="No step">–</td>;
-                                        const reach = reachPct(flow, step);
-                                        const deltaVal = step === 1 ? 0 : (metric === 'revenuePerEmail' ? cell.deltaRevenuePerEmail : metric === 'openRate' ? cell.deltaOpenRate : metric === 'clickRate' ? cell.deltaClickRate : cell.deltaConversionRate);
-                                        return (
-                                            <td key={step} className="group px-3 py-3 border-b border-gray-200 align-top text-center">
-                                                <StepCell metric={metric} value={(cell as any)[metric]} delta={deltaVal} onHoverData={{ flow, step, emails: cell.emailsSent, opens: cell.opens, clicks: cell.clicks, orders: cell.orders, revenue: cell.revenue, rpe: cell.revenuePerEmail, openRate: cell.openRate, clickRate: cell.clickRate }} />
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+            <div className="relative">
+                <div className="overflow-x-auto overflow-y-visible">
+                    {/* Left fade edge */}
+                    <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white to-transparent z-20 pointer-events-none"></div>
+                    {/* Right fade edge */}
+                    <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent z-20 pointer-events-none"></div>
+                    <table className="min-w-full border-separate border-spacing-0">
+                        <thead>
+                            <tr className="text-xs text-gray-600">
+                                <th className="sticky left-0 z-10 bg-white text-left px-3 py-2 font-medium border-b border-gray-200 w-[320px]">Flow</th>
+                                {Array.from({ length: effectiveMax }, (_, i) => i + 1).map(step => (
+                                    <th key={step} className="px-3 py-2 font-medium border-b border-gray-200 text-xs text-gray-600">S{step}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {flows.map((flow, rowIdx) => {
+                                const arr = byFlow[flow];
+                                return (
+                                    <tr key={flow} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                        <td className="sticky left-0 bg-inherit border-b border-gray-200 px-3 py-3 align-top">
+                                            <div className="flex items-center gap-1 text-sm font-semibold text-gray-900 whitespace-nowrap">
+                                                {largestNegPosition[flow] && <span className="w-2 h-2 rounded-full bg-rose-500" aria-label={`Largest negative delta at step ${largestNegPosition[flow]}`}></span>}
+                                                <span title={flow}>{flow}</span>
+                                            </div>
+                                        </td>
+                                        {Array.from({ length: effectiveMax }, (_, i) => i + 1).map(step => {
+                                            const cell = arr.find(c => c.sequencePosition === step);
+                                            if (!cell) return <td key={step} className="px-3 py-3 border-b border-gray-200 text-center text-xs text-gray-400" aria-label="No step">–</td>;
+                                            const reach = reachPct(flow, step);
+                                            const deltaVal = step === 1 ? 0 : (metric === 'revenuePerEmail' ? cell.deltaRevenuePerEmail : metric === 'openRate' ? cell.deltaOpenRate : metric === 'clickRate' ? cell.deltaClickRate : cell.deltaConversionRate);
+                                            return (
+                                                <td key={step} className="group px-3 py-3 border-b border-gray-200 align-top text-center">
+                                                    <StepCell metric={metric} value={(cell as any)[metric]} delta={deltaVal} onHoverData={{ flow, step, emails: cell.emailsSent, opens: cell.opens, clicks: cell.clicks, orders: cell.orders, revenue: cell.revenue, rpe: cell.revenuePerEmail, openRate: cell.openRate, clickRate: cell.clickRate }} />
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             </div>
             {!flows.length && (
                 <div className="mt-4 space-y-2" aria-label="Loading flows">

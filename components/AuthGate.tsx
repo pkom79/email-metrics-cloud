@@ -1,24 +1,22 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '../lib/supabase/client';
+import { useAuth } from './AuthProvider';
 
 export default function AuthGate({ children }: { children: React.ReactNode }) {
     const router = useRouter();
-    const [ready, setReady] = useState(false);
+    const { session, loading } = useAuth();
 
     useEffect(() => {
-        const check = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
-                router.replace('/signup?mode=signup');
-                return;
-            }
-            setReady(true);
-        };
-        check();
-    }, [router]);
+        if (loading) return; // Wait for auth check to complete
 
-    if (!ready) return null;
+        if (!session) {
+            router.replace('/signup?mode=signup');
+        }
+    }, [session, loading, router]);
+
+    if (loading) return null; // Show nothing while loading
+    if (!session) return null; // Show nothing while redirecting
+
     return <>{children}</>;
 }

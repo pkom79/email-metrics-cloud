@@ -52,8 +52,15 @@ export default function DeliverabilityRiskPanel({ dateRange, customFrom, customT
         let start: Date; let end: Date;
         if (dateRange === 'all') {
             const all = [...campaigns, ...flows];
-            end = new Date(Math.max(...all.map(e => e.sentDate.getTime()))); end.setHours(23, 59, 59, 999);
-            start = new Date(Math.min(...all.map(e => e.sentDate.getTime()))); start.setHours(0, 0, 0, 0);
+            const timestamps = all.map(e => e.sentDate.getTime());
+            let maxTime = timestamps[0] ?? Date.now();
+            let minTime = timestamps[0] ?? Date.now();
+            for (let i = 1; i < timestamps.length; i++) {
+                if (timestamps[i] > maxTime) maxTime = timestamps[i];
+                if (timestamps[i] < minTime) minTime = timestamps[i];
+            }
+            end = new Date(maxTime); end.setHours(23, 59, 59, 999);
+            start = new Date(minTime); start.setHours(0, 0, 0, 0);
         } else if (dateRange === 'custom' && customFrom && customTo) {
             start = new Date(customFrom + 'T00:00:00');
             end = new Date(customTo + 'T23:59:59');
@@ -186,9 +193,28 @@ export default function DeliverabilityRiskPanel({ dateRange, customFrom, customT
         if (!analysis) return null;
         const weeks = analysis.weeks;
         if (!weeks.length) return null;
-        const emailsMax = Math.max(...weeks.map(w => w.emailsSent), 1);
-        const rpeMax = Math.max(...weeks.map(w => (w.revenue / (w.emailsSent || 1))), 0.0001);
-        const unsubMax = Math.max(...weeks.map(w => (w.unsubs / (w.emailsSent || 1))), 0.0001);
+
+        const emailValues = weeks.map(w => w.emailsSent);
+        let emailsMax = emailValues[0] ?? 1;
+        for (let i = 1; i < emailValues.length; i++) {
+            if (emailValues[i] > emailsMax) emailsMax = emailValues[i];
+        }
+        emailsMax = Math.max(emailsMax, 1);
+
+        const rpeValues = weeks.map(w => (w.revenue / (w.emailsSent || 1)));
+        let rpeMax = rpeValues[0] ?? 0.0001;
+        for (let i = 1; i < rpeValues.length; i++) {
+            if (rpeValues[i] > rpeMax) rpeMax = rpeValues[i];
+        }
+        rpeMax = Math.max(rpeMax, 0.0001);
+
+        const unsubValues = weeks.map(w => (w.unsubs / (w.emailsSent || 1)));
+        let unsubMax = unsubValues[0] ?? 0.0001;
+        for (let i = 1; i < unsubValues.length; i++) {
+            if (unsubValues[i] > unsubMax) unsubMax = unsubValues[i];
+        }
+        unsubMax = Math.max(unsubMax, 0.0001);
+
         const height = 110; const width = weeks.length * 42; // dynamic width per week
         const barWidth = 18;
         const emailBars = weeks.map((w, i) => {

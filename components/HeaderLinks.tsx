@@ -1,23 +1,31 @@
 "use client";
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase/client';
-import { useEffect, useState } from 'react';
+import { useAuth } from './AuthProvider';
 
 export default function HeaderLinks({ isAuthed }: { isAuthed: boolean }) {
     const pathname = usePathname();
     const router = useRouter();
+    const { isAdmin } = useAuth();
+    const [signingOut, setSigningOut] = useState(false);
     const onDashboard = pathname === '/dashboard';
     const onAccount = pathname === '/account';
 
     const signOut = async () => {
-        await supabase.auth.signOut();
+        if (signingOut) return;
+        setSigningOut(true);
+        try {
+            await supabase.auth.signOut();
+        } catch (error) {
+            console.error('Sign out error:', error);
+        } finally {
+            setSigningOut(false);
+        }
         router.replace('/');
         router.refresh();
     };
-
-    const [isAdmin, setIsAdmin] = useState(false);
-    useEffect(() => { (async () => { const s = (await supabase.auth.getSession()).data.session; setIsAdmin(s?.user?.app_metadata?.role === 'admin'); })(); }, []);
 
     return (
         <div className="flex items-center gap-3">

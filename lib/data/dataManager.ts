@@ -171,9 +171,17 @@ export class DataManager {
             if (!allEmails.length) return null;
             let startDate: Date; let endDate: Date;
             if (dateRange === 'all') {
-                const times = allEmails.map(e => e.sentDate.getTime());
-                endDate = new Date(Math.max(...times)); endDate.setHours(23, 59, 59, 999);
-                const originalStartDate = new Date(Math.min(...times)); originalStartDate.setHours(0, 0, 0, 0);
+                // Find min and max dates efficiently without using spread operator
+                let maxTime = 0;
+                let minTime = Infinity;
+                for (const email of allEmails) {
+                    const time = email.sentDate.getTime();
+                    if (time > maxTime) maxTime = time;
+                    if (time < minTime) minTime = time;
+                }
+                
+                endDate = new Date(maxTime); endDate.setHours(23, 59, 59, 999);
+                const originalStartDate = new Date(minTime); originalStartDate.setHours(0, 0, 0, 0);
                 
                 // Cap to maximum 730 days (2 years)
                 const twoYearsAgo = new Date(endDate);
@@ -182,8 +190,14 @@ export class DataManager {
                 
                 startDate = originalStartDate < twoYearsAgo ? twoYearsAgo : originalStartDate;
             } else {
-                const times = allEmails.map(e => e.sentDate.getTime());
-                endDate = new Date(Math.max(...times)); endDate.setHours(23, 59, 59, 999);
+                // Find max date efficiently
+                let maxTime = 0;
+                for (const email of allEmails) {
+                    const time = email.sentDate.getTime();
+                    if (time > maxTime) maxTime = time;
+                }
+                
+                endDate = new Date(maxTime); endDate.setHours(23, 59, 59, 999);
                 const days = parseInt(dateRange.replace('d', ''));
                 
                 // Cap individual date ranges to maximum 730 days
@@ -401,8 +415,17 @@ export class DataManager {
     private applyTwoYearLimit<T extends { sentDate: Date }>(data: T[]): T[] {
         if (data.length === 0) return data;
         
+        // Find the latest date efficiently without using spread operator
+        let latestTime = 0;
+        for (const item of data) {
+            const time = item.sentDate.getTime();
+            if (time > latestTime) {
+                latestTime = time;
+            }
+        }
+        
         // Calculate 730 days ago from the latest email
-        const latestDate = new Date(Math.max(...data.map(item => item.sentDate.getTime())));
+        const latestDate = new Date(latestTime);
         const twoYearsAgo = new Date(latestDate);
         twoYearsAgo.setDate(twoYearsAgo.getDate() - 730);
         

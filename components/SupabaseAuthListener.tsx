@@ -1,18 +1,35 @@
 "use client";
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase/client';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 export default function SupabaseAuthListener() {
     const router = useRouter();
+    const initialized = useRef(false);
+    const lastSyncTime = useRef(0);
+    const SYNC_COOLDOWN = 1000; // 1 second between syncs
+
     useEffect(() => {
+        if (initialized.current) return; // Prevent multiple initializations
+        initialized.current = true;
+
         let suppress = false;
         // If we're processing a hash-based auth callback on this page load, avoid double-sync
-        if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) suppress = true;
+        if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
+            suppress = true;
+        }
+
         const { data: subscription } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
+            const now = Date.now();
+            if (now - lastSyncTime.current < SYNC_COOLDOWN) {
+                console.log('Skipping auth sync due to rate limit');
+                return;
+            }
+
             try {
                 if (!suppress) {
+                    lastSyncTime.current = now;
                     await fetch('/api/auth/session', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -20,13 +37,23 @@ export default function SupabaseAuthListener() {
                         body: JSON.stringify({ event, session })
                     });
                 }
-            } catch { /* ignore */ }
+            } catch (error) {
+                console.warn('Auth sync failed:', error);
+            }
+
             router.refresh();
             suppress = false;
         });
+
         return () => {
-            try { subscription.subscription.unsubscribe(); } catch { }
+            try {
+                subscription.subscription.unsubscribe();
+                initialized.current = false;
+            } catch (error) {
+                console.warn('Failed to unsubscribe auth listener:', error);
+            }
         };
     }, [router]);
+
     return null;
 }

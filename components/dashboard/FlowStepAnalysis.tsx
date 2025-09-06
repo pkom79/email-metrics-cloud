@@ -302,8 +302,12 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             allValues = allValues.concat(data.map(d => d.value));
         }
         if (allValues.length === 0) return { min: 0, max: 10 };
-        const minValue = Math.min(...allValues);
-        const maxValue = Math.max(...allValues);
+        let minValue = allValues[0];
+        let maxValue = allValues[0];
+        for (let i = 1; i < allValues.length; i++) {
+            if (allValues[i] < minValue) minValue = allValues[i];
+            if (allValues[i] > maxValue) maxValue = allValues[i];
+        }
         let min = 0;
         let max = maxValue;
         if (maxValue - minValue < 0.01 || maxValue === 0) max = maxValue > 0 ? maxValue * 1.5 : 10; else max = maxValue * 1.2;

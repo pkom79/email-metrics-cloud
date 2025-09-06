@@ -206,8 +206,14 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             const all = [...campaigns, ...flows];
             if (!all.length) return null;
             const times = all.map(e => e.sentDate.getTime());
-            const endDate = new Date(Math.max(...times)); endDate.setHours(23, 59, 59, 999);
-            if (dateRange === 'all') { const startDate = new Date(Math.min(...times)); startDate.setHours(0, 0, 0, 0); return { startDate, endDate }; }
+            let maxTime = times[0] ?? Date.now();
+            let minTime = times[0] ?? Date.now();
+            for (let i = 1; i < times.length; i++) {
+                if (times[i] > maxTime) maxTime = times[i];
+                if (times[i] < minTime) minTime = times[i];
+            }
+            const endDate = new Date(maxTime); endDate.setHours(23, 59, 59, 999);
+            if (dateRange === 'all') { const startDate = new Date(minTime); startDate.setHours(0, 0, 0, 0); return { startDate, endDate }; }
             const days = parseInt(dateRange.replace('d', ''));
             const startDate = new Date(endDate); startDate.setDate(startDate.getDate() - days + 1); startDate.setHours(0, 0, 0, 0);
             return { startDate, endDate };
@@ -321,8 +327,22 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         return { x: displayIdx, value: val, emails: b.emails, label, dateLabel: b.label, faded };
     }), [displayOrder, baseSeries, laggedMetricSeries, metric, sortMode]);
 
-    const emailsMax = useMemo(() => Math.max(...baseSeries.map(b => b.emails), 1), [baseSeries]);
-    const metricMax = useMemo(() => Math.max(1, ...points.map(p => p.value || 0)), [points]);
+    const emailsMax = useMemo(() => {
+        const emailValues = baseSeries.map(b => b.emails);
+        let max = 1;
+        for (let i = 0; i < emailValues.length; i++) {
+            if (emailValues[i] > max) max = emailValues[i];
+        }
+        return max;
+    }, [baseSeries]);
+    const metricMax = useMemo(() => {
+        const values = points.map(p => p.value || 0);
+        let max = 1;
+        for (let i = 0; i < values.length; i++) {
+            if (values[i] > max) max = values[i];
+        }
+        return max;
+    }, [points]);
 
     // Correlation (always computed on chronological series for integrity)
     const correlationInfo = useMemo(() => {
