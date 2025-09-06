@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Flame, Info } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 
@@ -25,18 +25,25 @@ interface StepAgg {
 
 type MetricKey = 'openRate' | 'clickRate' | 'conversionRate' | 'revenuePerEmail';
 
+// Compact currency formatting for better readability
+const formatCompactCurrency = (value: number) => {
+    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `$${(value / 1000).toFixed(1)}k`;
+    return `$${Math.round(value)}`;
+};
+
 // Heatmap-only step cell (big number, tooltip above, no reach bar line)
 const StepCell: React.FC<{
     metric: MetricKey; value: number; delta: number; onHoverData: any;
 }> = ({ metric, value, delta, onHoverData }) => {
     const isCurrency = metric === 'revenuePerEmail';
-    const displayValue = isCurrency ? `$${value.toFixed(2)}` : `${value.toFixed(1)}%`;
+    const displayValue = isCurrency ? formatCompactCurrency(value) : `${value.toFixed(1)}%`;
     const mag = Math.min(1, Math.abs(delta) / (isCurrency ? 2 : 10));
     const bg = delta === 0 ? 'rgba(147,51,234,0.05)' : delta > 0 ? `rgba(16,185,129,${0.18 + mag * 0.4})` : `rgba(244,63,94,${0.18 + mag * 0.4})`;
     return (
         <div className="relative group rounded-lg px-3 py-3 font-semibold text-gray-900 text-base leading-none select-none" style={{ background: bg }}>
             <span className="tabular-nums">{displayValue}</span>
-            <div className="pointer-events-none absolute left-1/2 bottom-full z-50 hidden -translate-x-1/2 -translate-y-2 group-hover:block">
+            <div className="pointer-events-none absolute left-1/2 bottom-full z-[60] hidden -translate-x-1/2 -translate-y-2 group-hover:block">
                 <div className="w-64 rounded-xl border border-gray-200 bg-white shadow-xl p-4 text-[11px] text-gray-800">
                     <p className="font-semibold mb-2">{onHoverData.flow} • Step {onHoverData.step}</p>
                     <table className="w-full text-[11px]">
@@ -45,8 +52,8 @@ const StepCell: React.FC<{
                             <tr><td className="text-gray-500 pr-2">Opens</td><td className="text-right tabular-nums">{onHoverData.opens.toLocaleString()}</td></tr>
                             <tr><td className="text-gray-500 pr-2">Clicks</td><td className="text-right tabular-nums">{onHoverData.clicks.toLocaleString()}</td></tr>
                             <tr><td className="text-gray-500 pr-2">Conversions</td><td className="text-right tabular-nums">{onHoverData.orders.toLocaleString()}</td></tr>
-                            <tr><td className="text-gray-500 pr-2">Revenue</td><td className="text-right tabular-nums">${onHoverData.revenue.toFixed(2)}</td></tr>
-                            <tr><td className="text-gray-500 pr-2">Rev/Email</td><td className="text-right tabular-nums">${onHoverData.rpe.toFixed(2)}</td></tr>
+                            <tr><td className="text-gray-500 pr-2">Revenue</td><td className="text-right tabular-nums">{formatCompactCurrency(onHoverData.revenue)}</td></tr>
+                            <tr><td className="text-gray-500 pr-2">Rev/Email</td><td className="text-right tabular-nums">{formatCompactCurrency(onHoverData.rpe)}</td></tr>
                             <tr><td className="text-gray-500 pr-2">Open rate</td><td className="text-right tabular-nums">{onHoverData.openRate.toFixed(2)}%</td></tr>
                             <tr><td className="text-gray-500 pr-2">CTR</td><td className="text-right tabular-nums">{onHoverData.clickRate.toFixed(2)}%</td></tr>
                         </tbody>
@@ -60,6 +67,8 @@ const StepCell: React.FC<{
 export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Props) {
     const dm = DataManager.getInstance();
     const flowEmails = dm.getFlowEmails().filter(f => f.status?.toLowerCase() === 'live');
+    const [showScrollIndicators, setShowScrollIndicators] = useState(false);
+    const tableContainerRef = useRef<HTMLDivElement>(null);
 
     // Filters
     const filtered = useMemo(() => {
@@ -170,6 +179,21 @@ export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Pro
         { key: 'revenuePerEmail', label: 'Rev/Email', available: true },
     ];
 
+    // Check if scrolling is needed for fade indicators
+    useEffect(() => {
+        const checkScrollable = () => {
+            if (tableContainerRef.current) {
+                const { scrollWidth, clientWidth } = tableContainerRef.current;
+                setShowScrollIndicators(scrollWidth > clientWidth);
+            }
+        };
+
+        checkScrollable();
+        window.addEventListener('resize', checkScrollable);
+
+        return () => window.removeEventListener('resize', checkScrollable);
+    }, [flows, effectiveMax]);
+
     const reachPct = (flow: string, step: number) => { // retained for tooltip percentage possibility (not displayed visually now)
         const arr = byFlow[flow];
         const base = arr.find(c => c.sequencePosition === 1)?.emailsSent || 0;
@@ -211,12 +235,19 @@ export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Pro
                     <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▼</span>
                 </div>
             </div>
-            <div className="relative">
-                <div className="overflow-x-auto overflow-y-visible">
-                    {/* Left fade edge */}
-                    <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white to-transparent z-20 pointer-events-none"></div>
-                    {/* Right fade edge */}
-                    <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent z-20 pointer-events-none"></div>
+            <div className="relative rounded-2xl overflow-hidden bg-white">
+                {/* Enhanced fade overlays - only show when scrollable */}
+                {showScrollIndicators && (
+                    <>
+                        <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-white via-white/95 via-white/70 to-transparent z-30 pointer-events-none"></div>
+                        <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-white via-white/95 via-white/70 to-transparent z-30 pointer-events-none"></div>
+                    </>
+                )}
+
+                <div
+                    ref={tableContainerRef}
+                    className="overflow-x-auto overflow-y-visible scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent"
+                >
                     <table className="min-w-full border-separate border-spacing-0">
                         <thead>
                             <tr className="text-xs text-gray-600">
