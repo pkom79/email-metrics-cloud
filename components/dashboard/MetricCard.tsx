@@ -2,7 +2,6 @@
 import React from 'react';
 import { ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
 import Sparkline from './Sparkline';
-import { getBenchmarkStatus, parseMetricValue } from '../../lib/utils/benchmarks';
 
 interface MetricCardProps {
     title: string;
@@ -19,7 +18,6 @@ interface MetricCardProps {
     previousValue?: number;
     previousPeriod?: { startDate: Date; endDate: Date };
     compareMode?: 'prev-period' | 'prev-year';
-    benchmarkCategory?: 'Campaigns' | 'Flows' | 'Combined';
     category?: 'email' | 'campaign' | 'flow';
 }
 
@@ -35,7 +33,6 @@ const MetricCard: React.FC<MetricCardProps> = ({
     previousValue,
     previousPeriod,
     compareMode = 'prev-period',
-    benchmarkCategory = 'Campaigns',
     category
 }) => {
     const isAllTime = dateRange === 'all';
@@ -47,8 +44,6 @@ const MetricCard: React.FC<MetricCardProps> = ({
     const isZeroDisplay = tinyChange || Math.abs(change) < 1e-9;
     const showChangeBlock = !isAllTime && !hasInsufficientData;
     const isIncrease = change > 0;
-    const benchmarkResult = metricKey ? getBenchmarkStatus(metricKey, parseMetricValue(value), benchmarkCategory) : null;
-    const numericValue = metricKey === 'conversionRate' ? parseMetricValue(value) : undefined;
 
     const getValueFormat = () => {
         if (!metricKey) return 'number';
@@ -84,20 +79,6 @@ const MetricCard: React.FC<MetricCardProps> = ({
                     <p className={`text-sm font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400`}>
                         {title}
                     </p>
-                    {/* Reserve fixed height so sparkline rows align whether benchmark exists or not */}
-                    <div className="mt-1 h-5 flex items-center">
-                        {benchmarkResult && (
-                            <div className="flex items-center gap-1">
-                                <div
-                                    className={`w-2 h-2 rounded-full ${benchmarkResult.status === 'excellent' ? 'bg-green-400' : benchmarkResult.status === 'good' ? 'bg-green-500' : benchmarkResult.status === 'ok' ? 'bg-yellow-400' : benchmarkResult.status === 'attention' ? 'bg-orange-400' : 'bg-red-500'
-                                        }`}
-                                />
-                                <span className={`text-xs font-medium ${benchmarkResult.color}`} style={(benchmarkResult as any).hexColor ? { color: (benchmarkResult as any).hexColor } : undefined}>
-                                    {benchmarkResult.label}
-                                </span>
-                            </div>
-                        )}
-                    </div>
                 </div>
             </div>
 
@@ -118,11 +99,6 @@ const MetricCard: React.FC<MetricCardProps> = ({
                     {value}
                 </p>
                 <div className="flex items-center gap-2">
-                    {metricKey === 'conversionRate' && numericValue !== undefined && numericValue > 100 && (
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full border border-purple-200 text-purple-700 bg-purple-50 dark:border-purple-700 dark:text-purple-200 dark:bg-purple-900/30`}>
-                            Includes view-through
-                        </span>
-                    )}
                     {showChangeBlock && (
                         <div
                             className={`flex items-center text-sm font-medium ${isZeroDisplay
