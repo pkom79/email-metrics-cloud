@@ -173,12 +173,22 @@ export class DataManager {
             if (dateRange === 'all') {
                 const times = allEmails.map(e => e.sentDate.getTime());
                 endDate = new Date(Math.max(...times)); endDate.setHours(23, 59, 59, 999);
-                startDate = new Date(Math.min(...times)); startDate.setHours(0, 0, 0, 0);
+                const originalStartDate = new Date(Math.min(...times)); originalStartDate.setHours(0, 0, 0, 0);
+                
+                // Cap to maximum 730 days (2 years)
+                const twoYearsAgo = new Date(endDate);
+                twoYearsAgo.setDate(twoYearsAgo.getDate() - 730);
+                twoYearsAgo.setHours(0, 0, 0, 0);
+                
+                startDate = originalStartDate < twoYearsAgo ? twoYearsAgo : originalStartDate;
             } else {
                 const times = allEmails.map(e => e.sentDate.getTime());
                 endDate = new Date(Math.max(...times)); endDate.setHours(23, 59, 59, 999);
                 const days = parseInt(dateRange.replace('d', ''));
-                startDate = new Date(endDate); startDate.setDate(startDate.getDate() - days + 1); startDate.setHours(0, 0, 0, 0);
+                
+                // Cap individual date ranges to maximum 730 days
+                const cappedDays = Math.min(days, 730);
+                startDate = new Date(endDate); startDate.setDate(startDate.getDate() - cappedDays + 1); startDate.setHours(0, 0, 0, 0);
             }
             return { startDate, endDate };
         } catch { return null; }
@@ -380,8 +390,24 @@ export class DataManager {
     getLoadProgress(): LoadProgress { return this.loadProgress; }
     hasRealData(): boolean { return this.isRealDataLoaded; }
 
-    getCampaigns(): ProcessedCampaign[] { return this.campaigns; }
-    getFlowEmails(): ProcessedFlowEmail[] { return this.flowEmails; }
+    getCampaigns(): ProcessedCampaign[] { 
+        return this.applyTwoYearLimit(this.campaigns);
+    }
+    
+    getFlowEmails(): ProcessedFlowEmail[] { 
+        return this.applyTwoYearLimit(this.flowEmails);
+    }
+
+    private applyTwoYearLimit<T extends { sentDate: Date }>(data: T[]): T[] {
+        if (data.length === 0) return data;
+        
+        // Calculate 730 days ago from the latest email
+        const latestDate = new Date(Math.max(...data.map(item => item.sentDate.getTime())));
+        const twoYearsAgo = new Date(latestDate);
+        twoYearsAgo.setDate(twoYearsAgo.getDate() - 730);
+        
+        return data.filter(item => item.sentDate >= twoYearsAgo);
+    }
     getSubscribers(): ProcessedSubscriber[] { return this.subscribers; }
 
     getUniqueFlowNames(): string[] { return this.flowTransformer.getUniqueFlowNames(this.flowEmails); }

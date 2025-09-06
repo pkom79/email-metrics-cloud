@@ -101,6 +101,53 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [displayedCampaigns, setDisplayedCampaigns] = useState(5);
     const [stickyBar, setStickyBar] = useState(false);
     const [showCustomDateModal, setShowCustomDateModal] = useState(false);
+
+    // Granularity validation logic
+    const totalDays = useMemo(() => {
+        if (dateRange === 'custom' && customActive) {
+            return customDays;
+        } else if (dateRange === 'all') {
+            return 730; // Cap to 2 years
+        } else {
+            return parseInt(dateRange.replace('d', ''));
+        }
+    }, [dateRange, customActive, customDays]);
+
+    const granularityOptions = useMemo(() => {
+        const options = [
+            {
+                key: 'daily' as const,
+                label: 'Daily',
+                disabled: totalDays >= 365,
+                tooltip: totalDays >= 365 ? 'Daily view disabled for ranges 365+ days' : undefined
+            },
+            {
+                key: 'weekly' as const,
+                label: 'Weekly',
+                disabled: false
+            },
+            {
+                key: 'monthly' as const,
+                label: 'Monthly',
+                disabled: totalDays <= 60,
+                tooltip: totalDays <= 60 ? 'Monthly view disabled for ranges 60 days or less' : undefined
+            }
+        ];
+        return options;
+    }, [totalDays]);
+
+    // Auto-adjust granularity when invalid
+    useEffect(() => {
+        const currentOption = granularityOptions.find(opt => opt.key === granularity);
+        if (currentOption?.disabled) {
+            // Find first non-disabled option
+            const validOption = granularityOptions.find(opt => !opt.disabled);
+            if (validOption) {
+                setGranularity(validOption.key);
+            }
+        }
+    }, [granularity, granularityOptions]);
+
     // Sticky bar end sentinel (placed *after* Audience Growth so bar stays visible through that section)
     const [stickyEndRef, setStickyEndRef] = useState<HTMLElement | null>(null);
     const [isBeforeAudience, setIsBeforeAudience] = useState(true);
@@ -114,6 +161,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [selectedAccountLabel, setSelectedAccountLabel] = useState<string>('');
     // Debug state for link errors
     const [linkDebugInfo, setLinkDebugInfo] = useState<string | null>(null);
+
+    // Delayed loading for heavy flow components
+    const [showFlowAnalysis, setShowFlowAnalysis] = useState(false);
+    const [showFlowDropOff, setShowFlowDropOff] = useState(false);
 
     // Check for link error parameters on load
     useEffect(() => {
@@ -352,6 +403,18 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const filteredCampaigns = useMemo(() => { if (!hasData) return [] as typeof ALL_CAMPAIGNS; let list = ALL_CAMPAIGNS; if (dateRange === 'custom' && customActive) { const from = new Date(customFrom! + 'T00:00:00'); const to = new Date(customTo! + 'T23:59:59'); list = list.filter(c => c.sentDate >= from && c.sentDate <= to); } else if (dateRange !== 'all') { const days = parseInt(dateRange.replace('d', '')); const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999); const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0); list = list.filter(c => c.sentDate >= start && c.sentDate <= end); } return list; }, [ALL_CAMPAIGNS, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
     const filteredFlowEmails = useMemo(() => { if (!hasData) return [] as typeof ALL_FLOWS; let flows = ALL_FLOWS; if (selectedFlow !== 'all') flows = flows.filter(f => f.flowName === selectedFlow); if (dateRange === 'custom' && customActive) { const from = new Date(customFrom! + 'T00:00:00'); const to = new Date(customTo! + 'T23:59:59'); flows = flows.filter(f => f.sentDate >= from && f.sentDate <= to); } else if (dateRange !== 'all') { const days = parseInt(dateRange.replace('d', '')); const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999); const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0); flows = flows.filter(f => f.sentDate >= start && f.sentDate <= end); } return flows; }, [ALL_FLOWS, selectedFlow, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
 
+    // Delayed loading of heavy flow components after main dashboard stabilizes
+    useEffect(() => {
+        if (initialLoadComplete && hasData) {
+            const timer1 = setTimeout(() => setShowFlowAnalysis(true), 1000);
+            const timer2 = setTimeout(() => setShowFlowDropOff(true), 1200);
+            return () => {
+                clearTimeout(timer1);
+                clearTimeout(timer2);
+            };
+        }
+    }, [initialLoadComplete, hasData]);
+
     // PoP
     const calcPoP = useCallback((metricKey: string, dataset: 'all' | 'campaigns' | 'flows', options?: { flowName?: string }) => {
         // Map our metric keys to DataManager keys if needed
@@ -524,9 +587,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <option value="120d">Last 120 days</option>
                         <option value="180d">Last 180 days</option>
                         <option value="365d">Last 365 days</option>
-                        <option value="all">All time</option>
+                        <option value="all">Last 2 Years</option>
                     </select><ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" /></div></div>
-                    <div className="flex items-center gap-1.5"><BarChart3 className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Granularity:</span><div className="flex gap-1.5 ml-2 flex-nowrap">{(['daily', 'weekly', 'monthly'] as const).map(g => <button key={g} onClick={() => { if (g !== granularity) { setGranularity(g); } }} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${granularity === g ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>{g.charAt(0).toUpperCase() + g.slice(1)}</button>)}</div></div>
+                    <div className="flex items-center gap-1.5"><BarChart3 className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Granularity:</span><div className="flex gap-1.5 ml-2 flex-nowrap">{granularityOptions.map(option => <button key={option.key} onClick={() => { if (!option.disabled && option.key !== granularity) { setGranularity(option.key); } }} disabled={option.disabled} title={option.tooltip} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${granularity === option.key ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'} ${option.disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>{option.label}</button>)}</div></div>
                     {/* Compare Mode */}
                     <div className="flex items-center gap-1.5"><GitCompare className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Compare:</span><div className="flex gap-1.5 ml-1 flex-nowrap">{([
                         { key: 'prev-period', label: 'Prev Period' },
@@ -690,9 +753,35 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     </section>
                 )}
                 {/* Flow Step Analysis */}
-                <section><FlowStepAnalysis dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} /></section>
+                <section>
+                    {showFlowAnalysis ? (
+                        <FlowStepAnalysis dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
+                    ) : (
+                        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+                            <div className="flex items-center justify-center h-32">
+                                <div className="flex items-center gap-3">
+                                    <div className="animate-spin w-5 h-5 border-2 border-purple-600 border-t-transparent rounded-full"></div>
+                                    <span className="text-gray-600 dark:text-gray-400">Loading flow analysis...</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </section>
                 {/* Flow Step Drop-Off Map */}
-                <section><FlowStepDropOff dateRange={dateRange} customFrom={customFrom} customTo={customTo} /></section>
+                <section>
+                    {showFlowDropOff ? (
+                        <FlowStepDropOff dateRange={dateRange} customFrom={customFrom} customTo={customTo} />
+                    ) : (
+                        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+                            <div className="flex items-center justify-center h-32">
+                                <div className="flex items-center gap-3">
+                                    <div className="animate-spin w-5 h-5 border-2 border-purple-600 border-t-transparent rounded-full"></div>
+                                    <span className="text-gray-600 dark:text-gray-400">Loading flow drop-off analysis...</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </section>
                 <AudienceCharts dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} />
                 {/* Sticky end sentinel (1px spacer) */}
                 <div ref={el => setStickyEndRef(el)} style={{ height: 1 }} />
