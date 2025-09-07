@@ -689,17 +689,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             <MetricCard title="Spam Rate" value={formatPercent(overviewMetrics.spamRate.value)} change={overviewMetrics.spamRate.change} isPositive={overviewMetrics.spamRate.isPositive} previousValue={overviewMetrics.spamRate.previousValue} previousPeriod={overviewMetrics.spamRate.previousPeriod} dateRange={dateRange} metricKey="spamRate" sparklineData={overviewSeries.spamRate} compareMode={compareMode} category="email" />
                             <MetricCard title="Bounce Rate" value={formatPercent(overviewMetrics.bounceRate.value)} change={overviewMetrics.bounceRate.change} isPositive={overviewMetrics.bounceRate.isPositive} previousValue={overviewMetrics.bounceRate.previousValue} previousPeriod={overviewMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={overviewSeries.bounceRate} compareMode={compareMode} category="email" />
                         </div>
-                        {/* Revenue Reliability module removed - placeholder panel retained for layout */}
-                        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-2">
-                                    <BarChart3 className="w-5 h-5 text-purple-600" />
-                                    <h3 className="text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100">Revenue Reliability (removed)</h3>
-                                </div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400">Module removed</div>
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400">This module has been removed. All core metrics remain available in the dashboard.</div>
-                        </div>
+                        {/* Revenue Reliability module removed - placeholder panel removed */}
                         <SendVolumeImpact dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
                     </section>
                 )}
