@@ -144,14 +144,14 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
     const active = hoverIdx != null ? buckets[hoverIdx] : null;
 
     return (
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 mb-8">
-            <div className="flex items-start justify-between mb-6 sticky top-14 z-20 bg-white border-b border-transparent pb-2">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 mb-8">
+            <div className="flex items-start justify-between mb-6 sticky top-14 z-20 bg-white dark:bg-gray-900 border-b border-transparent pb-2">
                 <div className="flex items-center gap-2">
                     <Users className="w-5 h-5 text-purple-600" />
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight flex items-center gap-2">Audience Growth
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight flex items-center gap-2">Audience Growth
                         <span className="relative group inline-flex items-center">
-                            <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-600 cursor-pointer" />
-                            <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-80 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
+                            <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 cursor-pointer" />
+                            <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
                                 <span className="font-semibold block mb-1">What is this?</span>
                                 Tracks additions to your ACTIVE email audience over time (current emailable profiles only). Created = profile added (signup or import). First Active = first recorded event. Subscribed = inferred organic signup (consent + first activity). Imports without consent aren’t counted as Subscribed.
                             </span>
@@ -160,12 +160,12 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                 </div>
                 <div className="flex gap-3 text-sm items-start">
                     <div className="relative">
-                        <select value={metric} onChange={e => setMetric(e.target.value as Metric)} className="appearance-none px-3 h-9 pr-8 rounded-lg border bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                        <select value={metric} onChange={e => setMetric(e.target.value as Metric)} className="appearance-none px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                             <option value="created">Created</option>
                             <option value="firstActive">First Active</option>
                             <option value="subscribed">Subscribed</option>
                         </select>
-                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▼</span>
+                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-xs">▼</span>
                     </div>
                 </div>
             </div>
@@ -173,10 +173,10 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                 <div />
                 <div className="text-right">
                     <div className="flex items-center justify-end gap-2 mb-0.5">
-                        <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium">Total {metric === 'created' ? 'Created' : metric === 'firstActive' ? 'First Active' : 'Subscribed'}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 font-medium">Total {metric === 'created' ? 'Created' : metric === 'firstActive' ? 'First Active' : 'Subscribed'}</div>
                         {pctChange != null && <span className={`text-[11px] font-medium flex items-center gap-0.5 ${pctChange >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pctChange >= 0 ? '↑' : '↓'} {Math.abs(pctChange).toFixed(1)}%</span>}
                     </div>
-                    <div className="text-4xl font-bold text-gray-900 tabular-nums">{total.toLocaleString()}</div>
+                    <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{total.toLocaleString()}</div>
                 </div>
             </div>
             <div className="relative" style={{ width: '100%' }}>
@@ -192,42 +192,42 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                     {yTickValues.map(v => {
                         const y = yScale(v); return (
                             <g key={v}>
-                                <text x={padLeft - 6} y={y + 3} fontSize={10} fill="#6b7280" textAnchor="end" className="tabular-nums">{v.toLocaleString()}</text>
+                                <text x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{v.toLocaleString()}</text>
                             </g>
                         );
                     })}
                     {/* X axis baseline */}
-                    <line x1={padLeft} x2={width - padRight} y1={innerH} y2={innerH} stroke="#e5e7eb" />
+                    <line x1={padLeft} x2={width - padRight} y1={innerH} y2={innerH} className="stroke-gray-200 dark:stroke-gray-700" />
                     {/* X axis ticks */}
                     {tickIndices.map(i => {
                         const b = buckets[i];
                         const x = xScale(i) - 30;
-                        return <text key={i} x={x} y={height - 15} fontSize={11} fill="#6b7280" textAnchor="start">{b.label}</text>;
+                        return <text key={i} x={x} y={height - 15} fontSize={11} textAnchor="start" className="fill-gray-500 dark:fill-gray-400">{b.label}</text>;
                     })}
                     {/* Hover hit zones */}
                     {buckets.map((b, i) => { const x = xScale(i); const cellW = innerW / Math.max(1, (buckets.length - 1)); return <rect key={i} x={x - cellW / 2} y={0} width={cellW} height={height} fill="transparent" onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)} />; })}
                 </svg>
                 {active && hoverIdx != null && (
-                    <div className="pointer-events-none absolute z-20 px-3 py-2 bg-white text-gray-900 text-xs rounded-lg shadow-lg border border-gray-200" style={{ left: `${(xScale(hoverIdx) / width) * 100}%`, top: '10%', transform: 'translate(-50%, 0)' }}>
-                        <div className="font-medium mb-0.5 text-gray-900">{active.label}</div>
-                        <div className="flex justify-between gap-3"><span className="text-gray-500">Created</span><span className="tabular-nums">{active.countCreated.toLocaleString()}</span></div>
-                        <div className="flex justify-between gap-3"><span className="text-gray-500">First Active</span><span className="tabular-nums">{active.countFirst.toLocaleString()}</span></div>
-                        <div className="flex justify-between gap-3"><span className="text-gray-500">Subscribed</span><span className="tabular-nums">{active.countSubscribed.toLocaleString()}</span></div>
+                    <div className="pointer-events-none absolute z-20 px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs rounded-lg shadow-lg border border-gray-200 dark:border-gray-700" style={{ left: `${(xScale(hoverIdx) / width) * 100}%`, top: '10%', transform: 'translate(-50%, 0)' }}>
+                        <div className="font-medium mb-0.5 text-gray-900 dark:text-gray-100">{active.label}</div>
+                        <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">Created</span><span className="tabular-nums">{active.countCreated.toLocaleString()}</span></div>
+                        <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">First Active</span><span className="tabular-nums">{active.countFirst.toLocaleString()}</span></div>
+                        <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">Subscribed</span><span className="tabular-nums">{active.countSubscribed.toLocaleString()}</span></div>
                     </div>
                 )}
             </div>
             <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-6">
-                <div className="border border-gray-200 rounded-2xl p-5 bg-white">
-                    <div className="text-gray-500 mb-2 font-medium text-sm">Created</div>
-                    <div className="text-gray-900 font-semibold tabular-nums text-2xl md:text-3xl leading-none">{buckets.reduce((s, b) => s + b.countCreated, 0).toLocaleString()}</div>
+                <div className="border border-gray-200 dark:border-gray-700 rounded-2xl p-5 bg-white dark:bg-gray-900">
+                    <div className="text-gray-500 dark:text-gray-400 mb-2 font-medium text-sm">Created</div>
+                    <div className="text-gray-900 dark:text-gray-100 font-semibold tabular-nums text-2xl md:text-3xl leading-none">{buckets.reduce((s, b) => s + b.countCreated, 0).toLocaleString()}</div>
                 </div>
-                <div className="border border-gray-200 rounded-2xl p-5 bg-white">
-                    <div className="text-gray-500 mb-2 font-medium text-sm">First Active</div>
-                    <div className="text-gray-900 font-semibold tabular-nums text-2xl md:text-3xl leading-none">{buckets.reduce((s, b) => s + b.countFirst, 0).toLocaleString()}</div>
+                <div className="border border-gray-200 dark:border-gray-700 rounded-2xl p-5 bg-white dark:bg-gray-900">
+                    <div className="text-gray-500 dark:text-gray-400 mb-2 font-medium text-sm">First Active</div>
+                    <div className="text-gray-900 dark:text-gray-100 font-semibold tabular-nums text-2xl md:text-3xl leading-none">{buckets.reduce((s, b) => s + b.countFirst, 0).toLocaleString()}</div>
                 </div>
-                <div className="border border-gray-200 rounded-2xl p-5 bg-white">
-                    <div className="text-gray-500 mb-2 font-medium text-sm">Subscribed</div>
-                    <div className="text-gray-900 font-semibold tabular-nums text-2xl md:text-3xl leading-none">{buckets.reduce((s, b) => s + b.countSubscribed, 0).toLocaleString()}</div>
+                <div className="border border-gray-200 dark:border-gray-700 rounded-2xl p-5 bg-white dark:bg-gray-900">
+                    <div className="text-gray-500 dark:text-gray-400 mb-2 font-medium text-sm">Subscribed</div>
+                    <div className="text-gray-900 dark:text-gray-100 font-semibold tabular-nums text-2xl md:text-3xl leading-none">{buckets.reduce((s, b) => s + b.countSubscribed, 0).toLocaleString()}</div>
                 </div>
             </div>
             {/* Disclaimer removed; information lives in tooltip only */}

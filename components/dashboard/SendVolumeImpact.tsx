@@ -150,8 +150,8 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
                 {/* Grid + Y ticks */}
                 {yTicks.map((t, i) => (
                     <g key={i}>
-                        <line x1={PADDING_LEFT} y1={t.y} x2={VIEW_W - PADDING_RIGHT} y2={t.y} stroke="#e5e7eb" strokeDasharray="2 2" />
-                        <text x={PADDING_LEFT - 6} y={t.y + 4} textAnchor="end" fontSize={11} fill="#6b7280" className="tabular-nums">
+                        <line x1={PADDING_LEFT} y1={t.y} x2={VIEW_W - PADDING_RIGHT} y2={t.y} className="stroke-gray-200 dark:stroke-gray-700" strokeDasharray="2 2" />
+                        <text x={PADDING_LEFT - 6} y={t.y + 4} textAnchor="end" fontSize={11} className="tabular-nums fill-gray-600 dark:fill-gray-400">
                             {metric === 'totalRevenue' || metric === 'revenuePerEmail'
                                 ? (t.value >= 1000 ? '$' + (t.value / 1000).toFixed(1) + 'k' : '$' + t.value.toFixed(0))
                                 : (t.value >= 1 ? t.value.toFixed(1) : t.value.toFixed(2))}
@@ -161,12 +161,12 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
                 {/* X axis ticks */}
                 {xTicks.map((t, i) => (
                     <g key={i}>
-                        <line x1={t.x} y1={GRAPH_H} x2={t.x} y2={GRAPH_H + 10} stroke="#e5e7eb" />
-                        <text x={t.x} y={GRAPH_H + 25} textAnchor="middle" fontSize={11} fill="#6b7280">{t.label}</text>
+                        <line x1={t.x} y1={GRAPH_H} x2={t.x} y2={GRAPH_H + 10} className="stroke-gray-200 dark:stroke-gray-700" />
+                        <text x={t.x} y={GRAPH_H + 25} textAnchor="middle" fontSize={11} className="fill-gray-600 dark:fill-gray-400">{t.label}</text>
                     </g>
                 ))}
                 {axisMode === 'volume' && (
-                    <text x={PADDING_LEFT} y={GRAPH_H + 40} textAnchor="start" fontSize={10} fill="#6b7280" className="font-medium">
+                    <text x={PADDING_LEFT} y={GRAPH_H + 40} textAnchor="start" fontSize={10} className="font-medium fill-gray-600 dark:fill-gray-400">
                         Send Volume (Highest → Lowest)
                     </text>
                 )}
@@ -180,7 +180,7 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
             </svg>
             {active && active.value != null && hover && (
                 <div
-                    className="pointer-events-none absolute z-20 px-3 py-2 bg-white text-gray-900 text-xs rounded-lg shadow-lg border border-gray-200"
+                    className="pointer-events-none absolute z-20 px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs rounded-lg shadow-lg border border-gray-200 dark:border-gray-700"
                     style={{
                         left: `${(hover.x / VIEW_W) * 100}%`,
                         top: `${Math.max(0, (hover.y / VIEW_H) * 100 - 5)}%`,
@@ -188,9 +188,9 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
                         whiteSpace: 'nowrap'
                     }}
                 >
-                    <div className="font-medium mb-0.5 text-gray-900">{axisMode === 'volume' ? (active.dateLabel ? active.dateLabel + ' • ' + active.label : active.label) : active.label}</div>
-                    <div className="flex justify-between gap-3"><span className="text-gray-500">Emails</span><span className="tabular-nums text-gray-900">{active.emails?.toLocaleString() || 0}</span></div>
-                    <div className="flex justify-between gap-3"><span className="text-gray-500">{METRIC_OPTIONS.find(m => m.value === metric)?.label}</span><span className="tabular-nums text-gray-900">{formatValue(active.value)}</span></div>
+                    <div className="font-medium mb-0.5 text-gray-900 dark:text-gray-100">{axisMode === 'volume' ? (active.dateLabel ? active.dateLabel + ' • ' + active.label : active.label) : active.label}</div>
+                    <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">Emails</span><span className="tabular-nums text-gray-900 dark:text-gray-100">{active.emails?.toLocaleString() || 0}</span></div>
+                    <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">{METRIC_OPTIONS.find(m => m.value === metric)?.label}</span><span className="tabular-nums text-gray-900 dark:text-gray-100">{formatValue(active.value)}</span></div>
                 </div>
             )}
         </div>
@@ -419,9 +419,9 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                     <Activity className="w-5 h-5 text-purple-600" />
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight flex items-center gap-2">Send Volume Impact
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight flex items-center gap-2">Send Volume Impact
                         <span className="relative group inline-flex items-center">
-                            <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-600 cursor-pointer" />
+                            <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 cursor-pointer" />
                             <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-80 bg-gray-900 text-white text-[11px] leading-snug p-3 rounded-lg shadow-xl border border-gray-700">
                                 <span className="font-semibold text-white">How to interpret</span><br />
                                 Purple line = selected performance metric. Shaded background = relative send volume (emails). Toggle between chronological and volume-sorted views. Correlation is always computed on the chronological data. Rising negative rate metrics (unsubs, spam, bounces) with higher volume indicates pressure. Partial period ends are trimmed.
@@ -430,65 +430,65 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     </h3>
                 </div>
                 <div className="flex gap-4 text-sm">
-                    <div className="flex gap-1 rounded-lg bg-gray-100 p-1 h-9 items-center">
+                    <div className="flex gap-1 rounded-lg bg-gray-100 dark:bg-gray-800 p-1 h-9 items-center">
                         {(['time', 'volume'] as const).map(m => (
-                            <button key={m} onClick={() => setSortMode(m)} className={`px-3 h-7 rounded-md text-xs font-medium transition ${sortMode === m ? 'bg-white shadow border border-gray-300 text-gray-900' : 'text-gray-600 hover:text-gray-900'}`}>{m === 'time' ? 'Time' : 'Volume'}</button>
+                            <button key={m} onClick={() => setSortMode(m)} className={`px-3 h-7 rounded-md text-xs font-medium transition ${sortMode === m ? 'bg-white dark:bg-gray-900 shadow border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'}`}>{m === 'time' ? 'Time' : 'Volume'}</button>
                         ))}
                     </div>
                     <div className="relative">
-                        <select value={metric} onChange={e => setMetric(e.target.value as MetricKey)} className="appearance-none px-3 h-9 pr-8 rounded-lg border bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                        <select value={metric} onChange={e => setMetric(e.target.value as MetricKey)} className="appearance-none px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                             {METRIC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
-                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▼</span>
+                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-xs">▼</span>
                     </div>
                     <div className="relative">
-                        <select value={scope} onChange={e => setScope(e.target.value as SourceScope)} className="appearance-none px-3 h-9 pr-8 rounded-lg border bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                        <select value={scope} onChange={e => setScope(e.target.value as SourceScope)} className="appearance-none px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                             <option value="all">All Emails</option>
                             <option value="campaigns">Campaigns</option>
                             <option value="flows">Flows</option>
                         </select>
-                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▼</span>
+                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-xs">▼</span>
                     </div>
                 </div>
             </div>
-            <div className="rounded-2xl bg-white border border-gray-200 p-6">
+            <div className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-6">
                 <div className="flex items-start justify-between mb-4">
                     <div />
                     <div className="text-right">
                         <div className="flex items-center justify-end gap-2 mb-0.5">
-                            <div className="text-[11px] uppercase tracking-wide text-gray-500 font-medium">Avg {METRIC_OPTIONS.find(m => m.value === metric)?.label}</div>
+                            <div className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 font-medium">Avg {METRIC_OPTIONS.find(m => m.value === metric)?.label}</div>
                             {(() => { if (!avgValue || !compareSeries.length || compareSeries.length !== points.length) return null; const compVals = compareSeries.filter(v => v != null) as number[]; if (compVals.length < 2) return null; const compAvg = compVals.reduce((s, v) => s + v, 0) / compVals.length; if (!compAvg) return null; const pct = ((avgValue - compAvg) / compAvg) * 100; const improved = negativeMetric ? pct < 0 : pct > 0; const arrowUp = pct > 0; const cls = improved ? 'text-emerald-600' : 'text-rose-600'; return <span className={`flex items-center gap-1 text-[11px] font-medium ${cls}`}>{arrowUp ? '↑' : '↓'} {Math.abs(pct).toFixed(1)}%</span>; })()}
                             <div className="relative group">
-                                <span className="cursor-help text-gray-400 text-xs">ⓘ</span>
-                                <div className="absolute right-0 top-full z-30 mt-1 w-60 rounded-md border border-gray-200 bg-white p-2 text-[11px] leading-snug opacity-0 shadow-lg transition-opacity group-hover:opacity-100">Change vs compare period average. Green = improvement.</div>
+                                <span className="cursor-help text-gray-400 dark:text-gray-500 text-xs">ⓘ</span>
+                                <div className="absolute right-0 top-full z-30 mt-1 w-60 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 text-[11px] leading-snug opacity-0 shadow-lg transition-opacity group-hover:opacity-100">Change vs compare period average. Green = improvement.</div>
                             </div>
                         </div>
-                        <div className="text-3xl font-bold text-gray-900 tabular-nums">{formatValue(avgValue)}</div>
+                        <div className="text-3xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{formatValue(avgValue)}</div>
                     </div>
                 </div>
                 <ChartContainer points={points} metric={metric} emailsMax={emailsMax} metricMax={metricMax} formatValue={formatValue} compareSeries={sortMode === 'time' ? compareSeries : undefined} axisMode={sortMode} scope={scope} />
-                {!baseSeries.length && (<div className="mt-4 text-xs text-gray-500">No sends in selected range.</div>)}
+                {!baseSeries.length && (<div className="mt-4 text-xs text-gray-500 dark:text-gray-400">No sends in selected range.</div>)}
                 <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 text-[11px]">
-                    <div className="relative border border-gray-200 rounded-lg p-3 bg-white flex flex-col justify-between">
-                        <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Avg Sends
-                            <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-52 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Mean emails per bucket after trimming partial periods.</span></span>
+                    <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
+                        <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Avg Sends
+                            <span className="group relative cursor-help text-gray-400 dark:text-gray-500">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-52 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Mean emails per bucket after trimming partial periods.</span></span>
                         </div>
-                        <div className="text-gray-900 font-semibold text-lg tabular-nums">{micro?.avgEmails?.toLocaleString() || '—'}</div>
+                        <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro?.avgEmails?.toLocaleString() || '—'}</div>
                     </div>
-                    <div className="relative border border-gray-200 rounded-lg p-3 bg-white flex flex-col justify-between">
-                        <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Revenue / 1k
-                            <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-56 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Total revenue divided by total emails, scaled per 1,000 sends.</span></span>
+                    <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
+                        <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Revenue / 1k
+                            <span className="group relative cursor-help text-gray-400 dark:text-gray-500">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-56 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Total revenue divided by total emails, scaled per 1,000 sends.</span></span>
                         </div>
-                        <div className="text-gray-900 font-semibold text-lg tabular-nums">{micro ? fmtCurrency(micro.rpmE) : '—'}</div>
+                        <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro ? fmtCurrency(micro.rpmE) : '—'}</div>
                     </div>
-                    <div className="relative border border-gray-200 rounded-lg p-3 bg-white flex flex-col justify-between">
-                        <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Median Unsub/1k
-                            <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-56 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Median bucket unsubscribe count normalized per 1,000 emails.</span></span>
+                    <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
+                        <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Median Unsub/1k
+                            <span className="group relative cursor-help text-gray-400 dark:text-gray-500">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-56 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Median bucket unsubscribe count normalized per 1,000 emails.</span></span>
                         </div>
-                        <div className="text-gray-900 font-semibold text-lg tabular-nums">{micro ? (micro.medianUnsub >= 1 ? micro.medianUnsub.toFixed(2) : micro.medianUnsub.toFixed(3)) : '—'}</div>
+                        <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro ? (micro.medianUnsub >= 1 ? micro.medianUnsub.toFixed(2) : micro.medianUnsub.toFixed(3)) : '—'}</div>
                     </div>
-                    <div className="relative border border-gray-200 rounded-lg p-3 bg-white flex flex-col justify-between">
-                        <div className="text-gray-500 mb-1 font-medium flex items-center gap-1">Correlation
+                    <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
+                        <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Correlation
                             <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-64 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px] leading-snug">
                                 Pearson correlation (r) between send volume and this metric over time (n ≥ 3).
                                 <br /><br />
@@ -524,17 +524,17 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                                         const isNegMetric = NEGATIVE_METRICS.includes(metric);
                                         const favorable = !isNegMetric ? (r > 0.05) : (r < -0.05);
                                         const unfavorable = !isNegMetric ? (r < -0.05) : (r > 0.05);
-                                        const colorClass = favorable ? 'text-emerald-600' : unfavorable ? 'text-rose-600' : 'text-gray-600';
+                                        const colorClass = favorable ? 'text-emerald-600' : unfavorable ? 'text-rose-600' : 'text-gray-600 dark:text-gray-300';
                                         return (
                                             <div className={`text-lg font-semibold tabular-nums ${colorClass}`}>{r.toFixed(2)}
-                                                <span className="ml-2 text-[10px] font-medium text-gray-500">{correlationInfo.label}{correlationInfo.n ? ` · n=${correlationInfo.n}` : ''}</span>
+                                                <span className="ml-2 text-[10px] font-medium text-gray-500 dark:text-gray-400">{correlationInfo.label}{correlationInfo.n ? ` · n=${correlationInfo.n}` : ''}</span>
                                             </div>
                                         );
                                     })()}
-                                    <div className="mt-1 text-[10px] leading-snug text-gray-500 max-w-[200px] pr-1">{narrative}</div>
+                                    <div className="mt-1 text-[10px] leading-snug text-gray-500 dark:text-gray-400 max-w-[200px] pr-1">{narrative}</div>
                                 </div>
                             ) : (
-                                <div className="text-lg font-semibold text-gray-500">—<span className="ml-2 text-[11px] font-medium">{correlationInfo?.label || '—'}</span></div>
+                                <div className="text-lg font-semibold text-gray-500 dark:text-gray-400">—<span className="ml-2 text-[11px] font-medium">{correlationInfo?.label || '—'}</span></div>
                             );
                         })()}
                     </div>
