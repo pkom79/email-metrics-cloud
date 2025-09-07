@@ -744,13 +744,16 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                         <p className="text-sm text-gray-500 dark:text-gray-400">{campaignMetricOptions.find(m => m.value === selectedCampaignMetric)?.label}</p>
                                     </div>
                                 </div>
-                                <div className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity absolute left-4 right-4 top-full mt-2 z-40 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl p-4 text-xs grid grid-cols-2 gap-x-6 gap-y-1">
-                                    {['revenue', 'revenuePerEmail', 'openRate', 'clickRate', 'clickToOpenRate', 'emailsSent', 'totalOrders', 'avgOrderValue', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].map(mk => (
-                                        <div key={mk} className="flex justify-between gap-4">
-                                            <span className="text-gray-500 capitalize">{campaignMetricOptions.find(opt => opt.value === mk)?.label || mk}</span>
-                                            <span className="tabular-nums font-medium text-gray-900 dark:text-gray-100">{formatMetricValue((c as any)[mk] as number, mk)}</span>
-                                        </div>
-                                    ))}
+                                {/* Tooltip - portal mounted to body to avoid clipping */}
+                                <div className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity absolute left-4 right-4 top-full mt-2 z-40">
+                                    <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl p-4 text-xs grid grid-cols-2 gap-x-6 gap-y-1">
+                                        {['revenue', 'revenuePerEmail', 'openRate', 'clickRate', 'clickToOpenRate', 'emailsSent', 'totalOrders', 'avgOrderValue', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].map(mk => (
+                                            <div key={mk} className="flex justify-between gap-4">
+                                                <span className="text-gray-500 capitalize">{campaignMetricOptions.find(opt => opt.value === mk)?.label || mk}</span>
+                                                <span className="tabular-nums font-medium text-gray-900 dark:text-gray-100">{formatMetricValue((c as any)[mk] as number, mk)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         ))}{(() => { const sorted = getSortedCampaigns(); return displayedCampaigns < sorted.length && (<div className="p-4 border-t border-gray-200 dark:border-gray-800 text-center bg-gray-50 dark:bg-gray-900/50"><button onClick={() => setDisplayedCampaigns(n => n + 5)} className="px-4 py-2 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white transition-colors">Load More ({Math.min(5, sorted.length - displayedCampaigns)} more)</button></div>); })()}</div>
