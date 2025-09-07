@@ -5,3 +5,13 @@
 :root {
     color-scheme: light dark;
 }
+
+@layer components {
+    .select-base {
+        @apply appearance-none px-3 py-2 pr-10 rounded-md border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent;
+    }
+
+    .select-chevron {
+        @apply pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 dark:text-gray-400;
+    }
+}

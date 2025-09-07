@@ -2,6 +2,7 @@
 // DEPRECATED: This panel has been superseded by SendVolumeImpact.tsx. Retained temporarily for reference.
 import React, { useMemo, useState } from 'react';
 import { Info, TrendingUp, BarChart3, Activity } from 'lucide-react';
+import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
 
@@ -263,11 +264,11 @@ export default function DeliverabilityRiskPanel({ dateRange, customFrom, customT
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
-                    <select value={scope} onChange={e => setScope(e.target.value as Scope)} className="appearance-none pl-3 pr-8 py-2 rounded-md bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-100 text-sm focus:ring-2 focus:ring-purple-500">
+                    <SelectBase value={scope} onChange={e => setScope((e.target as HTMLSelectElement).value as Scope)} className="pl-3 pr-8 py-2 rounded-md bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-100 text-sm focus:ring-2 focus:ring-purple-500">
                         <option value="all">All Email</option>
                         <option value="campaigns">Campaigns</option>
                         <option value="flows">Flows</option>
-                    </select>
+                    </SelectBase>
                     <span className="text-xs text-gray-500 dark:text-gray-400">{weekly.length >= 8 ? 'Last 8 weeks' : `Need 8 weeks (have ${weekly.length})`}</span>
                 </div>
             </div>

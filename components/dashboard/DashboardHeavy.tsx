@@ -12,7 +12,8 @@ import FlowStepAnalysis from './FlowStepAnalysis';
 import CustomSegmentBlock from './CustomSegmentBlock';
 import DataAgeNotice from './DataAgeNotice';
 import CampaignSendFrequency from './CampaignSendFrequency';
-import { BarChart3, Calendar, ChevronDown, GitCompare, Mail, Send, Zap, Star, Upload as UploadIcon, X, Share2 } from 'lucide-react';
+import { BarChart3, Calendar, GitCompare, Mail, Send, Zap, Star, Upload as UploadIcon, X, Share2 } from 'lucide-react';
+import SelectBase from "../ui/SelectBase";
 import UploadWizard from '../../components/UploadWizard';
 import { usePendingUploadsLinker } from '../../lib/utils/usePendingUploadsLinker';
 import { supabase } from '../../lib/supabase/client';
@@ -660,7 +661,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 </div>
             )}
             {/* Header */}
-            <div className="pt-4 sm:pt-6"><div className="max-w-7xl mx-auto"><div className="p-6 sm:p-8 mb-4"><div className="flex items-start justify-between gap-4"><div><h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>{businessName && <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>}</div><div className="flex items-center gap-3 relative">{!isAdmin && (<button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"><UploadIcon className="h-4 w-4" />Upload New Reports</button>)}{isAdmin && (<div className="relative"><select value={selectedAccountId} onChange={e => { const val = e.target.value; setSelectedAccountId(val); const a = (allAccounts || []).find(x => x.id === val); setSelectedAccountLabel(a?.label || a?.businessName || a?.id || ''); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="appearance-none px-3 py-2 pr-10 rounded-md border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm min-w-[240px] focus:ring-2 focus:ring-purple-500 focus:border-transparent">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</select><ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 dark:text-gray-400 pointer-events-none" /></div>)}</div></div></div></div></div>
+            <div className="pt-4 sm:pt-6"><div className="max-w-7xl mx-auto"><div className="p-6 sm:p-8 mb-4"><div className="flex items-start justify-between gap-4"><div><h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>{businessName && <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>}</div><div className="flex items-center gap-3 relative">{!isAdmin && (<button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"><UploadIcon className="h-4 w-4" />Upload New Reports</button>)}{isAdmin && (<div className="relative"><SelectBase value={selectedAccountId} onChange={e => { const val = (e.target as HTMLSelectElement).value; setSelectedAccountId(val); const a = (allAccounts || []).find(x => x.id === val); setSelectedAccountLabel(a?.label || a?.businessName || a?.id || ''); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="text-sm" minWidthClass="min-w-[240px]">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</SelectBase></div>)}</div></div></div></div></div>
 
             {/* Debug panel for link errors */}
             {linkDebugInfo && (
@@ -711,10 +712,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
                                         <label className="text-xs text-gray-600 dark:text-gray-300">Year</label>
-                                        <select value={popoverYear} onChange={e => setPopoverYear(parseInt(e.target.value, 10))} className="appearance-none px-2 py-1 pr-6 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs">
+                                        <SelectBase value={popoverYear} onChange={e => setPopoverYear(parseInt((e.target as HTMLSelectElement).value, 10))} className="px-2 py-1 pr-6 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs">
                                             {allowedYears.map(y => <option key={y} value={y}>{y}</option>)}
-                                        </select>
-                                        <ChevronDown className="-ml-6 w-4 h-4 text-gray-500 pointer-events-none" />
+                                        </SelectBase>
                                     </div>
                                     <div className="flex items-center gap-1">
                                         <button onClick={() => { let m = popoverMonth - 1, y = popoverYear; if (m < 0) { m = 11; y--; } setPopoverYear(y); setPopoverMonth(m); }} className="px-2 py-1 text-xs rounded border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Prev</button>
@@ -751,7 +751,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             </div>
                         )}
                     </div>
-                    <div className="flex flex-col items-start gap-1"><div className="relative"><select value={dateRange === 'custom' ? '' : dateRange} onChange={e => handleDateRangeChange(e.target.value || '30d')} className="appearance-none px-2 py-1 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs">
+                    <div className="flex flex-col items-start gap-1"><div className="relative"><SelectBase value={dateRange === 'custom' ? '' : dateRange} onChange={e => handleDateRangeChange((e.target as HTMLSelectElement).value || '30d')} className="px-2 py-1 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs">
                         <option value="" disabled>Presets</option>
                         <option value="30d">Last 30 days</option>
                         <option value="60d">Last 60 days</option>
@@ -760,7 +760,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <option value="180d">Last 180 days</option>
                         <option value="365d">Last 365 days</option>
                         <option value="all">Last 2 Years</option>
-                    </select><ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" /></div></div>
+                    </SelectBase></div></div>
                     <div className="flex items-center gap-1.5"><BarChart3 className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Granularity:</span><div className="flex gap-1.5 ml-2 flex-nowrap">{granularityOptions.map(option => <button key={option.key} onClick={() => { if (!option.disabled && option.key !== granularity) { setGranularity(option.key); } }} disabled={option.disabled} title={option.tooltip} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${granularity === option.key ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'} ${option.disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>{option.label}</button>)}</div></div>
                     {/* Compare Mode */}
                     {(() => {
@@ -862,7 +862,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     <section>
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2"><Star className="w-5 h-5 text-purple-600" /><h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Top Campaigns ({getSortedCampaigns().length})</h3></div>
-                            <div className="relative"><select value={selectedCampaignMetric} onChange={e => setSelectedCampaignMetric(e.target.value)} className="appearance-none px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">{campaignMetricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</select><ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" /></div>
+                            <div className="relative"><SelectBase value={selectedCampaignMetric} onChange={e => setSelectedCampaignMetric((e.target as HTMLSelectElement).value)} className="px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">{campaignMetricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</SelectBase></div>
                         </div>
                         <div className="border rounded-lg overflow-hidden border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">{getSortedCampaigns().slice(0, displayedCampaigns).map((c, i) => (
                             <div key={c.id} className={`group relative p-4 avoid-break ${i !== 0 ? 'border-t border-gray-200 dark:border-gray-800' : ''} md:grid md:items-center md:gap-4 md:[grid-template-columns:minmax(0,1fr)_400px_max-content]`}>
@@ -909,11 +909,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <div className="flex items-center justify-between gap-2 mb-3">
                             <div className="flex items-center gap-2"><Zap className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Flow Performance</h2></div>
                             <div className="relative">
-                                <select value={selectedFlow} onChange={e => { setSelectedFlow(e.target.value); }} className="appearance-none px-4 py-2 pr-9 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm min-w-[220px]">
+                                <SelectBase value={selectedFlow} onChange={e => { setSelectedFlow((e.target as HTMLSelectElement).value); }} className="px-4 py-2 pr-9 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm" minWidthClass="min-w-[220px]">
                                     <option value="all">All Flows</option>
                                     {uniqueFlowNames.map(f => <option key={f} value={f}>{f}</option>)}
-                                </select>
-                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
+                                </SelectBase>
                             </div>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

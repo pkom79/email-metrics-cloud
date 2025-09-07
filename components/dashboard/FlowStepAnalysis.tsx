@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useMemo, useEffect } from 'react';
-import { ChevronDown, Workflow, GitBranch, AlertTriangle, ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
+import { Workflow, GitBranch, AlertTriangle, ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
+import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
 
 interface FlowStepAnalysisProps {
@@ -653,16 +654,14 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 </div>
                 <div className="flex items-center gap-4">
                     <div className="relative">
-                        <select value={selectedFlow} onChange={(e) => setSelectedFlow(e.target.value)} className="appearance-none px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                        <SelectBase value={selectedFlow} onChange={(e) => setSelectedFlow((e.target as HTMLSelectElement).value)} className="px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
                             {uniqueFlowNames.map((flow: string) => (<option key={flow} value={flow}>{flow}</option>))}
-                        </select>
-                        <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
+                        </SelectBase>
                     </div>
                     <div className="relative">
-                        <select value={selectedMetric} onChange={(e) => setSelectedMetric(e.target.value)} className="appearance-none px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+                        <SelectBase value={selectedMetric} onChange={(e) => setSelectedMetric((e.target as HTMLSelectElement).value)} className="px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
                             {metricOptions.map(metric => (<option key={metric.value} value={metric.value}>{metric.label}</option>))}
-                        </select>
-                        <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
+                        </SelectBase>
                     </div>
                 </div>
             </div>

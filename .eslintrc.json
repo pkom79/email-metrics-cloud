@@ -9,5 +9,31 @@
     ]
     // tsconfigRootDir removed: ESLint resolves project relative to this config file.
     // A relative string value caused: parserOptions.tsconfigRootDir must be an absolute path.
+  },
+  "plugins": [],
+  "overrides": [
+    {
+      "files": [
+        "**/*.{ts,tsx,jsx,js}"
+      ],
+      "excludedFiles": [
+        "app/api/**/*",
+        "components/ui/SelectBase.tsx"
+      ],
+      "rules": {
+        "no-restricted-syntax": [
+          "warn",
+          {
+            "selector": "JSXOpeningElement[name.name='select']",
+            "message": "Use components/ui/SelectBase instead of native <select> for visual consistency. If this is intentional, disable this rule for the next line with: // eslint-disable-next-line no-restricted-syntax"
+          }
+        ]
+      }
+    }
+  ],
+  "settings": {
+    "import/resolver": {
+      "typescript": {}
+    }
   }
 }

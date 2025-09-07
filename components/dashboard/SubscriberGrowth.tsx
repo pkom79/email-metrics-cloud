@@ -1,5 +1,6 @@
 "use client";
 import React, { useMemo, useState } from 'react';
+import SelectBase from "../ui/SelectBase";
 import { Users, Info } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 
@@ -82,12 +83,11 @@ export default function SubscriberGrowth({ dateRange, granularity, customFrom, c
                 </div>
                 <div className="flex gap-3 text-sm">
                     <div className="relative">
-                        <select value={metric} onChange={e => setMetric(e.target.value as Metric)} className="appearance-none px-3 h-9 pr-8 rounded-lg border bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                        <SelectBase value={metric} onChange={e => setMetric((e.target as HTMLSelectElement).value as Metric)} className="px-3 h-9 pr-8 rounded-lg border bg-white border-gray-300 text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                             <option value="created">Created</option>
                             <option value="firstActive">First Active</option>
                             <option value="subscribed">Subscribed</option>
-                        </select>
-                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▼</span>
+                        </SelectBase>
                     </div>
                 </div>
             </div>

@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useMemo } from 'react';
-import { Calendar, ChevronDown } from 'lucide-react';
+import { Calendar } from 'lucide-react';
+import SelectBase from "../ui/SelectBase";
 import { ProcessedCampaign } from '../../lib/data/dataTypes';
 import { DataManager } from '../../lib/data/dataManager';
 
@@ -95,18 +96,17 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
                     </h3>
                 </div>
                 <div className="relative">
-                    <select
+                    <SelectBase
                         value={selectedMetric}
-                        onChange={(e) => setSelectedMetric(e.target.value)}
-                        className="appearance-none px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+                        onChange={(e) => setSelectedMetric((e.target as HTMLSelectElement).value)}
+                        className="px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm"
                     >
                         {metricOptions.map(metric => (
                             <option key={metric.value} value={metric.value}>
                                 {metric.label}
                             </option>
                         ))}
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
+                    </SelectBase>
                 </div>
             </div>
 

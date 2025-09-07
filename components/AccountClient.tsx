@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
+import SelectBase from "./ui/SelectBase";
 import { supabase } from '../lib/supabase/client';
 
 type Props = {
@@ -154,17 +155,16 @@ export default function AccountClient({ initial }: Props) {
                     <p className="text-xs text-gray-500">Select your profile or view another account (read-only).</p>
                     {accountsError && <div className="text-xs text-red-600">{accountsError}</div>}
                     <div className="relative">
-                        <select
+                        <SelectBase
                             value={selectedAccountId}
-                            onChange={e => setSelectedAccountId(e.target.value)}
-                            className="w-full appearance-none px-3 py-2 pr-9 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm text-gray-900 dark:text-gray-100"
+                            onChange={e => setSelectedAccountId((e.target as HTMLSelectElement).value)}
+                            className="w-full px-3 py-2 pr-9 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm text-gray-900 dark:text-gray-100"
                         >
                             <option value="admin-self">Admin (My Account)</option>
                             {(allAccounts || []).map(a => (
                                 <option key={a.id} value={a.id}>{a.businessName || a.id}</option>
                             ))}
-                        </select>
-                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-xs">▼</span>
+                        </SelectBase>
                     </div>
                     {selectedAccountId !== 'admin-self' && selectedAccountId && (
                         <div className="text-xs text-gray-600 dark:text-gray-300 space-y-1 border rounded p-3 bg-gray-50 dark:bg-gray-800/40">

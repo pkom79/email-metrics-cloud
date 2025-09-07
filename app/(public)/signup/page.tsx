@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../../lib/supabase/client';
-import { ChevronDown, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
+import SelectBase from '../../../components/ui/SelectBase';
 import { useSearchParams, useRouter } from 'next/navigation';
 
 const COUNTRIES = ['United States', 'Canada', 'United Kingdom', 'Australia', 'Germany', 'France', 'Netherlands', 'Spain', 'Italy', 'Sweden', 'Norway', 'Denmark', 'Ireland', 'New Zealand', 'Mexico', 'Brazil', 'Japan', 'Singapore', 'India'];
@@ -198,15 +199,14 @@ export default function Signup() {
                         <input type="text" inputMode="url" placeholder="Store URL (e.g. yourstore.com)" value={storeUrl} onChange={e => setStoreUrl(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
                         {/* Country dropdown styled like other selects */}
                         <div className="relative">
-                            <select
+                            <SelectBase
                                 value={country}
-                                onChange={e => setCountry(e.target.value)}
-                                className="appearance-none w-full px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                onChange={e => setCountry((e.target as HTMLSelectElement).value)}
+                                className="w-full px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                             >
                                 <option value="">Select Country</option>
                                 {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
+                            </SelectBase>
                         </div>
                     </>
                 )}

@@ -1,5 +1,6 @@
 "use client";
 import React, { useMemo, useState, useCallback } from 'react';
+import SelectBase from "../ui/SelectBase";
 import { Activity, Info } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
@@ -436,18 +437,16 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                         ))}
                     </div>
                     <div className="relative">
-                        <select value={metric} onChange={e => setMetric(e.target.value as MetricKey)} className="appearance-none px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                        <SelectBase value={metric} onChange={e => setMetric((e.target as HTMLSelectElement).value as MetricKey)} className="px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                             {METRIC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
-                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-xs">▼</span>
+                        </SelectBase>
                     </div>
                     <div className="relative">
-                        <select value={scope} onChange={e => setScope(e.target.value as SourceScope)} className="appearance-none px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                        <SelectBase value={scope} onChange={e => setScope((e.target as HTMLSelectElement).value as SourceScope)} className="px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                             <option value="all">All Emails</option>
                             <option value="campaigns">Campaigns</option>
                             <option value="flows">Flows</option>
-                        </select>
-                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 text-xs">▼</span>
+                        </SelectBase>
                     </div>
                 </div>
             </div>
