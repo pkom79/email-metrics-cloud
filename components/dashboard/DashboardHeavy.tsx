@@ -763,17 +763,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     </select><ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" /></div></div>
                     <div className="flex items-center gap-1.5"><BarChart3 className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Granularity:</span><div className="flex gap-1.5 ml-2 flex-nowrap">{granularityOptions.map(option => <button key={option.key} onClick={() => { if (!option.disabled && option.key !== granularity) { setGranularity(option.key); } }} disabled={option.disabled} title={option.tooltip} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${granularity === option.key ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'} ${option.disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>{option.label}</button>)}</div></div>
                     {/* Compare Mode */}
-                    <div className="flex items-center gap-1.5"><GitCompare className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Compare:</span><div className="flex gap-1.5 ml-1 flex-nowrap">{([
-                        { key: 'prev-period', label: 'Prev Period' },
-                        { key: 'prev-year', label: 'Prev Year' }
-                    ] as const).map(m => (
-                        <button
-                            key={m.key}
-                            onClick={() => { if (m.key !== compareMode && dateRange !== 'all') setCompareMode(m.key); }}
-                            disabled={dateRange === 'all'}
-                            className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${compareMode === m.key ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}
-                        >{m.label}</button>
-                    ))}</div></div>
+                    {(() => {
+                        const prevAvail = dm.isCompareWindowAvailable(dateRange === 'custom' && customActive ? `custom:${customFrom}:${customTo}` : dateRange, 'prev-period', customFrom, customTo); const yearAvail = dm.isCompareWindowAvailable(dateRange === 'custom' && customActive ? `custom:${customFrom}:${customTo}` : dateRange, 'prev-year', customFrom, customTo); return (
+                            <div className="flex items-center gap-1.5"><GitCompare className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Compare:</span><div className="flex gap-1.5 ml-1 flex-nowrap">
+                                <button onClick={() => { if (compareMode !== 'prev-period' && prevAvail) setCompareMode('prev-period'); }} disabled={!prevAvail} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${compareMode === 'prev-period' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Prev Period</button>
+                                <button onClick={() => { if (compareMode !== 'prev-year' && yearAvail) setCompareMode('prev-year'); }} disabled={!yearAvail} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${compareMode === 'prev-year' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Prev Year</button>
+                            </div></div>
+                        );
+                    })()}
                 </div></div></div></div>
             {/* Empty state (no data) */}
             {!showOverlay && !hasData && (

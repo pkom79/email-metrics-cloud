@@ -1,6 +1,7 @@
 "use client";
 import React from 'react';
 import { ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
+import TooltipPortal from '../TooltipPortal';
 import Sparkline from './Sparkline';
 
 interface MetricCardProps {
@@ -67,10 +68,12 @@ const MetricCard: React.FC<MetricCardProps> = ({
         }
     };
     const formatDate = (d: Date) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    const label = compareMode === 'prev-year' ? 'Same period last year' : 'Previous period';
-    const trendTooltip = previousPeriod && previousValue != null
-        ? `${label} (${formatDate(previousPeriod.startDate)} – ${formatDate(previousPeriod.endDate)}): ${formatPrevValue(previousValue)}`
-        : `Change vs ${label.toLowerCase()}`;
+    const trendTooltipNode = previousPeriod && previousValue != null ? (
+        <div className="text-gray-900 dark:text-gray-100">
+            <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">{formatDate(previousPeriod.startDate)} – {formatDate(previousPeriod.endDate)}</div>
+            <div className="text-sm font-semibold tabular-nums mt-0.5">{formatPrevValue(previousValue)}</div>
+        </div>
+    ) : null;
 
     return (
         <div className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4 hover:shadow-lg transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-[1.03] hover:z-20 will-change-transform origin-center`}>
@@ -99,31 +102,38 @@ const MetricCard: React.FC<MetricCardProps> = ({
                     {value}
                 </p>
                 <div className="flex items-center gap-2">
-                    {showChangeBlock && (
-                        <div
-                            className={`flex items-center text-sm font-medium ${isZeroDisplay
-                                ? 'text-gray-600 dark:text-gray-400'
-                                : shouldShowAsPositive
-                                    ? 'text-green-600 dark:text-green-400'
-                                    : 'text-red-600 dark:text-red-400'
-                                }`}
-                            title={trendTooltip}
-                            aria-label={trendTooltip}
-                        >
-                            {isZeroDisplay ? (
-                                <ArrowRight className="w-4 h-4 mr-1" />
-                            ) : isIncrease ? (
-                                <ArrowUp className="w-4 h-4 mr-1" />
-                            ) : (
-                                <ArrowDown className="w-4 h-4 mr-1" />
-                            )}
-                            {isZeroDisplay ? '0.0' : (() => {
-                                const formatted = Math.abs(change).toFixed(1);
-                                const num = parseFloat(formatted);
-                                return num >= 1000 ? num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatted;
-                            })()}%
+                    {showChangeBlock && trendTooltipNode ? (
+                        <TooltipPortal content={trendTooltipNode}>
+                            <div
+                                className={`flex items-center text-sm font-medium ${isZeroDisplay
+                                    ? 'text-gray-600 dark:text-gray-400'
+                                    : shouldShowAsPositive
+                                        ? 'text-green-600 dark:text-green-400'
+                                        : 'text-red-600 dark:text-red-400'
+                                    }`}
+                                role="button"
+                                tabIndex={0}
+                            >
+                                {isZeroDisplay ? (
+                                    <ArrowRight className="w-4 h-4 mr-1" />
+                                ) : isIncrease ? (
+                                    <ArrowUp className="w-4 h-4 mr-1" />
+                                ) : (
+                                    <ArrowDown className="w-4 h-4 mr-1" />
+                                )}
+                                {isZeroDisplay ? '0.0' : (() => {
+                                    const formatted = Math.abs(change).toFixed(1);
+                                    const num = parseFloat(formatted);
+                                    return num >= 1000 ? num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatted;
+                                })()}%
+                            </div>
+                        </TooltipPortal>
+                    ) : showChangeBlock ? (
+                        <div className={`flex items-center text-sm font-medium ${isZeroDisplay ? 'text-gray-600 dark:text-gray-400' : shouldShowAsPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {isZeroDisplay ? (<ArrowRight className="w-4 h-4 mr-1" />) : isIncrease ? (<ArrowUp className="w-4 h-4 mr-1" />) : (<ArrowDown className="w-4 h-4 mr-1" />)}
+                            {isZeroDisplay ? '0.0' : (() => { const formatted = Math.abs(change).toFixed(1); const num = parseFloat(formatted); return num >= 1000 ? num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatted; })()}%
                         </div>
-                    )}
+                    ) : null}
                 </div>
             </div>
 

@@ -913,12 +913,29 @@ export class DataManager {
             endDate
         );
 
-        const previousMetrics = this.getAggregatedMetricsForPeriod(
+        // Determine if the previous window is fully covered by available data in the subset
+        let earliestTime = Infinity; let latestTime = -Infinity;
+        const scan = (arr: { sentDate: Date }[]) => {
+            for (const e of arr) {
+                if (!e.sentDate || !(e.sentDate instanceof Date)) continue;
+                const t = e.sentDate.getTime();
+                if (!isFinite(t)) continue;
+                if (t < earliestTime) earliestTime = t;
+                if (t > latestTime) latestTime = t;
+            }
+        };
+        scan(campaignsToUse as any);
+        scan(flowsToUse as any);
+        const prevWindowCovered = isFinite(earliestTime) && isFinite(latestTime)
+            ? (earliestTime <= prevStartDate.getTime() && latestTime >= prevEndDate.getTime())
+            : false;
+
+        const previousMetrics = prevWindowCovered ? this.getAggregatedMetricsForPeriod(
             campaignsToUse,
             flowsToUse,
             prevStartDate,
             prevEndDate
-        );
+        ) : { totalRevenue: 0, emailsSent: 0, totalOrders: 0, openRate: 0, clickRate: 0, conversionRate: 0, unsubscribeRate: 0, spamRate: 0, bounceRate: 0, avgOrderValue: 0, revenuePerEmail: 0, clickToOpenRate: 0, emailCount: 0 };
 
         // Baseline volume assessment (dense-day requirement removed)
         const baselineEmails = previousMetrics.emailsSent;
@@ -985,14 +1002,14 @@ export class DataManager {
         }
 
         // If absolutely no baseline activity, keep previous as null (insufficient)
-        if (!baselineHasAnyActivity) {
+    if (!baselineHasAnyActivity || !prevWindowCovered) {
             return {
                 currentValue,
                 previousValue: null,
                 changePercent: 0,
                 isPositive: true,
                 currentPeriod: { startDate, endDate },
-                previousPeriod: undefined
+        previousPeriod: undefined
             };
         }
 
@@ -1027,6 +1044,65 @@ export class DataManager {
                 meetsVolume: baselineMeetsVolume
             }
         };
+    }
+
+    /**
+     * Check whether a comparison window (prev-period or prev-year) is fully available
+     * for the combined dataset (campaigns + flows). Used to enable/disable global controls.
+     */
+    isCompareWindowAvailable(
+        dateRange: string,
+        mode: 'prev-period' | 'prev-year',
+        customFrom?: string,
+        customTo?: string
+    ): boolean {
+        try {
+            // All-time intentionally disables comparison
+            if (dateRange === 'all') return false;
+
+            // Resolve current period window
+            let startDate: Date; let endDate: Date; let periodDays = 0;
+            if (dateRange === 'custom') {
+                if (!customFrom || !customTo) return false;
+                startDate = new Date(customFrom + 'T00:00:00');
+                endDate = new Date(customTo + 'T23:59:59');
+                periodDays = Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
+            } else if (dateRange.includes('custom:')) {
+                const parts = dateRange.split(':');
+                startDate = new Date(parts[1]);
+                endDate = new Date(parts[2]); endDate.setHours(23, 59, 59, 999);
+                startDate.setHours(0, 0, 0, 0);
+                periodDays = Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
+            } else {
+                const days = parseInt(dateRange.replace('d', ''));
+                if (!Number.isFinite(days) || days <= 0) return false;
+                endDate = this.getLastEmailDate(); endDate.setHours(23, 59, 59, 999);
+                startDate = new Date(endDate); startDate.setDate(startDate.getDate() - days + 1); startDate.setHours(0, 0, 0, 0);
+                periodDays = days;
+            }
+
+            let prevStart = new Date(startDate); let prevEnd = new Date(endDate);
+            if (mode === 'prev-year') { prevStart.setFullYear(prevStart.getFullYear() - 1); prevEnd.setFullYear(prevEnd.getFullYear() - 1); }
+            else { prevEnd = new Date(startDate.getTime() - 1); prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - periodDays + 1); prevStart.setHours(0, 0, 0, 0); prevEnd.setHours(23, 59, 59, 999); }
+
+            // Scan combined dataset for coverage
+            let earliest = Infinity; let latest = -Infinity;
+            const scan = (arr: { sentDate: Date }[]) => {
+                for (const e of arr) {
+                    if (!e.sentDate || !(e.sentDate instanceof Date)) continue;
+                    const t = e.sentDate.getTime();
+                    if (!isFinite(t)) continue;
+                    if (t < earliest) earliest = t;
+                    if (t > latest) latest = t;
+                }
+            };
+            scan(this.campaigns as any);
+            scan(this.flowEmails as any);
+            if (!isFinite(earliest) || !isFinite(latest)) return false;
+            return earliest <= prevStart.getTime() && latest >= prevEnd.getTime();
+        } catch {
+            return false;
+        }
     }
 
     /**
