@@ -391,6 +391,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
         return new Date(maxTime);
     }, [ALL_CAMPAIGNS, ALL_FLOWS, selectedFlow]);
+    // Year dropdown options: last email year to last email year - 2
+    const yearOptions = useMemo(() => {
+        const last = REFERENCE_DATE?.getFullYear?.() || new Date().getFullYear();
+        return [last, last - 1, last - 2];
+    }, [REFERENCE_DATE]);
     // Active flows: flows that have at least one send in the currently selected (or custom) date range
     // Mirror FlowStepAnalysis logic: restrict dropdown to *live* flows only, further filtered to current date window
     const liveFlows = useMemo(() => ALL_FLOWS.filter(f => (f as any).status && String((f as any).status).toLowerCase() === 'live'), [ALL_FLOWS]);
@@ -600,7 +605,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 </div>
             )}
             {/* Filters bar (sticky) */}
-            <div className={`hidden sm:block sm:pt-2 ${stickyBar ? 'sm:sticky sm:top-0 sm:z-50' : ''}`}> <div className="max-w-7xl mx-auto px-4"><div className={`rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${stickyBar ? 'shadow-lg' : 'shadow-sm'} px-3 py-2`}>
+            <div className={`hidden sm:block sm:pt-2 ${stickyBar ? 'sm:sticky sm:top-0 sm:z-50' : ''}`}> <div className="max-w-7xl mx-auto px-4"><div className={`rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${stickyBar ? 'shadow-lg' : 'shadow-sm'} px-[30px] py-2`}>
                 <div className="hidden sm:flex items-center justify-center gap-3 flex-nowrap whitespace-nowrap">
                     {/* Custom date inputs */}
                     <div className="flex items-center gap-1.5">
@@ -610,6 +615,35 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <span className="text-xs text-gray-500">to</span>
                         <input type="date" value={customTo || ''} onChange={e => { const v = e.target.value || undefined; setCustomTo(v); if (v && customFrom && new Date(v) < new Date(customFrom)) setCustomFrom(v); setDateRange('custom'); }} className="px-2 py-1 rounded text-xs border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
                         {customActive && <button onClick={() => { setCustomFrom(undefined); setCustomTo(undefined); setDateRange('30d'); }} className="ml-1 px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700">Clear</button>}
+                        {/* Quick Year selector (capped to last email year and previous two years) */}
+                        <div className="relative ml-2">
+                            <select
+                                aria-label="Year"
+                                onChange={e => {
+                                    const yr = parseInt(e.target.value, 10);
+                                    if (!Number.isFinite(yr)) return;
+                                    const start = new Date(yr, 0, 1);
+                                    const end = new Date(yr, 11, 31);
+                                    const toISO = (d: Date) => {
+                                        const y = d.getFullYear();
+                                        const m = String(d.getMonth() + 1).padStart(2, '0');
+                                        const da = String(d.getDate()).padStart(2, '0');
+                                        return `${y}-${m}-${da}`;
+                                    };
+                                    setCustomFrom(toISO(start));
+                                    setCustomTo(toISO(end));
+                                    setDateRange('custom');
+                                }}
+                                defaultValue=""
+                                className="appearance-none px-2 py-1 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs"
+                            >
+                                <option value="" disabled>Year</option>
+                                {yearOptions.map(y => (
+                                    <option key={y} value={y}>{y}</option>
+                                ))}
+                            </select>
+                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" />
+                        </div>
                     </div>
                     <div className="flex flex-col items-start gap-1"><div className="relative"><select value={dateRange === 'custom' ? '' : dateRange} onChange={e => handleDateRangeChange(e.target.value || '30d')} className="appearance-none px-2 py-1 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs">
                         <option value="" disabled>Presets</option>
