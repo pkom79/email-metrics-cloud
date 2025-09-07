@@ -75,29 +75,80 @@ export default function RevenueReliabilityV2({ campaigns, flows, dateRange, gran
     const allDates = [...campaigns.map(c => c.sentDate.getTime()), ...flows.map(f => f.sentDate.getTime())].sort((a, b) => a - b);
     const maxDate = allDates.length ? new Date(allDates[allDates.length - 1]) : new Date();
     const startDate = useMemo(() => {
+        console.log(`📅 Revenue Reliability Date Range Debug:`);
+        console.log(`  Selected dateRange: ${dateRange}`);
+        console.log(`  Max date from data: ${maxDate.toISOString()}`);
+        console.log(`  Total campaigns: ${campaigns.length}, Total flows: ${flows.length}`);
+
         if (dateRange === '365d') {
-            const d = new Date(maxDate); d.setDate(d.getDate() - 364); return d;
+            const d = new Date(maxDate); d.setDate(d.getDate() - 364);
+            console.log(`  365d range: ${d.toISOString()} to ${maxDate.toISOString()}`);
+            return d;
         } else if (dateRange === 'all') {
-            return allDates.length ? new Date(allDates[0]) : new Date(maxDate.getTime() - 364 * 24 * 3600 * 1000);
+            const result = allDates.length ? new Date(allDates[0]) : new Date(maxDate.getTime() - 364 * 24 * 3600 * 1000);
+            console.log(`  'all' range: ${result.toISOString()} to ${maxDate.toISOString()}`);
+            return result;
         } else if (dateRange === '90d') {
-            const d = new Date(maxDate); d.setDate(d.getDate() - 89); return d;
+            const d = new Date(maxDate); d.setDate(d.getDate() - 89);
+            console.log(`  90d range: ${d.toISOString()} to ${maxDate.toISOString()}`);
+            return d;
         }
         // Handle other date ranges
         const days = parseInt(dateRange.replace('d', ''));
         if (!isNaN(days)) {
-            const d = new Date(maxDate); d.setDate(d.getDate() - days + 1); return d;
+            const d = new Date(maxDate); d.setDate(d.getDate() - days + 1);
+            console.log(`  ${days}d range: ${d.toISOString()} to ${maxDate.toISOString()}`);
+            return d;
         }
-        return allDates.length ? new Date(allDates[0]) : new Date(maxDate.getTime() - 364 * 24 * 3600 * 1000);
+        const fallback = allDates.length ? new Date(allDates[0]) : new Date(maxDate.getTime() - 364 * 24 * 3600 * 1000);
+        console.log(`  Fallback range: ${fallback.toISOString()} to ${maxDate.toISOString()}`);
+        return fallback;
     }, [dateRange, maxDate.getTime(), allDates.length]);
 
     // Use appropriate aggregation based on granularity
     const periods = useMemo(() => {
+        console.log(`📊 Building ${granularity} periods from ${startDate.toISOString()} to ${maxDate.toISOString()}`);
+
+        const campaignsToUse = scope === 'flows' ? [] : campaigns;
+        const flowsToUse = scope === 'campaigns' ? [] : flows;
+
+        console.log(`  Using ${campaignsToUse.length} campaigns, ${flowsToUse.length} flows for scope: ${scope}`);
+
+        let result;
         if (granularity === 'monthly') {
-            return buildMonthlyAggregatesInRange(scope === 'flows' ? [] : campaigns, scope === 'campaigns' ? [] : flows, startDate, maxDate);
+            result = buildMonthlyAggregatesInRange(campaignsToUse, flowsToUse, startDate, maxDate);
         } else {
             // Default to weekly for 'weekly' granularity
-            return buildWeeklyAggregatesInRange(scope === 'flows' ? [] : campaigns, scope === 'campaigns' ? [] : flows, startDate, maxDate);
+            result = buildWeeklyAggregatesInRange(campaignsToUse, flowsToUse, startDate, maxDate);
         }
+
+        console.log(`  Generated ${result.length} ${granularity} periods`);
+        console.log(`  Period revenues:`, result.map(p => ({
+            label: p.label,
+            total: p.totalRevenue,
+            campaign: p.campaignRevenue,
+            flow: p.flowRevenue
+        })));
+        console.log(`  Raw revenue values:`, result.map(p => p.totalRevenue));
+
+        // Additional debug for 180d issue - show non-zero periods
+        const nonZeroPeriods = result.filter(p => p.totalRevenue > 0);
+        if (nonZeroPeriods.length < result.length) {
+            console.log(`  🚨 Found ${result.length - nonZeroPeriods.length} zero-revenue periods out of ${result.length} total`);
+            console.log(`  Non-zero periods:`, nonZeroPeriods.map(p => ({
+                label: p.label,
+                total: p.totalRevenue,
+                campaign: p.campaignRevenue,
+                flow: p.flowRevenue
+            })));
+
+            // Show the exact non-zero period details
+            if (nonZeroPeriods.length > 0) {
+                console.log(`  💰 Revenue-bearing period: "${nonZeroPeriods[0].label}" = $${nonZeroPeriods[0].totalRevenue.toFixed(2)}`);
+            }
+        }
+
+        return result;
     }, [campaigns, flows, scope, startDate, maxDate, granularity]);
 
     const result = useMemo(() => {
@@ -137,11 +188,20 @@ export default function RevenueReliabilityV2({ campaigns, flows, dateRange, gran
         return 'isCompleteWeek' in p ? p.isCompleteWeek : p.isCompleteMonth;
     });
 
+    console.log(`📈 Chart Data Debug:`);
+    console.log(`  Reliability result:`, { reliability: result.reliability, median: result.median, mad: result.mad });
+    console.log(`  All periods: ${periods.length}, Complete periods: ${chartPoints.length}`);
+
     const revenues = chartPoints.map(p => scope === 'campaigns' ? p.campaignRevenue : scope === 'flows' ? p.flowRevenue : p.totalRevenue);
+    console.log(`  Chart revenues for scope '${scope}':`, revenues);
+
     // Ensure chart doesn't go below 0 (fix negative revenue display bug)
     const maxRevenue = Math.max(...revenues.filter(r => r > 0), 1);
     const median = result.median || 0;
     const mad = result.mad || 0;
+
+    console.log(`  Chart scale: max=${maxRevenue}, median=${median}, mad=${mad}`);
+
     const VIEW_W = 850; const VIEW_H = 190; const GRAPH_H = 130; const PAD_L = 50; const PAD_R = 16;
     const innerW = VIEW_W - PAD_L - PAD_R;
     const xScale = (i: number) => chartPoints.length <= 1 ? PAD_L + innerW / 2 : PAD_L + (i / (chartPoints.length - 1)) * innerW;
@@ -156,6 +216,8 @@ export default function RevenueReliabilityV2({ campaigns, flows, dateRange, gran
     const upperBandY = (median > 0 && mad > 0) ? yScale(Math.min(median + mad, maxRevenue)) : null;
     const lowerBandY = (median > 0 && mad > 0) ? yScale(Math.max(median - mad, 0)) : null;
     const showBand = upperBandY != null && lowerBandY != null && Math.abs(lowerBandY - upperBandY) > 2;
+
+    console.log(`  MAD band coordinates: median=${medianY}, upper=${upperBandY}, lower=${lowerBandY}, show=${showBand}`);
 
     // Dynamic labels based on granularity
     const periodLabel = granularity === 'monthly' ? 'Monthly' : 'Weekly';
