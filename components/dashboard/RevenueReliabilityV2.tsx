@@ -1,15 +1,97 @@
 "use client";
 import React, { useMemo, useState } from 'react';
 import type { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
-import { buildWeeklyAggregatesInRange, computeReliability } from '../../lib/analytics/reliability';
+import { buildWeeklyAggregatesInRange, buildMonthlyAggregatesInRange, computeReliability } from '../../lib/analytics/reliability';
 import { ShieldCheck } from 'lucide-react';
 
-interface Props { campaigns: ProcessedCampaign[]; flows: ProcessedFlowEmail[]; dateRange: string; }
+interface Props {
+    campaigns: ProcessedCampaign[];
+    flows: ProcessedFlowEmail[];
+    dateRange: string;
+    granularity: 'daily' | 'weekly' | 'monthly';
+}
 
 const formatCurrency = (v: number) => '$' + Math.round(v).toLocaleString('en-US');
 
-export default function RevenueReliabilityV2({ campaigns, flows, dateRange }: Props) {
+export default function RevenueReliabilityV2({ campaigns, flows, dateRange, granularity }: Props) {
     const [scope, setScope] = useState<'all' | 'campaigns' | 'flows'>('all');
+    const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; revenue: number; label: string } | null>(null);
+
+    // Check if the module should be visible
+    const shouldShowModule = useMemo(() => {
+        if (granularity === 'daily') {
+            return false; // Hide for daily granularity
+        }
+
+        // Count complete periods
+        const allDates = [...campaigns.map(c => c.sentDate.getTime()), ...flows.map(f => f.sentDate.getTime())].sort((a, b) => a - b);
+        if (!allDates.length) return false;
+
+        const maxDate = allDates.length ? new Date(allDates[allDates.length - 1]) : new Date();
+        const startDate = (() => {
+            if (dateRange === '365d') {
+                const d = new Date(maxDate); d.setDate(d.getDate() - 364); return d;
+            } else if (dateRange === 'all') {
+                return allDates.length ? new Date(allDates[0]) : new Date(maxDate.getTime() - 364 * 24 * 3600 * 1000);
+            } else if (dateRange === '90d') {
+                const d = new Date(maxDate); d.setDate(d.getDate() - 89); return d;
+            }
+            // Handle other date ranges
+            const days = parseInt(dateRange.replace('d', ''));
+            if (!isNaN(days)) {
+                const d = new Date(maxDate); d.setDate(d.getDate() - days + 1); return d;
+            }
+            return allDates.length ? new Date(allDates[0]) : new Date(maxDate.getTime() - 364 * 24 * 3600 * 1000);
+        })();
+
+        if (granularity === 'weekly') {
+            const weeks = buildWeeklyAggregatesInRange(campaigns, flows, startDate, maxDate);
+            const completeWeeks = weeks.filter(w => w.isCompleteWeek);
+            return completeWeeks.length >= 4; // Need at least 4 complete weeks
+        } else if (granularity === 'monthly') {
+            const months = buildMonthlyAggregatesInRange(campaigns, flows, startDate, maxDate);
+            const completeMonths = months.filter(m => m.isCompleteMonth);
+            return completeMonths.length >= 4; // Need at least 4 complete months
+        }
+
+        return false;
+    }, [campaigns, flows, dateRange, granularity]);
+
+    // Get insufficient data message
+    const insufficientDataMessage = useMemo(() => {
+        if (granularity === 'daily') {
+            return 'Revenue Reliability requires weekly or monthly granularity for meaningful analysis.';
+        }
+        if (granularity === 'weekly') {
+            return 'Insufficient data: Need at least 4 complete weeks for reliability analysis.';
+        }
+        if (granularity === 'monthly') {
+            return 'Insufficient data: Need at least 4 complete months for reliability analysis.';
+        }
+        return 'Insufficient data for reliability analysis.';
+    }, [granularity]);
+
+    // If we shouldn't show the module, display message
+    if (!shouldShowModule) {
+        return (
+            <div className="mt-8">
+                <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+                    <div className="flex items-center justify-center py-8">
+                        <div className="text-center">
+                            <ShieldCheck className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                                Revenue Reliability
+                            </h3>
+                            <p className="text-gray-600 dark:text-gray-400 max-w-md">
+                                {insufficientDataMessage}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     // Derive date range bounds (assumes campaigns/flows arrays already filtered by parent for selected dateRange string)
     const allDates = [...campaigns.map(c => c.sentDate.getTime()), ...flows.map(f => f.sentDate.getTime())].sort((a, b) => a - b);
     const maxDate = allDates.length ? new Date(allDates[allDates.length - 1]) : new Date();
@@ -18,29 +100,55 @@ export default function RevenueReliabilityV2({ campaigns, flows, dateRange }: Pr
             const d = new Date(maxDate); d.setDate(d.getDate() - 364); return d;
         } else if (dateRange === 'all') {
             return allDates.length ? new Date(allDates[0]) : new Date(maxDate.getTime() - 364 * 24 * 3600 * 1000);
-        } else if (dateRange === '90d') { const d = new Date(maxDate); d.setDate(d.getDate() - 89); return d; }
+        } else if (dateRange === '90d') {
+            const d = new Date(maxDate); d.setDate(d.getDate() - 89); return d;
+        }
+        // Handle other date ranges
+        const days = parseInt(dateRange.replace('d', ''));
+        if (!isNaN(days)) {
+            const d = new Date(maxDate); d.setDate(d.getDate() - days + 1); return d;
+        }
         return allDates.length ? new Date(allDates[0]) : new Date(maxDate.getTime() - 364 * 24 * 3600 * 1000);
     }, [dateRange, maxDate.getTime(), allDates.length]);
-    const weeks = useMemo(() => buildWeeklyAggregatesInRange(scope === 'flows' ? [] : campaigns, scope === 'campaigns' ? [] : flows, startDate, maxDate), [campaigns, flows, scope, startDate, maxDate]);
-    const result = useMemo(() => computeReliability(weeks, { scope, windowSize: 12 }), [weeks, scope]);
-    if (!weeks.length) return null;
+
+    // Use appropriate aggregation based on granularity
+    const periods = useMemo(() => {
+        if (granularity === 'monthly') {
+            return buildMonthlyAggregatesInRange(scope === 'flows' ? [] : campaigns, scope === 'campaigns' ? [] : flows, startDate, maxDate);
+        } else {
+            // Default to weekly for 'weekly' granularity
+            return buildWeeklyAggregatesInRange(scope === 'flows' ? [] : campaigns, scope === 'campaigns' ? [] : flows, startDate, maxDate);
+        }
+    }, [campaigns, flows, scope, startDate, maxDate, granularity]);
+
+    const result = useMemo(() => {
+        const windowSize = granularity === 'monthly' ? 6 : 12; // 6 months or 12 weeks
+        return computeReliability(periods, { scope, windowSize, minPeriods: 4 });
+    }, [periods, scope, granularity]);
+
+    if (!periods.length) return null;
+
     const reliability = result.reliability;
     const trend = result.trendDelta;
     const badgeColor = reliability == null ? 'bg-gray-300 text-gray-700' : reliability >= 80 ? 'bg-green-600 text-white' : reliability >= 65 ? 'bg-emerald-500 text-white' : reliability >= 50 ? 'bg-amber-500 text-white' : 'bg-rose-600 text-white';
 
-    // Chart geometry: full period weeks (we keep all complete weeks in range)
-    const chartPoints = weeks.filter(w => w.isCompleteWeek);
-    const revenues = chartPoints.map(w => scope === 'campaigns' ? w.campaignRevenue : scope === 'flows' ? w.flowRevenue : w.totalRevenue);
+    // Chart geometry: full period periods (we keep all complete periods in range)
+    const chartPoints = periods.filter(p => {
+        return 'isCompleteWeek' in p ? p.isCompleteWeek : p.isCompleteMonth;
+    });
+
+    const revenues = chartPoints.map(p => scope === 'campaigns' ? p.campaignRevenue : scope === 'flows' ? p.flowRevenue : p.totalRevenue);
+    // Ensure chart doesn't go below 0 (fix negative revenue display bug)
     const maxRevenue = Math.max(...revenues.filter(r => r > 0), 1);
     const median = result.median || 0;
     const mad = result.mad || 0;
     const VIEW_W = 850; const VIEW_H = 190; const GRAPH_H = 130; const PAD_L = 50; const PAD_R = 16;
     const innerW = VIEW_W - PAD_L - PAD_R;
     const xScale = (i: number) => chartPoints.length <= 1 ? PAD_L + innerW / 2 : PAD_L + (i / (chartPoints.length - 1)) * innerW;
-    const yScale = (rev: number) => GRAPH_H - (rev / maxRevenue) * (GRAPH_H - 10);
+    const yScale = (rev: number) => GRAPH_H - (Math.max(0, rev) / maxRevenue) * (GRAPH_H - 10); // Clamp to 0 minimum
 
-    // Simple polyline connecting actual points (no smoothing, no fabricated zeros except real zero weeks)
-    const linePts = chartPoints.map((w, i) => ({ x: xScale(i), y: yScale(revenues[i]) }));
+    // Simple polyline connecting actual points (no smoothing, no fabricated zeros except real zero periods)
+    const linePts = chartPoints.map((p, i) => ({ x: xScale(i), y: yScale(revenues[i]) }));
     const linePath = linePts.length ? 'M' + linePts.map(p => `${p.x},${p.y}`).join(' L') : '';
 
     // Median + band (MAD) shading
@@ -49,12 +157,16 @@ export default function RevenueReliabilityV2({ campaigns, flows, dateRange }: Pr
     const lowerBandY = (median > 0 && mad > 0) ? yScale(Math.max(median - mad, 0)) : null;
     const showBand = upperBandY != null && lowerBandY != null && Math.abs(lowerBandY - upperBandY) > 2;
 
+    // Dynamic labels based on granularity
+    const periodLabel = granularity === 'monthly' ? 'Monthly' : 'Weekly';
+    const zeroPeriodsLabel = granularity === 'monthly' ? 'Zero Campaign Months' : 'Zero Campaign Weeks';
+
     const tiles = [
-        { label: 'Median Weekly Rev', value: result.median ? formatCurrency(result.median) : '—' },
+        { label: `Median ${periodLabel} Rev`, value: result.median ? formatCurrency(result.median) : '—' },
         { label: 'Dispersion (MAD)', value: result.mad ? formatCurrency(result.mad) : '—' },
     ];
     if ((scope === 'campaigns' || scope === 'all') && result.zeroCampaignWeeks && result.zeroCampaignWeeks > 0) {
-        tiles.push({ label: 'Zero Campaign Weeks', value: String(result.zeroCampaignWeeks) });
+        tiles.push({ label: zeroPeriodsLabel, value: String(result.zeroCampaignWeeks) });
         if (result.estLostCampaignRevenue) tiles.push({ label: 'Est. Lost Campaign Rev', value: formatCurrency(result.estLostCampaignRevenue) });
     }
 
@@ -68,7 +180,7 @@ export default function RevenueReliabilityV2({ campaigns, flows, dateRange }: Pr
                     <div className="flex items-center gap-2">
                         <ShieldCheck className="w-5 h-5" style={{ color: scopeColor }} />
                         <h3 className="text-base font-semibold tracking-tight text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                            Weekly Revenue Reliability
+                            Revenue Reliability
                             <button aria-label="Reliability definition" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors text-xs">ⓘ</button>
                         </h3>
                     </div>
@@ -100,6 +212,60 @@ export default function RevenueReliabilityV2({ campaigns, flows, dateRange }: Pr
                         )}
                         {/* Line */}
                         {linePath && <path d={linePath} fill="none" stroke={scopeColor} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
+
+                        {/* Interactive dots for hover */}
+                        {linePts.map((pt, i) => (
+                            <circle
+                                key={i}
+                                cx={pt.x}
+                                cy={pt.y}
+                                r={4}
+                                fill={scopeColor}
+                                className="cursor-pointer hover:r-6 transition-all"
+                                onMouseEnter={() => setHoveredPoint({
+                                    x: pt.x,
+                                    y: pt.y,
+                                    revenue: revenues[i],
+                                    label: chartPoints[i].label
+                                })}
+                                onMouseLeave={() => setHoveredPoint(null)}
+                            />
+                        ))}
+
+                        {/* Tooltip */}
+                        {hoveredPoint && (
+                            <g>
+                                <rect
+                                    x={hoveredPoint.x - 50}
+                                    y={hoveredPoint.y - 40}
+                                    width={100}
+                                    height={30}
+                                    fill="rgba(0, 0, 0, 0.8)"
+                                    rx={4}
+                                />
+                                <text
+                                    x={hoveredPoint.x}
+                                    y={hoveredPoint.y - 30}
+                                    textAnchor="middle"
+                                    fontSize={10}
+                                    fill="white"
+                                    className="font-medium"
+                                >
+                                    {hoveredPoint.label}
+                                </text>
+                                <text
+                                    x={hoveredPoint.x}
+                                    y={hoveredPoint.y - 18}
+                                    textAnchor="middle"
+                                    fontSize={10}
+                                    fill="white"
+                                    className="tabular-nums"
+                                >
+                                    {formatCurrency(hoveredPoint.revenue)}
+                                </text>
+                            </g>
+                        )}
+
                         {/* Median line */}
                         {medianY != null && <line x1={PAD_L} x2={VIEW_W - PAD_R} y1={medianY} y2={medianY} stroke="#9ca3af" strokeDasharray="4 3" />}
                         {/* X labels (max 6) */}
@@ -116,7 +282,12 @@ export default function RevenueReliabilityV2({ campaigns, flows, dateRange }: Pr
                 {/* Stat tiles */}
                 <div className="mt-6 grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))' }}>
                     <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 relative">
-                        <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500 mb-1 flex justify-between items-center">Reliability <span className="text-[10px] font-normal text-gray-400">{result.windowWeeks}w</span></p>
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500 mb-1 flex justify-between items-center">
+                            Reliability
+                            <span className="text-[10px] font-normal text-gray-400">
+                                {result.windowWeeks}{granularity === 'monthly' ? 'm' : 'w'}
+                            </span>
+                        </p>
                         <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 tabular-nums flex items-center gap-2">
                             {reliability !== null ? reliability + '%' : '—'}
                             {result.trendDelta !== null && (

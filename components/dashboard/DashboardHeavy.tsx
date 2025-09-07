@@ -690,7 +690,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             <MetricCard title="Bounce Rate" value={formatPercent(overviewMetrics.bounceRate.value)} change={overviewMetrics.bounceRate.change} isPositive={overviewMetrics.bounceRate.isPositive} previousValue={overviewMetrics.bounceRate.previousValue} previousPeriod={overviewMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={overviewSeries.bounceRate} compareMode={compareMode} category="email" />
                         </div>
                         {/* Weekly Revenue Reliability V2 */}
-                        <RevenueReliabilityV2 campaigns={filteredCampaigns as any} flows={filteredFlowEmails as any} dateRange={dateRange} />
+                        <RevenueReliabilityV2 campaigns={filteredCampaigns as any} flows={filteredFlowEmails as any} dateRange={dateRange} granularity={granularity} />
                         <SendVolumeImpact dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
                     </section>
                 )}
