@@ -57,20 +57,25 @@ const fmtNum = (v: number, d = 2) => Number.isFinite(v) ? v.toFixed(d) : '—';
 interface ChartSeriesPoint { x: number; value: number | null; emails?: number; label: string; dateLabel?: string; faded?: boolean; }
 interface ChartContainerProps { points: ChartSeriesPoint[]; metric: MetricKey; emailsMax: number; metricMax: number; formatValue: (v: number | null) => string; compareSeries?: (number | null)[]; axisMode: 'time' | 'volume'; scope: SourceScope; }
 
-// Simple Catmull-Rom spline to Bezier for smoother line
-function catmullRom2bezier(points: { x: number, y: number }[]) {
+// Simple Catmull-Rom spline to Bezier for smoother line (with optional y clamping)
+function catmullRom2bezier(points: { x: number, y: number }[], yMin?: number, yMax?: number) {
     if (points.length < 2) return '';
     const d: string[] = [];
     d.push(`M${points[0].x} ${points[0].y}`);
+    const clamp = (v: number) => {
+        if (typeof yMin === 'number' && v < yMin) return yMin;
+        if (typeof yMax === 'number' && v > yMax) return yMax;
+        return v;
+    };
     for (let i = 0; i < points.length - 1; i++) {
         const p0 = points[i - 1] || points[i];
         const p1 = points[i];
         const p2 = points[i + 1];
         const p3 = points[i + 2] || p2;
         const cp1x = p1.x + (p2.x - p0.x) / 6;
-        const cp1y = p1.y + (p2.y - p0.y) / 6;
+        const cp1y = clamp(p1.y + (p2.y - p0.y) / 6);
         const cp2x = p2.x - (p3.x - p1.x) / 6;
-        const cp2y = p2.y - (p3.y - p1.y) / 6;
+        const cp2y = clamp(p2.y - (p3.y - p1.y) / 6);
         d.push(`C${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x} ${p2.y}`);
     }
     return d.join(' ');
@@ -91,10 +96,14 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
     };
 
     // Build smoothed paths using Catmull-Rom -> Bezier
-    const metricPts = points.filter(p => p.value != null).map(p => ({ x: xScale(p.x), y: yMetric(p.value as number) }));
-    const emailsPts = points.map(p => ({ x: xScale(p.x), y: yEmails(p.emails || 0) }));
-    const metricPath = catmullRom2bezier(metricPts);
-    const emailsLine = catmullRom2bezier(emailsPts);
+    const clampY = (y: number) => Math.max(10, Math.min(GRAPH_H, y));
+    const metricPts = points
+        .filter(p => p.value != null)
+        .map(p => ({ x: xScale(p.x), y: clampY(yMetric(p.value as number)) }));
+    const emailsPts = points.map(p => ({ x: xScale(p.x), y: clampY(yEmails(p.emails || 0)) }));
+    // Clamp control points to prevent the curve from dipping below the 0 baseline
+    const metricPath = catmullRom2bezier(metricPts, 10, GRAPH_H);
+    const emailsLine = catmullRom2bezier(emailsPts, 10, GRAPH_H);
     const emailsArea = emailsPts.length ? `${emailsLine} L ${emailsPts[emailsPts.length - 1].x} ${GRAPH_H} L ${emailsPts[0].x} ${GRAPH_H} Z` : '';
     // Removed metric area shading (only show volume shading)
     const metricArea = '';
