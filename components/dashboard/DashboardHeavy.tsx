@@ -534,8 +534,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     ];
     const formatMetricValue = (v: number, metric: string) => {
         if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric)) {
-            // Use compact format for revenue metrics in lists and displays
-            return formatCompactCurrency(v);
+            // Show cents for small values; keep compact style for larger numbers
+            return v < 1000 ? formatCurrency(v) : formatCompactCurrency(v);
         }
         if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric)) return formatPercent(v);
         return formatNumber(v);
@@ -732,7 +732,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             <div className="relative"><select value={selectedCampaignMetric} onChange={e => setSelectedCampaignMetric(e.target.value)} className="appearance-none px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">{campaignMetricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</select><ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 dark:text-gray-400" /></div>
                         </div>
                         <div className="border rounded-lg overflow-hidden border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">{getSortedCampaigns().slice(0, displayedCampaigns).map((c, i) => (
-                            <div key={c.id} className={`group relative p-4 avoid-break ${i !== 0 ? 'border-t border-gray-200 dark:border-gray-800' : ''} md:grid md:items-center md:gap-4 md:[grid-template-columns:minmax(0,1fr)_360px_max-content]`}>
+                            <div key={c.id} className={`group relative p-4 avoid-break ${i !== 0 ? 'border-t border-gray-200 dark:border-gray-800' : ''} md:grid md:items-center md:gap-4 md:[grid-template-columns:minmax(0,1fr)_400px_max-content]`}>
                                 {/* Subject (col 1) */}
                                 <div className="md:col-start-1 md:col-end-2 min-w-0">
                                     <div className="flex items-center gap-3 mb-1.5"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium bg-purple-100 text-purple-900">{i + 1}</span><h4 className="font-medium text-gray-900 dark:text-gray-100 truncate">{c.subject}</h4></div>
