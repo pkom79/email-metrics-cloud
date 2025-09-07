@@ -71,27 +71,6 @@ export default function RevenueReliabilityV2({ campaigns, flows, dateRange, gran
         return 'Insufficient data for reliability analysis.';
     }, [granularity]);
 
-    // If we shouldn't show the module, display message
-    if (!shouldShowModule) {
-        return (
-            <div className="mt-8">
-                <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-                    <div className="flex items-center justify-center py-8">
-                        <div className="text-center">
-                            <ShieldCheck className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                                Revenue Reliability
-                            </h3>
-                            <p className="text-gray-600 dark:text-gray-400 max-w-md">
-                                {insufficientDataMessage}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
     // Derive date range bounds (assumes campaigns/flows arrays already filtered by parent for selected dateRange string)
     const allDates = [...campaigns.map(c => c.sentDate.getTime()), ...flows.map(f => f.sentDate.getTime())].sort((a, b) => a - b);
     const maxDate = allDates.length ? new Date(allDates[allDates.length - 1]) : new Date();
@@ -125,6 +104,27 @@ export default function RevenueReliabilityV2({ campaigns, flows, dateRange, gran
         const windowSize = granularity === 'monthly' ? 6 : 12; // 6 months or 12 weeks
         return computeReliability(periods, { scope, windowSize, minPeriods: 4 });
     }, [periods, scope, granularity]);
+
+    // If we shouldn't show the module, display message
+    if (!shouldShowModule) {
+        return (
+            <div className="mt-8">
+                <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+                    <div className="flex items-center justify-center py-8">
+                        <div className="text-center">
+                            <ShieldCheck className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                                Revenue Reliability
+                            </h3>
+                            <p className="text-gray-600 dark:text-gray-400 max-w-md">
+                                {insufficientDataMessage}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     if (!periods.length) return null;
 
@@ -213,15 +213,15 @@ export default function RevenueReliabilityV2({ campaigns, flows, dateRange, gran
                         {/* Line */}
                         {linePath && <path d={linePath} fill="none" stroke={scopeColor} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
 
-                        {/* Interactive dots for hover */}
+                        {/* Interactive dots for hover - invisible but functional */}
                         {linePts.map((pt, i) => (
                             <circle
                                 key={i}
                                 cx={pt.x}
                                 cy={pt.y}
-                                r={4}
-                                fill={scopeColor}
-                                className="cursor-pointer hover:r-6 transition-all"
+                                r={6}
+                                fill="transparent"
+                                className="cursor-pointer"
                                 onMouseEnter={() => setHoveredPoint({
                                     x: pt.x,
                                     y: pt.y,
