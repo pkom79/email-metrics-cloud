@@ -179,9 +179,8 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                         <linearGradient id={gradAreaId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.25} /><stop offset="100%" stopColor={color} stopOpacity={0.05} /></linearGradient>
                         <linearGradient id={cmpAreaId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.22} /><stop offset="100%" stopColor={color} stopOpacity={0.08} /></linearGradient>
                     </defs>
-                    {/* Compare area behind */}
-                    {!!compare && cmpAreaD && <path d={cmpAreaD} fill={`url(#${cmpAreaId})`} stroke="none" />}
-                    {/* Primary line only (no fill) so compare area remains visible */}
+                    {/* Primary area + line; no compare fill to avoid overlapped shading */}
+                    {areaD && <path d={areaD} fill={`url(#${gradAreaId})`} stroke="none" />}
                     {pathD && <path d={pathD} fill="none" stroke={`url(#${gradLineId})`} strokeWidth={2} />}
                     {/* Y tick labels */}
                     {yTickValues.map((v, i) => { const y = yScale(v); const label = yTickLabels[i] ?? ''; return <text key={i} x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{label}</text>; })}

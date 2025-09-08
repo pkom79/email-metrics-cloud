@@ -569,8 +569,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
                                     return (
                                         <g>
-                                            {/* Areas: compare behind, primary over it */}
-                                            {compareArea && <path d={compareArea} fill={`url(#cmp-gradient-${index})`} stroke="none" />}
+                                            {/* Primary area only; no compare shading */}
                                             <path d={areaPath} fill={`url(#gradient-${index})`} stroke="none" />
                                             <path d={pathD} fill="none" stroke={chartColor} strokeWidth="2" />
                                             {/* Hover points */}
@@ -626,8 +625,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         whiteSpace: 'nowrap'
                                     }}
                                 >
-                                    <div className="font-semibold">{new Date(hoveredPoint.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
-                                    <div className="tabular-nums mb-1">{(() => {
+                                    <div className="font-semibold mb-0.5">{hoveredPoint.date}</div>
+                                    <div className="tabular-nums mb-1.5">{(() => {
                                         const metricConfig = metricOptions.find(m => m.value === selectedMetric);
                                         switch (metricConfig?.format) {
                                             case 'currency':
@@ -656,8 +655,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                             const change = prevVal !== 0 ? ((hoveredPoint.value - prevVal) / prevVal) * 100 : null;
                                             return (
                                                 <>
-                                                    <div className="font-semibold">{new Date(prevPoint.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
-                                                    <div className="tabular-nums mb-1">{(() => {
+                                                    <div className="font-semibold mt-1">{prevPoint.date}</div>
+                                                    <div className="tabular-nums mb-1.5">{(() => {
                                                         const metricConfig = metricOptions.find(m => m.value === selectedMetric);
                                                         switch (metricConfig?.format) {
                                                             case 'currency':
@@ -672,7 +671,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                                         }
                                                     })()}</div>
                                                     {change != null && isFinite(change) && (
-                                                        <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">Change</span><span className="tabular-nums">{`${change >= 0 ? '+' : ''}${change.toFixed(1)}%`}</span></div>
+                                                        <div className="flex justify-between gap-3 pt-0.5"><span className="text-gray-500 dark:text-gray-400">Change</span><span className="tabular-nums">{`${change >= 0 ? '+' : ''}${change.toFixed(1)}%`}</span></div>
                                                     )}
                                                 </>
                                             );
