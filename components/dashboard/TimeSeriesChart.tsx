@@ -81,17 +81,13 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
     const gradLineId = `tsc-line-${idSuffix}`; const gradAreaId = `tsc-area-${idSuffix}`; const cmpAreaId = `tsc-cmp-area-${idSuffix}`;
 
     return (
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6">
-            <div className="flex items-start justify-between mb-6 sticky top-14 z-20 bg-white dark:bg-gray-900 border-b border-transparent pb-2">
-                <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight">{title}</h3>
-                </div>
-                <div className="flex gap-3 text-sm items-start">
-                    <div className="relative">
-                        <SelectBase value={metricKey} onChange={e => onMetricChange?.((e.target as HTMLSelectElement).value as MetricKey)} className="px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
-                            {metricOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                        </SelectBase>
-                    </div>
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 mb-8">
+            {/* Top controls: dropdown on right (no internal title) */}
+            <div className="flex items-start justify-end mb-3">
+                <div className="relative">
+                    <SelectBase value={metricKey} onChange={e => onMetricChange?.((e.target as HTMLSelectElement).value as MetricKey)} className="px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                        {metricOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </SelectBase>
                 </div>
             </div>
             <div className="flex items-start justify-between mb-4">
@@ -106,12 +102,11 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                     <defs>
                         <linearGradient id={gradLineId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.9} /><stop offset="100%" stopColor={color} stopOpacity={0.5} /></linearGradient>
                         <linearGradient id={gradAreaId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.25} /><stop offset="100%" stopColor={color} stopOpacity={0.05} /></linearGradient>
-                        <linearGradient id={cmpAreaId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.15} /><stop offset="100%" stopColor={color} stopOpacity={0.03} /></linearGradient>
+                        <linearGradient id={cmpAreaId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.12} /><stop offset="100%" stopColor={color} stopOpacity={0.04} /></linearGradient>
                     </defs>
                     {/* Compare area behind */}
                     {!!compare && cmpAreaD && <path d={cmpAreaD} fill={`url(#${cmpAreaId})`} stroke="none" />}
-                    {/* Primary */}
-                    {areaD && <path d={areaD} fill={`url(#${gradAreaId})`} stroke="none" />}
+                    {/* Primary line only (no fill) so compare area remains visible */}
                     {pathD && <path d={pathD} fill="none" stroke={`url(#${gradLineId})`} strokeWidth={2} />}
                     {/* Y tick labels */}
                     {yTickValues.map((v, i) => { const y = yScale(v); const label = formatVal(v); return <text key={i} x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{label}</text>; })}

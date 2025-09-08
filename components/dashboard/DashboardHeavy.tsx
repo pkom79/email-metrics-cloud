@@ -887,6 +887,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             compare={overviewChartSeries.compare}
                             valueType={metricValueType(overviewChartMetric)}
                             granularity={granularity}
+                            colorHue="#8b5cf6" // purple (overview)
                             idSuffix="overview"
                         />
                         {/* Revenue Split Bar (Campaign vs Flow) */}
@@ -926,6 +927,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             compare={campaignChartSeries.compare}
                             valueType={metricValueType(campaignChartMetric)}
                             granularity={granularity}
+                            colorHue="#6366f1" // indigo (campaigns)
                             idSuffix="campaigns"
                         />
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -1027,6 +1029,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             compare={flowChartSeries.compare}
                             valueType={metricValueType(flowChartMetric)}
                             granularity={granularity}
+                            colorHue="#10b981" // emerald (flows)
                             idSuffix="flows"
                         />
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
