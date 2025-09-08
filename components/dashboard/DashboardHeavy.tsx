@@ -905,11 +905,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             compare={overviewChartSeries.compare}
                             valueType={metricValueType(overviewChartMetric)}
                             granularity={granularity}
+                            compareMode={compareMode}
                             colorHue="#8b5cf6" // purple (overview)
                             idSuffix="overview"
                         />
-                        {/* Revenue Split Bar (Campaign vs Flow) */}
-                        <RevenueSplitBar campaigns={filteredCampaigns} flows={filteredFlowEmails} />
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                             {/* Row 1 */}
                             <MetricCard title="Total Revenue" value={formatCurrency(overviewMetrics.totalRevenue.value)} change={overviewMetrics.totalRevenue.change} isPositive={overviewMetrics.totalRevenue.isPositive} previousValue={overviewMetrics.totalRevenue.previousValue} previousPeriod={overviewMetrics.totalRevenue.previousPeriod} dateRange={dateRange} metricKey="revenue" sparklineData={overviewSeries.totalRevenue} compareMode={compareMode} category="email" />
@@ -927,6 +926,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             <MetricCard title="Spam Rate" value={formatPercent(overviewMetrics.spamRate.value)} change={overviewMetrics.spamRate.change} isPositive={overviewMetrics.spamRate.isPositive} previousValue={overviewMetrics.spamRate.previousValue} previousPeriod={overviewMetrics.spamRate.previousPeriod} dateRange={dateRange} metricKey="spamRate" sparklineData={overviewSeries.spamRate} compareMode={compareMode} category="email" />
                             <MetricCard title="Bounce Rate" value={formatPercent(overviewMetrics.bounceRate.value)} change={overviewMetrics.bounceRate.change} isPositive={overviewMetrics.bounceRate.isPositive} previousValue={overviewMetrics.bounceRate.previousValue} previousPeriod={overviewMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={overviewSeries.bounceRate} compareMode={compareMode} category="email" />
                         </div>
+                        {/* Revenue Split Bar (Campaign vs Flow) moved to sit above Send Volume Impact */}
+                        <RevenueSplitBar campaigns={filteredCampaigns} flows={filteredFlowEmails} />
                         {/* Revenue Reliability module removed - placeholder panel removed */}
                         <SendVolumeImpact dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
                     </section>
@@ -945,6 +946,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             compare={campaignChartSeries.compare}
                             valueType={metricValueType(campaignChartMetric)}
                             granularity={granularity}
+                            compareMode={compareMode}
                             colorHue="#6366f1" // indigo (campaigns)
                             idSuffix="campaigns"
                         />
@@ -1047,6 +1049,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             compare={flowChartSeries.compare}
                             valueType={metricValueType(flowChartMetric)}
                             granularity={granularity}
+                            compareMode={compareMode}
                             colorHue="#10b981" // emerald (flows)
                             idSuffix="flows"
                         />

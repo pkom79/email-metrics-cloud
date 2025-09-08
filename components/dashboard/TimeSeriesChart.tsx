@@ -7,7 +7,7 @@ type CompareMode = 'prev-period' | 'prev-year';
 
 export type MetricKey = 'revenue' | 'avgOrderValue' | 'revenuePerEmail' | 'openRate' | 'clickRate' | 'clickToOpenRate' | 'emailsSent' | 'totalOrders' | 'conversionRate' | 'unsubscribeRate' | 'spamRate' | 'bounceRate';
 
-export interface SeriesPoint { value: number; date: string }
+export interface SeriesPoint { value: number; date: string; iso?: string }
 
 export interface TimeSeriesChartProps {
     title: string;
@@ -21,6 +21,7 @@ export interface TimeSeriesChartProps {
     darkColorHue?: string; // hex variant for dark, fallback to colorHue
     valueType: 'currency' | 'number' | 'percentage';
     granularity: Granularity;
+    compareMode?: CompareMode; // for labeling previous period in tooltip
     // Decorative options
     idSuffix?: string; // to make gradient IDs deterministic
 }
@@ -37,7 +38,7 @@ const fmt = {
     number: (v: number) => Math.round(v).toLocaleString('en-US')
 };
 
-export default function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigValue, primary, compare = null, colorHue = '#8b5cf6', darkColorHue, valueType, granularity, idSuffix = 'tsc' }: TimeSeriesChartProps) {
+export default function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigValue, primary, compare = null, colorHue = '#8b5cf6', darkColorHue, valueType, granularity, compareMode = 'prev-period', idSuffix = 'tsc' }: TimeSeriesChartProps) {
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
     const width = 850; const height = 200; const innerH = 140; const padLeft = 72; const padRight = 20; const innerW = width - padLeft - padRight;
 
@@ -92,6 +93,16 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
     const active = hoverIdx != null ? primary[hoverIdx] : null;
     const cmpActive = hoverIdx != null && (compare || undefined) ? (compare || [])[hoverIdx] : undefined;
 
+    const formatFullDate = (iso?: string, fallback?: string) => {
+        try {
+            if (!iso) return fallback || '';
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return fallback || '';
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        } catch {
+            return fallback || '';
+        }
+    };
     const labelForPoint = (i: number) => primary[i]?.date || '';
     const formatVal = (v: number) => valueType === 'currency' ? fmt.currency(v) : valueType === 'percentage' ? fmt.percentageDynamic(v) : fmt.number(v);
     const color = colorHue; const dColor = darkColorHue || colorHue;
@@ -136,11 +147,17 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                 </svg>
                 {active && hoverIdx != null && (
                     <div className="pointer-events-none absolute z-20 px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs rounded-lg shadow-lg border border-gray-200 dark:border-gray-700" style={{ left: `${(xScale(hoverIdx) / width) * 100}%`, top: '10%', transform: 'translate(-50%, 0)' }}>
-                        <div className="font-medium mb-0.5 text-gray-900 dark:text-gray-100">{labelForPoint(hoverIdx)}</div>
-                        <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">Current</span><span className="tabular-nums">{formatVal(active.value)}</span></div>
+                        {/* Current date (bold) */}
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">{formatFullDate(primary[hoverIdx]?.iso, labelForPoint(hoverIdx))}</div>
+                        {/* Current value only */}
+                        <div className="tabular-nums mb-1">{formatVal(active.value)}</div>
                         {cmpActive && (
                             <>
-                                <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">Compare</span><span className="tabular-nums">{formatVal(cmpActive.value)}</span></div>
+                                {/* Previous date (bold) with compare label */}
+                                <div className="font-semibold text-gray-900 dark:text-gray-100">{formatFullDate((compare || [])[hoverIdx]?.iso, (compare || [])[hoverIdx]?.date)}{` — ${compareMode === 'prev-year' ? 'previous year' : 'previous period'}`}</div>
+                                {/* Previous value only */}
+                                <div className="tabular-nums mb-1">{formatVal(cmpActive.value)}</div>
+                                {/* Delta */}
                                 {(() => { const prev = cmpActive.value; const cur = active.value; const showDelta = prev != null && isFinite(prev) && prev !== 0; if (!showDelta) return null; const deltaPct = ((cur - prev) / prev) * 100; return <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">Change</span><span className="tabular-nums">{`${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(1)}%`}</span></div>; })()}
                             </>
                         )}
