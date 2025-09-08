@@ -143,7 +143,6 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
             <div className="flex items-start justify-between mb-4">
                 <div />
                 <div className="text-right">
-                    <div className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 font-medium">{metricOptions.find(m => m.value === metricKey)?.label || ''}</div>
                     <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{bigValue}</div>
                     {(() => {
                         const isAllTime = false; // charts aren't shown for 'all' compare anyway here
