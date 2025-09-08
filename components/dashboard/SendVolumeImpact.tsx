@@ -4,7 +4,7 @@ import SelectBase from "../ui/SelectBase";
 import { Activity, Info } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
-import { thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
+import { computeAxisMax, thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
 
 interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; compareMode?: 'prev-period' | 'prev-year'; }
 
@@ -338,12 +338,8 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     }, [baseSeries]);
     const metricMax = useMemo(() => {
         const values = points.map(p => p.value || 0);
-        let max = 1;
-        for (let i = 0; i < values.length; i++) {
-            if (values[i] > max) max = values[i];
-        }
-        return max;
-    }, [points]);
+        return computeAxisMax(values, null, (metric === 'totalRevenue' || metric === 'revenuePerEmail') ? 'currency' : 'number');
+    }, [points, metric]);
 
     // Correlation (always computed on chronological series for integrity)
     const correlationInfo = useMemo(() => {

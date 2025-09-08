@@ -3,7 +3,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { Users, Info } from 'lucide-react';
 import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
-import { thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
+import { computeAxisMax, thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
 
 interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; compareMode?: 'prev-period' | 'prev-year'; }
 
@@ -94,7 +94,8 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
     if (!buckets.length) return null;
 
     // Scale now based only on selected metric for better visual variation
-    const maxVal = Math.max(1, ...buckets.map(b => metric === 'created' ? b.countCreated : metric === 'firstActive' ? b.countFirst : b.countSubscribed));
+    const rawMax = Math.max(0, ...buckets.map(b => metric === 'created' ? b.countCreated : metric === 'firstActive' ? b.countFirst : b.countSubscribed));
+    const maxVal = computeAxisMax([rawMax], null, 'number');
     const width = 850; const height = 170; const innerH = 120; const padLeft = 40; const padRight = 20; const innerW = width - padLeft - padRight;
     const xScale = (i: number) => buckets.length <= 1 ? padLeft + innerW / 2 : padLeft + (i / (buckets.length - 1)) * innerW;
     // Clamp to 0: never render below baseline even with smoothing/negative glitches

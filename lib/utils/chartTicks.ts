@@ -2,6 +2,16 @@
 
 export type ValueType = 'currency' | 'number' | 'percentage';
 
+// Soft "nice" ceiling for axis max: choose from 1, 1.5, 2, 2.5, 5, 7.5, 10 × 10^k
+function softNiceCeil(raw: number): number {
+  if (!Number.isFinite(raw) || raw <= 0) return 1;
+  const pow10 = Math.pow(10, Math.floor(Math.log10(raw)));
+  const n = raw / pow10;
+  const steps = [1, 1.5, 2, 2.5, 5, 7.5, 10];
+  for (const s of steps) { if (n <= s) return s * pow10; }
+  return 10 * pow10;
+}
+
 // Compute an axis max using raw data (no "nice" rounding).
 export function computeAxisMax(values: number[], compareValues: number[] | null | undefined, type: ValueType): number {
   if (type === 'percentage') return 100;
@@ -9,7 +19,8 @@ export function computeAxisMax(values: number[], compareValues: number[] | null 
   for (const v of values) if (Number.isFinite(v) && v > raw) raw = v;
   if (compareValues) for (const v of compareValues) if (Number.isFinite(v) && v > raw) raw = v;
   if (!Number.isFinite(raw) || raw <= 0) raw = 1; // fallback to avoid divide-by-zero
-  return raw;
+  // Apply soft nice ceiling for smoother large-axis ticks
+  return softNiceCeil(raw);
 }
 
 // Thirds tick values for the given axis max (0, 1/3, 2/3, max)
@@ -49,7 +60,12 @@ export function formatTickLabels(values: number[], type: ValueType, axisMax: num
       // < 1000: format as currency but control decimals
       return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: d, maximumFractionDigits: d }).format(v);
     }
-    // numbers: integers with thousands separators unless decimals needed
+    // numbers: compact to K/M/B/T for consistency
+    if (v >= 1_000_000_000_000) return `${(v / 1_000_000_000_000).toFixed(Math.min(2, d))}T`;
+    if (v >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(Math.min(2, d))}B`;
+    if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(Math.min(2, d))}M`;
+    if (v >= 1_000) return `${(v / 1_000).toFixed(Math.min(2, d))}k`;
+    // < 1000: use integer or small decimals if needed
     if (d === 0) return Math.round(v).toLocaleString('en-US');
     return (Math.round(v * Math.pow(10, d)) / Math.pow(10, d)).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
   };

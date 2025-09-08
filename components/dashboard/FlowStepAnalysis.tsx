@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Workflow, GitBranch, AlertTriangle, ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
 import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
-import { thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
+import { thirdTicks, formatTickLabels, computeAxisMax } from '../../lib/utils/chartTicks';
 
 interface FlowStepAnalysisProps {
     dateRange: string;
@@ -39,6 +39,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         y: number;
         value: number;
         date: string;
+        pointIndex: number;
     } | null>(null);
 
     const metricOptions = [
@@ -298,39 +299,26 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
     const sharedYAxisRange = useMemo(() => {
         if (!selectedFlow) return { min: 0, max: 10 };
+        const metricConfig = metricOptions.find(m => m.value === selectedMetric);
+        const type = metricConfig?.format === 'currency' ? 'currency' : metricConfig?.format === 'percentage' ? 'percentage' : 'number';
         let allValues: number[] = [];
+        let allPrevValues: number[] = [];
         for (let position = 1; flowSequenceInfo && position <= flowSequenceInfo.sequenceLength; position++) {
             const data = getStepSparklineData(position, selectedMetric);
-            allValues = allValues.concat(data.map(d => d.value));
+            allValues = allValues.concat(data.map(d => Math.max(0, d.value)));
+            if (dateWindows && dateRange !== 'all') {
+                const { prevStartDateOnly, prevEndDateOnly } = dateWindows;
+                try {
+                    const prevData = dataManager.getFlowStepTimeSeries(currentFlowEmails, selectedFlow || '', position, selectedMetric, 'custom', granularity, prevStartDateOnly.toISOString().slice(0, 10), prevEndDateOnly.toISOString().slice(0, 10));
+                    if (prevData && prevData.length) allPrevValues = allPrevValues.concat(prevData.map((d: any) => Math.max(0, d.value)));
+                } catch { }
+            }
         }
-        if (allValues.length === 0) return { min: 0, max: 10 };
-        let minValue = allValues[0];
-        let maxValue = allValues[0];
-        for (let i = 1; i < allValues.length; i++) {
-            if (allValues[i] < minValue) minValue = allValues[i];
-            if (allValues[i] > maxValue) maxValue = allValues[i];
-        }
-        let min = 0;
-        let max = maxValue;
-        // For percentage metrics, fix domain to [0,100]
-        const metricConfig = metricOptions.find(m => m.value === selectedMetric);
-        if (metricConfig && metricConfig.format === 'percentage') {
-            return { min: 0, max: 100 };
-        }
-        if (maxValue - minValue < 0.01 || maxValue === 0) max = maxValue > 0 ? maxValue * 1.5 : 10; else max = maxValue * 1.2;
-        if (metricConfig?.format === 'currency') {
-            if (max > 10000) max = Math.ceil(max / 1000) * 1000;
-            else if (max > 1000) max = Math.ceil(max / 100) * 100;
-            else if (max > 100) max = Math.ceil(max / 10) * 10;
-            else max = Math.ceil(max);
-        } else {
-            if (max > 1000) max = Math.ceil(max / 100) * 100;
-            else if (max > 100) max = Math.ceil(max / 10) * 10;
-            else max = Math.ceil(max);
-        }
-        return { min, max };
+        if (allValues.length === 0 && allPrevValues.length === 0) return { min: 0, max: 10 };
+        const max = computeAxisMax(allValues, allPrevValues, type as any);
+        return { min: 0, max };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedFlow, selectedMetric, flowSequenceInfo, getStepSparklineData]);
+    }, [selectedFlow, selectedMetric, flowSequenceInfo, getStepSparklineData, dateWindows, dateRange, granularity]);
 
     const getStepPeriodChange = (sequencePosition: number, metric: string): { change: number; isPositive: boolean; previousValue: number; previousPeriod: { startDate: Date; endDate: Date } } | null => {
         if (!selectedFlow || dateRange === 'all') return null;
@@ -511,6 +499,10 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         <stop offset="0%" stopColor={chartColor} stopOpacity="0.25" />
                                         <stop offset="100%" stopColor={chartColor} stopOpacity="0.05" />
                                     </linearGradient>
+                                    <linearGradient id={`cmp-gradient-${index}`} x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor={chartColor} stopOpacity="0.22" />
+                                        <stop offset="100%" stopColor={chartColor} stopOpacity="0.08" />
+                                    </linearGradient>
                                 </defs>
                                 {yTicks.map((tick, i) => (
                                     <g key={i}>
@@ -537,6 +529,27 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                     }
                                     const areaPath = pathD + ` L 850,120 L 0,120 Z`;
 
+                                    // Build compare series area if previous period exists with same length
+                                    let compareArea: string | null = null;
+                                    try {
+                                        if (dateWindows && dateRange !== 'all') {
+                                            const { prevStartDateOnly, prevEndDateOnly } = dateWindows;
+                                            const prevData = dataManager.getFlowStepTimeSeries(currentFlowEmails, selectedFlow || '', step.sequencePosition, selectedMetric, 'custom', granularity, prevStartDateOnly.toISOString().slice(0, 10), prevEndDateOnly.toISOString().slice(0, 10));
+                                            if (prevData && prevData.length >= 2) {
+                                                const cmpPts = prevData.map((point, i) => { const x = (i / (prevData.length - 1)) * 850; const v = point.value; const y = 120 - ((v - yAxisRange.min) / (yAxisRange.max - yAxisRange.min)) * 100; return { x, y }; });
+                                                let cmpPath = `M ${cmpPts[0].x},${cmpPts[0].y}`;
+                                                for (let j = 1; j < cmpPts.length; j++) {
+                                                    const cp1x = cmpPts[j - 1].x + (cmpPts[j].x - cmpPts[j - 1].x) * 0.4;
+                                                    const cp1y = cmpPts[j - 1].y;
+                                                    const cp2x = cmpPts[j].x - (cmpPts[j].x - cmpPts[j - 1].x) * 0.4;
+                                                    const cp2y = cmpPts[j].y;
+                                                    cmpPath += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${cmpPts[j].x},${cmpPts[j].y}`;
+                                                }
+                                                compareArea = cmpPath + ` L 850,120 L 0,120 Z`;
+                                            }
+                                        }
+                                    } catch { }
+
                                     const formatTooltipValue = (value: number): string => {
                                         const metricConfig = metricOptions.find(m => m.value === selectedMetric);
                                         switch (metricConfig?.format) {
@@ -556,6 +569,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
                                     return (
                                         <g>
+                                            {/* Compare area behind */}
+                                            {compareArea && <path d={compareArea} fill={`url(#cmp-gradient-${index})`} stroke="none" />}
                                             <path d={pathD} fill="none" stroke={chartColor} strokeWidth="2" />
                                             {/* Hover points */}
                                             {points.map((point, i) => (
@@ -573,7 +588,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                                             x: point.x,
                                                             y: point.y,
                                                             value: point.value,
-                                                            date: point.date
+                                                            date: point.date,
+                                                            pointIndex: i
                                                         });
                                                     }}
                                                     onMouseLeave={(e) => {
@@ -600,7 +616,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                             {/* Tooltip */}
                             {hoveredPoint && hoveredPoint.chartIndex === index && (
                                 <div
-                                    className="absolute z-20 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-xl pointer-events-none border border-gray-700"
+                                    className="absolute z-20 px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs rounded-lg shadow-lg border border-gray-200 dark:border-gray-700"
                                     style={{
                                         left: `${(hoveredPoint.x / 850) * 100}%`,
                                         top: `${Math.max(0, (hoveredPoint.y / 160) * 100 - 10)}%`,
@@ -609,8 +625,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         whiteSpace: 'nowrap'
                                     }}
                                 >
-                                    <div className="font-medium">{new Date(hoveredPoint.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
-                                    <div className="text-xs opacity-90">{(() => {
+                                    <div className="font-semibold">{new Date(hoveredPoint.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                                    <div className="tabular-nums mb-1">{(() => {
                                         const metricConfig = metricOptions.find(m => m.value === selectedMetric);
                                         switch (metricConfig?.format) {
                                             case 'currency':
@@ -624,6 +640,40 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                                 return hoveredPoint.value.toLocaleString('en-US');
                                         }
                                     })()}</div>
+                                    {(() => {
+                                        if (!dateWindows || dateRange === 'all') return null;
+                                        const { prevStartDateOnly, prevEndDateOnly } = dateWindows;
+                                        try {
+                                            const prevData = dataManager.getFlowStepTimeSeries(currentFlowEmails, selectedFlow || '', step.sequencePosition, selectedMetric, 'custom', granularity, prevStartDateOnly.toISOString().slice(0, 10), prevEndDateOnly.toISOString().slice(0, 10));
+                                            if (!prevData || prevData.length <= hoveredPoint.pointIndex) return null;
+                                            const prevPoint = prevData[hoveredPoint.pointIndex];
+                                            const prevVal = prevPoint?.value;
+                                            if (prevVal == null) return null;
+                                            const change = prevVal !== 0 ? ((hoveredPoint.value - prevVal) / prevVal) * 100 : null;
+                                            return (
+                                                <>
+                                                    <div className="font-semibold">{new Date(prevPoint.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                                                    <div className="tabular-nums mb-1">{(() => {
+                                                        const metricConfig = metricOptions.find(m => m.value === selectedMetric);
+                                                        switch (metricConfig?.format) {
+                                                            case 'currency':
+                                                                return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(prevVal);
+                                                            case 'percentage':
+                                                                const formatted = prevVal.toFixed(1);
+                                                                const num = parseFloat(formatted);
+                                                                return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : `${formatted}%`;
+                                                            case 'number':
+                                                            default:
+                                                                return prevVal.toLocaleString('en-US');
+                                                        }
+                                                    })()}</div>
+                                                    {change != null && isFinite(change) && (
+                                                        <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">Change</span><span className="tabular-nums">{`${change >= 0 ? '+' : ''}${change.toFixed(1)}%`}</span></div>
+                                                    )}
+                                                </>
+                                            );
+                                        } catch { return null; }
+                                    })()}
                                 </div>
                             )}
                         </div>
