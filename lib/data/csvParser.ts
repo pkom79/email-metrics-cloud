@@ -85,24 +85,71 @@ export class CSVParser {
 
     private validateCampaigns(data: RawCampaignCSV[]): ParseResult<RawCampaignCSV> {
         const validData: RawCampaignCSV[] = [];
-        // Only require essential identifiers; allow alternate header names
-        const hasAny = (row: any, keys: string[]) => keys.some(k => row[k] !== undefined && row[k] !== null && row[k] !== '');
-        data.forEach((row) => {
-            let isValid = true;
-            // Campaign name
-            if (!hasAny(row, ['Campaign Name', 'Name'])) isValid = false;
-            // Send time/date: accept several variants
-            if (isValid && !hasAny(row, ['Send Time', 'Send Date', 'Sent At', 'Send Date (UTC)', 'Send Date (GMT)', 'Date'])) isValid = false;
-            // Recipients: accept Total Recipients or Recipients
-            if (isValid && !hasAny(row, ['Total Recipients', 'Recipients'])) isValid = false;
-            // Exclude SMS campaigns if the channel column indicates SMS
-            const channel = (row as any)['Campaign Channel'];
-            if (isValid && channel && typeof channel === 'string' && channel.toLowerCase().includes('sms')) {
-                isValid = false;
+        const rejected: { idx: number; reason: string }[] = [];
+        // Normalize keys to tolerate duplicate-renamed headers (e.g., "Send Date_2")
+        const normalizeKey = (k: string) => k.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        const hasAnyNormalized = (row: any, keys: string[]) => {
+            const rowKeys = Object.keys(row);
+            return keys.some((want) => {
+                const target = normalizeKey(want);
+                for (const rk of rowKeys) {
+                    const nk = normalizeKey(rk);
+                    if ((nk === target || nk.startsWith(target)) && row[rk] !== undefined && row[rk] !== null && row[rk] !== '') return true;
+                }
+                return false;
+            });
+        };
+        const findAnyFieldNormalized = (row: any, keys: string[]) => {
+            const rowKeys = Object.keys(row);
+            for (const want of keys) {
+                const target = normalizeKey(want);
+                // exact match first
+                for (const rk of rowKeys) {
+                    const nk = normalizeKey(rk);
+                    if (nk === target) {
+                        const v = row[rk];
+                        if (v !== undefined && v !== null && v !== '') return v;
+                    }
+                }
+                // then prefix match to catch duplicate headers
+                for (const rk of rowKeys) {
+                    const nk = normalizeKey(rk);
+                    if (nk.startsWith(target)) {
+                        const v = row[rk];
+                        if (v !== undefined && v !== null && v !== '') return v;
+                    }
+                }
             }
-            if (isValid) validData.push(row);
+            return undefined;
+        };
+        data.forEach((row, i) => {
+            // Campaign name
+            if (!hasAnyNormalized(row, ['Campaign Name', 'Name'])) {
+                rejected.push({ idx: i, reason: 'missing name' });
+                return;
+            }
+            // Send time/date: accept several variants
+            if (!hasAnyNormalized(row, ['Send Time', 'Send Date', 'Sent At', 'Send Date (UTC)', 'Send Date (GMT)', 'Date'])) {
+                rejected.push({ idx: i, reason: 'missing send date' });
+                return;
+            }
+            // Exclude pure-SMS campaigns; include if channel mentions email or is missing/unknown
+            const channelRaw = findAnyFieldNormalized(row, ['Campaign Channel', 'Channel', 'Message Channel']);
+            if (typeof channelRaw === 'string') {
+                const ch = channelRaw.toLowerCase();
+                const mentionsEmail = ch.includes('email');
+                const mentionsSms = ch.includes('sms');
+                if (!mentionsEmail && mentionsSms) {
+                    rejected.push({ idx: i, reason: 'sms-only' });
+                    return;
+                }
+            }
+            validData.push(row);
         });
-        if (validData.length === 0) return { success: false, error: 'No valid campaign data found. Ensure the CSV has Campaign Name, Send Time/Date, and Recipients.' };
+        try {
+            console.info(`[CSVParser] Campaign rows accepted: ${validData.length}, rejected: ${rejected.length}`);
+        } catch {}
+        if (validData.length === 0) return { success: false, error: 'No valid campaign data found. Ensure the CSV has Campaign Name and Send Time/Date columns.' };
         return { success: true, data: validData };
     }
 

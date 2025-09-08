@@ -18,7 +18,7 @@ interface Props {
 export default function CampaignGapsAndLosses({ dateRange, granularity, customFrom, customTo, filteredCampaigns }: Props) {
     const dm = DataManager.getInstance();
     const campaigns = (filteredCampaigns && filteredCampaigns.length) ? filteredCampaigns : dm.getCampaigns();
-    const flows = dm.getFlowEmails();
+    // Intentionally exclude flows from this module; other modules still use them
 
     const range = useMemo(() => {
         try {
@@ -36,12 +36,12 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
             } catch { }
             return { start, end };
         } catch { return null; }
-    }, [dateRange, customFrom, customTo, campaigns, flows]);
+    }, [dateRange, customFrom, customTo, campaigns]);
 
     const result = useMemo(() => {
         if (!range) return null;
-        return computeCampaignGapsAndLosses({ campaigns, flows, rangeStart: range.start, rangeEnd: range.end });
-    }, [range, campaigns, flows]);
+        return computeCampaignGapsAndLosses({ campaigns, flows: [], rangeStart: range.start, rangeEnd: range.end });
+    }, [range, campaigns]);
 
     if (!range || !result) return null;
 
