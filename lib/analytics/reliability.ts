@@ -6,6 +6,8 @@ export interface WeeklyAggregate {
   totalRevenue: number;
   campaignRevenue: number;
   flowRevenue: number;
+  // New: count of distinct campaign sends within the week (not emails sent)
+  campaignsSent?: number;
   daySet: Set<string>;
   isCompleteWeek: boolean;
 }
@@ -52,16 +54,16 @@ function startOfMonday(d: Date) {
 
 export function buildWeeklyAggregates(campaigns: ProcessedCampaign[], flows: ProcessedFlowEmail[]): WeeklyAggregate[] {
   if (!campaigns.length && !flows.length) return [];
-  interface Bucket { totalRevenue: number; campaignRevenue: number; flowRevenue: number; daySet: Set<string>; weekStart: Date; }
+  interface Bucket { totalRevenue: number; campaignRevenue: number; flowRevenue: number; daySet: Set<string>; weekStart: Date; campaignCount: number; }
   const map: Record<string, Bucket> = {};
   const add = (dt: Date, revenue: number | undefined, type: 'campaign' | 'flow') => {
     const ws = startOfMonday(dt);
     const key = ws.toISOString();
-    if (!map[key]) map[key] = { totalRevenue: 0, campaignRevenue: 0, flowRevenue: 0, daySet: new Set(), weekStart: ws };
+    if (!map[key]) map[key] = { totalRevenue: 0, campaignRevenue: 0, flowRevenue: 0, daySet: new Set(), weekStart: ws, campaignCount: 0 };
     const b = map[key];
     const r = revenue || 0;
     b.totalRevenue += r;
-    if (type === 'campaign') b.campaignRevenue += r; else b.flowRevenue += r;
+    if (type === 'campaign') { b.campaignRevenue += r; b.campaignCount += 1; } else { b.flowRevenue += r; }
     b.daySet.add(dt.toISOString().slice(0,10));
   };
   for (const c of campaigns) add(c.sentDate, c.revenue, 'campaign');
@@ -72,6 +74,7 @@ export function buildWeeklyAggregates(campaigns: ProcessedCampaign[], flows: Pro
     totalRevenue: b.totalRevenue,
     campaignRevenue: b.campaignRevenue,
     flowRevenue: b.flowRevenue,
+    campaignsSent: b.campaignCount,
     daySet: b.daySet,
     isCompleteWeek: false,
   }));
@@ -85,7 +88,7 @@ export function buildWeeklyAggregates(campaigns: ProcessedCampaign[], flows: Pro
     for (let t=start; t<=end; t+=ONE_WEEK) {
       if (!existing.has(t)) {
         const ws = new Date(t);
-        weeks.push({ weekStart: ws, label: ws.toLocaleDateString('en-US',{month:'short',day:'numeric'}), totalRevenue:0, campaignRevenue:0, flowRevenue:0, daySet: new Set(), isCompleteWeek:false });
+  weeks.push({ weekStart: ws, label: ws.toLocaleDateString('en-US',{month:'short',day:'numeric'}), totalRevenue:0, campaignRevenue:0, flowRevenue:0, campaignsSent: 0, daySet: new Set(), isCompleteWeek:false });
       }
     }
     weeks.sort((a,b)=>a.weekStart.getTime()-b.weekStart.getTime());
@@ -111,18 +114,18 @@ export function buildWeeklyAggregatesInRange(
   const endMonday = startOfMonday(endDate);
   const ONE_WEEK = 7 * ONE_DAY;
   // Aggregate raw sends first by canonical Monday key
-  interface Bucket { totalRevenue: number; campaignRevenue: number; flowRevenue: number; daySet: Set<string>; weekStart: Date; }
+  interface Bucket { totalRevenue: number; campaignRevenue: number; flowRevenue: number; daySet: Set<string>; weekStart: Date; campaignCount: number; }
   const map: Record<string, Bucket> = {};
   const add = (dt: Date, revenue: number | undefined, type: 'campaign' | 'flow') => {
     if (dt < startMonday || dt > endDate) return; // outside
     const ws = startOfMonday(dt);
     if (ws < startMonday || ws > endMonday) return;
     const key = ws.toISOString();
-    if (!map[key]) map[key] = { totalRevenue: 0, campaignRevenue: 0, flowRevenue: 0, daySet: new Set(), weekStart: ws };
+    if (!map[key]) map[key] = { totalRevenue: 0, campaignRevenue: 0, flowRevenue: 0, daySet: new Set(), weekStart: ws, campaignCount: 0 };
     const b = map[key];
     const r = revenue || 0;
     b.totalRevenue += r;
-    if (type === 'campaign') b.campaignRevenue += r; else b.flowRevenue += r;
+    if (type === 'campaign') { b.campaignRevenue += r; b.campaignCount += 1; } else { b.flowRevenue += r; }
     b.daySet.add(dt.toISOString().slice(0,10));
   };
   for (const c of campaigns) add(c.sentDate, c.revenue, 'campaign');
@@ -139,6 +142,7 @@ export function buildWeeklyAggregatesInRange(
         totalRevenue: b.totalRevenue,
         campaignRevenue: b.campaignRevenue,
         flowRevenue: b.flowRevenue,
+        campaignsSent: b.campaignCount,
         daySet: b.daySet,
         isCompleteWeek: (b.weekStart.getTime() + 7*ONE_DAY) <= Date.now()
       });
@@ -150,6 +154,7 @@ export function buildWeeklyAggregatesInRange(
         totalRevenue: 0,
         campaignRevenue: 0,
         flowRevenue: 0,
+        campaignsSent: 0,
         daySet: new Set(),
         isCompleteWeek: (ws.getTime() + 7*ONE_DAY) <= Date.now()
       });

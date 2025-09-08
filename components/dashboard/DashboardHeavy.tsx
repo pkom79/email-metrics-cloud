@@ -14,6 +14,7 @@ import FlowStepAnalysis from './FlowStepAnalysis';
 import CustomSegmentBlock from './CustomSegmentBlock';
 import DataAgeNotice from './DataAgeNotice';
 import CampaignSendFrequency from './CampaignSendFrequency';
+import CampaignGapsAndLosses from './CampaignGapsAndLosses';
 import { BarChart3, Calendar, GitCompare, Mail, Send, Zap, Star, Upload as UploadIcon, X, Share2 } from 'lucide-react';
 import SelectBase from "../ui/SelectBase";
 import UploadWizard from '../../components/UploadWizard';
@@ -940,6 +941,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             customTo={customTo}
                             compareMode={compareMode}
                         />
+                        {/* Campaign Gaps & Losses */}
+                        <CampaignGapsAndLosses dateRange={dateRange} customFrom={customFrom} customTo={customTo} />
                         {/* Revenue Reliability module removed - placeholder panel removed */}
                         <SendVolumeImpact dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
                     </section>
