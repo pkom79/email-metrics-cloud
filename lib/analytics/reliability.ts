@@ -113,6 +113,8 @@ export function buildWeeklyAggregatesInRange(
   // Ensure end boundary covers entire last week
   const endMonday = startOfMonday(endDate);
   const ONE_WEEK = 7 * ONE_DAY;
+  // Completeness should be evaluated relative to the selected range end, not the current time
+  const completeBoundaryMs = new Date(endDate).setHours(23, 59, 59, 999);
   // Aggregate raw sends first by canonical Monday key
   interface Bucket { totalRevenue: number; campaignRevenue: number; flowRevenue: number; daySet: Set<string>; weekStart: Date; campaignCount: number; }
   const map: Record<string, Bucket> = {};
@@ -134,7 +136,7 @@ export function buildWeeklyAggregatesInRange(
   for (let t = startMonday.getTime(); t <= endMonday.getTime(); t += ONE_WEEK) {
     const ws = new Date(t);
     const key = ws.toISOString();
-    if (map[key]) {
+  if (map[key]) {
       const b = map[key];
       weeks.push({
         weekStart: b.weekStart,
@@ -144,7 +146,7 @@ export function buildWeeklyAggregatesInRange(
         flowRevenue: b.flowRevenue,
         campaignsSent: b.campaignCount,
         daySet: b.daySet,
-        isCompleteWeek: (b.weekStart.getTime() + 7*ONE_DAY) <= Date.now()
+    isCompleteWeek: (b.weekStart.getTime() + 7*ONE_DAY - 1) <= completeBoundaryMs
       });
     } else {
       // Only include a zero week if it lies wholly within range; genuine zero (no sends of either type)
@@ -156,7 +158,7 @@ export function buildWeeklyAggregatesInRange(
         flowRevenue: 0,
         campaignsSent: 0,
         daySet: new Set(),
-        isCompleteWeek: (ws.getTime() + 7*ONE_DAY) <= Date.now()
+    isCompleteWeek: (ws.getTime() + 7*ONE_DAY - 1) <= completeBoundaryMs
       });
     }
   }
