@@ -36,7 +36,15 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
     const width = 850; const height = 200; const innerH = 140; const padLeft = 72; const padRight = 20; const innerW = width - padLeft - padRight;
 
-    const maxVal = useMemo(() => Math.max(1, ...primary.map(p => p.value)), [primary]);
+    const maxVal = useMemo(() => {
+        const pMax = primary.length ? Math.max(...primary.map(p => Math.max(0, p.value))) : 0;
+        const cMax = (compare && compare.length) ? Math.max(...compare.map(p => Math.max(0, p.value))) : 0;
+        let raw = Math.max(pMax, cMax);
+        if (!isFinite(raw) || raw <= 0) raw = 1; // fallback when all zeros
+        // add a touch of headroom so the line doesn't touch the top
+        const headroom = raw * 0.08;
+        return raw + headroom;
+    }, [primary, compare]);
     const xScale = (i: number) => primary.length <= 1 ? padLeft + innerW / 2 : padLeft + (i / (primary.length - 1)) * innerW;
     const yScale = (v: number) => {
         const y = innerH - (Math.max(0, v) / maxVal) * (innerH - 10);
@@ -70,7 +78,16 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
 
     const desiredXTicks = 6; const tickIdx: number[] = [];
     if (primary.length <= desiredXTicks) { for (let i = 0; i < primary.length; i++) tickIdx.push(i); } else { for (let i = 0; i < desiredXTicks; i++) { const idx = Math.round((i / (desiredXTicks - 1)) * (primary.length - 1)); if (!tickIdx.includes(idx)) tickIdx.push(idx); } }
-    const yTicks = 4; const yTickValues = Array.from({ length: yTicks + 1 }, (_, i) => (maxVal / yTicks) * i);
+    const yTicks = 4;
+    const niceStep = useMemo(() => {
+        // choose a nice step based on magnitude (1, 2, 5 * 10^n)
+        const rawStep = maxVal / yTicks;
+        const pow10 = Math.pow(10, Math.floor(Math.log10(rawStep || 1)));
+        const n = rawStep / pow10;
+        const nice = n >= 5 ? 5 : n >= 2 ? 2 : 1;
+        return nice * pow10;
+    }, [maxVal]);
+    const yTickValues = useMemo(() => Array.from({ length: yTicks + 1 }, (_, i) => niceStep * i), [niceStep]);
 
     const active = hoverIdx != null ? primary[hoverIdx] : null;
     const cmpActive = hoverIdx != null && (compare || undefined) ? (compare || [])[hoverIdx] : undefined;
@@ -102,7 +119,7 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                     <defs>
                         <linearGradient id={gradLineId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.9} /><stop offset="100%" stopColor={color} stopOpacity={0.5} /></linearGradient>
                         <linearGradient id={gradAreaId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.25} /><stop offset="100%" stopColor={color} stopOpacity={0.05} /></linearGradient>
-                        <linearGradient id={cmpAreaId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.12} /><stop offset="100%" stopColor={color} stopOpacity={0.04} /></linearGradient>
+                        <linearGradient id={cmpAreaId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.22} /><stop offset="100%" stopColor={color} stopOpacity={0.08} /></linearGradient>
                     </defs>
                     {/* Compare area behind */}
                     {!!compare && cmpAreaD && <path d={cmpAreaD} fill={`url(#${cmpAreaId})`} stroke="none" />}
