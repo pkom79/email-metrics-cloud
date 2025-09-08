@@ -34,7 +34,7 @@ const fmt = {
 
 export default function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigValue, primary, compare = null, colorHue = '#8b5cf6', darkColorHue, valueType, granularity, idSuffix = 'tsc' }: TimeSeriesChartProps) {
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-    const width = 850; const height = 200; const innerH = 140; const padLeft = 48; const padRight = 20; const innerW = width - padLeft - padRight;
+    const width = 850; const height = 200; const innerH = 140; const padLeft = 72; const padRight = 20; const innerW = width - padLeft - padRight;
 
     const maxVal = useMemo(() => Math.max(1, ...primary.map(p => p.value)), [primary]);
     const xScale = (i: number) => primary.length <= 1 ? padLeft + innerW / 2 : padLeft + (i / (primary.length - 1)) * innerW;

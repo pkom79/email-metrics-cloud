@@ -69,8 +69,8 @@ export class DataManager {
     }
 
     private _buildBaseBucketsForSubset(campaigns: ProcessedCampaign[], flows: ProcessedFlowEmail[], granularity: 'daily' | 'weekly' | 'monthly', startDate: Date, endDate: Date) {
+        // Build a per-day map of subset sums, then iterate across the full day range to zero-fill gaps
         const all = [...campaigns, ...flows].filter(e => e.sentDate instanceof Date && !isNaN(e.sentDate.getTime()) && e.sentDate >= startDate && e.sentDate <= endDate);
-        if (!all.length) return [] as { key: string; label: string; sums: any }[];
         const dailyMap: Map<string, { revenue: number; emailsSent: number; totalOrders: number; uniqueOpens: number; uniqueClicks: number; unsubscribesCount: number; spamComplaintsCount: number; bouncesCount: number; emailCount: number; date: Date }> = new Map();
         for (const e of all) {
             const d = new Date(e.sentDate); d.setHours(0, 0, 0, 0);
@@ -79,37 +79,67 @@ export class DataManager {
             if (!rec) { rec = { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0, date: d }; dailyMap.set(key, rec); }
             rec.revenue += e.revenue; rec.emailsSent += e.emailsSent; rec.totalOrders += e.totalOrders; rec.uniqueOpens += e.uniqueOpens; rec.uniqueClicks += e.uniqueClicks; rec.unsubscribesCount += e.unsubscribesCount; rec.spamComplaintsCount += e.spamComplaintsCount; rec.bouncesCount += e.bouncesCount; rec.emailCount += 1;
         }
-        const dayEntries = Array.from(dailyMap.values()).sort((a, b) => a.date.getTime() - b.date.getTime());
-        if (granularity === 'daily') {
-            return dayEntries.map(d => ({ key: this._dayKey(d.date), label: this.safeToLocaleDateString(d.date, { month: 'short', day: 'numeric' }), sums: d }));
+
+        // Build continuous list of day keys between start and end
+        const dayKeys: string[] = [];
+        const cursor = new Date(startDate); cursor.setHours(0, 0, 0, 0);
+        const end = new Date(endDate); end.setHours(0, 0, 0, 0);
+        let guard = 0;
+        while (cursor <= end && guard < 8000) { // safety cap
+            dayKeys.push(this._dayKey(cursor));
+            cursor.setDate(cursor.getDate() + 1);
+            guard++;
         }
+
+        if (granularity === 'daily') {
+            return dayKeys.map(k => {
+                const d = new Date(k);
+                const rec = dailyMap.get(k) || { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } as any;
+                return { key: k, label: this.safeToLocaleDateString(d, { month: 'short', day: 'numeric' }), sums: rec };
+            });
+        }
+
         if (granularity === 'weekly') {
             const weeks: { key: string; label: string; sums: any }[] = [];
-            let currentWeek: any = null;
-            for (const d of dayEntries) {
-                const monday = this._mondayOf(d.date);
+            let currentWeekKey = '';
+            let current: any = null;
+            for (const k of dayKeys) {
+                const d = new Date(k);
+                const monday = this._mondayOf(d);
                 const wKey = this._dayKey(monday);
-                if (!currentWeek || currentWeek.key !== wKey) {
-                    if (currentWeek) weeks.push(currentWeek);
-                    currentWeek = { key: wKey, label: this.safeToLocaleDateString(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6), { month: 'short', day: 'numeric' }), sums: { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } };
+                if (wKey !== currentWeekKey) {
+                    if (current) weeks.push(current);
+                    currentWeekKey = wKey;
+                    const weekEnd = new Date(monday); weekEnd.setDate(weekEnd.getDate() + 6);
+                    current = { key: wKey, label: this.safeToLocaleDateString(weekEnd, { month: 'short', day: 'numeric' }), sums: { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } };
                 }
-                const s = currentWeek.sums; s.revenue += d.revenue; s.emailsSent += d.emailsSent; s.totalOrders += d.totalOrders; s.uniqueOpens += d.uniqueOpens; s.uniqueClicks += d.uniqueClicks; s.unsubscribesCount += d.unsubscribesCount; s.spamComplaintsCount += d.spamComplaintsCount; s.bouncesCount += d.bouncesCount; s.emailCount += d.emailCount;
+                const rec = dailyMap.get(k);
+                if (rec) {
+                    const s = current.sums; s.revenue += rec.revenue; s.emailsSent += rec.emailsSent; s.totalOrders += rec.totalOrders; s.uniqueOpens += rec.uniqueOpens; s.uniqueClicks += rec.uniqueClicks; s.unsubscribesCount += rec.unsubscribesCount; s.spamComplaintsCount += rec.spamComplaintsCount; s.bouncesCount += rec.bouncesCount; s.emailCount += rec.emailCount;
+                }
             }
-            if (currentWeek) weeks.push(currentWeek);
+            if (current) weeks.push(current);
             return weeks;
         }
+
         // monthly
         const months: { key: string; label: string; sums: any }[] = [];
-        let currentMonth: any = null;
-        for (const d of dayEntries) {
-            const mKey = `${d.date.getFullYear()}-${String(d.date.getMonth() + 1).padStart(2, '0')}`;
-            if (!currentMonth || currentMonth.key !== mKey) {
-                if (currentMonth) months.push(currentMonth);
-                currentMonth = { key: mKey, label: this.safeToLocaleDateString(new Date(d.date.getFullYear(), d.date.getMonth(), 1), { month: 'short', year: '2-digit' }), sums: { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } };
+        let currentMonthKey = '';
+        let current: any = null;
+        for (const k of dayKeys) {
+            const d = new Date(k);
+            const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            if (mKey !== currentMonthKey) {
+                if (current) months.push(current);
+                currentMonthKey = mKey;
+                current = { key: mKey, label: this.safeToLocaleDateString(new Date(d.getFullYear(), d.getMonth(), 1), { month: 'short', year: '2-digit' }), sums: { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } };
             }
-            const s = currentMonth.sums; s.revenue += d.revenue; s.emailsSent += d.emailsSent; s.totalOrders += d.totalOrders; s.uniqueOpens += d.uniqueOpens; s.uniqueClicks += d.uniqueClicks; s.unsubscribesCount += d.unsubscribesCount; s.spamComplaintsCount += d.spamComplaintsCount; s.bouncesCount += d.bouncesCount; s.emailCount += d.emailCount;
+            const rec = dailyMap.get(k);
+            if (rec) {
+                const s = current.sums; s.revenue += rec.revenue; s.emailsSent += rec.emailsSent; s.totalOrders += rec.totalOrders; s.uniqueOpens += rec.uniqueOpens; s.uniqueClicks += rec.uniqueClicks; s.unsubscribesCount += rec.unsubscribesCount; s.spamComplaintsCount += rec.spamComplaintsCount; s.bouncesCount += rec.bouncesCount; s.emailCount += rec.emailCount;
+            }
         }
-        if (currentMonth) months.push(currentMonth);
+        if (current) months.push(current);
         return months;
     }
 
@@ -671,9 +701,18 @@ export class DataManager {
             const prevFromISO = `${prevStart.getFullYear()}-${String(prevStart.getMonth() + 1).padStart(2, '0')}-${String(prevStart.getDate()).padStart(2, '0')}`;
             const prevToISO = `${prevEnd.getFullYear()}-${String(prevEnd.getMonth() + 1).padStart(2, '0')}-${String(prevEnd.getDate()).padStart(2, '0')}`;
 
-            const compare = this.getMetricTimeSeries(campaigns, flows, metricKey, 'custom', granularity, prevFromISO, prevToISO);
-            // Hide compare if absolutely no data in previous window
-            if (!compare || compare.length === 0) return { primary, compare: null };
+            let compare = this.getMetricTimeSeries(campaigns, flows, metricKey, 'custom', granularity, prevFromISO, prevToISO);
+            // Normalize compare length to primary (zero-fill to align by index)
+            if (compare.length < primary.length) {
+                const deficit = primary.length - compare.length;
+                const lastLabel = compare.length > 0 ? compare[compare.length - 1].date : '';
+                for (let i = 0; i < deficit; i++) compare.push({ value: 0, date: lastLabel });
+            } else if (compare.length > primary.length) {
+                compare = compare.slice(compare.length - primary.length);
+            }
+            // Hide compare if all values are zero
+            const anyNonZero = compare.some(p => Number.isFinite(p.value) && p.value !== 0);
+            if (!anyNonZero) return { primary, compare: null };
             return { primary, compare };
         } catch (e) {
             console.warn('getMetricTimeSeriesWithCompare failed', e);
