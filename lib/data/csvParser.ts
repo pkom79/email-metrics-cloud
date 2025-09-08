@@ -85,19 +85,22 @@ export class CSVParser {
 
     private validateCampaigns(data: RawCampaignCSV[]): ParseResult<RawCampaignCSV> {
         const validData: RawCampaignCSV[] = [];
-        const requiredFields = ['Campaign Name', 'Send Time', 'Total Recipients', 'Revenue', 'Unique Opens', 'Unique Clicks'];
+        // Only require the essential identifiers; numeric fields can be blank and will parse to 0 later
+        const requiredFields = ['Campaign Name', 'Send Time', 'Total Recipients'];
         data.forEach((row) => {
             let isValid = true;
-            requiredFields.forEach((field) => {
+            for (const field of requiredFields) {
                 const v = (row as any)[field];
-                if (v === undefined || v === null || v === '') isValid = false;
-            });
-            if ((row as any)['Campaign Channel'] && typeof (row as any)['Campaign Channel'] === 'string' && (row as any)['Campaign Channel'].toLowerCase().includes('sms')) {
+                if (v === undefined || v === null || v === '') { isValid = false; break; }
+            }
+            // Exclude SMS campaigns if the channel column is present
+            const channel = (row as any)['Campaign Channel'];
+            if (isValid && channel && typeof channel === 'string' && channel.toLowerCase().includes('sms')) {
                 isValid = false;
             }
             if (isValid) validData.push(row);
         });
-        if (validData.length === 0) return { success: false, error: 'No valid flow data found. Check that the CSV contains flows with delivery data (Delivered > 0).' };
+        if (validData.length === 0) return { success: false, error: 'No valid campaign data found. Ensure the CSV has Campaign Name, Send Time, and Total Recipients.' };
         return { success: true, data: validData };
     }
 
