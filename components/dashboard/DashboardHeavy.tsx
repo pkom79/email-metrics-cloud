@@ -941,8 +941,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             customTo={customTo}
                             compareMode={compareMode}
                         />
-                        {/* Campaign Gaps & Losses */}
-                        <CampaignGapsAndLosses dateRange={dateRange} customFrom={customFrom} customTo={customTo} />
                         {/* Revenue Reliability module removed - placeholder panel removed */}
                         <SendVolumeImpact dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
                     </section>
@@ -988,6 +986,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         </div>
                         {/* Send Frequency Module */}
                         <CampaignSendFrequency campaigns={filteredCampaigns} />
+                        {/* Campaign Gaps & Losses — placed below Campaign Send Frequency */}
+                        <CampaignGapsAndLosses dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} />
                     </section>
                 )}
                 {/* Day & Hour Performance (placed before Top Campaigns to match legacy ordering) */}

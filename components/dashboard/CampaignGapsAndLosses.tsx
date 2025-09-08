@@ -5,9 +5,9 @@ import MetricCard from './MetricCard';
 import { DataManager } from '../../lib/data/dataManager';
 import { computeCampaignGapsAndLosses } from '../../lib/analytics/campaignGapsLosses';
 
-interface Props { dateRange: string; customFrom?: string; customTo?: string; }
+interface Props { dateRange: string; granularity?: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; }
 
-export default function CampaignGapsAndLosses({ dateRange, customFrom, customTo }: Props) {
+export default function CampaignGapsAndLosses({ dateRange, granularity, customFrom, customTo }: Props) {
     const dm = DataManager.getInstance();
     const campaigns = dm.getCampaigns();
     const flows = dm.getFlowEmails();
@@ -32,6 +32,17 @@ export default function CampaignGapsAndLosses({ dateRange, customFrom, customTo 
 
     if (!range || !result) return null;
 
+    // Visibility gate: only in 90-day Weekly view
+    const weekly90 = dateRange === '90d' && granularity === 'weekly';
+    if (!weekly90) {
+        return (
+            <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
+                <div className="flex items-center gap-2 mb-2"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Gaps & Losses</h3></div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">This module is available only in the 90-day Weekly view.</div>
+            </div>
+        );
+    }
+
     // All-weeks-sent: show success message instead of cards
     if (result.allWeeksSent) {
         return (
@@ -44,14 +55,24 @@ export default function CampaignGapsAndLosses({ dateRange, customFrom, customTo 
 
     const formatCurrency = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0);
 
-    // Render six cards; gray out Estimated Lost Revenue when insufficientHistoryForEstimator; add inline note for deferrals
+    const showInsufficientBanner = result.insufficientWeeklyData || result.hasLongGaps;
+    if (showInsufficientBanner) {
+        const msg = result.insufficientWeeklyData
+            ? 'Insufficient data to estimate weekly losses. Need ≥66% of weeks with campaigns sent in this 90-day period. Try expanding your time range.'
+            : 'Insufficient data for weekly analysis in this period. Try a different time range.';
+        return (
+            <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
+                <div className="flex items-center gap-2 mb-2"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Gaps & Losses</h3></div>
+                <div className="text-sm text-amber-700 dark:text-amber-300">{msg}</div>
+            </div>
+        );
+    }
+
+    // Render six cards when sufficient data
     return (
         <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Gaps & Losses</h3></div>
-                {result.deferredWeeksOver4 > 0 && (
-                    <div className="text-[11px] text-gray-600 dark:text-gray-400">Long gaps deferred to monthly: {result.deferredWeeksOver4} weeks</div>
-                )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Row 1 — Consistency & Gaps */}
@@ -59,12 +80,7 @@ export default function CampaignGapsAndLosses({ dateRange, customFrom, customTo 
                 <MetricCard title="Longest Gap Without Campaigns" value={`${result.longestZeroSendGap.toLocaleString()} wk${result.longestZeroSendGap === 1 ? '' : 's'}`} change={0} isPositive={false} dateRange={dateRange} category="campaign" />
                 <MetricCard title="% of Weeks With Campaigns Sent" value={`${result.pctWeeksWithCampaignsSent.toFixed(1)}%`} change={0} isPositive={true} dateRange={dateRange} category="campaign" />
                 {/* Row 2 — Impact & Effectiveness */}
-                <div className={`${result.insufficientHistoryForEstimator ? 'opacity-60' : ''}`}>
-                    <MetricCard title="Estimated Lost Revenue" value={formatCurrency(result.estimatedLostRevenue || 0)} change={0} isPositive={false} dateRange={dateRange} category="campaign" />
-                    {result.insufficientHistoryForEstimator && (
-                        <div className="mt-1 text-[11px] text-gray-600 dark:text-gray-400">Insufficient history to estimate lost revenue (need ≥26 weeks and ≥8 non-zero weeks).</div>
-                    )}
-                </div>
+                <MetricCard title="Estimated Lost Revenue" value={formatCurrency(result.estimatedLostRevenue || 0)} change={0} isPositive={false} dateRange={dateRange} category="campaign" />
                 <MetricCard title="Low-Effectiveness Campaigns" value={result.lowEffectivenessCampaigns.toLocaleString()} change={0} isPositive={false} dateRange={dateRange} category="campaign" />
                 <MetricCard title="Average Campaigns per Week" value={result.avgCampaignsPerWeek.toFixed(2)} change={0} isPositive={true} dateRange={dateRange} category="campaign" />
             </div>
