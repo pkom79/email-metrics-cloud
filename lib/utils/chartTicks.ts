@@ -2,30 +2,18 @@
 
 export type ValueType = 'currency' | 'number' | 'percentage';
 
-// Soft "nice" ceiling for axis max: choose from 1, 1.5, 2, 2.5, 5, 7.5, 10 × 10^k
-function softNiceCeil(raw: number): number {
-  if (!Number.isFinite(raw) || raw <= 0) return 1;
-  const pow10 = Math.pow(10, Math.floor(Math.log10(raw)));
-  const n = raw / pow10;
-  const steps = [1, 1.5, 2, 2.5, 5, 7.5, 10];
-  for (const s of steps) { if (n <= s) return s * pow10; }
-  return 10 * pow10;
-}
-
 // Compute an axis max using raw data (no "nice" rounding).
 export function computeAxisMax(values: number[], compareValues: number[] | null | undefined, type: ValueType): number {
-  if (type === 'percentage') return 100;
   let raw = 0;
   for (const v of values) if (Number.isFinite(v) && v > raw) raw = v;
   if (compareValues) for (const v of compareValues) if (Number.isFinite(v) && v > raw) raw = v;
   if (!Number.isFinite(raw) || raw <= 0) raw = 1; // fallback to avoid divide-by-zero
-  // Apply soft nice ceiling for smoother large-axis ticks
-  return softNiceCeil(raw);
+  // Return raw max as requested (no nice rounding)
+  return raw;
 }
 
 // Thirds tick values for the given axis max (0, 1/3, 2/3, max)
 export function thirdTicks(axisMax: number, type: ValueType): number[] {
-  if (type === 'percentage') return [0, 100 / 3, 200 / 3, 100];
   return [0, axisMax / 3, (2 * axisMax) / 3, axisMax];
 }
 
@@ -35,15 +23,26 @@ export function thirdTicks(axisMax: number, type: ValueType): number[] {
 // - Percentages: fixed 0%, 33%, 67%, 100% labels.
 export function formatTickLabels(values: number[], type: ValueType, axisMax: number): string[] {
   if (type === 'percentage') {
-    // Map explicit thirds to integers
-    return values.map((v) => {
-      if (v <= 0.000001) return '0%';
-      if (Math.abs(v - 100) < 0.000001) return '100%';
-      // 33% and 67% for thirds
-      if (Math.abs(v - 100 / 3) < 0.05) return '33%';
-      if (Math.abs(v - 200 / 3) < 0.05) return '67%';
-      return `${Math.round(v)}%`;
-    });
+    // Percentages: dynamic thirds of actual max; remove stray decimals
+    // Start decimals: 0, but if tiny range then increase (axisMax < 3 => 1, axisMax < 1 => 2)
+    let decimals = 0;
+    if (axisMax < 1) decimals = 2; else if (axisMax < 3) decimals = 1;
+    const maxDecimals = 3;
+    const makePct = (v: number, d: number) => {
+      if (d === 0) return `${Math.round(v)}%`;
+      const rounded = Math.round(v * Math.pow(10, d)) / Math.pow(10, d);
+      return `${rounded.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })}%`;
+    };
+    const labelsFor = (d: number) => values.map(v => makePct(v, d));
+    let labels = labelsFor(decimals);
+    // Ensure uniqueness after rounding; bump decimals if colliding
+    let hasDup = true; let d = decimals;
+    while (hasDup && d < maxDecimals) {
+      const seen = new Set<string>(); hasDup = false;
+      for (const s of labels) { if (seen.has(s)) { hasDup = true; break; } seen.add(s); }
+      if (hasDup) { d += 1; labels = labelsFor(d); }
+    }
+    return labels;
   }
 
   // For currency and number, try increasing decimals until labels are unique or we hit cap

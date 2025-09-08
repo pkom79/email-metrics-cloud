@@ -309,7 +309,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             if (dateWindows && dateRange !== 'all') {
                 const { prevStartDateOnly, prevEndDateOnly } = dateWindows;
                 try {
-                    const prevData = dataManager.getFlowStepTimeSeries(currentFlowEmails, selectedFlow || '', position, selectedMetric, 'custom', granularity, prevStartDateOnly.toISOString().slice(0, 10), prevEndDateOnly.toISOString().slice(0, 10));
+                    const prevData = dataManager.getFlowStepTimeSeries(previousFlowEmails, selectedFlow || '', position, selectedMetric, 'custom', granularity, prevStartDateOnly.toISOString().slice(0, 10), prevEndDateOnly.toISOString().slice(0, 10));
                     if (prevData && prevData.length) allPrevValues = allPrevValues.concat(prevData.map((d: any) => Math.max(0, d.value)));
                 } catch { }
             }
@@ -462,8 +462,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         if (yAxisRange.max > yAxisRange.min) {
             const axisMax = yAxisRange.max; // already computed per metric
             const type = ['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(selectedMetric) ? 'currency' : (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'bounceRate', 'spamRate'].includes(selectedMetric) ? 'percentage' : 'number') as any;
-            const vals = thirdTicks(type === 'percentage' ? 100 : axisMax, type as any);
-            const labels = formatTickLabels(vals, type as any, type === 'percentage' ? 100 : axisMax);
+            const vals = thirdTicks(axisMax, type as any);
+            const labels = formatTickLabels(vals, type as any, axisMax);
             yTicks = vals.map((v, i) => ({ y: 120 - ((v - yAxisRange.min) / (axisMax - yAxisRange.min)) * 100, label: labels[i] }));
         }
         return (
@@ -529,12 +529,12 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                     }
                                     const areaPath = pathD + ` L 850,120 L 0,120 Z`;
 
-                                    // Build compare series area if previous period exists with same length
+                                    // Build compare series area if previous period exists
                                     let compareArea: string | null = null;
                                     try {
                                         if (dateWindows && dateRange !== 'all') {
                                             const { prevStartDateOnly, prevEndDateOnly } = dateWindows;
-                                            const prevData = dataManager.getFlowStepTimeSeries(currentFlowEmails, selectedFlow || '', step.sequencePosition, selectedMetric, 'custom', granularity, prevStartDateOnly.toISOString().slice(0, 10), prevEndDateOnly.toISOString().slice(0, 10));
+                                            const prevData = dataManager.getFlowStepTimeSeries(previousFlowEmails, selectedFlow || '', step.sequencePosition, selectedMetric, 'custom', granularity, prevStartDateOnly.toISOString().slice(0, 10), prevEndDateOnly.toISOString().slice(0, 10));
                                             if (prevData && prevData.length >= 2) {
                                                 const cmpPts = prevData.map((point, i) => { const x = (i / (prevData.length - 1)) * 850; const v = point.value; const y = 120 - ((v - yAxisRange.min) / (yAxisRange.max - yAxisRange.min)) * 100; return { x, y }; });
                                                 let cmpPath = `M ${cmpPts[0].x},${cmpPts[0].y}`;
@@ -569,8 +569,9 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
                                     return (
                                         <g>
-                                            {/* Compare area behind */}
+                                            {/* Areas: compare behind, primary over it */}
                                             {compareArea && <path d={compareArea} fill={`url(#cmp-gradient-${index})`} stroke="none" />}
+                                            <path d={areaPath} fill={`url(#gradient-${index})`} stroke="none" />
                                             <path d={pathD} fill="none" stroke={chartColor} strokeWidth="2" />
                                             {/* Hover points */}
                                             {points.map((point, i) => (
@@ -644,9 +645,12 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         if (!dateWindows || dateRange === 'all') return null;
                                         const { prevStartDateOnly, prevEndDateOnly } = dateWindows;
                                         try {
-                                            const prevData = dataManager.getFlowStepTimeSeries(currentFlowEmails, selectedFlow || '', step.sequencePosition, selectedMetric, 'custom', granularity, prevStartDateOnly.toISOString().slice(0, 10), prevEndDateOnly.toISOString().slice(0, 10));
-                                            if (!prevData || prevData.length <= hoveredPoint.pointIndex) return null;
-                                            const prevPoint = prevData[hoveredPoint.pointIndex];
+                                            const prevData = dataManager.getFlowStepTimeSeries(previousFlowEmails, selectedFlow || '', step.sequencePosition, selectedMetric, 'custom', granularity, prevStartDateOnly.toISOString().slice(0, 10), prevEndDateOnly.toISOString().slice(0, 10));
+                                            if (!prevData || prevData.length === 0) return null;
+                                            const idx = (sparklineData.length > 1 && prevData.length > 1)
+                                                ? Math.round((hoveredPoint.pointIndex / (sparklineData.length - 1)) * (prevData.length - 1))
+                                                : 0;
+                                            const prevPoint = prevData[Math.min(Math.max(0, idx), prevData.length - 1)];
                                             const prevVal = prevPoint?.value;
                                             if (prevVal == null) return null;
                                             const change = prevVal !== 0 ? ((hoveredPoint.value - prevVal) / prevVal) * 100 : null;
