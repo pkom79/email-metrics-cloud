@@ -18,9 +18,14 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
             // Anchor strictly to campaigns timeline for weekly campaign coverage.
             if (!campaigns.length) return null;
             let maxTime = 0; for (const e of campaigns) { const t = e.sentDate?.getTime?.(); if (Number.isFinite(t) && t! > maxTime) maxTime = t!; }
+            const latestCampaign = new Date(maxTime);
             const end = new Date(maxTime); end.setHours(23, 59, 59, 999);
             const days = parseInt(String(dateRange).replace('d', '')) || 30;
             const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0);
+            try {
+                // eslint-disable-next-line no-console
+                console.debug('[CampaignGaps&Losses] range', { dateRange, start: start.toISOString(), end: end.toISOString(), latestCampaign: latestCampaign.toISOString(), campaignsCount: campaigns.length });
+            } catch { }
             return { start, end };
         } catch { return null; }
     }, [dateRange, customFrom, customTo, campaigns, flows]);
