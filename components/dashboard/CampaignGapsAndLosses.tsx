@@ -3,13 +3,21 @@ import React, { useMemo } from 'react';
 import { AlertTriangle, CalendarRange, Layers, LineChart, MailX, Percent } from 'lucide-react';
 import MetricCard from './MetricCard';
 import { DataManager } from '../../lib/data/dataManager';
+import type { ProcessedCampaign } from '../../lib/data/dataTypes';
 import { computeCampaignGapsAndLosses } from '../../lib/analytics/campaignGapsLosses';
 
-interface Props { dateRange: string; granularity?: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; }
+interface Props {
+    dateRange: string;
+    granularity?: 'daily' | 'weekly' | 'monthly';
+    customFrom?: string;
+    customTo?: string;
+    // Reuse same dataset as Top Campaigns to keep counts consistent across modules
+    filteredCampaigns?: ProcessedCampaign[];
+}
 
-export default function CampaignGapsAndLosses({ dateRange, granularity, customFrom, customTo }: Props) {
+export default function CampaignGapsAndLosses({ dateRange, granularity, customFrom, customTo, filteredCampaigns }: Props) {
     const dm = DataManager.getInstance();
-    const campaigns = dm.getCampaigns();
+    const campaigns = (filteredCampaigns && filteredCampaigns.length) ? filteredCampaigns : dm.getCampaigns();
     const flows = dm.getFlowEmails();
 
     const range = useMemo(() => {
@@ -66,10 +74,14 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
         const msg = result.insufficientWeeklyData
             ? 'Insufficient data to estimate weekly losses. Need ≥66% of weeks with campaigns sent in this period. Try expanding your time range.'
             : 'Insufficient data for weekly analysis in this period. Try a different time range.';
+        const hint = result.suspectedCsvCoverageGap
+            ? `Heads up: We detected a long ${result.suspectedCsvCoverageGap.weeks} week stretch without any campaigns (${result.suspectedCsvCoverageGap.start} → ${result.suspectedCsvCoverageGap.end}). If this looks wrong, re-export your Campaigns CSV for that span to ensure all rows are included.`
+            : null;
         return (
             <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-2"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Gaps & Losses</h3></div>
                 <div className="text-sm text-amber-700 dark:text-amber-300">{msg}</div>
+                {hint && <div className="mt-2 text-xs text-amber-700/90 dark:text-amber-300/90">{hint}</div>}
             </div>
         );
     }

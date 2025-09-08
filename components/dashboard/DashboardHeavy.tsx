@@ -987,7 +987,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         {/* Send Frequency Module */}
                         <CampaignSendFrequency campaigns={filteredCampaigns} />
                         {/* Campaign Gaps & Losses — placed below Campaign Send Frequency */}
-                        <CampaignGapsAndLosses dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} />
+                        <CampaignGapsAndLosses
+                            dateRange={dateRange}
+                            granularity={granularity}
+                            customFrom={customFrom}
+                            customTo={customTo}
+                            filteredCampaigns={filteredCampaigns}
+                        />
                     </section>
                 )}
                 {/* Day & Hour Performance (placed before Top Campaigns to match legacy ordering) */}

@@ -21,6 +21,8 @@ export interface GapsLossesResult {
   allWeeksSent: boolean;
   insufficientWeeklyData: boolean; // true if < ceil(66%) of weeks in the selected range have campaigns sent
   hasLongGaps: boolean; // true if there exists a zero-send run >= 5 weeks (weekly analysis insufficient for those)
+  // Hint: if we detect a very long zero-campaign stretch, surface as potential CSV export gap guidance
+  suspectedCsvCoverageGap?: { weeks: number; start: string; end: string } | null;
 }
 
 // Percentile helper (p in [0,1]) using sorted copy; linear interpolation
@@ -76,6 +78,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
 
   let zeroSendWeeks = 0;
   let longestGap = 0;
+  let longestGapStartIdx: number | null = null;
   let hasLongGaps = false;
   // Detect runs among complete weeks only
   let i = 0;
@@ -85,7 +88,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
       while (j < completeWeeks.length && isZeroSend(completeWeeks[j])) j++;
       const runLen = j - i;
       zeroSendWeeks += runLen;
-      if (runLen > longestGap) longestGap = runLen;
+      if (runLen > longestGap) { longestGap = runLen; longestGapStartIdx = i; }
       if (runLen > 4) hasLongGaps = true;
       i = j;
     } else {
@@ -220,6 +223,26 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   // If nothing computed, keep as undefined rather than 0
   if (estimatedLostRevenue === 0) estimatedLostRevenue = undefined;
 
+  // Suspected CSV coverage gap hint: if we observe an exceptionally long consecutive zero-campaign stretch
+  // (e.g., >= 10 weeks) inside the selected range, surface a guidance hint for users to re-export CSV.
+  let suspectedCsvCoverageGap: { weeks: number; start: string; end: string } | null = null;
+  if (longestGap >= 10 && longestGapStartIdx != null) {
+    const startW = completeWeeks[longestGapStartIdx]?.weekStart;
+    const endW = completeWeeks[longestGapStartIdx + longestGap - 1]?.weekStart;
+    if (startW && endW) {
+      const endLabel = new Date(endW); endLabel.setDate(endLabel.getDate() + 6);
+      suspectedCsvCoverageGap = {
+        weeks: longestGap,
+        start: startW.toISOString().slice(0, 10),
+        end: endLabel.toISOString().slice(0, 10),
+      };
+      try {
+        // eslint-disable-next-line no-console
+        console.warn('[CampaignGaps&Losses] Detected long zero-campaign stretch', suspectedCsvCoverageGap);
+      } catch {}
+    }
+  }
+
   return {
     zeroCampaignSendWeeks: zeroSendWeeks,
     longestZeroSendGap: longestGap,
@@ -230,5 +253,6 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
     allWeeksSent,
     insufficientWeeklyData,
     hasLongGaps,
+    suspectedCsvCoverageGap,
   };
 }
