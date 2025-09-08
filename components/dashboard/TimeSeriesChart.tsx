@@ -98,7 +98,7 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
             if (!iso) return fallback || '';
             const d = new Date(iso);
             if (isNaN(d.getTime())) return fallback || '';
-            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            return d.toLocaleDateString('en-US', granularity === 'monthly' ? { month: 'short', year: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' });
         } catch {
             return fallback || '';
         }
