@@ -5,6 +5,7 @@ import MetricCard from './MetricCard';
 import DayOfWeekPerformance from './DayOfWeekPerformance';
 import HourOfDayPerformance from './HourOfDayPerformance';
 import RevenueSplitBar from './RevenueSplitBar';
+import SplitShareOverTime from './SplitShareOverTime';
 // Revenue Reliability module removed: placeholder used to preserve layout
 import SendVolumeImpact from './SendVolumeImpact';
 import AudienceCharts from './AudienceCharts';
@@ -932,6 +933,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         </div>
                         {/* Revenue Split Bar (Campaign vs Flow) moved to sit above Send Volume Impact */}
                         <RevenueSplitBar campaigns={filteredCampaigns} flows={filteredFlowEmails} />
+                        <SplitShareOverTime
+                            dateRange={dateRange === 'custom' ? 'custom' : dateRange}
+                            granularity={granularity}
+                            customFrom={customFrom}
+                            customTo={customTo}
+                            compareMode={compareMode}
+                        />
                         {/* Revenue Reliability module removed - placeholder panel removed */}
                         <SendVolumeImpact dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
                     </section>
