@@ -165,7 +165,7 @@ export function buildWeeklyAggregatesInRange(
   // Diagnostics: echo weekly buckets if enabled
   try {
     const enabled = (typeof process !== 'undefined' && process.env && (process.env.NEXT_PUBLIC_EM_DIAG === '1' || process.env.NEXT_PUBLIC_EM_DIAG === 'true')) ||
-                    (typeof window !== 'undefined' && (window as any).__EM_DIAG__);
+                    (typeof window !== 'undefined' && (((window as any).__EM_DIAG__) || ((window as any).EM_DIAG) || (function(){ try { return typeof localStorage !== 'undefined' && (localStorage.getItem('EM_DIAG') === '1' || localStorage.getItem('EM_DIAG') === 'true'); } catch { return false; } })()));
     if (enabled && weeks.length) {
       const log = weeks.map(w => ({
         start: w.weekStart.toISOString().slice(0,10),

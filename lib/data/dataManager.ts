@@ -395,7 +395,7 @@ export class DataManager {
                     // Diagnostics: summarize campaigns by month and date bounds after transform
                     try {
                         const enabled = (typeof process !== 'undefined' && process.env && (process.env.NEXT_PUBLIC_EM_DIAG === '1' || process.env.NEXT_PUBLIC_EM_DIAG === 'true')) ||
-                                        (typeof window !== 'undefined' && (window as any).__EM_DIAG__);
+                                        (typeof window !== 'undefined' && (((window as any).__EM_DIAG__) || ((window as any).EM_DIAG) || (function(){ try { return typeof localStorage !== 'undefined' && (localStorage.getItem('EM_DIAG') === '1' || localStorage.getItem('EM_DIAG') === 'true'); } catch { return false; } })()));
                         if (enabled && this.campaigns?.length) {
                             let minT = Number.POSITIVE_INFINITY;
                             let maxT = 0;
