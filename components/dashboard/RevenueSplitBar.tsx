@@ -29,7 +29,7 @@ export default function RevenueSplitBar({ campaigns, flows }: RevenueSplitBarPro
     if (!campaigns.length && !flows.length) return null;
 
     return (
-        <div className="mb-4">
+        <div className="mt-4 mb-4">
             <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
                 <div className="flex items-center justify-between mb-2">
                     <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Campaign vs Flow Revenue Split</p>
