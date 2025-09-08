@@ -20,34 +20,42 @@ export default function SupabaseAuthListener() {
             suppress = true;
         }
 
-        const { data: subscription } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
-            const now = Date.now();
-            if (now - lastSyncTime.current < SYNC_COOLDOWN) {
-                console.log('Skipping auth sync due to rate limit');
-                return;
-            }
-
-            try {
-                if (!suppress) {
-                    lastSyncTime.current = now;
-                    await fetch('/api/auth/session', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'same-origin',
-                        body: JSON.stringify({ event, session })
-                    });
+        let subscription: any = null;
+        try {
+            const { data: sub } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
+                const now = Date.now();
+                if (now - lastSyncTime.current < SYNC_COOLDOWN) {
+                    console.log('Skipping auth sync due to rate limit');
+                    return;
                 }
-            } catch (error) {
-                console.warn('Auth sync failed:', error);
-            }
 
-            router.refresh();
-            suppress = false;
-        });
+                try {
+                    if (!suppress) {
+                        lastSyncTime.current = now;
+                        await fetch('/api/auth/session', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'same-origin',
+                            body: JSON.stringify({ event, session })
+                        });
+                    }
+                } catch (error) {
+                    console.warn('Auth sync failed:', error);
+                }
+
+                router.refresh();
+                suppress = false;
+            });
+            subscription = sub;
+        } catch (e) {
+            // Supabase env missing; skip listener entirely in this runtime
+            console.warn('Supabase auth listener disabled (env missing).');
+            return;
+        }
 
         return () => {
             try {
-                subscription.subscription.unsubscribe();
+                subscription?.subscription?.unsubscribe?.();
                 initialized.current = false;
             } catch (error) {
                 console.warn('Failed to unsubscribe auth listener:', error);

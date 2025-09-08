@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../../lib/supabase/client';
 
-export default function ResetPasswordPage() {
+function ResetPasswordInner() {
     const router = useRouter();
     const search = useSearchParams();
     const [password, setPassword] = useState('');
@@ -52,5 +52,13 @@ export default function ResetPasswordPage() {
             {error && <p className="text-sm text-red-500">{error}</p>}
             {ok && <p className="text-sm text-green-600">{ok}</p>}
         </div>
+    );
+}
+
+export default function ResetPasswordPage() {
+    return (
+        <Suspense fallback={<div />}>
+            <ResetPasswordInner />
+        </Suspense>
     );
 }

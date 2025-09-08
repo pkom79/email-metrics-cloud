@@ -15,9 +15,9 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
     const range = useMemo(() => {
         try {
             if (dateRange === 'custom' && customFrom && customTo) return { start: new Date(customFrom + 'T00:00:00'), end: new Date(customTo + 'T23:59:59') };
-            const all = [...campaigns, ...flows];
-            if (!all.length) return null;
-            let maxTime = 0; for (const e of all) { const t = e.sentDate?.getTime?.(); if (Number.isFinite(t) && t! > maxTime) maxTime = t!; }
+            // Anchor strictly to campaigns timeline for weekly campaign coverage.
+            if (!campaigns.length) return null;
+            let maxTime = 0; for (const e of campaigns) { const t = e.sentDate?.getTime?.(); if (Number.isFinite(t) && t! > maxTime) maxTime = t!; }
             const end = new Date(maxTime); end.setHours(23, 59, 59, 999);
             const days = parseInt(String(dateRange).replace('d', '')) || 30;
             const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0);

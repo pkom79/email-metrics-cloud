@@ -26,7 +26,7 @@ export async function GET() {
             .select('account_id')
             .not('account_id', 'is', null);
             
-        const uniqueSnapshotAccounts = [...new Set(snapshotAccounts?.map(s => s.account_id) || [])];
+    const uniqueSnapshotAccounts = [...new Set(snapshotAccounts?.map((s: any) => s.account_id) || [])];
         
         return NextResponse.json({
             success: true,
@@ -39,7 +39,7 @@ export async function GET() {
             uniqueSnapshotAccounts,
             analysis: {
                 hasSnapshotsForDataAccount: (snapshotsWithData?.length || 0) > 0,
-                dataAccountExistsInDB: allAccounts?.some(a => a.id === accountWithData),
+                dataAccountExistsInDB: allAccounts?.some((a: any) => a.id === accountWithData),
                 snapshotAccountsCount: uniqueSnapshotAccounts.length
             }
         });

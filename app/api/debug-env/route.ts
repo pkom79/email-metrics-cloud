@@ -36,7 +36,7 @@ export async function GET() {
             storage: {
                 connected: !storageError,
                 error: storageError?.message,
-                buckets: buckets?.map(b => b.name) || [],
+                buckets: buckets?.map((b: any) => b.name) || [],
             }
         });
 

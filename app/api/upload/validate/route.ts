@@ -15,8 +15,8 @@ export async function POST(request: Request) {
         const { data: list, error: listErr } = await supabase.storage.from(bucket).list(uploadId, { limit: 100 });
         if (listErr) throw listErr;
 
-        const present = new Set((list || []).map((f) => f.name));
-        const missing = required.filter((r) => !present.has(r));
+    const present = new Set((list || []).map((f: any) => f.name));
+    const missing = required.filter((r: any) => !present.has(r));
 
         if (missing.length > 0) {
             return NextResponse.json({ ok: false, missing }, { status: 400 });

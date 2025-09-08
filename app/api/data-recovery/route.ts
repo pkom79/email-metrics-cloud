@@ -35,7 +35,7 @@ export async function POST() {
         }
 
         // Get unique account IDs from snapshots
-        const snapshotAccountIds = new Set(snapshots?.map(s => s.account_id) || []);
+    const snapshotAccountIds = new Set(snapshots?.map((s: any) => s.account_id) || []);
         
         // Get existing accounts
         const { data: existingAccounts, error: accountsError } = await supabase
@@ -47,11 +47,11 @@ export async function POST() {
             return NextResponse.json(results, { status: 500 });
         }
 
-        const existingAccountIds = new Set(existingAccounts?.map(a => a.id) || []);
+    const existingAccountIds = new Set(existingAccounts?.map((a: any) => a.id) || []);
 
         // Find orphaned snapshots (account_id not in accounts table)
         const orphanedAccountIds = Array.from(snapshotAccountIds).filter(
-            accountId => !existingAccountIds.has(accountId)
+            (accountId: any) => !existingAccountIds.has(accountId)
         );
 
         console.log(`data-recovery: Found ${orphanedAccountIds.length} orphaned account IDs`);
@@ -88,7 +88,7 @@ export async function POST() {
                 // If no uploads found, check if this is a recent auth user without account
                 if (!uploads || uploads.length === 0) {
                     // Try to match by checking recent auth users
-                    const pkomUser = authUsers.find(u => u.email === 'pkom79@gmail.com');
+                    const pkomUser = authUsers.find((u: any) => u.email === 'pkom79@gmail.com');
                     
                     if (pkomUser) {
                         console.log(`data-recovery: Creating missing account for ${pkomUser.email}`);

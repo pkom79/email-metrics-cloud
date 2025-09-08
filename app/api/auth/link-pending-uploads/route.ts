@@ -84,7 +84,7 @@ export async function POST(request: Request) {
           processedResults.push({ id, error: listErr?.message || 'list failed' }); 
           continue; 
         }
-        const fileNames = new Set(files.map(f => f.name));
+  const fileNames = new Set(files.map((f: any) => f.name));
         console.log(`link-pending-uploads: Found files for ${id}:`, Array.from(fileNames));
         const missing = required.filter(r => !fileNames.has(r));
         if (missing.length) { 

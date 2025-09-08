@@ -1,13 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL) throw new Error('NEXT_PUBLIC_SUPABASE_URL missing');
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('SUPABASE_SERVICE_ROLE_KEY missing');
+const hasAdminEnv = () => !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-export const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { persistSession: false, autoRefreshToken: false } }
-);
+// Export a build-safe admin client. If env vars are missing (e.g., in CI or local
+// static builds), expose a proxy that throws only when actually used.
+export const supabaseAdmin = hasAdminEnv()
+  ? createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    )
+  : (new Proxy({}, {
+      get() {
+        throw new Error('Supabase admin env not set. Define NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.');
+      }
+    }) as any);
 
 // Preferred order when probing buckets for canonical CSVs
 export const CSV_BUCKETS = ['uploads', 'csv-uploads', 'preauth-uploads'] as const;

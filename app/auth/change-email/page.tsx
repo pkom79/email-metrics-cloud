@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../../lib/supabase/client';
 
-export default function ChangeEmailPage() {
+function ChangeEmailInner() {
     const router = useRouter();
     const search = useSearchParams();
     const [error, setError] = useState<string | null>(null);
@@ -88,5 +88,13 @@ export default function ChangeEmailPage() {
                 </div>
             ) : null}
         </div>
+    );
+}
+
+export default function ChangeEmailPage() {
+    return (
+        <Suspense fallback={<div />}>
+            <ChangeEmailInner />
+        </Suspense>
     );
 }

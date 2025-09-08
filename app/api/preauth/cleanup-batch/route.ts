@@ -209,7 +209,7 @@ export async function POST() {
                             .select('upload_id')
                             .eq('account_id', accountId);
 
-                        const uploadsWithSnapshots = new Set(accountSnapshots?.map(s => s.upload_id));
+                        const uploadsWithSnapshots = new Set(accountSnapshots?.map((s: any) => s.upload_id));
                         
                         if (uploadsWithSnapshots.size <= 1 && uploadsWithSnapshots.has(upload.id)) {
                             console.log(`cleanup-batch: PROTECTED - Upload ${upload.id} is the only one with snapshots for account ${accountId}`);

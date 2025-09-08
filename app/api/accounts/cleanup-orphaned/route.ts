@@ -37,11 +37,11 @@ export async function POST() {
             const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
             if (authError) throw authError;
 
-            const authUserIds = new Set(authUsers.users.map(u => u.id));
+            const authUserIds = new Set(authUsers.users.map((u: any) => u.id));
             
             // Find accounts without corresponding auth users
             const orphanedAccounts = dbAccounts.filter(
-                account => !authUserIds.has(account.owner_user_id)
+                (account: any) => !authUserIds.has(account.owner_user_id)
             );
 
             console.log(`cleanup-orphaned: Found ${orphanedAccounts.length} orphaned accounts`);

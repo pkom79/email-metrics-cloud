@@ -15,7 +15,7 @@ export async function POST(request: Request) {
         const { data: list, error: listErr } = await supabase.storage.from(bucket).list(uploadId, { limit: 100 });
         if (listErr) throw listErr;
         if (list && list.length) {
-            const toRemove = list.map((f) => `${uploadId}/${f.name}`);
+            const toRemove = list.map((f: any) => `${uploadId}/${f.name}`);
             const { error: removeErr } = await supabase.storage.from(bucket).remove(toRemove);
             if (removeErr) throw removeErr;
         }

@@ -24,9 +24,9 @@ export async function GET() {
         
         results.uploads = {
             total: uploadCounts?.length || 0,
-            withAccounts: uploadCounts?.filter(u => u.account_id).length || 0,
-            withoutAccounts: uploadCounts?.filter(u => !u.account_id).length || 0,
-            byStatus: uploadCounts?.reduce((acc: any, u) => {
+            withAccounts: uploadCounts?.filter((u: any) => u.account_id).length || 0,
+            withoutAccounts: uploadCounts?.filter((u: any) => !u.account_id).length || 0,
+            byStatus: uploadCounts?.reduce((acc: any, u: any) => {
                 acc[u.status] = (acc[u.status] || 0) + 1;
                 return acc;
             }, {}) || {}
@@ -39,8 +39,8 @@ export async function GET() {
             
         results.snapshots = {
             total: snapshotCounts?.length || 0,
-            uniqueAccounts: new Set(snapshotCounts?.map(s => s.account_id)).size || 0,
-            uniqueUploads: new Set(snapshotCounts?.map(s => s.upload_id)).size || 0
+            uniqueAccounts: new Set(snapshotCounts?.map((s: any) => s.account_id)).size || 0,
+            uniqueUploads: new Set(snapshotCounts?.map((s: any) => s.upload_id)).size || 0
         };
 
         // Count accounts in public.accounts
@@ -50,9 +50,9 @@ export async function GET() {
             
         results.accounts = {
             total: accountCounts?.length || 0,
-            active: accountCounts?.filter(a => !a.deleted_at).length || 0,
-            deleted: accountCounts?.filter(a => a.deleted_at).length || 0,
-            list: accountCounts?.map(a => ({
+            active: accountCounts?.filter((a: any) => !a.deleted_at).length || 0,
+            deleted: accountCounts?.filter((a: any) => a.deleted_at).length || 0,
+            list: accountCounts?.map((a: any) => ({
                 id: a.id,
                 owner_user_id: a.owner_user_id,
                 deleted_at: a.deleted_at,
@@ -68,7 +68,7 @@ export async function GET() {
         } else {
             results.authUsers = {
                 total: authUsers.users?.length || 0,
-                list: authUsers.users?.map(u => ({
+                list: authUsers.users?.map((u: any) => ({
                     id: u.id,
                     email: u.email,
                     created_at: u.created_at,
@@ -86,31 +86,31 @@ export async function GET() {
         };
 
         if (!authError && accountCounts && authUsers.users) {
-            const authUserIds = new Set(authUsers.users.map(u => u.id));
-            const accountUserIds = new Set(accountCounts.map(a => a.owner_user_id));
+            const authUserIds = new Set(authUsers.users.map((u: any) => u.id));
+            const accountUserIds = new Set(accountCounts.map((a: any) => a.owner_user_id));
 
             // Find accounts without corresponding auth users
             orphaned.accountsWithoutAuthUsers = accountCounts.filter(
-                a => !authUserIds.has(a.owner_user_id)
+                (a: any) => !authUserIds.has(a.owner_user_id)
             );
 
             // Find auth users without corresponding accounts
             orphaned.authUsersWithoutAccounts = authUsers.users.filter(
-                u => !accountUserIds.has(u.id)
+                (u: any) => !accountUserIds.has(u.id)
             );
         }
 
         // Find snapshots without uploads
         if (snapshotCounts && uploadCounts) {
-            const uploadIds = new Set(uploadCounts.map(u => u.id));
-            const accountIds = new Set(accountCounts?.map(a => a.id));
+            const uploadIds = new Set(uploadCounts.map((u: any) => u.id));
+            const accountIds = new Set(accountCounts?.map((a: any) => a.id));
             
             orphaned.snapshotsWithoutUploads = snapshotCounts.filter(
-                s => !uploadIds.has(s.upload_id)
+                (s: any) => !uploadIds.has(s.upload_id)
             ).length;
             
             orphaned.snapshotsWithoutAccounts = snapshotCounts.filter(
-                s => !accountIds.has(s.account_id)
+                (s: any) => !accountIds.has(s.account_id)
             ).length;
         }
 

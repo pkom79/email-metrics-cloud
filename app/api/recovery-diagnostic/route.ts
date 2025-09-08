@@ -36,7 +36,7 @@ export async function GET() {
         // Get auth user for pkom79@gmail.com
         const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
         
-        const pkomUser = authUsers?.users?.find(u => u.email === 'pkom79@gmail.com');
+    const pkomUser = authUsers?.users?.find((u: any) => u.email === 'pkom79@gmail.com');
 
         const result = {
             snapshotsWithAccounts: orphanedSnapshots || [],

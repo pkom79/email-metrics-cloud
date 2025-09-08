@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import { supabase } from '../../../lib/supabase/client';
 import { AlertCircle } from 'lucide-react';
 import SelectBase from '../../../components/ui/SelectBase';
@@ -12,7 +12,7 @@ const ISO_TO_NAME: Record<string, string> = {
 // GDPR/EEA/UK list based on options above
 const GDPR_COUNTRIES = new Set(['United Kingdom', 'Germany', 'France', 'Netherlands', 'Spain', 'Italy', 'Sweden', 'Norway', 'Denmark', 'Ireland']);
 
-export default function Signup() {
+function SignupInner() {
     const search = useSearchParams();
     const router = useRouter();
     const qpModeParam = search.get('mode');
@@ -259,5 +259,13 @@ export default function Signup() {
             )}
             {ok && <p className="text-sm text-green-600">{ok}</p>}
         </div>
+    );
+}
+
+export default function Signup() {
+    return (
+        <Suspense fallback={<div />}>
+            <SignupInner />
+        </Suspense>
     );
 }

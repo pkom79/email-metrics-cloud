@@ -6,6 +6,10 @@ import { buildWeeklyAggregatesInRange } from '../../../lib/analytics/reliability
 
 export async function GET(request: NextRequest) {
     try {
+        // Build-safe guard: If env vars are missing, disable this debug route
+        if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+            return NextResponse.json({ error: 'Supabase env missing; debug-reliability disabled' }, { status: 503 });
+        }
         const supabase = createRouteHandlerClient({ cookies });
         const { data: { user } } = await supabase.auth.getUser();
         
