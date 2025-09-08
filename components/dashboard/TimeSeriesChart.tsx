@@ -1,6 +1,8 @@
 "use client";
 import React, { useMemo, useState } from 'react';
 import SelectBase from "../ui/SelectBase";
+import TooltipPortal from "../TooltipPortal";
+import { ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
 
 type Granularity = 'daily' | 'weekly' | 'monthly';
 type CompareMode = 'prev-period' | 'prev-year';
@@ -24,6 +26,11 @@ export interface TimeSeriesChartProps {
     compareMode?: CompareMode; // for labeling previous period in tooltip
     // Decorative options
     idSuffix?: string; // to make gradient IDs deterministic
+    // Header trend props (to match MetricCard)
+    headerChange?: number;
+    headerIsPositive?: boolean;
+    headerPreviousValue?: number;
+    headerPreviousPeriod?: { startDate: Date; endDate: Date };
 }
 
 // Formatters mirror Metric Cards
@@ -38,7 +45,7 @@ const fmt = {
     number: (v: number) => Math.round(v).toLocaleString('en-US')
 };
 
-export default function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigValue, primary, compare = null, colorHue = '#8b5cf6', darkColorHue, valueType, granularity, compareMode = 'prev-period', idSuffix = 'tsc' }: TimeSeriesChartProps) {
+export default function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigValue, primary, compare = null, colorHue = '#8b5cf6', darkColorHue, valueType, granularity, compareMode = 'prev-period', idSuffix = 'tsc', headerChange, headerIsPositive, headerPreviousValue, headerPreviousPeriod }: TimeSeriesChartProps) {
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
     const width = 850; const height = 200; const innerH = 140; const padLeft = 72; const padRight = 20; const innerW = width - padLeft - padRight;
 
@@ -98,7 +105,22 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
             if (!iso) return fallback || '';
             const d = new Date(iso);
             if (isNaN(d.getTime())) return fallback || '';
-            return d.toLocaleDateString('en-US', granularity === 'monthly' ? { month: 'short', year: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' });
+            if (granularity === 'monthly') {
+                return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            }
+            if (granularity === 'weekly') {
+                const end = d;
+                const start = new Date(end);
+                start.setDate(end.getDate() - 6);
+                const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+                const monthStart = start.toLocaleDateString('en-US', { month: 'short' });
+                const monthEnd = end.toLocaleDateString('en-US', { month: 'short' });
+                const dayStart = start.getDate();
+                const dayEnd = end.getDate();
+                const year = end.getFullYear();
+                return sameMonth ? `${monthEnd} ${dayStart}${dayEnd}, ${year}`.replace('\u0013', '–') : `${monthStart} ${dayStart} – ${monthEnd} ${dayEnd}, ${year}`;
+            }
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         } catch {
             return fallback || '';
         }
@@ -123,6 +145,41 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                 <div className="text-right">
                     <div className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 font-medium">{metricOptions.find(m => m.value === metricKey)?.label || ''}</div>
                     <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{bigValue}</div>
+                    {(() => {
+                        const isAllTime = false; // charts aren't shown for 'all' compare anyway here
+                        const change = headerChange ?? 0;
+                        const isPositive = headerIsPositive ?? true;
+                        const prevVal = headerPreviousValue;
+                        const prevPeriod = headerPreviousPeriod;
+                        const DISPLAY_EPS = 0.05;
+                        const tiny = Math.abs(change) < DISPLAY_EPS;
+                        const zeroDisplay = tiny || Math.abs(change) < 1e-9;
+                        const fmtPrev = (v?: number) => {
+                            if (v == null) return '';
+                            switch (valueType) {
+                                case 'currency': return fmt.currency(v);
+                                case 'percentage': return `${v.toFixed(1)}%`;
+                                default: return Math.round(v).toLocaleString('en-US');
+                            }
+                        };
+                        const formatDate = (d: Date) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                        const tooltipNode = prevPeriod && prevVal != null ? (
+                            <div className="text-gray-900 dark:text-gray-100">
+                                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">{formatDate(prevPeriod.startDate)} – {formatDate(prevPeriod.endDate)}</div>
+                                <div className="text-sm font-semibold tabular-nums mt-0.5">{fmtPrev(prevVal)}</div>
+                            </div>
+                        ) : null;
+                        return (prevPeriod && prevVal != null) ? (
+                            <div className="mt-1 flex justify-end">
+                                <TooltipPortal content={tooltipNode as any}>
+                                    <div className={`flex items-center text-[13px] font-medium ${zeroDisplay ? 'text-gray-600 dark:text-gray-400' : (isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}`} role="button" tabIndex={0}>
+                                        {zeroDisplay ? (<ArrowRight className="w-4 h-4 mr-1" />) : (change > 0 ? (<ArrowUp className="w-4 h-4 mr-1" />) : (<ArrowDown className="w-4 h-4 mr-1" />))}
+                                        {zeroDisplay ? '0.0' : (() => { const formatted = Math.abs(change).toFixed(1); const num = parseFloat(formatted); return num >= 1000 ? num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatted; })()}%
+                                    </div>
+                                </TooltipPortal>
+                            </div>
+                        ) : null;
+                    })()}
                 </div>
             </div>
             <div className="relative" style={{ width: '100%' }}>

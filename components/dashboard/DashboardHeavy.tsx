@@ -906,6 +906,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             valueType={metricValueType(overviewChartMetric)}
                             granularity={granularity}
                             compareMode={compareMode}
+                            headerChange={overviewMetrics[(overviewChartMetric === 'revenue' ? 'totalRevenue' : overviewChartMetric === 'avgOrderValue' ? 'averageOrderValue' : overviewChartMetric) as keyof typeof overviewMetrics]?.change as any}
+                            headerIsPositive={overviewMetrics[(overviewChartMetric === 'revenue' ? 'totalRevenue' : overviewChartMetric === 'avgOrderValue' ? 'averageOrderValue' : overviewChartMetric) as keyof typeof overviewMetrics]?.isPositive as any}
+                            headerPreviousValue={overviewMetrics[(overviewChartMetric === 'revenue' ? 'totalRevenue' : overviewChartMetric === 'avgOrderValue' ? 'averageOrderValue' : overviewChartMetric) as keyof typeof overviewMetrics]?.previousValue as any}
+                            headerPreviousPeriod={overviewMetrics[(overviewChartMetric === 'revenue' ? 'totalRevenue' : overviewChartMetric === 'avgOrderValue' ? 'averageOrderValue' : overviewChartMetric) as keyof typeof overviewMetrics]?.previousPeriod as any}
                             colorHue="#8b5cf6" // purple (overview)
                             idSuffix="overview"
                         />
@@ -947,6 +951,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             valueType={metricValueType(campaignChartMetric)}
                             granularity={granularity}
                             compareMode={compareMode}
+                            headerChange={campaignMetrics[(campaignChartMetric === 'revenue' ? 'totalRevenue' : campaignChartMetric === 'avgOrderValue' ? 'averageOrderValue' : campaignChartMetric) as keyof typeof campaignMetrics]?.change as any}
+                            headerIsPositive={campaignMetrics[(campaignChartMetric === 'revenue' ? 'totalRevenue' : campaignChartMetric === 'avgOrderValue' ? 'averageOrderValue' : campaignChartMetric) as keyof typeof campaignMetrics]?.isPositive as any}
+                            headerPreviousValue={campaignMetrics[(campaignChartMetric === 'revenue' ? 'totalRevenue' : campaignChartMetric === 'avgOrderValue' ? 'averageOrderValue' : campaignChartMetric) as keyof typeof campaignMetrics]?.previousValue as any}
+                            headerPreviousPeriod={campaignMetrics[(campaignChartMetric === 'revenue' ? 'totalRevenue' : campaignChartMetric === 'avgOrderValue' ? 'averageOrderValue' : campaignChartMetric) as keyof typeof campaignMetrics]?.previousPeriod as any}
                             colorHue="#6366f1" // indigo (campaigns)
                             idSuffix="campaigns"
                         />
@@ -1050,6 +1058,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             valueType={metricValueType(flowChartMetric)}
                             granularity={granularity}
                             compareMode={compareMode}
+                            headerChange={flowMetrics[(flowChartMetric === 'revenue' ? 'totalRevenue' : flowChartMetric === 'avgOrderValue' ? 'averageOrderValue' : flowChartMetric) as keyof typeof flowMetrics]?.change as any}
+                            headerIsPositive={flowMetrics[(flowChartMetric === 'revenue' ? 'totalRevenue' : flowChartMetric === 'avgOrderValue' ? 'averageOrderValue' : flowChartMetric) as keyof typeof flowMetrics]?.isPositive as any}
+                            headerPreviousValue={flowMetrics[(flowChartMetric === 'revenue' ? 'totalRevenue' : flowChartMetric === 'avgOrderValue' ? 'averageOrderValue' : flowChartMetric) as keyof typeof flowMetrics]?.previousValue as any}
+                            headerPreviousPeriod={flowMetrics[(flowChartMetric === 'revenue' ? 'totalRevenue' : flowChartMetric === 'avgOrderValue' ? 'averageOrderValue' : flowChartMetric) as keyof typeof flowMetrics]?.previousPeriod as any}
                             colorHue="#10b981" // emerald (flows)
                             idSuffix="flows"
                         />
