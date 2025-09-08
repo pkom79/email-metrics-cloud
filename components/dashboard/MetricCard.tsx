@@ -13,6 +13,7 @@ interface MetricCardProps {
     isNegativeMetric?: boolean;
     metricKey?: string;
     sparklineData?: { value: number; date: string }[];
+    hideSparkline?: boolean;
     // Kept for compatibility but not rendered anymore
     granularity?: 'daily' | 'weekly' | 'monthly';
     // Previous period tooltip data
@@ -31,6 +32,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
     isNegativeMetric = false,
     metricKey,
     sparklineData = [],
+    hideSparkline = false,
     previousValue,
     previousPeriod,
     compareMode = 'prev-period',
@@ -85,17 +87,19 @@ const MetricCard: React.FC<MetricCardProps> = ({
                 </div>
             </div>
 
-            <Sparkline
-                isPositive={shouldShowAsPositive}
-                change={change}
-                isAllTime={isAllTime}
-                isNegativeMetric={isNegativeMetric}
-                data={sparklineData}
-                valueFormat={valueFormat as any}
-                hasInsufficientData={hasInsufficientData}
-                forceZeroStyle={showChangeBlock ? isZeroDisplay : true /* if we hide arrow treat as purple */}
-                category={category}
-            />
+            {!hideSparkline && (
+                <Sparkline
+                    isPositive={shouldShowAsPositive}
+                    change={change}
+                    isAllTime={isAllTime}
+                    isNegativeMetric={isNegativeMetric}
+                    data={sparklineData}
+                    valueFormat={valueFormat as any}
+                    hasInsufficientData={hasInsufficientData}
+                    forceZeroStyle={showChangeBlock ? isZeroDisplay : true /* if we hide arrow treat as purple */}
+                    category={category}
+                />
+            )}
 
             <div className="flex items-end justify-between">
                 <p className={`text-2xl font-bold text-gray-900 dark:text-white`}>

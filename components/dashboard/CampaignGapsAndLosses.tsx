@@ -32,13 +32,14 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
 
     if (!range || !result) return null;
 
-    // Visibility gate: only in 90-day Weekly view
-    const weekly90 = dateRange === '90d' && granularity === 'weekly';
-    if (!weekly90) {
+    // Visibility gate: show only in Weekly view for ranges >= 90 days (presets or custom)
+    const daysSpan = Math.floor((range.end.getTime() - range.start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const weekly90Plus = granularity === 'weekly' && daysSpan >= 90;
+    if (!weekly90Plus) {
         return (
             <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-2"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Gaps & Losses</h3></div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">This module is available only in the 90-day Weekly view.</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">This module is available only in the Weekly view for ranges 90 days or longer.</div>
             </div>
         );
     }
@@ -58,7 +59,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
     const showInsufficientBanner = result.insufficientWeeklyData || result.hasLongGaps;
     if (showInsufficientBanner) {
         const msg = result.insufficientWeeklyData
-            ? 'Insufficient data to estimate weekly losses. Need ≥66% of weeks with campaigns sent in this 90-day period. Try expanding your time range.'
+            ? 'Insufficient data to estimate weekly losses. Need ≥66% of weeks with campaigns sent in this period. Try expanding your time range.'
             : 'Insufficient data for weekly analysis in this period. Try a different time range.';
         return (
             <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
@@ -76,13 +77,13 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Row 1 — Consistency & Gaps */}
-                <MetricCard title="Zero Campaign Send Weeks" value={result.zeroCampaignSendWeeks.toLocaleString()} change={0} isPositive={false} dateRange={dateRange} category="campaign" />
-                <MetricCard title="Longest Gap Without Campaigns" value={`${result.longestZeroSendGap.toLocaleString()} wk${result.longestZeroSendGap === 1 ? '' : 's'}`} change={0} isPositive={false} dateRange={dateRange} category="campaign" />
-                <MetricCard title="% of Weeks With Campaigns Sent" value={`${result.pctWeeksWithCampaignsSent.toFixed(1)}%`} change={0} isPositive={true} dateRange={dateRange} category="campaign" />
+                <MetricCard title="Zero Campaign Send Weeks" value={result.zeroCampaignSendWeeks.toLocaleString()} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline />
+                <MetricCard title="Longest Gap Without Campaigns" value={`${result.longestZeroSendGap.toLocaleString()} wk${result.longestZeroSendGap === 1 ? '' : 's'}`} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline />
+                <MetricCard title="% of Weeks With Campaigns Sent" value={`${result.pctWeeksWithCampaignsSent.toFixed(1)}%`} change={0} isPositive={true} dateRange={dateRange} category="campaign" hideSparkline />
                 {/* Row 2 — Impact & Effectiveness */}
-                <MetricCard title="Estimated Lost Revenue" value={formatCurrency(result.estimatedLostRevenue || 0)} change={0} isPositive={false} dateRange={dateRange} category="campaign" />
-                <MetricCard title="Low-Effectiveness Campaigns" value={result.lowEffectivenessCampaigns.toLocaleString()} change={0} isPositive={false} dateRange={dateRange} category="campaign" />
-                <MetricCard title="Average Campaigns per Week" value={result.avgCampaignsPerWeek.toFixed(2)} change={0} isPositive={true} dateRange={dateRange} category="campaign" />
+                <MetricCard title="Estimated Lost Revenue" value={formatCurrency(result.estimatedLostRevenue || 0)} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline />
+                <MetricCard title="Low-Effectiveness Campaigns" value={result.lowEffectivenessCampaigns.toLocaleString()} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline />
+                <MetricCard title="Average Campaigns per Week" value={result.avgCampaignsPerWeek.toFixed(2)} change={0} isPositive={true} dateRange={dateRange} category="campaign" hideSparkline />
             </div>
         </div>
     );
