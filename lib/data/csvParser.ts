@@ -85,22 +85,24 @@ export class CSVParser {
 
     private validateCampaigns(data: RawCampaignCSV[]): ParseResult<RawCampaignCSV> {
         const validData: RawCampaignCSV[] = [];
-        // Only require the essential identifiers; numeric fields can be blank and will parse to 0 later
-        const requiredFields = ['Campaign Name', 'Send Time', 'Total Recipients'];
+        // Only require essential identifiers; allow alternate header names
+        const hasAny = (row: any, keys: string[]) => keys.some(k => row[k] !== undefined && row[k] !== null && row[k] !== '');
         data.forEach((row) => {
             let isValid = true;
-            for (const field of requiredFields) {
-                const v = (row as any)[field];
-                if (v === undefined || v === null || v === '') { isValid = false; break; }
-            }
-            // Exclude SMS campaigns if the channel column is present
+            // Campaign name
+            if (!hasAny(row, ['Campaign Name', 'Name'])) isValid = false;
+            // Send time/date: accept several variants
+            if (isValid && !hasAny(row, ['Send Time', 'Send Date', 'Sent At', 'Send Date (UTC)', 'Send Date (GMT)', 'Date'])) isValid = false;
+            // Recipients: accept Total Recipients or Recipients
+            if (isValid && !hasAny(row, ['Total Recipients', 'Recipients'])) isValid = false;
+            // Exclude SMS campaigns if the channel column indicates SMS
             const channel = (row as any)['Campaign Channel'];
             if (isValid && channel && typeof channel === 'string' && channel.toLowerCase().includes('sms')) {
                 isValid = false;
             }
             if (isValid) validData.push(row);
         });
-        if (validData.length === 0) return { success: false, error: 'No valid campaign data found. Ensure the CSV has Campaign Name, Send Time, and Total Recipients.' };
+        if (validData.length === 0) return { success: false, error: 'No valid campaign data found. Ensure the CSV has Campaign Name, Send Time/Date, and Recipients.' };
         return { success: true, data: validData };
     }
 

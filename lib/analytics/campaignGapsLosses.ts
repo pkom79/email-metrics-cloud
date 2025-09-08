@@ -48,7 +48,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   const ONE_DAY = 24 * 60 * 60 * 1000;
   try {
     // eslint-disable-next-line no-console
-    console.debug('[CampaignGaps&Losses] inputs', { rangeStart: rangeStart.toISOString(), rangeEnd: rangeEnd.toISOString(), weeks: weeks.length });
+  console.debug('[CampaignGaps&Losses] inputs', { rangeStart: rangeStart.toISOString(), rangeEnd: rangeEnd.toISOString(), weeks: weeks.length, campaigns: campaigns.length });
   } catch {}
   // Weeks fully contained within the selected range (exclude partial first/last week segments)
   const fullInRangeWeeks = weeks.filter(w => {
@@ -142,7 +142,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
       const key = String(n);
       hist[key] = (hist[key] || 0) + 1;
     }
-    console.debug('[CampaignGaps&Losses] altSentWeeks', { altSentWeeks, campaignsInRange, hist, mismatches, weeksWithCounts: altWeeks.map(w => ({ start: w.key.slice(0,10), count: w.count })) });
+  console.debug('[CampaignGaps&Losses] altSentWeeks', { altSentWeeks, campaignsInRange, coverageDenom, hist, mismatches, weeksWithCounts: altWeeks.map(w => ({ start: w.key.slice(0,10), count: w.count })) });
   } catch {}
 
   // Low-Effectiveness Campaigns: count individual campaigns with revenue==0 in the selected range

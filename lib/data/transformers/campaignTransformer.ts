@@ -31,17 +31,25 @@ export class CampaignTransformer {
         return undefined;
     }
 
+    private findAnyField(raw: any, candidates: string[]): any {
+        for (const c of candidates) {
+            const v = this.findField(raw, c);
+            if (v !== undefined && v !== null && v !== '') return v;
+        }
+        return undefined;
+    }
+
     private transformSingle(raw: RawCampaignCSV, id: number): ProcessedCampaign | null {
-        const name = (this.findField(raw, 'Campaign Name') ?? (raw as any)['Campaign Name'] ?? '') as string;
+        const name = (this.findAnyField(raw, ['Campaign Name', 'Name']) ?? (raw as any)['Campaign Name'] ?? (raw as any)['Name'] ?? '') as string;
         const subject = (this.findField(raw, 'Subject') ?? (raw as any)['Subject'] ?? name) as string;
-        const sendVal = this.findField(raw, 'Send Time');
+        const sendVal = this.findAnyField(raw, ['Send Time', 'Send Date', 'Sent At', 'Send Date (UTC)', 'Send Date (GMT)', 'Date']);
         const sentDate = this.parseDateStrict(sendVal);
         if (!sentDate) return null; // skip if date unparseable
 
-        const emailsSent = this.parseNumber(this.findField(raw, 'Total Recipients'));
+        const emailsSent = this.parseNumber(this.findAnyField(raw, ['Total Recipients', 'Recipients']));
         const uniqueOpens = this.parseNumber(this.findField(raw, 'Unique Opens'));
         const uniqueClicks = this.parseNumber(this.findField(raw, 'Unique Clicks'));
-        const totalOrders = this.parseNumber(this.findField(raw, 'Unique Placed Order'));
+        const totalOrders = this.parseNumber(this.findAnyField(raw, ['Unique Placed Order', 'Total Placed Orders', 'Placed Orders']));
         const revenue = this.parseNumber(this.findField(raw, 'Revenue'));
         const unsubscribesCount = this.parseNumber(this.findField(raw, 'Unsubscribes'));
         const spamComplaintsCount = this.parseNumber(this.findField(raw, 'Spam Complaints'));
@@ -92,17 +100,39 @@ export class CampaignTransformer {
             if (value instanceof Date) {
                 return isNaN(value.getTime()) ? null : value;
             }
-            const s = String(value).trim();
-            const d = new Date(s);
-            if (!isNaN(d.getTime())) return d;
+            let s = String(value).trim();
+            if (!s) return null;
+            // Normalize common timezone abbreviations that JS Date struggles with
+            s = s.replace(/\b(UTC|GMT|EST|EDT|CST|CDT|PST|PDT)\b/ig, '').trim();
+            // Handle common MM/DD/YYYY[ HH:mm[:ss]] [AM|PM] formats explicitly in UTC to avoid locale ambiguity
+            const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i);
+            if (mdy) {
+                const mm = parseInt(mdy[1], 10);
+                const dd = parseInt(mdy[2], 10);
+                const yy = parseInt(mdy[3], 10);
+                const year = mdy[3].length === 2 ? (yy > 70 ? 1900 + yy : 2000 + yy) : yy;
+                let hours = parseInt(mdy[4] || '0', 10);
+                const mins = parseInt(mdy[5] || '0', 10);
+                const secs = parseInt(mdy[6] || '0', 10);
+                const ampm = (mdy[7] || '').toUpperCase();
+                if (ampm) {
+                    if (ampm === 'PM' && hours < 12) hours += 12;
+                    if (ampm === 'AM' && hours === 12) hours = 0;
+                }
+                const d = new Date(Date.UTC(year, mm - 1, dd, hours, mins, secs));
+                if (!isNaN(d.getTime())) return d;
+            }
+            // Try native parse
+            const d1 = new Date(s);
+            if (!isNaN(d1.getTime())) return d1;
             // Try adding Z if it looks like ISO without timezone
             if (/^\d{4}-\d{2}-\d{2}T\d{2}:.+$/i.test(s)) {
                 const dz = new Date(s + 'Z');
                 if (!isNaN(dz.getTime())) return dz;
             }
-            // Try US locale fallback
-            const dl = new Date(Date.parse(s));
-            if (!isNaN(dl.getTime())) return dl;
+            // Fallback to Date.parse
+            const d2 = new Date(Date.parse(s));
+            if (!isNaN(d2.getTime())) return d2;
             return null;
         } catch { return null; }
     }
