@@ -20,7 +20,12 @@ import { usePendingUploadsLinker } from '../../lib/utils/usePendingUploadsLinker
 import { supabase } from '../../lib/supabase/client';
 
 function formatCurrency(value: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value); }
-function formatPercent(value: number) { const formatted = value.toFixed(2); const num = parseFloat(formatted); return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : `${formatted}%`; }
+function formatPercent(value: number) {
+    const abs = Math.abs(value);
+    if (abs >= 0.1) return `${value.toFixed(1)}%`;
+    if (abs >= 0.01) return `${value.toFixed(2)}%`;
+    return `${value.toFixed(3)}%`;
+}
 function formatNumber(value: number) { return Math.round(value).toLocaleString('en-US'); }
 // Compact currency removed per requirement; always show full US currency with 2 decimals
 

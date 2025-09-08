@@ -710,9 +710,6 @@ export class DataManager {
             } else if (compare.length > primary.length) {
                 compare = compare.slice(compare.length - primary.length);
             }
-            // Hide compare if all values are zero
-            const anyNonZero = compare.some(p => Number.isFinite(p.value) && p.value !== 0);
-            if (!anyNonZero) return { primary, compare: null };
             return { primary, compare };
         } catch (e) {
             console.warn('getMetricTimeSeriesWithCompare failed', e);

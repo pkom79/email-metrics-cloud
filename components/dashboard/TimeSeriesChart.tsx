@@ -28,7 +28,12 @@ export interface TimeSeriesChartProps {
 // Formatters mirror Metric Cards
 const fmt = {
     currency: (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v),
-    percentage: (v: number) => `${v.toFixed(1)}%`,
+    percentageDynamic: (v: number) => {
+        const abs = Math.abs(v);
+        if (abs >= 0.1) return `${v.toFixed(1)}%`;
+        if (abs >= 0.01) return `${v.toFixed(2)}%`;
+        return `${v.toFixed(3)}%`;
+    },
     number: (v: number) => Math.round(v).toLocaleString('en-US')
 };
 
@@ -93,7 +98,7 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
     const cmpActive = hoverIdx != null && (compare || undefined) ? (compare || [])[hoverIdx] : undefined;
 
     const labelForPoint = (i: number) => primary[i]?.date || '';
-    const formatVal = (v: number) => valueType === 'currency' ? fmt.currency(v) : valueType === 'percentage' ? fmt.percentage(v) : fmt.number(v);
+    const formatVal = (v: number) => valueType === 'currency' ? fmt.currency(v) : valueType === 'percentage' ? fmt.percentageDynamic(v) : fmt.number(v);
     const color = colorHue; const dColor = darkColorHue || colorHue;
     const gradLineId = `tsc-line-${idSuffix}`; const gradAreaId = `tsc-area-${idSuffix}`; const cmpAreaId = `tsc-cmp-area-${idSuffix}`;
 
