@@ -4,12 +4,24 @@ export class CampaignTransformer {
     transform(rawCampaigns: RawCampaignCSV[]): ProcessedCampaign[] {
         const out: ProcessedCampaign[] = [];
         let badDateCount = 0;
+        const failedSamples: any[] = [];
         for (let i = 0; i < rawCampaigns.length; i++) {
-            const pc = this.transformSingle(rawCampaigns[i], i + 1);
-            if (pc) out.push(pc); else badDateCount++;
+            const raw = rawCampaigns[i];
+            const pc = this.transformSingle(raw, i + 1);
+            if (pc) {
+                out.push(pc);
+            } else {
+                badDateCount++;
+                try {
+                    const v = this.extractSendVal(raw);
+                    if (failedSamples.length < 5) failedSamples.push(v);
+                } catch {}
+            }
         }
         if (badDateCount) {
-            try { console.warn(`[CampaignTransformer] Skipped ${badDateCount} campaign rows due to invalid Send Time`); } catch {}
+            try {
+                console.warn(`[CampaignTransformer] Skipped ${badDateCount} campaign rows due to invalid Send Time. Sample raw values:`, failedSamples);
+            } catch {}
         }
         return out;
     }
@@ -42,7 +54,7 @@ export class CampaignTransformer {
     private transformSingle(raw: RawCampaignCSV, id: number): ProcessedCampaign | null {
         const name = (this.findAnyField(raw, ['Campaign Name', 'Name']) ?? (raw as any)['Campaign Name'] ?? (raw as any)['Name'] ?? '') as string;
         const subject = (this.findField(raw, 'Subject') ?? (raw as any)['Subject'] ?? name) as string;
-        const sendVal = this.findAnyField(raw, ['Send Time', 'Send Date', 'Sent At', 'Send Date (UTC)', 'Send Date (GMT)', 'Date']);
+        const sendVal = this.findAnyField(raw, ['Send Time', 'Send Time (UTC)', 'Send Date', 'Sent At', 'Send Date (UTC)', 'Send Date (GMT)', 'Date']);
         const sentDate = this.parseDateStrict(sendVal);
         if (!sentDate) return null; // skip if date unparseable
 
@@ -93,6 +105,10 @@ export class CampaignTransformer {
         };
     }
 
+    private extractSendVal(raw: RawCampaignCSV): any {
+        return this.findAnyField(raw, ['Send Time', 'Send Time (UTC)', 'Send Date', 'Sent At', 'Send Date (UTC)', 'Send Date (GMT)', 'Date']);
+    }
+
     private parseDateStrict(value: any): Date | null {
         if (value === undefined || value === null || value === '') return null;
         try {
@@ -100,10 +116,21 @@ export class CampaignTransformer {
             if (value instanceof Date) {
                 return isNaN(value.getTime()) ? null : value;
             }
+            // Numeric epoch (seconds or ms)
+            if (typeof value === 'number') {
+                const n = value;
+                const ms = n > 1e12 ? n : (n > 1e10 ? n * 100 : n * 1000);
+                const d = new Date(ms);
+                return isNaN(d.getTime()) ? null : d;
+            }
             let s = String(value).trim();
             if (!s) return null;
-            // Normalize common timezone abbreviations that JS Date struggles with
+            // Normalize: remove commas and the word 'at'
+            s = s.replace(/,/g, ' ').replace(/\bat\b/ig, ' ').replace(/\s+/g, ' ').trim();
+            // Remove timezone abbreviations and offsets like UTC, GMT, PST, +00:00, +0000, (UTC), (GMT)
             s = s.replace(/\b(UTC|GMT|EST|EDT|CST|CDT|PST|PDT)\b/ig, '').trim();
+            s = s.replace(/\([^)]+\)/g, '').trim();
+            s = s.replace(/([+-]\d{2}:?\d{2})$/, '').trim();
             // Handle common MM/DD/YYYY[ HH:mm[:ss]] [AM|PM] formats explicitly in UTC to avoid locale ambiguity
             const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i);
             if (mdy) {
@@ -120,6 +147,11 @@ export class CampaignTransformer {
                     if (ampm === 'AM' && hours === 12) hours = 0;
                 }
                 const d = new Date(Date.UTC(year, mm - 1, dd, hours, mins, secs));
+                if (!isNaN(d.getTime())) return d;
+            }
+            // ISO-like with space separator (YYYY-MM-DD HH:mm[:ss]) -> convert to ISO Z
+            if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2})?$/.test(s)) {
+                const d = new Date(s.replace(' ', 'T') + 'Z');
                 if (!isNaN(d.getTime())) return d;
             }
             // Try native parse
