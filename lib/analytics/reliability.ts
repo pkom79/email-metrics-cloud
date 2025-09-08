@@ -43,7 +43,7 @@ export interface ReliabilityResult {
 
 const ONE_DAY = 24 * 60 * 60 * 1000;
 
-function startOfMonday(d: Date) {
+function startOfMondayLocal(d: Date) {
   const dt = new Date(d);
   const day = dt.getDay(); // 0=Sun
   const diff = (day + 6) % 7; // shift to Monday
@@ -52,12 +52,22 @@ function startOfMonday(d: Date) {
   return dt;
 }
 
+// Use UTC-based Monday alignment to avoid DST/local-time boundary bugs when bucketing by week across long ranges
+function startOfMondayUTC(d: Date) {
+  const dt = new Date(d);
+  const day = dt.getUTCDay(); // 0=Sun
+  const diff = (day + 6) % 7; // shift to Monday
+  dt.setUTCDate(dt.getUTCDate() - diff);
+  dt.setUTCHours(0, 0, 0, 0);
+  return dt;
+}
+
 export function buildWeeklyAggregates(campaigns: ProcessedCampaign[], flows: ProcessedFlowEmail[]): WeeklyAggregate[] {
   if (!campaigns.length && !flows.length) return [];
   interface Bucket { totalRevenue: number; campaignRevenue: number; flowRevenue: number; daySet: Set<string>; weekStart: Date; campaignCount: number; }
   const map: Record<string, Bucket> = {};
   const add = (dt: Date, revenue: number | undefined, type: 'campaign' | 'flow') => {
-    const ws = startOfMonday(dt);
+  const ws = startOfMondayLocal(dt);
     const key = ws.toISOString();
     if (!map[key]) map[key] = { totalRevenue: 0, campaignRevenue: 0, flowRevenue: 0, daySet: new Set(), weekStart: ws, campaignCount: 0 };
     const b = map[key];
@@ -109,9 +119,9 @@ export function buildWeeklyAggregatesInRange(
   endDate: Date
 ): WeeklyAggregate[] {
   if (endDate < startDate) return [];
-  const startMonday = startOfMonday(startDate);
-  // Ensure end boundary covers entire last week
-  const endMonday = startOfMonday(endDate);
+  const startMonday = startOfMondayUTC(startDate);
+  // Ensure end boundary covers entire last week (UTC-based)
+  const endMonday = startOfMondayUTC(endDate);
   const ONE_WEEK = 7 * ONE_DAY;
   // Completeness should be evaluated relative to the selected range end, not the current time
   const completeBoundaryMs = new Date(endDate).setHours(23, 59, 59, 999);
@@ -120,7 +130,7 @@ export function buildWeeklyAggregatesInRange(
   const map: Record<string, Bucket> = {};
   const add = (dt: Date, revenue: number | undefined, type: 'campaign' | 'flow') => {
     if (dt < startMonday || dt > endDate) return; // outside
-    const ws = startOfMonday(dt);
+    const ws = startOfMondayUTC(dt);
     if (ws < startMonday || ws > endMonday) return;
     const key = ws.toISOString();
     if (!map[key]) map[key] = { totalRevenue: 0, campaignRevenue: 0, flowRevenue: 0, daySet: new Set(), weekStart: ws, campaignCount: 0 };
@@ -146,7 +156,7 @@ export function buildWeeklyAggregatesInRange(
         flowRevenue: b.flowRevenue,
         campaignsSent: b.campaignCount,
         daySet: b.daySet,
-    isCompleteWeek: (b.weekStart.getTime() + 7*ONE_DAY - 1) <= completeBoundaryMs
+  isCompleteWeek: (b.weekStart.getTime() + 7*ONE_DAY - 1) <= completeBoundaryMs
       });
     } else {
       // Only include a zero week if it lies wholly within range; genuine zero (no sends of either type)
@@ -158,7 +168,7 @@ export function buildWeeklyAggregatesInRange(
         flowRevenue: 0,
         campaignsSent: 0,
         daySet: new Set(),
-    isCompleteWeek: (ws.getTime() + 7*ONE_DAY - 1) <= completeBoundaryMs
+  isCompleteWeek: (ws.getTime() + 7*ONE_DAY - 1) <= completeBoundaryMs
       });
     }
   }
