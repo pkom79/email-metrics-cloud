@@ -4,6 +4,7 @@ import SelectBase from "../ui/SelectBase";
 import { Activity, Info } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
+import { thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
 
 interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; compareMode?: 'prev-period' | 'prev-year'; }
 
@@ -121,16 +122,8 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
         return res;
     }, [points, xScale]);
     // Y ticks for metric (3)
-    const yTicks = useMemo(() => {
-        const ticks: { y: number; value: number }[] = [];
-        for (let i = 0; i < 3; i++) {
-            const v = (metricMax / 2) * i; // 0, mid, max approx replaced below
-            ticks.push({ y: yMetric(v), value: v });
-        }
-        ticks.push({ y: yMetric(metricMax), value: metricMax });
-        // ensure unique ordering
-        return Array.from(new Map(ticks.map(t => [t.value, t])).values());
-    }, [metricMax, yMetric]);
+    const metricTickValues = useMemo(() => thirdTicks(metricMax, (metric === 'totalRevenue' || metric === 'revenuePerEmail') ? 'currency' : 'number'), [metricMax, metric]);
+    const metricTickLabels = useMemo(() => formatTickLabels(metricTickValues, (metric === 'totalRevenue' || metric === 'revenuePerEmail') ? 'currency' : 'number', metricMax), [metricTickValues, metric, metricMax]);
 
     const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
     const active = hover ? points[hover.idx] : null;
@@ -149,16 +142,14 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
                     </linearGradient>
                 </defs>
                 {/* Grid + Y ticks */}
-                {yTicks.map((t, i) => (
-                    <g key={i}>
-                        <line x1={PADDING_LEFT} y1={t.y} x2={VIEW_W - PADDING_RIGHT} y2={t.y} className="stroke-gray-200 dark:stroke-gray-700" strokeDasharray="2 2" />
-                        <text x={PADDING_LEFT - 6} y={t.y + 4} textAnchor="end" fontSize={11} className="tabular-nums fill-gray-600 dark:fill-gray-400">
-                            {metric === 'totalRevenue' || metric === 'revenuePerEmail'
-                                ? (t.value >= 1000 ? '$' + (t.value / 1000).toFixed(1) + 'k' : '$' + t.value.toFixed(0))
-                                : (t.value >= 1 ? t.value.toFixed(1) : t.value.toFixed(2))}
-                        </text>
-                    </g>
-                ))}
+                {metricTickValues.map((v, i) => {
+                    const y = yMetric(v); return (
+                        <g key={i}>
+                            <line x1={PADDING_LEFT} y1={y} x2={VIEW_W - PADDING_RIGHT} y2={y} className="stroke-gray-200 dark:stroke-gray-700" strokeDasharray="2 2" />
+                            <text x={PADDING_LEFT - 6} y={y + 4} textAnchor="end" fontSize={11} className="tabular-nums fill-gray-600 dark:fill-gray-400">{metricTickLabels[i]}</text>
+                        </g>
+                    );
+                })}
                 {/* X axis ticks */}
                 {xTicks.map((t, i) => (
                     <g key={i}>

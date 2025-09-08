@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import SelectBase from "../ui/SelectBase";
 import TooltipPortal from "../TooltipPortal";
 import { ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
+import { computeAxisMax, thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
 
 type Granularity = 'daily' | 'weekly' | 'monthly';
 type CompareMode = 'prev-period' | 'prev-year';
@@ -49,18 +50,7 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
     const width = 850; const height = 200; const innerH = 140; const padLeft = 72; const padRight = 20; const innerW = width - padLeft - padRight;
 
-    const maxVal = useMemo(() => {
-        // Highest value across primary and compare
-        const pMax = primary.length ? Math.max(...primary.map(p => Math.max(0, p.value))) : 0;
-        const cMax = (compare && compare.length) ? Math.max(...compare.map(p => Math.max(0, p.value))) : 0;
-        let raw = Math.max(pMax, cMax);
-        if (!isFinite(raw) || raw <= 0) raw = 1; // fallback when all zeros
-        // Round up to a nice number (1/2/5 * 10^n)
-        const pow10 = Math.pow(10, Math.floor(Math.log10(raw)));
-        const n = raw / pow10;
-        const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
-        return nice * pow10; // top tick value
-    }, [primary, compare]);
+    const maxVal = useMemo(() => computeAxisMax(primary.map(p => Math.max(0, p.value)), (compare || undefined) ? (compare || []).map(p => Math.max(0, p.value)) : null, valueType === 'percentage' ? 'percentage' : (valueType as any)), [primary, compare, valueType]);
     const xScale = (i: number) => primary.length <= 1 ? padLeft + innerW / 2 : padLeft + (i / (primary.length - 1)) * innerW;
     const yScale = (v: number) => {
         const y = innerH - (Math.max(0, v) / maxVal) * (innerH - 10);
@@ -94,8 +84,9 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
 
     const desiredXTicks = 6; const tickIdx: number[] = [];
     if (primary.length <= desiredXTicks) { for (let i = 0; i < primary.length; i++) tickIdx.push(i); } else { for (let i = 0; i < desiredXTicks; i++) { const idx = Math.round((i / (desiredXTicks - 1)) * (primary.length - 1)); if (!tickIdx.includes(idx)) tickIdx.push(idx); } }
-    // Y ticks: bottom 0, two proportional ticks, and top = maxVal
-    const yTickValues = useMemo(() => [0, maxVal / 3, (2 * maxVal) / 3, maxVal], [maxVal]);
+    // Y ticks: thirds using raw max or percentage domain
+    const yTickValues = useMemo(() => thirdTicks(maxVal, valueType as any), [maxVal, valueType]);
+    const yTickLabels = useMemo(() => formatTickLabels(yTickValues, valueType as any, maxVal), [yTickValues, valueType, maxVal]);
 
     const active = hoverIdx != null ? primary[hoverIdx] : null;
     const cmpActive = hoverIdx != null && (compare || undefined) ? (compare || [])[hoverIdx] : undefined;
@@ -193,7 +184,7 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                     {/* Primary line only (no fill) so compare area remains visible */}
                     {pathD && <path d={pathD} fill="none" stroke={`url(#${gradLineId})`} strokeWidth={2} />}
                     {/* Y tick labels */}
-                    {yTickValues.map((v, i) => { const y = yScale(v); const label = (valueType === 'percentage' && v === 0) ? '0%' : formatVal(v); return <text key={i} x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{label}</text>; })}
+                    {yTickValues.map((v, i) => { const y = yScale(v); const label = yTickLabels[i] ?? ''; return <text key={i} x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{label}</text>; })}
                     {/* X axis baseline */}
                     <line x1={padLeft} x2={width - padRight} y1={innerH} y2={innerH} className="stroke-gray-200 dark:stroke-gray-700" />
                     {/* X ticks */}

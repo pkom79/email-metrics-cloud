@@ -3,6 +3,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { Users, Info } from 'lucide-react';
 import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
+import { thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
 
 interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; compareMode?: 'prev-period' | 'prev-year'; }
 
@@ -139,8 +140,9 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
     }
 
     // Y axis ticks (4 divisions)
-    const yTicks = 4;
-    const yTickValues = Array.from({ length: yTicks + 1 }, (_, i) => Math.round((maxVal / yTicks) * i));
+    // Thirds-based ticks and labels (numbers)
+    const yTickValues = useMemo(() => thirdTicks(maxVal, 'number'), [maxVal]);
+    const yTickLabels = useMemo(() => formatTickLabels(yTickValues, 'number', maxVal), [yTickValues, maxVal]);
 
     const active = hoverIdx != null ? buckets[hoverIdx] : null;
 
@@ -189,10 +191,10 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                     {pathD && <path d={pathD} fill="none" stroke="url(#ag-line)" strokeWidth={2} />}
                     {/* Y axis */}
                     {/* Y axis ticks (labels only, no horizontal grid lines) */}
-                    {yTickValues.map(v => {
+                    {yTickValues.map((v, i) => {
                         const y = yScale(v); return (
                             <g key={v}>
-                                <text x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{v.toLocaleString()}</text>
+                                <text x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{yTickLabels[i]}</text>
                             </g>
                         );
                     })}

@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Workflow, GitBranch, AlertTriangle, ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
 import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
+import { thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
 
 interface FlowStepAnalysisProps {
     dateRange: string;
@@ -311,17 +312,17 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         }
         let min = 0;
         let max = maxValue;
-        if (maxValue - minValue < 0.01 || maxValue === 0) max = maxValue > 0 ? maxValue * 1.5 : 10; else max = maxValue * 1.2;
+        // For percentage metrics, fix domain to [0,100]
         const metricConfig = metricOptions.find(m => m.value === selectedMetric);
+        if (metricConfig && metricConfig.format === 'percentage') {
+            return { min: 0, max: 100 };
+        }
+        if (maxValue - minValue < 0.01 || maxValue === 0) max = maxValue > 0 ? maxValue * 1.5 : 10; else max = maxValue * 1.2;
         if (metricConfig?.format === 'currency') {
             if (max > 10000) max = Math.ceil(max / 1000) * 1000;
             else if (max > 1000) max = Math.ceil(max / 100) * 100;
             else if (max > 100) max = Math.ceil(max / 10) * 10;
             else max = Math.ceil(max);
-        } else if (metricConfig?.format === 'percentage') {
-            if (max < 1) max = Math.ceil(max * 100) / 100;
-            else if (max < 10) max = Math.ceil(max);
-            else max = Math.ceil(max / 5) * 5;
         } else {
             if (max > 1000) max = Math.ceil(max / 100) * 100;
             else if (max > 100) max = Math.ceil(max / 10) * 10;
@@ -471,8 +472,11 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         }
         let yTicks: { y: number; label: string }[] = [];
         if (yAxisRange.max > yAxisRange.min) {
-            const tickCount = 3;
-            for (let i = 0; i < tickCount; i++) { const value = yAxisRange.min + ((yAxisRange.max - yAxisRange.min) * (i / (tickCount - 1))); const y = 120 - ((value - yAxisRange.min) / (yAxisRange.max - yAxisRange.min)) * 100; yTicks.push({ y, label: formatMetricValue(value, selectedMetric) }); }
+            const axisMax = yAxisRange.max; // already computed per metric
+            const type = ['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(selectedMetric) ? 'currency' : (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'bounceRate', 'spamRate'].includes(selectedMetric) ? 'percentage' : 'number') as any;
+            const vals = thirdTicks(type === 'percentage' ? 100 : axisMax, type as any);
+            const labels = formatTickLabels(vals, type as any, type === 'percentage' ? 100 : axisMax);
+            yTicks = vals.map((v, i) => ({ y: 120 - ((v - yAxisRange.min) / (axisMax - yAxisRange.min)) * 100, label: labels[i] }));
         }
         return (
             <div key={step.sequencePosition} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
