@@ -8,6 +8,7 @@ import RevenueSplitBar from './RevenueSplitBar';
 // Revenue Reliability module removed: placeholder used to preserve layout
 import SendVolumeImpact from './SendVolumeImpact';
 import AudienceCharts from './AudienceCharts';
+import TimeSeriesChart from './TimeSeriesChart';
 import FlowStepAnalysis from './FlowStepAnalysis';
 import CustomSegmentBlock from './CustomSegmentBlock';
 import DataAgeNotice from './DataAgeNotice';
@@ -99,6 +100,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [compareMode, setCompareMode] = useState<'prev-period' | 'prev-year'>('prev-period');
     const [selectedFlow, setSelectedFlow] = useState('all');
     const [selectedCampaignMetric, setSelectedCampaignMetric] = useState('revenue');
+    // Chart metric selections (defaults: Total Revenue)
+    const [overviewChartMetric, setOverviewChartMetric] = useState<'revenue' | 'avgOrderValue' | 'revenuePerEmail' | 'openRate' | 'clickRate' | 'clickToOpenRate' | 'emailsSent' | 'totalOrders' | 'conversionRate' | 'unsubscribeRate' | 'spamRate' | 'bounceRate'>('revenue');
+    const [campaignChartMetric, setCampaignChartMetric] = useState<typeof overviewChartMetric>('revenue');
+    const [flowChartMetric, setFlowChartMetric] = useState<typeof overviewChartMetric>('revenue');
     const [displayedCampaigns, setDisplayedCampaigns] = useState(5);
     const [stickyBar, setStickyBar] = useState(false);
     const [showCustomDateModal, setShowCustomDateModal] = useState(false);
@@ -622,6 +627,74 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         { value: 'spamRate', label: 'Spam Rate' },
         { value: 'bounceRate', label: 'Bounce Rate' },
     ];
+    const metricValueType = (metric: string): 'currency' | 'number' | 'percentage' => {
+        if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric)) return 'currency';
+        if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric)) return 'percentage';
+        return 'number';
+    };
+    const bigValueForOverview = (metric: string) => {
+        if (!overviewMetrics) return '';
+        const map: Record<string, number> = {
+            revenue: overviewMetrics.totalRevenue.value,
+            avgOrderValue: overviewMetrics.averageOrderValue.value,
+            revenuePerEmail: overviewMetrics.revenuePerEmail.value,
+            openRate: overviewMetrics.openRate.value,
+            clickRate: overviewMetrics.clickRate.value,
+            clickToOpenRate: overviewMetrics.clickToOpenRate.value,
+            emailsSent: overviewMetrics.emailsSent.value,
+            totalOrders: overviewMetrics.totalOrders.value,
+            conversionRate: overviewMetrics.conversionRate.value,
+            unsubscribeRate: overviewMetrics.unsubscribeRate.value,
+            spamRate: overviewMetrics.spamRate.value,
+            bounceRate: overviewMetrics.bounceRate.value,
+        };
+        const v = map[metric];
+        return ['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric) ? formatCurrency(v) : ['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric) ? formatPercent(v) : formatNumber(v);
+    };
+    const bigValueForCampaigns = (metric: string) => {
+        if (!campaignMetrics) return '';
+        const map: Record<string, number> = {
+            revenue: campaignMetrics.totalRevenue.value,
+            avgOrderValue: campaignMetrics.averageOrderValue.value,
+            revenuePerEmail: campaignMetrics.revenuePerEmail.value,
+            openRate: campaignMetrics.openRate.value,
+            clickRate: campaignMetrics.clickRate.value,
+            clickToOpenRate: campaignMetrics.clickToOpenRate.value,
+            emailsSent: campaignMetrics.emailsSent.value,
+            totalOrders: campaignMetrics.totalOrders.value,
+            conversionRate: campaignMetrics.conversionRate.value,
+            unsubscribeRate: campaignMetrics.unsubscribeRate.value,
+            spamRate: campaignMetrics.spamRate.value,
+            bounceRate: campaignMetrics.bounceRate.value,
+        };
+        const v = map[metric];
+        return ['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric) ? formatCurrency(v) : ['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric) ? formatPercent(v) : formatNumber(v);
+    };
+    const bigValueForFlows = (metric: string) => {
+        if (!flowMetrics) return '';
+        const map: Record<string, number> = {
+            revenue: flowMetrics.totalRevenue.value,
+            avgOrderValue: flowMetrics.averageOrderValue.value,
+            revenuePerEmail: flowMetrics.revenuePerEmail.value,
+            openRate: flowMetrics.openRate.value,
+            clickRate: flowMetrics.clickRate.value,
+            clickToOpenRate: flowMetrics.clickToOpenRate.value,
+            emailsSent: flowMetrics.emailsSent.value,
+            totalOrders: flowMetrics.totalOrders.value,
+            conversionRate: flowMetrics.conversionRate.value,
+            unsubscribeRate: flowMetrics.unsubscribeRate.value,
+            spamRate: flowMetrics.spamRate.value,
+            bounceRate: flowMetrics.bounceRate.value,
+        };
+        const v = map[metric];
+        return ['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric) ? formatCurrency(v) : ['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric) ? formatPercent(v) : formatNumber(v);
+    };
+
+    // Build chart series (primary + compare) per segment
+    const overviewChartSeries = useMemo(() => dm.getMetricTimeSeriesWithCompare(defCampaigns as any, defFlows as any, overviewChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo), [dm, defCampaigns, defFlows, overviewChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo]);
+    const campaignChartSeries = useMemo(() => dm.getMetricTimeSeriesWithCompare(defCampaigns as any, [], campaignChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo), [dm, defCampaigns, campaignChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo]);
+    const flowsForChart = useMemo(() => (selectedFlow === 'all' ? defFlows : defFlows.filter(f => f.flowName === selectedFlow)), [defFlows, selectedFlow]);
+    const flowChartSeries = useMemo(() => dm.getMetricTimeSeriesWithCompare([], flowsForChart as any, flowChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo), [dm, flowsForChart, flowChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo]);
     const formatMetricValue = (v: number, metric: string) => {
         if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric)) {
             // Requirement: always show full US currency with 2 decimals
@@ -803,6 +876,19 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 {overviewMetrics && (
                     <section>
                         <div className="flex items-center gap-2 mb-3"><Mail className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Email Performance Overview</h2></div>
+                        {/* Overview Timeseries Chart */}
+                        <TimeSeriesChart
+                            title="Email Performance Overview"
+                            metricKey={overviewChartMetric}
+                            metricOptions={campaignMetricOptions as any}
+                            onMetricChange={m => setOverviewChartMetric(m)}
+                            bigValue={bigValueForOverview(overviewChartMetric)}
+                            primary={overviewChartSeries.primary}
+                            compare={overviewChartSeries.compare}
+                            valueType={metricValueType(overviewChartMetric)}
+                            granularity={granularity}
+                            idSuffix="overview"
+                        />
                         {/* Revenue Split Bar (Campaign vs Flow) */}
                         <RevenueSplitBar campaigns={filteredCampaigns} flows={filteredFlowEmails} />
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -829,6 +915,19 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 {campaignMetrics && (
                     <section>
                         <div className="flex items-center gap-2 mb-3"><Send className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Campaign Performance</h2></div>
+                        {/* Campaign Timeseries Chart */}
+                        <TimeSeriesChart
+                            title="Campaign Performance"
+                            metricKey={campaignChartMetric}
+                            metricOptions={campaignMetricOptions as any}
+                            onMetricChange={m => setCampaignChartMetric(m)}
+                            bigValue={bigValueForCampaigns(campaignChartMetric)}
+                            primary={campaignChartSeries.primary}
+                            compare={campaignChartSeries.compare}
+                            valueType={metricValueType(campaignChartMetric)}
+                            granularity={granularity}
+                            idSuffix="campaigns"
+                        />
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                             {/* Row 1 */}
                             <MetricCard title="Total Revenue" value={formatCurrency(campaignMetrics.totalRevenue.value)} change={campaignMetrics.totalRevenue.change} isPositive={campaignMetrics.totalRevenue.isPositive} previousValue={campaignMetrics.totalRevenue.previousValue} previousPeriod={campaignMetrics.totalRevenue.previousPeriod} dateRange={dateRange} metricKey="revenue" sparklineData={campaignSeries.totalRevenue} compareMode={compareMode} category="campaign" />
@@ -917,6 +1016,19 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 </SelectBase>
                             </div>
                         </div>
+                        {/* Flow Timeseries Chart */}
+                        <TimeSeriesChart
+                            title="Flow Performance"
+                            metricKey={flowChartMetric}
+                            metricOptions={campaignMetricOptions as any}
+                            onMetricChange={m => setFlowChartMetric(m)}
+                            bigValue={bigValueForFlows(flowChartMetric)}
+                            primary={flowChartSeries.primary}
+                            compare={flowChartSeries.compare}
+                            valueType={metricValueType(flowChartMetric)}
+                            granularity={granularity}
+                            idSuffix="flows"
+                        />
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                             {/* Row 1 */}
                             <MetricCard title="Total Revenue" value={formatCurrency(flowMetrics.totalRevenue.value)} change={flowMetrics.totalRevenue.change} isPositive={flowMetrics.totalRevenue.isPositive} previousValue={flowMetrics.totalRevenue.previousValue} previousPeriod={flowMetrics.totalRevenue.previousPeriod} dateRange={dateRange} metricKey="revenue" sparklineData={flowSeries.totalRevenue} compareMode={compareMode} category="flow" />

@@ -625,6 +625,62 @@ export class DataManager {
         }
     }
 
+    /**
+     * Returns both primary and compare time series for the given inputs.
+     * - Compare is hidden (null) when dateRange is 'all' or when the computed previous window has zero data.
+     * - Buckets use the same granularity; alignment is by index for tooltip purposes.
+     */
+    getMetricTimeSeriesWithCompare(
+        campaigns: ProcessedCampaign[],
+        flows: ProcessedFlowEmail[],
+        metricKey: string,
+        dateRange: string,
+        granularity: 'daily' | 'weekly' | 'monthly',
+        compareMode: 'prev-period' | 'prev-year' = 'prev-period',
+        customFrom?: string,
+        customTo?: string
+    ): { primary: { value: number; date: string }[]; compare: { value: number; date: string }[] | null } {
+        try {
+            const primary = this.getMetricTimeSeries(campaigns, flows, metricKey, dateRange, granularity, customFrom, customTo);
+            // Do not compute compare for 'all'
+            if (dateRange === 'all') return { primary, compare: null };
+
+            // Resolve current window to derive previous window
+            const range = this._computeDateRangeForTimeSeries(dateRange, customFrom, customTo);
+            if (!range) return { primary, compare: null };
+            const { startDate, endDate } = range;
+
+            // Compute previous window
+            let prevStart = new Date(startDate);
+            let prevEnd = new Date(endDate);
+            if (compareMode === 'prev-year') {
+                prevStart.setFullYear(prevStart.getFullYear() - 1);
+                prevEnd.setFullYear(prevEnd.getFullYear() - 1);
+                // Handle leap day alignment
+                if (startDate.getMonth() === 1 && startDate.getDate() === 29 && prevStart.getMonth() === 2) prevStart.setDate(0);
+                if (endDate.getMonth() === 1 && endDate.getDate() === 29 && prevEnd.getMonth() === 2) prevEnd.setDate(0);
+            } else {
+                prevEnd = new Date(startDate.getTime() - 1);
+                prevEnd.setHours(23, 59, 59, 999);
+                prevStart = new Date(prevEnd);
+                const days = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
+                prevStart.setDate(prevStart.getDate() - days + 1);
+                prevStart.setHours(0, 0, 0, 0);
+            }
+
+            const prevFromISO = `${prevStart.getFullYear()}-${String(prevStart.getMonth() + 1).padStart(2, '0')}-${String(prevStart.getDate()).padStart(2, '0')}`;
+            const prevToISO = `${prevEnd.getFullYear()}-${String(prevEnd.getMonth() + 1).padStart(2, '0')}-${String(prevEnd.getDate()).padStart(2, '0')}`;
+
+            const compare = this.getMetricTimeSeries(campaigns, flows, metricKey, 'custom', granularity, prevFromISO, prevToISO);
+            // Hide compare if absolutely no data in previous window
+            if (!compare || compare.length === 0) return { primary, compare: null };
+            return { primary, compare };
+        } catch (e) {
+            console.warn('getMetricTimeSeriesWithCompare failed', e);
+            return { primary: [], compare: null };
+        }
+    }
+
     // (Removed duplicate _rebuildDailyAggregates and _computeDateRangeForTimeSeries definitions; consolidated earlier in file.)
 
     getFlowStepTimeSeries(
