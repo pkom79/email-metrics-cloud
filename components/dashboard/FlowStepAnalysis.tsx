@@ -646,13 +646,13 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
     }, [selectedFlow, flowSummaries]);
 
     return (
-        <section>
-            <div className="flex items-center justify-between mb-2">
+        <section className="section-card">
+            <div className="section-header mb-2">
                 <div className="flex items-center gap-2">
                     <Workflow className="w-6 h-6 text-emerald-600" />
                     <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Flow Step Analysis</h3>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="section-controls">
                     <div className="relative">
                         <SelectBase value={selectedFlow} onChange={(e) => setSelectedFlow((e.target as HTMLSelectElement).value)} className="px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
                             {uniqueFlowNames.map((flow: string) => (<option key={flow} value={flow}>{flow}</option>))}

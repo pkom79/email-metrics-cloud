@@ -416,8 +416,8 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         return v >= 1 ? v.toFixed(2) : v.toFixed(3);
     };
     return (
-        <div className="mt-10">
-            <div className="flex items-center justify-between mb-4">
+        <div className="mt-10 section-card">
+            <div className="section-header">
                 <div className="flex items-center gap-2">
                     <Activity className="w-5 h-5 text-purple-600" />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight flex items-center gap-2">Send Volume Impact
@@ -430,7 +430,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                         </span>
                     </h3>
                 </div>
-                <div className="flex gap-4 text-sm">
+                <div className="section-controls">
                     <div className="flex gap-1 rounded-lg bg-gray-100 dark:bg-gray-800 p-1 h-9 items-center">
                         {(['time', 'volume'] as const).map(m => (
                             <button key={m} onClick={() => setSortMode(m)} className={`px-3 h-7 rounded-md text-xs font-medium transition ${sortMode === m ? 'bg-white dark:bg-gray-900 shadow border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'}`}>{m === 'time' ? 'Time' : 'Volume'}</button>
@@ -450,93 +450,91 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     </div>
                 </div>
             </div>
-            <div className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-6">
-                <div className="flex items-start justify-between mb-4">
-                    <div />
-                    <div className="text-right">
-                        <div className="flex items-center justify-end gap-2 mb-0.5">
-                            <div className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 font-medium">Avg {METRIC_OPTIONS.find(m => m.value === metric)?.label}</div>
-                            {(() => { if (!avgValue || !compareSeries.length || compareSeries.length !== points.length) return null; const compVals = compareSeries.filter(v => v != null) as number[]; if (compVals.length < 2) return null; const compAvg = compVals.reduce((s, v) => s + v, 0) / compVals.length; if (!compAvg) return null; const pct = ((avgValue - compAvg) / compAvg) * 100; const improved = negativeMetric ? pct < 0 : pct > 0; const arrowUp = pct > 0; const cls = improved ? 'text-emerald-600' : 'text-rose-600'; return <span className={`flex items-center gap-1 text-[11px] font-medium ${cls}`}>{arrowUp ? '↑' : '↓'} {Math.abs(pct).toFixed(1)}%</span>; })()}
-                            <div className="relative group">
-                                <span className="cursor-help text-gray-400 dark:text-gray-500 text-xs">ⓘ</span>
-                                <div className="absolute right-0 top-full z-30 mt-1 w-60 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 text-[11px] leading-snug opacity-0 shadow-lg transition-opacity group-hover:opacity-100">Change vs compare period average. Green = improvement.</div>
-                            </div>
+            <div className="flex items-start justify-between mb-4">
+                <div />
+                <div className="text-right">
+                    <div className="flex items-center justify-end gap-2 mb-0.5">
+                        <div className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 font-medium">Avg {METRIC_OPTIONS.find(m => m.value === metric)?.label}</div>
+                        {(() => { if (!avgValue || !compareSeries.length || compareSeries.length !== points.length) return null; const compVals = compareSeries.filter(v => v != null) as number[]; if (compVals.length < 2) return null; const compAvg = compVals.reduce((s, v) => s + v, 0) / compVals.length; if (!compAvg) return null; const pct = ((avgValue - compAvg) / compAvg) * 100; const improved = negativeMetric ? pct < 0 : pct > 0; const arrowUp = pct > 0; const cls = improved ? 'text-emerald-600' : 'text-rose-600'; return <span className={`flex items-center gap-1 text-[11px] font-medium ${cls}`}>{arrowUp ? '↑' : '↓'} {Math.abs(pct).toFixed(1)}%</span>; })()}
+                        <div className="relative group">
+                            <span className="cursor-help text-gray-400 dark:text-gray-500 text-xs">ⓘ</span>
+                            <div className="absolute right-0 top-full z-30 mt-1 w-60 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 text-[11px] leading-snug opacity-0 shadow-lg transition-opacity group-hover:opacity-100">Change vs compare period average. Green = improvement.</div>
                         </div>
-                        <div className="text-3xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{formatValue(avgValue)}</div>
                     </div>
+                    <div className="text-3xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{formatValue(avgValue)}</div>
                 </div>
-                <ChartContainer points={points} metric={metric} emailsMax={emailsMax} metricMax={metricMax} formatValue={formatValue} compareSeries={sortMode === 'time' ? compareSeries : undefined} axisMode={sortMode} scope={scope} />
-                {!baseSeries.length && (<div className="mt-4 text-xs text-gray-500 dark:text-gray-400">No sends in selected range.</div>)}
-                <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 text-[11px]">
-                    <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
-                        <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Avg Sends
-                            <span className="group relative cursor-help text-gray-400 dark:text-gray-500">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-52 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Mean emails per bucket after trimming partial periods.</span></span>
-                        </div>
-                        <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro?.avgEmails?.toLocaleString() || '—'}</div>
+            </div>
+            <ChartContainer points={points} metric={metric} emailsMax={emailsMax} metricMax={metricMax} formatValue={formatValue} compareSeries={sortMode === 'time' ? compareSeries : undefined} axisMode={sortMode} scope={scope} />
+            {!baseSeries.length && (<div className="mt-4 text-xs text-gray-500 dark:text-gray-400">No sends in selected range.</div>)}
+            <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 text-[11px]">
+                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
+                    <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Avg Sends
+                        <span className="group relative cursor-help text-gray-400 dark:text-gray-500">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-52 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Mean emails per bucket after trimming partial periods.</span></span>
                     </div>
-                    <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
-                        <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Revenue / 1k
-                            <span className="group relative cursor-help text-gray-400 dark:text-gray-500">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-56 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Total revenue divided by total emails, scaled per 1,000 sends.</span></span>
-                        </div>
-                        <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro ? fmtCurrency(micro.rpmE) : '—'}</div>
+                    <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro?.avgEmails?.toLocaleString() || '—'}</div>
+                </div>
+                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
+                    <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Revenue / 1k
+                        <span className="group relative cursor-help text-gray-400 dark:text-gray-500">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-56 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Total revenue divided by total emails, scaled per 1,000 sends.</span></span>
                     </div>
-                    <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
-                        <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Median Unsub/1k
-                            <span className="group relative cursor-help text-gray-400 dark:text-gray-500">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-56 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Median bucket unsubscribe count normalized per 1,000 emails.</span></span>
-                        </div>
-                        <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro ? (micro.medianUnsub >= 1 ? micro.medianUnsub.toFixed(2) : micro.medianUnsub.toFixed(3)) : '—'}</div>
+                    <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro ? fmtCurrency(micro.rpmE) : '—'}</div>
+                </div>
+                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
+                    <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Median Unsub/1k
+                        <span className="group relative cursor-help text-gray-400 dark:text-gray-500">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-56 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Median bucket unsubscribe count normalized per 1,000 emails.</span></span>
                     </div>
-                    <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
-                        <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Correlation
-                            <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-64 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px] leading-snug">
-                                Pearson correlation (r) between send volume and this metric over time (n ≥ 3).
-                                <br /><br />
-                                Positive means the metric tends to be higher in higher-volume periods.
-                                Negative means it tends to be lower when volume is higher.
-                                <br /><br />
-                                Strength: Neg &lt;0.1, Weak &lt;0.3, Moderate &lt;0.5, Strong &lt;0.7.
-                            </span></span>
-                        </div>
-                        {(() => {
-                            if (!correlationInfo) return <div className="text-lg font-semibold text-gray-500">—</div>;
-                            const r = correlationInfo.r;
-                            const metricLabel = METRIC_OPTIONS.find(m => m.value === metric)?.label || 'Metric';
-                            let narrative = '';
-                            if (r == null) narrative = correlationInfo.label || 'Insufficient data';
-                            else {
-                                const pos = r > 0.05; const neg = r < -0.05; const isNegativeMetric = NEGATIVE_METRICS.includes(metric);
-                                if (!pos && !neg) narrative = `Little relationship between volume and ${metricLabel}.`;
-                                else if (pos) {
-                                    if (metric === 'totalRevenue') narrative = 'Higher send volume often coincides with higher total revenue.';
-                                    else if (metric === 'revenuePerEmail') narrative = 'Scaling volume hasn’t hurt efficiency (revenue/email rises with volume).';
-                                    else if (isNegativeMetric) narrative = `Higher volume periods tend to have higher ${metricLabel.toLowerCase()} (monitor).`;
-                                } else if (neg) {
-                                    if (metric === 'totalRevenue') narrative = 'Higher volume is not translating into more total revenue.';
-                                    else if (metric === 'revenuePerEmail') narrative = 'Efficiency drops at higher volume (revenue/email falls).';
-                                    else if (isNegativeMetric) narrative = `Higher volume does not increase ${metricLabel.toLowerCase()} (good).`;
-                                }
+                    <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro ? (micro.medianUnsub >= 1 ? micro.medianUnsub.toFixed(2) : micro.medianUnsub.toFixed(3)) : '—'}</div>
+                </div>
+                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
+                    <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Correlation
+                        <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-64 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px] leading-snug">
+                            Pearson correlation (r) between send volume and this metric over time (n ≥ 3).
+                            <br /><br />
+                            Positive means the metric tends to be higher in higher-volume periods.
+                            Negative means it tends to be lower when volume is higher.
+                            <br /><br />
+                            Strength: Neg &lt;0.1, Weak &lt;0.3, Moderate &lt;0.5, Strong &lt;0.7.
+                        </span></span>
+                    </div>
+                    {(() => {
+                        if (!correlationInfo) return <div className="text-lg font-semibold text-gray-500">—</div>;
+                        const r = correlationInfo.r;
+                        const metricLabel = METRIC_OPTIONS.find(m => m.value === metric)?.label || 'Metric';
+                        let narrative = '';
+                        if (r == null) narrative = correlationInfo.label || 'Insufficient data';
+                        else {
+                            const pos = r > 0.05; const neg = r < -0.05; const isNegativeMetric = NEGATIVE_METRICS.includes(metric);
+                            if (!pos && !neg) narrative = `Little relationship between volume and ${metricLabel}.`;
+                            else if (pos) {
+                                if (metric === 'totalRevenue') narrative = 'Higher send volume often coincides with higher total revenue.';
+                                else if (metric === 'revenuePerEmail') narrative = 'Scaling volume hasn’t hurt efficiency (revenue/email rises with volume).';
+                                else if (isNegativeMetric) narrative = `Higher volume periods tend to have higher ${metricLabel.toLowerCase()} (monitor).`;
+                            } else if (neg) {
+                                if (metric === 'totalRevenue') narrative = 'Higher volume is not translating into more total revenue.';
+                                else if (metric === 'revenuePerEmail') narrative = 'Efficiency drops at higher volume (revenue/email falls).';
+                                else if (isNegativeMetric) narrative = `Higher volume does not increase ${metricLabel.toLowerCase()} (good).`;
                             }
-                            return r != null ? (
-                                <div>
-                                    {(() => {
-                                        // Adjust coloring logic: positive correlation for negative metrics is unfavorable (red), negative correlation favorable (green)
-                                        const isNegMetric = NEGATIVE_METRICS.includes(metric);
-                                        const favorable = !isNegMetric ? (r > 0.05) : (r < -0.05);
-                                        const unfavorable = !isNegMetric ? (r < -0.05) : (r > 0.05);
-                                        const colorClass = favorable ? 'text-emerald-600' : unfavorable ? 'text-rose-600' : 'text-gray-600 dark:text-gray-300';
-                                        return (
-                                            <div className={`text-lg font-semibold tabular-nums ${colorClass}`}>{r.toFixed(2)}
-                                                <span className="ml-2 text-[10px] font-medium text-gray-500 dark:text-gray-400">{correlationInfo.label}{correlationInfo.n ? ` · n=${correlationInfo.n}` : ''}</span>
-                                            </div>
-                                        );
-                                    })()}
-                                    <div className="mt-1 text-[10px] leading-snug text-gray-500 dark:text-gray-400 max-w-[200px] pr-1">{narrative}</div>
-                                </div>
-                            ) : (
-                                <div className="text-lg font-semibold text-gray-500 dark:text-gray-400">—<span className="ml-2 text-[11px] font-medium">{correlationInfo?.label || '—'}</span></div>
-                            );
-                        })()}
-                    </div>
+                        }
+                        return r != null ? (
+                            <div>
+                                {(() => {
+                                    // Adjust coloring logic: positive correlation for negative metrics is unfavorable (red), negative correlation favorable (green)
+                                    const isNegMetric = NEGATIVE_METRICS.includes(metric);
+                                    const favorable = !isNegMetric ? (r > 0.05) : (r < -0.05);
+                                    const unfavorable = !isNegMetric ? (r < -0.05) : (r > 0.05);
+                                    const colorClass = favorable ? 'text-emerald-600' : unfavorable ? 'text-rose-600' : 'text-gray-600 dark:text-gray-300';
+                                    return (
+                                        <div className={`text-lg font-semibold tabular-nums ${colorClass}`}>{r.toFixed(2)}
+                                            <span className="ml-2 text-[10px] font-medium text-gray-500 dark:text-gray-400">{correlationInfo.label}{correlationInfo.n ? ` · n=${correlationInfo.n}` : ''}</span>
+                                        </div>
+                                    );
+                                })()}
+                                <div className="mt-1 text-[10px] leading-snug text-gray-500 dark:text-gray-400 max-w-[200px] pr-1">{narrative}</div>
+                            </div>
+                        ) : (
+                            <div className="text-lg font-semibold text-gray-500 dark:text-gray-400">—<span className="ml-2 text-[11px] font-medium">{correlationInfo?.label || '—'}</span></div>
+                        );
+                    })()}
                 </div>
             </div>
         </div>
