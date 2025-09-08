@@ -154,7 +154,7 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                         {cmpActive && (
                             <>
                                 {/* Previous date (bold) with compare label */}
-                                <div className="font-semibold text-gray-900 dark:text-gray-100">{formatFullDate((compare || [])[hoverIdx]?.iso, (compare || [])[hoverIdx]?.date)}{` — ${compareMode === 'prev-year' ? 'previous year' : 'previous period'}`}</div>
+                                <div className="font-semibold text-gray-900 dark:text-gray-100">{formatFullDate((compare || [])[hoverIdx]?.iso, (compare || [])[hoverIdx]?.date)}</div>
                                 {/* Previous value only */}
                                 <div className="tabular-nums mb-1">{formatVal(cmpActive.value)}</div>
                                 {/* Delta */}
