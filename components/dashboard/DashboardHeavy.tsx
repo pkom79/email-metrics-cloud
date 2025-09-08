@@ -696,10 +696,23 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     };
 
     // Build chart series (primary + compare) per segment
-    const overviewChartSeries = useMemo(() => dm.getMetricTimeSeriesWithCompare(defCampaigns as any, defFlows as any, overviewChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo), [dm, defCampaigns, defFlows, overviewChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo]);
-    const campaignChartSeries = useMemo(() => dm.getMetricTimeSeriesWithCompare(defCampaigns as any, [], campaignChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo), [dm, defCampaigns, campaignChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo]);
-    const flowsForChart = useMemo(() => (selectedFlow === 'all' ? defFlows : defFlows.filter(f => f.flowName === selectedFlow)), [defFlows, selectedFlow]);
-    const flowChartSeries = useMemo(() => dm.getMetricTimeSeriesWithCompare([], flowsForChart as any, flowChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo), [dm, flowsForChart, flowChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo]);
+    // IMPORTANT: Use full arrays (no date filtering) so previous-window data exists for compare.
+    const overviewChartSeries = useMemo(
+        () => dm.getMetricTimeSeriesWithCompare(ALL_CAMPAIGNS as any, ALL_FLOWS as any, overviewChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo),
+        [dm, ALL_CAMPAIGNS, ALL_FLOWS, overviewChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo]
+    );
+    const campaignChartSeries = useMemo(
+        () => dm.getMetricTimeSeriesWithCompare(ALL_CAMPAIGNS as any, [], campaignChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo),
+        [dm, ALL_CAMPAIGNS, campaignChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo]
+    );
+    const flowsAllForChart = useMemo(
+        () => (selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow)),
+        [ALL_FLOWS, selectedFlow]
+    );
+    const flowChartSeries = useMemo(
+        () => dm.getMetricTimeSeriesWithCompare([], flowsAllForChart as any, flowChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo),
+        [dm, flowsAllForChart, flowChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo]
+    );
     const formatMetricValue = (v: number, metric: string) => {
         if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric)) {
             // Requirement: always show full US currency with 2 decimals
