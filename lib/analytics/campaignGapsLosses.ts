@@ -94,6 +94,11 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   const sentWeeksAll = fullInRangeWeeks.filter(w => (w.campaignsSent || 0) > 0).length;
   const pctWeeksWithCampaignsSent = coverageDenom > 0 ? (sentWeeksAll / coverageDenom) * 100 : 0;
   const avgCampaignsPerWeek = coverageDenom > 0 ? (fullInRangeWeeks.reduce((s,w)=> s + (w.campaignsSent || 0), 0) / coverageDenom) : 0;
+  // Debug: surface coverage math to help diagnose gating issues in the field
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[CampaignGaps&Losses] coverage', { coverageDenom, sentWeeksAll, pctWeeksWithCampaignsSent: Number(pctWeeksWithCampaignsSent.toFixed?.(2) ?? pctWeeksWithCampaignsSent), totalWeeksInRange, totalCompleteWeeks });
+  } catch {}
 
   // Low-Effectiveness Campaigns: count individual campaigns with revenue==0 in the selected range
   let lowEffectivenessCampaigns = 0;
