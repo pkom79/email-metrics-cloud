@@ -162,6 +162,20 @@ export function buildWeeklyAggregatesInRange(
       });
     }
   }
+  // Diagnostics: echo weekly buckets if enabled
+  try {
+    const enabled = (typeof process !== 'undefined' && process.env && (process.env.NEXT_PUBLIC_EM_DIAG === '1' || process.env.NEXT_PUBLIC_EM_DIAG === 'true')) ||
+                    (typeof window !== 'undefined' && (window as any).__EM_DIAG__);
+    if (enabled && weeks.length) {
+      const log = weeks.map(w => ({
+        start: w.weekStart.toISOString().slice(0,10),
+        campaignsSent: w.campaignsSent || 0,
+        isCompleteWeek: w.isCompleteWeek
+      }));
+      // eslint-disable-next-line no-console
+      console.debug('[Reliability] Weekly aggregates', { rangeStart: startMonday.toISOString().slice(0,10), rangeEnd: endDate.toISOString().slice(0,10) , count: weeks.length, weeks: log });
+    }
+  } catch { /* ignore diag errors */ }
   return weeks;
 }
 

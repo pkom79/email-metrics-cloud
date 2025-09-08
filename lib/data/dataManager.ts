@@ -392,6 +392,30 @@ export class DataManager {
                 const res = await this.csvParser.parseCampaigns(files.campaigns, (p) => { this.loadProgress.campaigns.progress = p * 0.5; onProgress?.(this.loadProgress); });
                 if (res.success && res.data) {
                     this.campaigns = this.campaignTransformer.transform(res.data);
+                    // Diagnostics: summarize campaigns by month and date bounds after transform
+                    try {
+                        const enabled = (typeof process !== 'undefined' && process.env && (process.env.NEXT_PUBLIC_EM_DIAG === '1' || process.env.NEXT_PUBLIC_EM_DIAG === 'true')) ||
+                                        (typeof window !== 'undefined' && (window as any).__EM_DIAG__);
+                        if (enabled && this.campaigns?.length) {
+                            let minT = Number.POSITIVE_INFINITY;
+                            let maxT = 0;
+                            const byMonth = new Map<string, number>();
+                            for (const c of this.campaigns) {
+                                const t = c.sentDate?.getTime?.() ?? new Date(c.sentDate as any).getTime();
+                                if (!isNaN(t)) { if (t < minT) minT = t; if (t > maxT) maxT = t; }
+                                const d = new Date(t);
+                                const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+                                byMonth.set(k, (byMonth.get(k) || 0) + 1);
+                            }
+                            const summary = Object.fromEntries([...byMonth.entries()].sort());
+                            // eslint-disable-next-line no-console
+                            console.info('[DataManager] Campaigns loaded: count=%d, range=%s..%s, byMonth=%o',
+                                this.campaigns.length,
+                                isFinite(minT)? new Date(minT).toISOString().slice(0,10) : 'n/a',
+                                maxT? new Date(maxT).toISOString().slice(0,10) : 'n/a',
+                                summary);
+                        }
+                    } catch { /* ignore diag errors */ }
                     this.loadProgress.campaigns.loaded = true; this.loadProgress.campaigns.progress = 100;
                 } else { errors.push(`Campaigns: ${res.error || 'Unknown error'}`); this.loadProgress.campaigns.error = res.error; }
             }
