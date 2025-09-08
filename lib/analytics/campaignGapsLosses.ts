@@ -43,6 +43,13 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   const completeWeeks = weeks.filter(w => w.isCompleteWeek);
   const totalCompleteWeeks = completeWeeks.length;
   const totalWeeksInRange = weeks.length;
+  const ONE_DAY = 24 * 60 * 60 * 1000;
+  // Weeks fully contained within the selected range (exclude partial first/last week segments)
+  const fullInRangeWeeks = weeks.filter(w => {
+    const weekStartMs = w.weekStart.getTime();
+    const weekEndMs = weekStartMs + 7 * ONE_DAY - 1;
+    return weekStartMs >= rangeStart.getTime() && weekEndMs <= rangeEnd.getTime();
+  });
 
   // Guard: if no weeks, return zeros
   if (!totalWeeksInRange) {
@@ -82,11 +89,11 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
     }
   }
 
-  // For coverage metrics and gating, evaluate against all weeks in range (strictly within selection),
-  // independent of whether the final week is considered complete relative to "now".
-  const sentWeeksAll = weeks.filter(w => (w.campaignsSent || 0) > 0).length;
-  const pctWeeksWithCampaignsSent = totalWeeksInRange > 0 ? (sentWeeksAll / totalWeeksInRange) * 100 : 0;
-  const avgCampaignsPerWeek = totalWeeksInRange > 0 ? (weeks.reduce((s,w)=> s + (w.campaignsSent || 0), 0) / totalWeeksInRange) : 0;
+  // For coverage metrics and gating, evaluate against full weeks completely inside the selected range.
+  const coverageDenom = fullInRangeWeeks.length;
+  const sentWeeksAll = fullInRangeWeeks.filter(w => (w.campaignsSent || 0) > 0).length;
+  const pctWeeksWithCampaignsSent = coverageDenom > 0 ? (sentWeeksAll / coverageDenom) * 100 : 0;
+  const avgCampaignsPerWeek = coverageDenom > 0 ? (fullInRangeWeeks.reduce((s,w)=> s + (w.campaignsSent || 0), 0) / coverageDenom) : 0;
 
   // Low-Effectiveness Campaigns: count individual campaigns with revenue==0 in the selected range
   let lowEffectivenessCampaigns = 0;
@@ -95,9 +102,9 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
     if (c.sentDate >= rangeStart && c.sentDate <= rangeEnd && (c.revenue || 0) === 0) lowEffectivenessCampaigns++;
   }
 
-  const allWeeksSent = totalWeeksInRange > 0 && weeks.every(w => (w.campaignsSent || 0) > 0);
-  // Weekly sufficiency gate: require ceil(66%) of weeks in the selected range to have at least one campaign sent
-  const threshold = Math.ceil(0.66 * totalWeeksInRange);
+  const allWeeksSent = coverageDenom > 0 && fullInRangeWeeks.every(w => (w.campaignsSent || 0) > 0);
+  // Weekly sufficiency gate: require ceil(66%) of full-in-range weeks to have at least one campaign sent
+  const threshold = Math.ceil(0.66 * coverageDenom);
   const insufficientWeeklyData = sentWeeksAll < threshold;
 
   // Cap support: 90th percentile of non-zero campaign revenue within the selected range (complete weeks only)
