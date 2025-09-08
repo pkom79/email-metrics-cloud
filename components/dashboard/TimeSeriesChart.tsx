@@ -76,7 +76,8 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
 
     const pts = primary.map((p, i) => ({ x: xScale(i), y: yScale(p.value) }));
     const pathD = buildSmoothPath(pts);
-    const areaD = pathD ? `${pathD} L ${xScale(primary.length - 1)} ${innerH} L ${xScale(0)} ${innerH} Z` : '';
+    // Primary is line-only (no area fill)
+    const areaD = '';
 
     const cmpPts = (compare || undefined) ? (compare || []).map((p, i) => ({ x: xScale(i), y: yScale(p.value) })) : [];
     const cmpPathD = cmpPts.length >= 2 ? buildSmoothPath(cmpPts) : '';
@@ -179,7 +180,9 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                         <linearGradient id={gradAreaId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.25} /><stop offset="100%" stopColor={color} stopOpacity={0.05} /></linearGradient>
                         <linearGradient id={cmpAreaId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.22} /><stop offset="100%" stopColor={color} stopOpacity={0.08} /></linearGradient>
                     </defs>
-                    {/* Primary area + line; no compare fill to avoid overlapped shading */}
+                    {/* Compare shaded area (previous period) */}
+                    {cmpAreaD && <path d={cmpAreaD} fill={`url(#${cmpAreaId})`} stroke="none" />}
+                    {/* Primary line (selected date range) */}
                     {areaD && <path d={areaD} fill={`url(#${gradAreaId})`} stroke="none" />}
                     {pathD && <path d={pathD} fill="none" stroke={`url(#${gradLineId})`} strokeWidth={2} />}
                     {/* Y tick labels */}
@@ -209,6 +212,21 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                         )}
                     </div>
                 )}
+                {/* Legend */}
+                <div className="mt-3 pb-1 flex items-center gap-6 text-xs text-gray-600 dark:text-gray-300">
+                    <div className="flex items-center gap-2">
+                        <svg width="22" height="8" viewBox="0 0 22 8" aria-hidden>
+                            <line x1="1" y1="4" x2="21" y2="4" stroke={color} strokeWidth="2" />
+                        </svg>
+                        <span>Selected date range</span>
+                    </div>
+                    {(compare && (compare as any).length) ? (
+                        <div className="flex items-center gap-2">
+                            <span className="inline-block w-3.5 h-3.5 rounded-[3px]" style={{ backgroundColor: color, opacity: 0.18 }} />
+                            <span>Previous period</span>
+                        </div>
+                    ) : null}
+                </div>
             </div>
         </div>
     );

@@ -569,8 +569,11 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
                                     return (
                                         <g>
-                                            {/* Primary area only; no compare shading */}
-                                            <path d={areaPath} fill={`url(#gradient-${index})`} stroke="none" />
+                                            {/* Compare shaded area (previous period) */}
+                                            {compareArea && (
+                                                <path d={compareArea} fill={`url(#cmp-gradient-${index})`} stroke="none" />
+                                            )}
+                                            {/* Primary line (selected date range) */}
                                             <path d={pathD} fill="none" stroke={chartColor} strokeWidth="2" />
                                             {/* Hover points */}
                                             {points.map((point, i) => (
@@ -689,6 +692,21 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                             <div className="relative" style={{ width: '100%', height: `${Math.max((value / yAxisRange.max) * 100, 5)}%`, background: chartGradient, borderTop: `2px solid ${chartColor}`, borderRadius: '4px 4px 0 0' }} />
                         </div>
                     )}
+                </div>
+                {/* Legend */}
+                <div className="mt-3 pb-1 flex items-center gap-6 text-xs text-gray-600 dark:text-gray-300">
+                    <div className="flex items-center gap-2">
+                        <svg width="22" height="8" viewBox="0 0 22 8" aria-hidden>
+                            <line x1="1" y1="4" x2="21" y2="4" stroke={chartColor} strokeWidth="2" />
+                        </svg>
+                        <span>Selected date range</span>
+                    </div>
+                    {dateWindows && dateRange !== 'all' ? (
+                        <div className="flex items-center gap-2">
+                            <span className="inline-block w-3.5 h-3.5 rounded-[3px]" style={{ backgroundColor: chartColor, opacity: 0.18 }} />
+                            <span>{compareMode === 'prev-year' ? 'Same period last year' : 'Previous period'}</span>
+                        </div>
+                    ) : null}
                 </div>
             </div>
         );
