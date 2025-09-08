@@ -106,23 +106,31 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   // Debug: surface coverage math to help diagnose gating issues in the field
   try {
     // eslint-disable-next-line no-console
-    const sample = fullInRangeWeeks.map(w => ({ label: w.label, start: w.weekStart.toISOString().slice(0,10), sent: (w.campaignsSent||0) > 0, rev: w.campaignRevenue||0 }));
-    // Alternate sent-week computation directly from raw campaigns
-    const ONE_WEEK = 7 * ONE_DAY;
-    const startMonday = new Date(rangeStart); startMonday.setDate(startMonday.getDate() - ((startMonday.getDay()+6)%7)); startMonday.setHours(0,0,0,0);
-    const endMonday = new Date(rangeEnd); endMonday.setDate(endMonday.getDate() - ((endMonday.getDay()+6)%7)); endMonday.setHours(0,0,0,0);
-    const altMap: Record<string, number> = {};
+  const sample = fullInRangeWeeks.map(w => ({ label: w.label, start: w.weekStart.toISOString().slice(0,10), sent: (w.campaignsSent||0) > 0, rev: w.campaignRevenue||0 }));
+  // Alternate sent-week computation directly from raw campaigns, using UTC Monday buckets to align with weekly aggregator
+  const ONE_WEEK = 7 * ONE_DAY;
+  const startMonday = new Date(rangeStart);
+  const startDayUTC = startMonday.getUTCDay();
+  const startDiffUTC = (startDayUTC + 6) % 7;
+  startMonday.setUTCDate(startMonday.getUTCDate() - startDiffUTC);
+  startMonday.setUTCHours(0,0,0,0);
+  const endMonday = new Date(rangeEnd);
+  const endDayUTC = endMonday.getUTCDay();
+  const endDiffUTC = (endDayUTC + 6) % 7;
+  endMonday.setUTCDate(endMonday.getUTCDate() - endDiffUTC);
+  endMonday.setUTCHours(0,0,0,0);
+  const altMap: Record<string, number> = {};
     let campaignsInRange = 0;
     for (const c of campaigns) {
       if (!(c.sentDate instanceof Date)) continue;
       const dt = c.sentDate;
       if (dt < rangeStart || dt > rangeEnd) continue;
       campaignsInRange++;
-      const ws = new Date(dt);
-      const day = ws.getDay();
-      const diff = (day + 6) % 7; // to Monday
-      ws.setDate(ws.getDate() - diff);
-      ws.setHours(0,0,0,0);
+  const ws = new Date(dt);
+  const dayUTC = ws.getUTCDay();
+  const diffUTC = (dayUTC + 6) % 7; // to Monday in UTC
+  ws.setUTCDate(ws.getUTCDate() - diffUTC);
+  ws.setUTCHours(0,0,0,0);
       if (ws < startMonday || ws > endMonday) continue;
       const key = ws.toISOString();
       altMap[key] = (altMap[key] || 0) + 1;
