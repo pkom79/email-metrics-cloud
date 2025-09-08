@@ -88,13 +88,21 @@ export class CSVParser {
         const rejected: { idx: number; reason: string }[] = [];
         // Normalize keys to tolerate duplicate-renamed headers (e.g., "Send Date_2")
         const normalizeKey = (k: string) => k.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        const tokens = (s: string) => normalizeKey(s).split(' ').filter(Boolean);
+        const isTokenSubset = (want: string, have: string) => {
+            const w = new Set(tokens(want));
+            const h = new Set(tokens(have));
+            // want tokens must be contained in have tokens
+            for (const t of w) { if (!h.has(t)) return false; }
+            return true;
+        };
         const hasAnyNormalized = (row: any, keys: string[]) => {
             const rowKeys = Object.keys(row);
             return keys.some((want) => {
                 const target = normalizeKey(want);
                 for (const rk of rowKeys) {
                     const nk = normalizeKey(rk);
-                    if ((nk === target || nk.startsWith(target)) && row[rk] !== undefined && row[rk] !== null && row[rk] !== '') return true;
+                    if ((nk === target || nk.startsWith(target) || isTokenSubset(target, nk)) && row[rk] !== undefined && row[rk] !== null && row[rk] !== '') return true;
                 }
                 return false;
             });
@@ -106,7 +114,7 @@ export class CSVParser {
                 // exact match first
                 for (const rk of rowKeys) {
                     const nk = normalizeKey(rk);
-                    if (nk === target) {
+                    if (nk === target || isTokenSubset(target, nk)) {
                         const v = row[rk];
                         if (v !== undefined && v !== null && v !== '') return v;
                     }
