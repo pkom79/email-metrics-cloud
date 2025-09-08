@@ -2,20 +2,50 @@ import { RawCampaignCSV, ProcessedCampaign } from '../../data/dataTypes';
 
 export class CampaignTransformer {
     transform(rawCampaigns: RawCampaignCSV[]): ProcessedCampaign[] {
-        return rawCampaigns.map((raw, index) => this.transformSingle(raw, index + 1));
+        const out: ProcessedCampaign[] = [];
+        let badDateCount = 0;
+        for (let i = 0; i < rawCampaigns.length; i++) {
+            const pc = this.transformSingle(rawCampaigns[i], i + 1);
+            if (pc) out.push(pc); else badDateCount++;
+        }
+        if (badDateCount) {
+            try { console.warn(`[CampaignTransformer] Skipped ${badDateCount} campaign rows due to invalid Send Time`); } catch {}
+        }
+        return out;
     }
 
-    private transformSingle(raw: RawCampaignCSV, id: number): ProcessedCampaign {
-        const sentDate = this.parseDate((raw as any)['Send Time']);
+    private normalizeKey(k: string): string {
+        return k.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    }
 
-        const emailsSent = this.parseNumber((raw as any)['Total Recipients']);
-        const uniqueOpens = this.parseNumber((raw as any)['Unique Opens']);
-        const uniqueClicks = this.parseNumber((raw as any)['Unique Clicks']);
-        const totalOrders = this.parseNumber((raw as any)['Unique Placed Order']);
-        const revenue = this.parseNumber((raw as any)['Revenue']);
-        const unsubscribesCount = this.parseNumber((raw as any)['Unsubscribes']);
-        const spamComplaintsCount = this.parseNumber((raw as any)['Spam Complaints']);
-        const bouncesCount = this.parseNumber((raw as any)['Bounces']);
+    private findField(raw: any, base: string): any {
+        const target = this.normalizeKey(base);
+        // exact match preferred
+        for (const key of Object.keys(raw)) {
+            if (this.normalizeKey(key) === target) return (raw as any)[key];
+        }
+        // then prefix match to handle duplicates like "Send Time_2"
+        for (const key of Object.keys(raw)) {
+            if (this.normalizeKey(key).startsWith(target)) return (raw as any)[key];
+        }
+        return undefined;
+    }
+
+    private transformSingle(raw: RawCampaignCSV, id: number): ProcessedCampaign | null {
+        const name = (this.findField(raw, 'Campaign Name') ?? (raw as any)['Campaign Name'] ?? '') as string;
+        const subject = (this.findField(raw, 'Subject') ?? (raw as any)['Subject'] ?? name) as string;
+        const sendVal = this.findField(raw, 'Send Time');
+        const sentDate = this.parseDateStrict(sendVal);
+        if (!sentDate) return null; // skip if date unparseable
+
+        const emailsSent = this.parseNumber(this.findField(raw, 'Total Recipients'));
+        const uniqueOpens = this.parseNumber(this.findField(raw, 'Unique Opens'));
+        const uniqueClicks = this.parseNumber(this.findField(raw, 'Unique Clicks'));
+        const totalOrders = this.parseNumber(this.findField(raw, 'Unique Placed Order'));
+        const revenue = this.parseNumber(this.findField(raw, 'Revenue'));
+        const unsubscribesCount = this.parseNumber(this.findField(raw, 'Unsubscribes'));
+        const spamComplaintsCount = this.parseNumber(this.findField(raw, 'Spam Complaints'));
+        const bouncesCount = this.parseNumber(this.findField(raw, 'Bounces'));
 
         const openRate = emailsSent > 0 ? (uniqueOpens / emailsSent) * 100 : 0;
         const clickRate = emailsSent > 0 ? (uniqueClicks / emailsSent) * 100 : 0;
@@ -30,8 +60,8 @@ export class CampaignTransformer {
 
         return {
             id,
-            campaignName: (raw as any)['Campaign Name'] || '',
-            subject: (raw as any)['Subject'] || (raw as any)['Campaign Name'],
+            campaignName: name,
+            subject,
             sentDate,
             dayOfWeek: sentDate.getDay(),
             hourOfDay: sentDate.getHours(),
@@ -55,11 +85,26 @@ export class CampaignTransformer {
         };
     }
 
-    private parseDate(dateStr: string): Date {
+    private parseDateStrict(value: any): Date | null {
+        if (value === undefined || value === null || value === '') return null;
         try {
-            const d = new Date(dateStr);
-            return isNaN(d.getTime()) ? new Date() : d;
-        } catch { return new Date(); }
+            // If value is already a Date
+            if (value instanceof Date) {
+                return isNaN(value.getTime()) ? null : value;
+            }
+            const s = String(value).trim();
+            const d = new Date(s);
+            if (!isNaN(d.getTime())) return d;
+            // Try adding Z if it looks like ISO without timezone
+            if (/^\d{4}-\d{2}-\d{2}T\d{2}:.+$/i.test(s)) {
+                const dz = new Date(s + 'Z');
+                if (!isNaN(dz.getTime())) return dz;
+            }
+            // Try US locale fallback
+            const dl = new Date(Date.parse(s));
+            if (!isNaN(dl.getTime())) return dl;
+            return null;
+        } catch { return null; }
     }
 
     private parseNumber(value: any): number {

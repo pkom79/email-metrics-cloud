@@ -109,10 +109,12 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
     const startMonday = new Date(rangeStart); startMonday.setDate(startMonday.getDate() - ((startMonday.getDay()+6)%7)); startMonday.setHours(0,0,0,0);
     const endMonday = new Date(rangeEnd); endMonday.setDate(endMonday.getDate() - ((endMonday.getDay()+6)%7)); endMonday.setHours(0,0,0,0);
     const altMap: Record<string, number> = {};
+    let campaignsInRange = 0;
     for (const c of campaigns) {
       if (!(c.sentDate instanceof Date)) continue;
       const dt = c.sentDate;
       if (dt < rangeStart || dt > rangeEnd) continue;
+      campaignsInRange++;
       const ws = new Date(dt);
       const day = ws.getDay();
       const diff = (day + 6) % 7; // to Monday
@@ -122,7 +124,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
       const key = ws.toISOString();
       altMap[key] = (altMap[key] || 0) + 1;
     }
-    const altWeeks = fullInRangeWeeks.map(w => ({ key: w.weekStart.toISOString(), sent: (altMap[w.weekStart.toISOString()]||0) > 0 }));
+    const altWeeks = fullInRangeWeeks.map(w => ({ key: w.weekStart.toISOString(), sent: (altMap[w.weekStart.toISOString()]||0) > 0, count: (altMap[w.weekStart.toISOString()]||0) }));
   const altSentWeeks = altWeeks.filter(w => w.sent).length;
   const mismatches = fullInRangeWeeks.filter(w => ((w.campaignsSent||0)>0) !== ((altMap[w.weekStart.toISOString()]||0)>0)).map(w => w.weekStart.toISOString().slice(0,10));
   // Prefer raw-campaign-derived count for gating and display to avoid aggregation inconsistencies
@@ -130,7 +132,14 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   pctWeeksWithCampaignsSent = coverageDenom > 0 ? (sentWeeksAll / coverageDenom) * 100 : 0;
     console.debug('[CampaignGaps&Losses] coverage', { coverageDenom, sentWeeksAll, pctWeeksWithCampaignsSent: Number(pctWeeksWithCampaignsSent.toFixed?.(2) ?? pctWeeksWithCampaignsSent), totalWeeksInRange, totalCompleteWeeks });
     console.debug('[CampaignGaps&Losses] coverageWeeks', sample);
-    console.debug('[CampaignGaps&Losses] altSentWeeks', { altSentWeeks, mismatches });
+    // Build a tiny histogram: how many weeks had N campaigns (within full in-range weeks)
+    const hist: Record<string, number> = { '0': 0 };
+    for (const w of altWeeks) {
+      const n = w.count || 0;
+      const key = String(n);
+      hist[key] = (hist[key] || 0) + 1;
+    }
+    console.debug('[CampaignGaps&Losses] altSentWeeks', { altSentWeeks, campaignsInRange, hist, mismatches, weeksWithCounts: altWeeks.map(w => ({ start: w.key.slice(0,10), count: w.count })) });
   } catch {}
 
   // Low-Effectiveness Campaigns: count individual campaigns with revenue==0 in the selected range
