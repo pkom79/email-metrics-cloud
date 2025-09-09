@@ -38,11 +38,13 @@ export default function UploadPage() {
             uploaded: uploads.subscribers,
             // Hover glow color (explicit, no gradient to avoid mismatches)
             gradient: 'from-purple-600 to-purple-600',
-            glow1: 'bg-purple-600/10',
-            glow2: 'bg-purple-600/20',
+            glow1: 'bg-purple-600/20',
+            glow2: 'bg-purple-600/40',
             // Solid icon background color
             iconBg: 'bg-purple-600',
-            hoverBorder: 'hover:border-purple-400/50',
+            hoverBorder: 'hover:border-purple-500/60',
+            hoverText: 'text-purple-600 dark:text-purple-400',
+            ringColor: 'hover:ring-purple-400/40',
         },
         {
             id: 'flows',
@@ -51,10 +53,12 @@ export default function UploadPage() {
             icon: Zap,
             uploaded: uploads.flows,
             gradient: 'from-emerald-600 to-emerald-600',
-            glow1: 'bg-emerald-600/10',
-            glow2: 'bg-emerald-600/20',
+            glow1: 'bg-emerald-600/20',
+            glow2: 'bg-emerald-600/40',
             iconBg: 'bg-emerald-600',
-            hoverBorder: 'hover:border-emerald-400/50',
+            hoverBorder: 'hover:border-emerald-500/60',
+            hoverText: 'text-emerald-600 dark:text-emerald-400',
+            ringColor: 'hover:ring-emerald-400/40',
         },
         {
             id: 'campaigns',
@@ -63,10 +67,12 @@ export default function UploadPage() {
             icon: Send,
             uploaded: uploads.campaigns,
             gradient: 'from-indigo-600 to-indigo-600',
-            glow1: 'bg-indigo-600/10',
-            glow2: 'bg-indigo-600/20',
+            glow1: 'bg-indigo-600/20',
+            glow2: 'bg-indigo-600/40',
             iconBg: 'bg-indigo-600',
-            hoverBorder: 'hover:border-indigo-400/50',
+            hoverBorder: 'hover:border-indigo-500/60',
+            hoverText: 'text-indigo-600 dark:text-indigo-400',
+            ringColor: 'hover:ring-indigo-400/40',
         },
     ] as const;
 
@@ -198,7 +204,8 @@ export default function UploadPage() {
                 onMouseLeave={() => setHoveredZone(null)}
                 className={`
           group relative overflow-hidden cursor-pointer transition-all duration-300 ease-out
-          bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border rounded-2xl p-8
+        bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border rounded-2xl p-8
+        hover:ring-2 ${(zone as any).ringColor} hover:ring-offset-2 hover:ring-offset-white dark:hover:ring-offset-gray-900
         ${uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? 'border-green-400/50 bg-green-50/80 dark:bg-green-950/20 dark:border-green-700/50' : `border-gray-200/50 dark:border-gray-700/50 ${(zone as any).hoverBorder}`}
           hover:shadow-2xl hover:-translate-y-2 transform
           ${isHovered && !isProcessing ? 'scale-105' : ''}
@@ -211,7 +218,7 @@ export default function UploadPage() {
                     <div className={`inline-flex items-center justify-center w-16 h-16 rounded-xl mb-6 transition-all duration-300 ${uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? 'bg-green-100 dark:bg-green-900/30' : `${(zone as any).iconBg} group-hover:scale-110`}`}>
                         {uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" /> : <Icon className="w-8 h-8 text-white" />}
                     </div>
-                    <h3 className={`text-xl font-semibold mb-3 transition-colors duration-200 text-gray-900 dark:text-gray-100 ${isHovered && !isProcessing ? 'text-purple-600 dark:text-purple-400' : ''}`}>{zone.title}</h3>
+                    <h3 className={`text-xl font-semibold mb-3 transition-colors duration-200 text-gray-900 dark:text-gray-100 ${isHovered && !isProcessing ? (zone as any).hoverText : ''}`}>{zone.title}</h3>
                     <p className="text-sm leading-relaxed mb-4 text-gray-600 dark:text-gray-300">{zone.description}</p>
                     {uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? (
                         <div>
@@ -227,7 +234,7 @@ export default function UploadPage() {
                             <p className="text-xs mt-2 text-gray-400 dark:text-gray-500">Click to replace file</p>
                         </div>
                     ) : (
-                        <div className={`flex items-center text-sm font-medium transition-colors duration-200 text-gray-400 dark:text-gray-400 ${isHovered && !isProcessing ? 'text-purple-600 dark:text-purple-400' : ''}`}>
+                        <div className={`flex items-center text-sm font-medium transition-colors duration-200 text-gray-400 dark:text-gray-400 ${isHovered && !isProcessing ? (zone as any).hoverText : ''}`}>
                             <Upload className="w-4 h-4 mr-2" />
                             Click to upload CSV file
                         </div>
