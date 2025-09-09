@@ -141,9 +141,9 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
     }
 
     // Y axis ticks (4 divisions)
-    // Thirds-based ticks and labels (numbers)
-    const yTickValues = useMemo(() => thirdTicks(maxVal, 'number'), [maxVal]);
-    const yTickLabels = useMemo(() => formatTickLabels(yTickValues, 'number', maxVal), [yTickValues, maxVal]);
+    // Thirds-based ticks and labels (numbers) — compute directly (avoid hooks after early return)
+    const yTickValues = thirdTicks(maxVal, 'number');
+    const yTickLabels = formatTickLabels(yTickValues, 'number', maxVal);
 
     const active = hoverIdx != null ? buckets[hoverIdx] : null;
 

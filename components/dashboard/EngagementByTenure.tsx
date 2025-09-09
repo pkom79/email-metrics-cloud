@@ -148,9 +148,9 @@ export default function EngagementByTenure({ subscribers, dateRange, customTo }:
                 <table className="min-w-full border-separate" style={{ borderSpacing: 0 }}>
                     <thead>
                         <tr>
-                            <th className="sticky left-0 bg-white dark:bg-gray-900 text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-2 py-1 border-b border-gray-200 dark:border-gray-800">Profile age</th>
+                            <th className="sticky left-0 bg-white dark:bg-gray-900 text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-2 py-1 border-b border-gray-200 dark:border-gray-800">{/* intentionally blank header */}</th>
                             {engDefs.map((e) => (
-                                <th key={e.key} className="text-xs font-medium text-gray-500 dark:text-gray-400 px-2 py-1 border-b border-gray-200 dark:border-gray-800 text-left whitespace-nowrap">{e.label}</th>
+                                <th key={e.key} className="text-xs font-medium text-gray-500 dark:text-gray-400 px-2 py-1 border-b border-gray-200 dark:border-gray-800 text-center whitespace-nowrap">{e.label}</th>
                             ))}
                         </tr>
                     </thead>
@@ -176,7 +176,6 @@ export default function EngagementByTenure({ subscribers, dateRange, customTo }:
                                                         <span className="font-semibold text-gray-900 dark:text-gray-100">Share: </span>
                                                         <span>{fmtP(cell.percent)}</span>
                                                     </div>
-                                                    <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Count: {cell.count.toLocaleString('en-US')} of {row.denom.toLocaleString('en-US')}</div>
                                                 </div>
                                             )}
                                         >
