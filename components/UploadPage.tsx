@@ -40,6 +40,7 @@ export default function UploadPage() {
             gradient: 'from-purple-600 to-purple-600',
             // Solid icon background color
             iconBg: 'bg-purple-600',
+            hoverBorder: 'hover:border-purple-400/50',
         },
         {
             id: 'flows',
@@ -49,6 +50,7 @@ export default function UploadPage() {
             uploaded: uploads.flows,
             gradient: 'from-emerald-600 to-emerald-600',
             iconBg: 'bg-emerald-600',
+            hoverBorder: 'hover:border-emerald-400/50',
         },
         {
             id: 'campaigns',
@@ -58,6 +60,7 @@ export default function UploadPage() {
             uploaded: uploads.campaigns,
             gradient: 'from-indigo-600 to-indigo-600',
             iconBg: 'bg-indigo-600',
+            hoverBorder: 'hover:border-indigo-400/50',
         },
     ] as const;
 
@@ -190,7 +193,7 @@ export default function UploadPage() {
                 className={`
           group relative overflow-hidden cursor-pointer transition-all duration-300 ease-out
           bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border rounded-2xl p-8
-          ${uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? 'border-green-400/50 bg-green-50/80 dark:bg-green-950/20 dark:border-green-700/50' : 'border-gray-200/50 dark:border-gray-700/50 hover:border-purple-400/50'}
+        ${uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? 'border-green-400/50 bg-green-50/80 dark:bg-green-950/20 dark:border-green-700/50' : `border-gray-200/50 dark:border-gray-700/50 ${(zone as any).hoverBorder}`}
           hover:shadow-2xl hover:-translate-y-2 transform
           ${isHovered && !isProcessing ? 'scale-105' : ''}
           ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}
@@ -223,9 +226,7 @@ export default function UploadPage() {
                             Click to upload CSV file
                         </div>
                     )}
-                    <div className={`absolute top-6 right-6 transition-all duration-300 ${isHovered && !isProcessing ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2'}`}>
-                        <ArrowRight className="w-5 h-5 text-purple-500" />
-                    </div>
+                    {/* Arrow removed per request */}
                 </div>
             </div>
         );
