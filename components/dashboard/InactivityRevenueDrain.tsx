@@ -67,10 +67,12 @@ export default function InactivityRevenueDrain({ subscribers }: Props) {
                     return (
                         <div key={b.key} className="flex flex-col">
                             <div className="group relative flex-1 flex flex-col justify-end min-h-[150px]">
-                                <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-lg overflow-hidden flex items-end" style={{ minHeight: '150px' }}>
+                                <div className="w-full relative bg-gray-200 dark:bg-gray-800 rounded-lg overflow-hidden flex items-end" style={{ minHeight: '150px' }}>
+                                    {/* subtle purple-tinted backdrop */}
+                                    <div className="absolute inset-0 bg-gradient-to-b from-purple-500/10 via-purple-500/5 to-transparent pointer-events-none" />
                                     <div className="w-full rounded-t-lg bg-gradient-to-b from-purple-400 to-purple-600 transition-all duration-500" style={{ height: `${heightPct}%` }} />
                                 </div>
-                                <div className="mt-2 text-base font-semibold text-gray-900 dark:text-gray-100">{pct(b.clv)}</div>
+                                <div className="mt-2 text-xl font-bold text-gray-900 dark:text-gray-100">{pct(b.clv)}</div>
                                 <div className="text-sm text-gray-600 dark:text-gray-400">{b.label}</div>
                                 <div className="text-xs text-gray-500 dark:text-gray-500">{formatCurrency(b.clv)}</div>
                                 <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition z-10 absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full w-64 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-xs text-gray-700 dark:text-gray-300">

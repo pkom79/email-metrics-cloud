@@ -1,7 +1,7 @@
 "use client";
 import React, { useMemo, useState } from 'react';
 import SelectBase from "../ui/SelectBase";
-import { Layers } from 'lucide-react';
+import { Layers, Info } from 'lucide-react';
 import { ProcessedCampaign } from '../../lib/data/dataTypes';
 
 type BucketKey = '1' | '2' | '3' | '4+';
@@ -180,7 +180,16 @@ export default function CampaignSendFrequency({ campaigns }: Props) {
     return (
         <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
-                <div className="flex items-center gap-2"><Layers className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Performance by Send Frequency</h3></div>
+                <div className="flex items-center gap-2">
+                    <Layers className="w-5 h-5 text-purple-600" />
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Performance by Send Frequency</h3>
+                    <div className="group relative">
+                        <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-700 dark:text-gray-500 dark:group-hover:text-gray-300 cursor-pointer" />
+                        <div className="absolute left-0 top-6 z-20 hidden group-hover:block w-80 text-xs leading-snug bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3 space-y-2">
+                            <p className="text-gray-600 dark:text-gray-300">Bars show averages across weeks grouped by how many campaigns were sent. Toggle to view averages per week or per campaign. Rates and efficiency metrics are weighted using total emails/events.</p>
+                        </div>
+                    </div>
+                </div>
                 <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
                     <div className="flex items-center gap-1.5">
                         {(['week', 'campaign'] as const).map(m => (
@@ -194,7 +203,7 @@ export default function CampaignSendFrequency({ campaigns }: Props) {
                     </div>
                 </div>
             </div>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mb-5">Bars show {selectedMeta.label.toLowerCase()} across weeks grouped by how many campaigns were sent. Toggle to view averages per week or per campaign. Rates and efficiency metrics are weighted using total emails/events.</p>
+            {/* description moved into tooltip above */}
             <div className={`grid gap-6 ${buckets.length === 1 ? 'grid-cols-1 max-w-xs mx-auto' : buckets.length === 2 ? 'grid-cols-2 max-w-md mx-auto' : buckets.length === 3 ? 'grid-cols-3 max-w-3xl mx-auto' : 'grid-cols-2 md:grid-cols-4'}`}>
                 {buckets.map(b => {
                     const val = getValue(b);
@@ -202,12 +211,14 @@ export default function CampaignSendFrequency({ campaigns }: Props) {
                     return (
                         <div key={b.key} className="flex flex-col">
                             <div className="group relative flex-1 flex flex-col justify-end min-h-[160px]">
-                                <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-lg overflow-hidden flex items-end" style={{ minHeight: '160px' }}>
+                                <div className="w-full relative bg-gray-200 dark:bg-gray-800 rounded-lg overflow-hidden flex items-end" style={{ minHeight: '160px' }}>
+                                    {/* subtle indigo-tinted backdrop */}
+                                    <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/10 via-indigo-500/5 to-transparent pointer-events-none" />
                                     <div className="w-full rounded-t-lg bg-indigo-500 transition-all duration-500" style={{ height: `${heightPct}%` }} aria-label={`${bucketLabel(b.key)}: ${formatVal(val)}`} />
                                 </div>
-                                <div className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">{formatVal(val)}</div>
-                                <div className="text-xs text-gray-600 dark:text-gray-400">{bucketLabel(b.key)}</div>
-                                <div className="text-[10px] text-gray-500 dark:text-gray-500">{b.weeksCount} {b.weeksCount === 1 ? 'week' : 'weeks'}</div>
+                                <div className="mt-2 text-xl font-bold text-gray-900 dark:text-gray-100">{formatVal(val)}</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">{bucketLabel(b.key)}</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-500">{b.weeksCount} {b.weeksCount === 1 ? 'week' : 'weeks'}</div>
                                 {/* Tooltip */}
                                 <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition z-10 absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full w-72 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-xs text-gray-700 dark:text-gray-300">
                                     <div className="font-semibold mb-1">{bucketLabel(b.key)}</div>
