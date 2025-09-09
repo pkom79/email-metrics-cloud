@@ -99,7 +99,6 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                     <TooltipPortal
                         content={(
                             <div className="max-w-xs text-gray-900 dark:text-gray-100">
-                                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Definition</div>
                                 <div className="text-sm">Weeks in the selected range with no campaign sends.</div>
                                 {!!(result.zeroSendWeekStarts?.length) && (
                                     <div className="mt-2">
@@ -124,7 +123,6 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                     <TooltipPortal
                         content={(
                             <div className="max-w-xs text-gray-900 dark:text-gray-100">
-                                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Definition</div>
                                 <div className="text-sm">The longest consecutive streak of weeks with zero campaign sends.</div>
                                 {!!(result.longestGapWeekStarts?.length) && (
                                     <div className="mt-2">
@@ -149,7 +147,6 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                     <TooltipPortal
                         content={(
                             <div className="max-w-xs text-gray-900 dark:text-gray-100">
-                                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Definition</div>
                                 <div className="text-sm">Full weeks inside the range that had at least one campaign.</div>
                                 <div className="text-sm font-semibold mt-2 tabular-nums">{result.weeksWithCampaignsSent.toLocaleString()} of {result.weeksInRangeFull.toLocaleString()} weeks</div>
                             </div>
@@ -165,7 +162,6 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                     <TooltipPortal
                         content={(
                             <div className="max-w-xs text-gray-900 dark:text-gray-100">
-                                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Definition</div>
                                 <div className="text-sm">Conservative estimate of revenue missed during short gaps (1–4 weeks). We look at typical nearby weeks, cap outliers, and multiply by the number of missing weeks.</div>
                             </div>
                         )}
@@ -179,7 +175,6 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                     <TooltipPortal
                         content={(
                             <div className="max-w-xs text-gray-900 dark:text-gray-100">
-                                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Definition</div>
                                 <div className="text-sm">Campaigns in this range with $0 revenue.</div>
                                 {!!(result.zeroRevenueCampaignDetails?.length) && (
                                     <div className="mt-2">
@@ -206,7 +201,6 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                     <TooltipPortal
                         content={(
                             <div className="max-w-xs text-gray-900 dark:text-gray-100">
-                                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Definition</div>
                                 <div className="text-sm">Total campaigns divided by the number of full weeks in range.</div>
                                 <div className="text-sm font-semibold mt-2 tabular-nums">{(result.totalCampaignsInFullWeeks ?? 0).toLocaleString()} total ÷ {result.weeksInRangeFull.toLocaleString()} weeks</div>
                             </div>
