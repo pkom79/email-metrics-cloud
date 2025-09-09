@@ -91,6 +91,8 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
                                 Aggregates campaign performance by weekday over the selected range. Each bar sums (or averages) the chosen metric for campaigns sent that day.
                                 <br /><br />
                                 <span className="font-semibold">Best Day logic:</span> Winner only if top day ≥ 1.5 MAD above median AND has ≥ {minCampaignsRequired} campaigns (dynamic threshold = ceil(5% of all campaigns, capped at 10, floor 3). Current threshold: {minCampaignsRequired}). Otherwise we show "No clear winner" to avoid noise.
+                                <br /><br />
+                                <span className="block mt-1 text-gray-500 dark:text-gray-400">Note: Some ESPs stagger send time per recipient. That can blur weekday patterns and hide a clear winner. It's normal to see "No clear winner" if sends are spread out or the sample is small.</span>
                             </div>
                         )} />
                     </h3>

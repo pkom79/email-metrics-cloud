@@ -133,6 +133,8 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
                                 Aggregates campaign performance by send hour (local time) across the selected range so you can spot hourly engagement or revenue concentration.
                                 <br /><br />
                                 <span className="font-semibold">Best Hour logic:</span> Winner only if top hour ≥ 1.8 MAD above median AND has ≥ {minCampaignsRequired} campaigns (dynamic threshold = ceil(5% of all campaigns, capped at 12, floor 3). Current threshold: {minCampaignsRequired}). Otherwise we show "No clear winner" to avoid random spikes.
+                                <br /><br />
+                                <span className="block mt-1 text-gray-500 dark:text-gray-400">Note: Some ESPs stagger send time per recipient. That can blur hourly patterns and hide a clear winner. It's normal to see "No clear winner" if sends are spread out or the sample is small.</span>
                             </div>
                         )} />
                     </h3>
