@@ -222,7 +222,18 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             <section>
                 <div className="flex items-center gap-3 mb-6">
                     <Users className="w-6 h-6 text-purple-600" />
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Audience Overview</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Audience Overview
+                        <InfoTooltipIcon placement="bottom-start" content={(
+                            <div>
+                                <p className="font-semibold mb-1">What</p>
+                                <p>Key counts and averages about your audience today.</p>
+                                <p className="font-semibold mt-2 mb-1">How</p>
+                                <p>We compute totals and simple percentages from your latest snapshot.</p>
+                                <p className="font-semibold mt-2 mb-1">Why</p>
+                                <p>Use this as a quick health check before diving deeper.</p>
+                            </div>
+                        )} />
+                    </h2>
                 </div>
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-8 text-center">
                     <AlertCircle className="w-12 h-12 mx-auto mb-4 text-gray-500" />
@@ -236,7 +247,18 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         <section>
             <div className="flex items-center gap-3 mb-4">
                 <Users className="w-6 h-6 text-purple-600" />
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Audience Overview</h2>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Audience Overview
+                    <InfoTooltipIcon placement="bottom-start" content={(
+                        <div>
+                            <p className="font-semibold mb-1">What</p>
+                            <p>Key counts and averages about your audience today.</p>
+                            <p className="font-semibold mt-2 mb-1">How</p>
+                            <p>We compute totals and simple percentages from your latest snapshot. Values follow your date range when relevant.</p>
+                            <p className="font-semibold mt-2 mb-1">Why</p>
+                            <p>Use this as a quick health check before diving deeper.</p>
+                        </div>
+                    )} />
+                </h2>
             </div>
             <div className="mb-6">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -293,7 +315,18 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-2 mb-4">
                         <UserCheck className="w-5 h-5 text-purple-600" />
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Purchase Frequency Distribution</h3>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Purchase Frequency Distribution
+                            <InfoTooltipIcon placement="top" content={(
+                                <div>
+                                    <p className="font-semibold mb-1">What</p>
+                                    <p>How many people bought once, twice, or many times.</p>
+                                    <p className="font-semibold mt-2 mb-1">How</p>
+                                    <p>We group profiles by total orders to show the shape of your buyer base.</p>
+                                    <p className="font-semibold mt-2 mb-1">Why</p>
+                                    <p>Spot opportunities to move one-time buyers to repeat purchasers.</p>
+                                </div>
+                            )} />
+                        </h3>
                     </div>
                     <div className="space-y-3">
                         {purchaseFrequencyData.map((item) => (
@@ -312,7 +345,18 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-2 mb-4">
                         <Calendar className="w-5 h-5 text-purple-600" />
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Audience Lifetime</h3>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Audience Lifetime
+                            <InfoTooltipIcon placement="top" content={(
+                                <div>
+                                    <p className="font-semibold mb-1">What</p>
+                                    <p>How long people have been on your list.</p>
+                                    <p className="font-semibold mt-2 mb-1">How</p>
+                                    <p>We bucket profiles by time since they joined.</p>
+                                    <p className="font-semibold mt-2 mb-1">Why</p>
+                                    <p>Balance acquisition and retention. A newer list needs more onboarding. An older list may need reactivation.</p>
+                                </div>
+                            )} />
+                        </h3>
                     </div>
                     <div className="space-y-3">
                         {lifetimeData.map((item) => (
@@ -334,7 +378,18 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-4">
                     <TrendingUp className="w-5 h-5 text-purple-600" />
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">High-Value Customer Segments</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">High-Value Customer Segments
+                        <InfoTooltipIcon placement="top" content={(
+                            <div>
+                                <p className="font-semibold mb-1">What</p>
+                                <p>Buyers who spend much more than average.</p>
+                                <p className="font-semibold mt-2 mb-1">How</p>
+                                <p>We flag customers whose lifetime value is 2x, 3x, or 6x your buyer AOV.</p>
+                                <p className="font-semibold mt-2 mb-1">Why</p>
+                                <p>Protect and grow these relationships with VIP offers and tailored flows.</p>
+                            </div>
+                        )} />
+                    </h3>
                 </div>
                 <div className="space-y-3">
                     {highValueSegments.map((seg) => (
@@ -355,7 +410,18 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-4">
                     <Calendar className="w-5 h-5 text-purple-600" />
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Last Active Segments</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Last Active Segments
+                        <InfoTooltipIcon placement="top" content={(
+                            <div>
+                                <p className="font-semibold mb-1">What</p>
+                                <p>How recently people engaged.</p>
+                                <p className="font-semibold mt-2 mb-1">How</p>
+                                <p>We group profiles by days since the last open or click, and include those who never engaged.</p>
+                                <p className="font-semibold mt-2 mb-1">Why</p>
+                                <p>Spot inactivity early. Warm recent engagers and re-engage older cohorts before suppressing.</p>
+                            </div>
+                        )} />
+                    </h3>
                 </div>
                 <div className="space-y-3">
                     {lastActiveSegments.map((seg) => (

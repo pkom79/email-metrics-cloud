@@ -1,6 +1,7 @@
 "use client";
 import React, { useMemo } from 'react';
 import type { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
+import InfoTooltipIcon from '../InfoTooltipIcon';
 
 interface RevenueSplitBarProps {
     campaigns: ProcessedCampaign[];
@@ -32,7 +33,18 @@ export default function RevenueSplitBar({ campaigns, flows }: RevenueSplitBarPro
         <div className="mt-4 mb-4">
             <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
                 <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Campaign vs Flow Revenue Split</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign vs Flow Revenue Split
+                        <InfoTooltipIcon placement="top" content={(
+                            <div>
+                                <p className="font-semibold mb-1">What</p>
+                                <p>Share of revenue from campaigns vs flows.</p>
+                                <p className="font-semibold mt-2 mb-1">How</p>
+                                <p>We total revenue from each and show the percentage split for the selected range.</p>
+                                <p className="font-semibold mt-2 mb-1">Why</p>
+                                <p>Balance investment. Strong flows suggest lifecycle wins; low flow share may mean missed automation revenue.</p>
+                            </div>
+                        )} />
+                    </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{totalRevenue > 0 ? formatCurrency(totalRevenue) + ' total' : 'No revenue in range'}</p>
                 </div>
                 {totalRevenue > 0 ? (

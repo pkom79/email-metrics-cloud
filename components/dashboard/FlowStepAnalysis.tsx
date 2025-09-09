@@ -4,6 +4,7 @@ import { Workflow, GitBranch, AlertTriangle, ArrowUp, ArrowDown, ArrowRight } fr
 import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
 import { thirdTicks, formatTickLabels, computeAxisMax } from '../../lib/utils/chartTicks';
+import InfoTooltipIcon from '../InfoTooltipIcon';
 
 interface FlowStepAnalysisProps {
     dateRange: string;
@@ -729,7 +730,18 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             <div className="section-header mb-2">
                 <div className="flex items-center gap-2">
                     <Workflow className="w-6 h-6 text-emerald-600" />
-                    <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Flow Step Analysis</h3>
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Flow Step Analysis
+                        <InfoTooltipIcon placement="bottom-start" content={(
+                            <div>
+                                <p className="font-semibold mb-1">What</p>
+                                <p>Performance by step inside a selected flow.</p>
+                                <p className="font-semibold mt-2 mb-1">How</p>
+                                <p>Pick a flow and a metric to see each message side by side. Rates are computed per message; revenue is total for that step.</p>
+                                <p className="font-semibold mt-2 mb-1">Why</p>
+                                <p>Find weak links, rename confusing steps, and test subject lines or timing where drop a0offs appear.</p>
+                            </div>
+                        )} />
+                    </h3>
                 </div>
                 <div className="section-controls">
                     <div className="relative">

@@ -1,7 +1,8 @@
 "use client";
 import React, { useMemo, useState } from 'react';
 import SelectBase from "../ui/SelectBase";
-import { Users, Info } from 'lucide-react';
+import { Users } from 'lucide-react';
+import InfoTooltipIcon from '../InfoTooltipIcon';
 import { DataManager } from '../../lib/data/dataManager';
 
 interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; }
@@ -79,7 +80,18 @@ export default function SubscriberGrowth({ dateRange, granularity, customFrom, c
             <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-2">
                     <Users className="w-5 h-5 text-purple-600" />
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Subscriber Growth</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight flex items-center gap-2">Subscriber Growth
+                        <InfoTooltipIcon placement="bottom-start" content={(
+                            <div>
+                                <p className="font-semibold mb-1">What</p>
+                                <p>Created profiles, first activity, and subscribed counts over time.</p>
+                                <p className="font-semibold mt-2 mb-1">How</p>
+                                <p>We bucket events by your selected granularity and date range. Subscribed uses consent timestamps when available.</p>
+                                <p className="font-semibold mt-2 mb-1">Why</p>
+                                <p>See if your acquisition and activation efforts are trending up and which moments to amplify.</p>
+                            </div>
+                        )} />
+                    </h3>
                 </div>
                 <div className="flex gap-3 text-sm">
                     <div className="relative">
@@ -113,7 +125,7 @@ export default function SubscriberGrowth({ dateRange, granularity, customFrom, c
                 <div className="border border-gray-200 rounded-lg p-3"><div className="text-gray-500 mb-1 font-medium">First Active</div><div className="text-gray-900 font-semibold tabular-nums">{buckets.reduce((s, b) => s + b.countFirst, 0).toLocaleString()}</div></div>
                 <div className="border border-gray-200 rounded-lg p-3"><div className="text-gray-500 mb-1 font-medium">Subscribed</div><div className="text-gray-900 font-semibold tabular-nums">{buckets.reduce((s, b) => s + b.countSubscribed, 0).toLocaleString()}</div></div>
             </div>
-            <div className="mt-4 text-[11px] text-gray-500 flex items-center gap-2"><Info className="w-3 h-3" /> Created = Profile Created On; First Active = first event; Subscribed = inferred from consent.</div>
+            <div className="mt-4 text-[11px] text-gray-500">Created = profile created; First Active = first event; Subscribed = inferred from consent.</div>
         </div>
     );
 }

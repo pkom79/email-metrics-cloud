@@ -4,6 +4,7 @@ import { Users, DollarSign, Calendar, TrendingUp, UploadCloud, Info, Mail, Alert
 import Papa from 'papaparse';
 import { ProcessedSubscriber } from '../../lib/data/dataTypes';
 import { SubscriberTransformer } from '../../lib/data/transformers/subscriberTransformer';
+import InfoTooltipIcon from '../InfoTooltipIcon';
 
 const CustomSegmentBlock: React.FC = () => {
     const [segmentSubscribers, setSegmentSubscribers] = useState<ProcessedSubscriber[]>([]);
@@ -115,7 +116,18 @@ const CustomSegmentBlock: React.FC = () => {
         <div className="mt-8">
             <div className="flex items-center gap-3 mb-4">
                 <UploadCloud className="w-6 h-6 text-purple-600" />
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Analyze Custom Segment</h2>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Analyze Custom Segment
+                    <InfoTooltipIcon placement="bottom-start" content={(
+                        <div>
+                            <p className="font-semibold mb-1">What</p>
+                            <p>Upload a CSV for a segment and get quick performance indicators.</p>
+                            <p className="font-semibold mt-2 mb-1">How</p>
+                            <p>We parse the file and compute counts, revenue, engagement recency, and risk markers just for this audience.</p>
+                            <p className="font-semibold mt-2 mb-1">Why</p>
+                            <p>Validate a list before you mail it or decide who to target with flows and campaigns.</p>
+                        </div>
+                    )} />
+                </h2>
             </div>
 
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-8 mb-8 hover:shadow-xl transition-all duration-200">

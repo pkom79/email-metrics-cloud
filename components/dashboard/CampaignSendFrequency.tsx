@@ -1,7 +1,7 @@
 "use client";
 import React, { useMemo, useState } from 'react';
 import SelectBase from "../ui/SelectBase";
-import { Layers, Info } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import { ProcessedCampaign } from '../../lib/data/dataTypes';
 
@@ -187,8 +187,13 @@ export default function CampaignSendFrequency({ campaigns }: Props) {
                     <InfoTooltipIcon
                         placement="bottom-start"
                         content={(
-                            <div className="w-80">
-                                <p>Bars show averages across weeks grouped by how many campaigns were sent. Toggle to view averages per week or per campaign. Rates and efficiency metrics are weighted using total emails/events.</p>
+                            <div>
+                                <p className="font-semibold mb-1">What</p>
+                                <p>How results change as you send more or fewer campaigns in a week.</p>
+                                <p className="font-semibold mt-2 mb-1">How</p>
+                                <p>We group weeks by the number of campaigns sent and show averages. Use the toggle to switch between per week and per campaign views. Rates are weighted by total emails and events.</p>
+                                <p className="font-semibold mt-2 mb-1">Why</p>
+                                <p>Find your sweet spot. If more sending doesn't improve revenue per email or lifts unsub/spam, pull back. If results hold steady, a higher cadence may be safe.</p>
                             </div>
                         )}
                     />

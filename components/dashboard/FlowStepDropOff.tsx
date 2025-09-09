@@ -235,10 +235,13 @@ export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Pro
                         <InfoTooltipIcon
                             placement="bottom"
                             content={(
-                                <div className="w-80">
-                                    <p className="font-semibold mb-1">Metrics</p>
-                                    <p>Open rate = unique opens / delivered. CTR = unique clicks / delivered. CVR = conversions / delivered. Rev/Email = revenue / delivered.</p>
-                                    <p className="mt-2">Color shows delta vs previous step (green up, red down). Larger saturation = larger change.</p>
+                                <div>
+                                    <p className="font-semibold mb-1">What</p>
+                                    <p>How performance changes from one step to the next inside each flow.</p>
+                                    <p className="font-semibold mt-2 mb-1">How</p>
+                                    <p>We show the chosen metric per step and a color delta vs the previous step (green up, red down). Open rate = unique opens/delivered; click rate = unique clicks/delivered; conversion = orders/delivered; revenue/email = revenue/delivered.</p>
+                                    <p className="font-semibold mt-2 mb-1">Why</p>
+                                    <p>Find where attention drops and test copy, offers, or timing to reduce falloff.</p>
                                 </div>
                             )}
                         />
