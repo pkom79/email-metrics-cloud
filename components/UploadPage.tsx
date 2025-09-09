@@ -30,11 +30,35 @@ export default function UploadPage() {
     const allUploaded = uploads.subscribers && uploads.flows && uploads.campaigns;
 
     const uploadZones = [
-        // Note: "iconBg" controls the solid background color of the icon square.
-        // Keep the existing "gradient" for card hover glow overlays.
-        { id: 'subscribers', title: 'Subscribers Report', description: 'Import your subscriber list and segmentation data', icon: FileText, uploaded: uploads.subscribers, gradient: 'from-blue-500 to-purple-600', iconBg: 'bg-purple-600' },
-        { id: 'flows', title: 'Email Flows Report', description: 'Automated email sequences and journey performance', icon: Zap, uploaded: uploads.flows, gradient: 'from-purple-500 to-pink-600', iconBg: 'bg-emerald-600' },
-        { id: 'campaigns', title: 'Email Campaigns Report', description: 'One-time campaign metrics and engagement data', icon: Send, uploaded: uploads.campaigns, gradient: 'from-pink-500 to-red-500', iconBg: 'bg-indigo-600' },
+        {
+            id: 'subscribers',
+            title: 'Subscribers Report',
+            description: 'Import your subscriber list and segmentation data',
+            icon: FileText,
+            uploaded: uploads.subscribers,
+            // Hover glow should match icon background color; keep gradient but same color stops
+            gradient: 'from-purple-600 to-purple-600',
+            // Solid icon background color
+            iconBg: 'bg-purple-600',
+        },
+        {
+            id: 'flows',
+            title: 'Email Flows Report',
+            description: 'Automated email sequences and journey performance',
+            icon: Zap,
+            uploaded: uploads.flows,
+            gradient: 'from-emerald-600 to-emerald-600',
+            iconBg: 'bg-emerald-600',
+        },
+        {
+            id: 'campaigns',
+            title: 'Email Campaigns Report',
+            description: 'One-time campaign metrics and engagement data',
+            icon: Send,
+            uploaded: uploads.campaigns,
+            gradient: 'from-indigo-600 to-indigo-600',
+            iconBg: 'bg-indigo-600',
+        },
     ] as const;
 
     const handleFileSelect = async (type: 'subscribers' | 'flows' | 'campaigns') => {
