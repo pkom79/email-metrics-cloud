@@ -36,8 +36,10 @@ export default function UploadPage() {
             description: 'Import your subscriber list and segmentation data',
             icon: FileText,
             uploaded: uploads.subscribers,
-            // Hover glow should match icon background color; keep gradient but same color stops
+            // Hover glow color (explicit, no gradient to avoid mismatches)
             gradient: 'from-purple-600 to-purple-600',
+            glow1: 'bg-purple-600/10',
+            glow2: 'bg-purple-600/20',
             // Solid icon background color
             iconBg: 'bg-purple-600',
             hoverBorder: 'hover:border-purple-400/50',
@@ -49,6 +51,8 @@ export default function UploadPage() {
             icon: Zap,
             uploaded: uploads.flows,
             gradient: 'from-emerald-600 to-emerald-600',
+            glow1: 'bg-emerald-600/10',
+            glow2: 'bg-emerald-600/20',
             iconBg: 'bg-emerald-600',
             hoverBorder: 'hover:border-emerald-400/50',
         },
@@ -59,6 +63,8 @@ export default function UploadPage() {
             icon: Send,
             uploaded: uploads.campaigns,
             gradient: 'from-indigo-600 to-indigo-600',
+            glow1: 'bg-indigo-600/10',
+            glow2: 'bg-indigo-600/20',
             iconBg: 'bg-indigo-600',
             hoverBorder: 'hover:border-indigo-400/50',
         },
@@ -199,8 +205,8 @@ export default function UploadPage() {
           ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}
         `}
             >
-                <div className={`absolute inset-0 bg-gradient-to-br ${zone.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
-                <div className={`absolute inset-0 rounded-2xl bg-gradient-to-r ${zone.gradient} opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-300`} />
+                <div className={`absolute inset-0 ${(zone as any).glow1} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
+                <div className={`absolute inset-0 rounded-2xl ${(zone as any).glow2} opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300`} />
                 <div className="relative z-10">
                     <div className={`inline-flex items-center justify-center w-16 h-16 rounded-xl mb-6 transition-all duration-300 ${uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? 'bg-green-100 dark:bg-green-900/30' : `${(zone as any).iconBg} group-hover:scale-110`}`}>
                         {uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" /> : <Icon className="w-8 h-8 text-white" />}
