@@ -44,7 +44,6 @@ export default function UploadPage() {
             iconBg: 'bg-purple-600',
             hoverBorder: 'hover:border-purple-500/60',
             hoverText: 'text-purple-600 dark:text-purple-400',
-            ringColor: 'hover:ring-purple-400/40',
         },
         {
             id: 'flows',
@@ -58,7 +57,6 @@ export default function UploadPage() {
             iconBg: 'bg-emerald-600',
             hoverBorder: 'hover:border-emerald-500/60',
             hoverText: 'text-emerald-600 dark:text-emerald-400',
-            ringColor: 'hover:ring-emerald-400/40',
         },
         {
             id: 'campaigns',
@@ -72,7 +70,6 @@ export default function UploadPage() {
             iconBg: 'bg-indigo-600',
             hoverBorder: 'hover:border-indigo-500/60',
             hoverText: 'text-indigo-600 dark:text-indigo-400',
-            ringColor: 'hover:ring-indigo-400/40',
         },
     ] as const;
 
@@ -203,14 +200,13 @@ export default function UploadPage() {
                 onMouseEnter={() => setHoveredZone(zone.id)}
                 onMouseLeave={() => setHoveredZone(null)}
                 className={`
-          group relative overflow-hidden cursor-pointer transition-all duration-300 ease-out
-        bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border rounded-2xl p-8
-        hover:ring-2 ${(zone as any).ringColor} hover:ring-offset-2 hover:ring-offset-white dark:hover:ring-offset-gray-900
-        ${uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? 'border-green-400/50 bg-green-50/80 dark:bg-green-950/20 dark:border-green-700/50' : `border-gray-200/50 dark:border-gray-700/50 ${(zone as any).hoverBorder}`}
-          hover:shadow-2xl hover:-translate-y-2 transform
-          ${isHovered && !isProcessing ? 'scale-105' : ''}
-          ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}
-        `}
+                    group relative overflow-hidden cursor-pointer transition-all duration-300 ease-out
+                bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border rounded-2xl p-8
+                ${uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? 'border-green-400/50 bg-green-50/80 dark:bg-green-950/20 dark:border-green-700/50' : `border-gray-200/50 dark:border-gray-700/50 ${(zone as any).hoverBorder}`}
+                    hover:shadow-2xl hover:-translate-y-2 transform
+                    ${isHovered && !isProcessing ? 'scale-105' : ''}
+                    ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}
+                `}
             >
                 <div className={`absolute inset-0 ${(zone as any).glow1} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
                 <div className={`absolute inset-0 rounded-2xl ${(zone as any).glow2} opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300`} />
