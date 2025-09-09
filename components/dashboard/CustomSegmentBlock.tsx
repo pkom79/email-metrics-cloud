@@ -214,7 +214,7 @@ const CustomSegmentBlock: React.FC = () => {
                         </div>
 
                         <div className="mb-2 flex items-center gap-2">
-                            <Info className="w-4 h-4 text-purple-600" />
+                            <span className="text-gray-400 dark:text-gray-400"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block align-middle"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg></span>
                             <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Additional Metrics</span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

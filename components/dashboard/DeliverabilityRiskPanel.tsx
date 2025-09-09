@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { Info, TrendingUp, BarChart3, Activity } from 'lucide-react';
 import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
+import InfoTooltipIcon from '../InfoTooltipIcon';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
 
 // Types
@@ -251,17 +252,19 @@ export default function DeliverabilityRiskPanel({ dateRange, customFrom, customT
                 <div className="flex items-center gap-2">
                     <TrendingUp className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Send Volume Impact & Trade‑Offs</h3>
-                    <div className="group relative">
-                        <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-700 dark:text-gray-500 dark:group-hover:text-gray-300 cursor-pointer" />
-                        <div className="absolute left-0 top-6 z-30 hidden group-hover:block w-96 text-[11px] leading-snug bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3 space-y-2">
-                            <p className="font-semibold text-gray-800 dark:text-gray-100">What</p>
-                            <p className="text-gray-600 dark:text-gray-300">Shows how sending more (last 4 weeks) impacted revenue and negative signals vs the prior 4. Elasticities express incremental effect per +1K emails.</p>
-                            <p className="font-semibold text-gray-800 dark:text-gray-100">Interpretation</p>
-                            <p className="text-gray-600 dark:text-gray-300">Use incremental revenue vs unsub/spam growth to decide if further volume expansion is value accretive or destructive.</p>
-                            <p className="font-semibold text-gray-800 dark:text-gray-100">Classification</p>
-                            <p className="text-gray-600 dark:text-gray-300">Healthy = strong incremental revenue with limited complaint churn. Mixed = revenue lift with rising friction. Harmful = little / negative revenue with rising complaints.</p>
-                        </div>
-                    </div>
+                    <InfoTooltipIcon
+                        content={(
+                            <div className="w-96 space-y-2">
+                                <p className="font-semibold">What</p>
+                                <p>Shows how sending more (last 4 weeks) impacted revenue and negative signals vs the prior 4. Elasticities express incremental effect per +1K emails.</p>
+                                <p className="font-semibold">Interpretation</p>
+                                <p>Use incremental revenue vs unsub/spam growth to decide if further volume expansion is value accretive or destructive.</p>
+                                <p className="font-semibold">Classification</p>
+                                <p>Healthy = strong incremental revenue with limited complaint churn. Mixed = revenue lift with rising friction. Harmful = little / negative revenue with rising complaints.</p>
+                            </div>
+                        )}
+                        placement="bottom-start"
+                    />
                 </div>
                 <div className="flex items-center gap-3">
                     <SelectBase value={scope} onChange={e => setScope((e.target as HTMLSelectElement).value as Scope)} className="pl-3 pr-8 py-2 rounded-md bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-100 text-sm focus:ring-2 focus:ring-purple-500">

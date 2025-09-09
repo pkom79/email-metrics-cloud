@@ -1,6 +1,7 @@
 "use client";
 import React, { useMemo } from 'react';
 import { Moon, Info } from 'lucide-react';
+import InfoTooltipIcon from '../InfoTooltipIcon';
 import type { ProcessedSubscriber } from '../../lib/data/dataTypes';
 
 interface Props { subscribers: ProcessedSubscriber[]; }
@@ -47,18 +48,20 @@ export default function InactivityRevenueDrain({ subscribers }: Props) {
             <div className="flex items-center gap-2 mb-4">
                 <Moon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Inactivity Revenue Drain</h3>
-                <div className="group relative">
-                    <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-700 dark:text-gray-500 dark:group-hover:text-gray-300 cursor-pointer" />
-                    <div className="absolute left-0 top-6 z-20 hidden group-hover:block w-80 text-xs leading-snug bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3 space-y-2">
-                        <p className="text-gray-700 dark:text-gray-200 font-semibold">What</p>
-                        <p className="text-gray-600 dark:text-gray-300">Share of total subscriber CLV held by dormant segments (no open or click for the interval).</p>
-                        <p className="text-gray-700 dark:text-gray-200 font-semibold">Why</p>
-                        <p className="text-gray-600 dark:text-gray-300">Win‑back focus: unlock trapped value starting with longest inactive, highest CLV clusters.</p>
-                        <p className="text-gray-700 dark:text-gray-200 font-semibold">Data</p>
-                        <p className="text-gray-600 dark:text-gray-300">Latest of last open / click. Buckets exclusive. 120+ excludes never‑engaged (not yet shown).</p>
-                        <p className="text-gray-500 dark:text-gray-400">Dormant CLV: {formatCurrency(totalDormantClv)} ({((totalDormantClv / totalClv) * 100).toFixed(1)}% of total)</p>
-                    </div>
-                </div>
+                <InfoTooltipIcon
+                    placement="bottom-start"
+                    content={(
+                        <div className="w-80 space-y-2">
+                            <p className="font-semibold">What</p>
+                            <p>Share of total subscriber CLV held by dormant segments (no open or click for the interval).</p>
+                            <p className="font-semibold">Why</p>
+                            <p>Win‑back focus: unlock trapped value starting with longest inactive, highest CLV clusters.</p>
+                            <p className="font-semibold">Data</p>
+                            <p>Latest of last open / click. Buckets exclusive. 120+ excludes never‑engaged (not yet shown).</p>
+                            <p className="text-gray-600 dark:text-gray-300">Dormant CLV: {formatCurrency(totalDormantClv)} ({((totalDormantClv / totalClv) * 100).toFixed(1)}% of total)</p>
+                        </div>
+                    )}
+                />
             </div>
             <div className={`grid gap-6 ${defs.length <= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2 md:grid-cols-5'}`}>
                 {defs.map(b => {

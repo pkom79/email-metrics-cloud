@@ -1,7 +1,8 @@
 "use client";
 import React, { useMemo, useState, useCallback } from 'react';
 import SelectBase from "../ui/SelectBase";
-import { Activity, Info } from 'lucide-react';
+import { Activity } from 'lucide-react';
+import InfoTooltipIcon from '../InfoTooltipIcon';
 import { DataManager } from '../../lib/data/dataManager';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
 import { computeAxisMax, thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
@@ -408,13 +409,12 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                 <div className="flex items-center gap-2">
                     <Activity className="w-5 h-5 text-purple-600" />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight flex items-center gap-2">Send Volume Impact
-                        <span className="relative group inline-flex items-center">
-                            <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 cursor-pointer" />
-                            <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-80 bg-gray-900 text-white text-[11px] leading-snug p-3 rounded-lg shadow-xl border border-gray-700">
-                                <span className="font-semibold text-white">How to interpret</span><br />
+                        <InfoTooltipIcon placement="top" content={(
+                            <div className="leading-snug">
+                                <span className="font-semibold">How to interpret</span><br />
                                 Purple line = selected performance metric. Shaded background = relative send volume (emails). Toggle between chronological and volume-sorted views. Correlation is always computed on the chronological data. Rising negative rate metrics (unsubs, spam, bounces) with higher volume indicates pressure. Partial period ends are trimmed.
-                            </span>
-                        </span>
+                            </div>
+                        )} />
                     </h3>
                 </div>
                 <div className="section-controls">
@@ -443,10 +443,6 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     <div className="flex items-center justify-end gap-2 mb-0.5">
                         <div className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 font-medium">Avg {METRIC_OPTIONS.find(m => m.value === metric)?.label}</div>
                         {(() => { if (!avgValue || !compareSeries.length || compareSeries.length !== points.length) return null; const compVals = compareSeries.filter(v => v != null) as number[]; if (compVals.length < 2) return null; const compAvg = compVals.reduce((s, v) => s + v, 0) / compVals.length; if (!compAvg) return null; const pct = ((avgValue - compAvg) / compAvg) * 100; const improved = negativeMetric ? pct < 0 : pct > 0; const arrowUp = pct > 0; const cls = improved ? 'text-emerald-600' : 'text-rose-600'; return <span className={`flex items-center gap-1 text-[11px] font-medium ${cls}`}>{arrowUp ? '↑' : '↓'} {Math.abs(pct).toFixed(1)}%</span>; })()}
-                        <div className="relative group">
-                            <span className="cursor-help text-gray-400 dark:text-gray-500 text-xs">ⓘ</span>
-                            <div className="absolute right-0 top-full z-30 mt-1 w-60 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 text-[11px] leading-snug opacity-0 shadow-lg transition-opacity group-hover:opacity-100">Change vs compare period average. Green = improvement.</div>
-                        </div>
                     </div>
                     <div className="text-3xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{formatValue(avgValue)}</div>
                 </div>
@@ -456,32 +452,34 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 text-[11px]">
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
                     <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Avg Sends
-                        <span className="group relative cursor-help text-gray-400 dark:text-gray-500">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-52 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Mean emails per bucket after trimming partial periods.</span></span>
+                        <InfoTooltipIcon placement="top" content={"Mean emails per bucket after trimming partial periods."} />
                     </div>
                     <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro?.avgEmails?.toLocaleString() || '—'}</div>
                 </div>
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
                     <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Revenue / 1k
-                        <span className="group relative cursor-help text-gray-400 dark:text-gray-500">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-56 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Total revenue divided by total emails, scaled per 1,000 sends.</span></span>
+                        <InfoTooltipIcon placement="top" content={"Total revenue divided by total emails, scaled per 1,000 sends."} />
                     </div>
                     <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro ? fmtCurrency(micro.rpmE) : '—'}</div>
                 </div>
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
                     <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Median Unsub/1k
-                        <span className="group relative cursor-help text-gray-400 dark:text-gray-500">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-56 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px]">Median bucket unsubscribe count normalized per 1,000 emails.</span></span>
+                        <InfoTooltipIcon placement="top" content={"Median bucket unsubscribe count normalized per 1,000 emails."} />
                     </div>
                     <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro ? (micro.medianUnsub >= 1 ? micro.medianUnsub.toFixed(2) : micro.medianUnsub.toFixed(3)) : '—'}</div>
                 </div>
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
                     <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Correlation
-                        <span className="group relative cursor-help text-gray-400">ⓘ<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-4 z-20 hidden group-hover:block w-64 bg-gray-900 text-white p-2 rounded-md border border-gray-700 text-[11px] leading-snug">
-                            Pearson correlation (r) between send volume and this metric over time (n ≥ 3).
-                            <br /><br />
-                            Positive means the metric tends to be higher in higher-volume periods.
-                            Negative means it tends to be lower when volume is higher.
-                            <br /><br />
-                            Strength: Neg &lt;0.1, Weak &lt;0.3, Moderate &lt;0.5, Strong &lt;0.7.
-                        </span></span>
+                        <InfoTooltipIcon placement="top" content={(
+                            <div className="leading-snug">
+                                Pearson correlation (r) between send volume and this metric over time (n ≥ 3).
+                                <br /><br />
+                                Positive means the metric tends to be higher in higher-volume periods.
+                                Negative means it tends to be lower when volume is higher.
+                                <br /><br />
+                                Strength: Neg &lt;0.1, Weak &lt;0.3, Moderate &lt;0.5, Strong &lt;0.7.
+                            </div>
+                        )} />
                     </div>
                     {(() => {
                         if (!correlationInfo) return <div className="text-lg font-semibold text-gray-500">—</div>;

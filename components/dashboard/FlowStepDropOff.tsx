@@ -2,6 +2,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import SelectBase from "../ui/SelectBase";
 import { Flame, Info } from 'lucide-react';
+import InfoTooltipIcon from '../InfoTooltipIcon';
 import { DataManager } from '../../lib/data/dataManager';
 
 interface Props { dateRange: string; customFrom?: string; customTo?: string; }
@@ -231,14 +232,16 @@ export default function FlowStepDropOff({ dateRange, customFrom, customTo }: Pro
                 <div className="flex items-center gap-2">
                     <Flame className="w-5 h-5 text-purple-600" />
                     <h3 className="text-lg font-semibold text-gray-900 tracking-tight flex items-center gap-2">Flow Step Drop-Off
-                        <span className="relative group inline-flex items-center">
-                            <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-600 cursor-pointer" />
-                            <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-80 bg-white border border-gray-200 text-gray-800 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
-                                <span className="font-semibold block mb-1">Metrics</span>
-                                Open rate = unique opens / delivered. CTR = unique clicks / delivered. CVR = conversions / delivered. Rev/Email = revenue / delivered.
-                                <br /><br />Color shows delta vs previous step (green up, red down). Larger saturation = larger change.
-                            </span>
-                        </span>
+                        <InfoTooltipIcon
+                            placement="bottom"
+                            content={(
+                                <div className="w-80">
+                                    <p className="font-semibold mb-1">Metrics</p>
+                                    <p>Open rate = unique opens / delivered. CTR = unique clicks / delivered. CVR = conversions / delivered. Rev/Email = revenue / delivered.</p>
+                                    <p className="mt-2">Color shows delta vs previous step (green up, red down). Larger saturation = larger change.</p>
+                                </div>
+                            )}
+                        />
                     </h3>
                 </div>
                 <div className="relative">

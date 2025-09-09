@@ -1,6 +1,7 @@
 "use client";
 import React, { useMemo, useState, useCallback } from 'react';
 import { Users, Info } from 'lucide-react';
+import InfoTooltipIcon from '../InfoTooltipIcon';
 import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
 import { computeAxisMax, thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
@@ -153,13 +154,15 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                 <div className="flex items-center gap-2">
                     <Users className="w-5 h-5 text-purple-600" />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight flex items-center gap-2">Audience Growth
-                        <span className="relative group inline-flex items-center">
-                            <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 cursor-pointer" />
-                            <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
-                                <span className="font-semibold block mb-1">What is this?</span>
-                                Tracks additions to your ACTIVE email audience over time (current emailable profiles only). Created = profile added (signup or import). First Active = first recorded event. Subscribed = inferred organic signup (consent + first activity). Imports without consent aren’t counted as Subscribed.
-                            </span>
-                        </span>
+                        <InfoTooltipIcon
+                            placement="bottom"
+                            content={(
+                                <div className="w-80">
+                                    <p className="font-semibold mb-1">What is this?</p>
+                                    <p>Tracks additions to your ACTIVE email audience over time (current emailable profiles only). Created = profile added (signup or import). First Active = first recorded event. Subscribed = inferred organic signup (consent + first activity). Imports without consent aren’t counted as Subscribed.</p>
+                                </div>
+                            )}
+                        />
                     </h3>
                 </div>
                 <div className="flex gap-3 text-sm items-start">
