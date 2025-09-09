@@ -2,6 +2,7 @@
 import React from 'react';
 import { Users, UserCheck, DollarSign, TrendingUp, Calendar, AlertCircle, Trash2, PiggyBank, CheckCircle } from 'lucide-react';
 import InactivityRevenueDrain from './InactivityRevenueDrain';
+import EngagementByTenure from './EngagementByTenure';
 import { DataManager } from '../../lib/data/dataManager';
 
 export default function AudienceCharts({ dateRange, granularity, customFrom, customTo }: { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string }) {
@@ -370,7 +371,10 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 </div>
             </div>
 
-            {/* Inactivity Revenue Drain (placed after Last Active Segments) */}
+            {/* Engagement by Tenure heatmap */}
+            <EngagementByTenure subscribers={subscribers} dateRange={dateRange} customTo={customTo} />
+
+            {/* Inactivity Revenue Drain (placed after Last Active Segments and heatmap) */}
             <InactivityRevenueDrain subscribers={subscribers} />
 
             {/* Dead Weight Audience & Potential Savings */}
