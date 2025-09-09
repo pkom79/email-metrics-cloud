@@ -157,9 +157,13 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                         <InfoTooltipIcon
                             placement="bottom"
                             content={(
-                                <div className="w-80">
-                                    <p className="font-semibold mb-1">What is this?</p>
-                                    <p>Tracks additions to your ACTIVE email audience over time (current emailable profiles only). Created = profile added (signup or import). First Active = first recorded event. Subscribed = inferred organic signup (consent + first activity). Imports without consent aren’t counted as Subscribed.</p>
+                                <div>
+                                    <p className="font-semibold mb-1">What</p>
+                                    <p>New profiles, initial activity, and signups over time.</p>
+                                    <p className="font-semibold mt-2 mb-1">How</p>
+                                    <p>Counts for Created which can occur by submitting a form, being imported, or through an integration like Shopify, First Active which includes actions like opening an email, clicking a link, visiting your website, or making a purchase, and Subscribed indicating that the person has explicitly given consent to receive marketing messages through that channel within your date range.</p>
+                                    <p className="font-semibold mt-2 mb-1">Why</p>
+                                    <p>Invest in sources and moments that generate genuine signups and early engagement.</p>
                                 </div>
                             )}
                         />

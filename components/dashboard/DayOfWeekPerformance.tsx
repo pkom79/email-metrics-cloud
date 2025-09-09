@@ -87,12 +87,13 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
                     <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Performance by Day of Week
                         <InfoTooltipIcon placement="top" content={(
                             <div className="leading-snug">
-                                <span className="font-semibold block mb-1">What is this?</span>
-                                Aggregates campaign performance by weekday over the selected range. Each bar sums (or averages) the chosen metric for campaigns sent that day.
-                                <br /><br />
-                                <span className="font-semibold">Best Day logic:</span> Winner only if top day ≥ 1.5 MAD above median AND has ≥ {minCampaignsRequired} campaigns (dynamic threshold = ceil(5% of all campaigns, capped at 10, floor 3). Current threshold: {minCampaignsRequired}). Otherwise we show "No clear winner" to avoid noise.
-                                <br /><br />
-                                <span className="block mt-1 text-gray-500 dark:text-gray-400">Note: Some ESPs stagger send time per recipient. That can blur weekday patterns and hide a clear winner. It's normal to see "No clear winner" if sends are spread out or the sample is small.</span>
+                                <p className="font-semibold mb-1">What</p>
+                                <p>Compare results by weekday.</p>
+                                <p className="font-semibold mt-2 mb-1">How</p>
+                                <p>We group campaigns by the day they were sent and show the metric you chose.</p>
+                                <p className="font-semibold mt-2 mb-1">Why</p>
+                                <p>Send more on the days that consistently win. If there is no clear pattern, test a couple of days.</p>
+                                <p className="mt-2 text-gray-500 dark:text-gray-400">Note: If your account uses send time per recipient in Klaviyo, results may be skewed and might not match Klaviyo. There might not be a clear winner sometimes because messages are spread across days for each person or the sample is small.</p>
                             </div>
                         )} />
                     </h3>

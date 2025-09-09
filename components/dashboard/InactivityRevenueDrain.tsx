@@ -51,14 +51,13 @@ export default function InactivityRevenueDrain({ subscribers }: Props) {
                 <InfoTooltipIcon
                     placement="bottom-start"
                     content={(
-                        <div className="w-80 space-y-2">
+                        <div className="space-y-2">
                             <p className="font-semibold">What</p>
-                            <p>Share of total subscriber CLV held by dormant segments (no open or click for the interval).</p>
+                            <p>How much customer value sits in inactive subscribers.</p>
+                            <p className="font-semibold">How</p>
+                            <p>Totals CLV for people with no recent opens or clicks.</p>
                             <p className="font-semibold">Why</p>
-                            <p>Win‑back focus: unlock trapped value starting with longest inactive, highest CLV clusters.</p>
-                            <p className="font-semibold">Data</p>
-                            <p>Latest of last open / click. Buckets exclusive. 120+ excludes never‑engaged (not yet shown).</p>
-                            <p className="text-gray-600 dark:text-gray-300">Dormant CLV: {formatCurrency(totalDormantClv)} ({((totalDormantClv / totalClv) * 100).toFixed(1)}% of total)</p>
+                            <p>Prioritize win back for the largest, highest value inactive groups.</p>
                         </div>
                     )}
                 />

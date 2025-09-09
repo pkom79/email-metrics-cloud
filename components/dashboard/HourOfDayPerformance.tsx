@@ -129,12 +129,13 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
                         Campaign Performance by Hour of Day
                         <InfoTooltipIcon placement="top" content={(
                             <div className="leading-snug">
-                                <span className="font-semibold block mb-1">What is this?</span>
-                                Aggregates campaign performance by send hour (local time) across the selected range so you can spot hourly engagement or revenue concentration.
-                                <br /><br />
-                                <span className="font-semibold">Best Hour logic:</span> Winner only if top hour ≥ 1.8 MAD above median AND has ≥ {minCampaignsRequired} campaigns (dynamic threshold = ceil(5% of all campaigns, capped at 12, floor 3). Current threshold: {minCampaignsRequired}). Otherwise we show "No clear winner" to avoid random spikes.
-                                <br /><br />
-                                <span className="block mt-1 text-gray-500 dark:text-gray-400">Note: Some ESPs stagger send time per recipient. That can blur hourly patterns and hide a clear winner. It's normal to see "No clear winner" if sends are spread out or the sample is small.</span>
+                                <p className="font-semibold mb-1">What</p>
+                                <p>Compare results by send hour.</p>
+                                <p className="font-semibold mt-2 mb-1">How</p>
+                                <p>We group campaigns by local send hour and show the metric you chose.</p>
+                                <p className="font-semibold mt-2 mb-1">Why</p>
+                                <p>Favor hours that regularly work. If unclear, A/B nearby hours and standardize.</p>
+                                <p className="mt-2 text-gray-500 dark:text-gray-400">Note: If your account uses send time per recipient in Klaviyo, results may be skewed and might not match Klaviyo. There might not be a clear winner sometimes because messages are spread across hours for each person or the sample is small.</p>
                             </div>
                         )} />
                     </h3>

@@ -138,11 +138,13 @@ export default function EngagementByTenure({ subscribers, dateRange, customTo }:
                 <InfoTooltipIcon
                     placement="bottom-start"
                     content={(
-                        <div className="w-80 space-y-2">
+                        <div className="space-y-2">
                             <p className="font-semibold">What</p>
-                            <p>Percent of profiles in each age group by last engagement window.</p>
+                            <p>How engagement changes by profile age segment.</p>
                             <p className="font-semibold">How</p>
-                            <p>Age based on Profile Created. Engagement uses latest of last open or click. Buckets are exclusive: 0–30, 31–60, 61–90, 91–120, 120+, and Never engaged. Rows are normalized (deepest purple = highest % in that row).</p>
+                            <p>Shows what share of each profile age segment engaged recently versus not.</p>
+                            <p className="font-semibold">Why</p>
+                            <p>Win back older segments. Nurture new ones to build habits.</p>
                         </div>
                     )}
                 />

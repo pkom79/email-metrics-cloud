@@ -385,15 +385,13 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                         <Trash2 className="w-5 h-5 text-purple-600" />
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Dead Weight Audience
                             <InfoTooltipIcon placement="top" content={(
-                                <div className="leading-snug">
-                                    <span className="font-semibold block mb-1">What is Dead Weight?</span>
-                                    These are subscribers who haven’t opened or clicked in a long time or were never active after signup. Keeping a large inactive segment inflates your Klaviyo billing and can slowly hurt deliverability (lower engagement signals). Purging or suppressing them periodically helps:
-                                    <ul className="list-disc pl-4 mt-2 space-y-1 text-gray-700 dark:text-gray-300">
-                                        <li>Reduce platform cost</li>
-                                        <li>Improve average engagement & deliverability</li>
-                                        <li>Focus re‑activation efforts on a smaller, fresher segment</li>
-                                    </ul>
-                                    <span className="block mt-2 text-gray-500 dark:text-gray-400">Always run a light re‑engagement flow before suppressing.</span>
+                                <div>
+                                    <p className="font-semibold mb-1">What</p>
+                                    <p>People who never engaged or have been inactive for a long time and the cost impact.</p>
+                                    <p className="font-semibold mt-2 mb-1">How</p>
+                                    <p>We detect never active and long inactive profiles and estimate Klaviyo plan savings if suppressed.</p>
+                                    <p className="font-semibold mt-2 mb-1">Why</p>
+                                    <p>Try a light re engagement first. Then suppress to cut costs and protect deliverability.</p>
                                 </div>
                             )} />
                         </h3>
