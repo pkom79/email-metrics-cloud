@@ -506,13 +506,13 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 </defs>
                                 {yTicks.map((tick, i) => (
                                     <g key={i}>
-                                        <line x1={0} y1={tick.y} x2={850} y2={tick.y} stroke="#e5e7eb" strokeDasharray="2,2" />
+                                        {/* Removed horizontal grid line to simplify design; keep label */}
                                         <text x={-5} y={tick.y + 4} textAnchor="end" fontSize="12" fill="#6b7280">{tick.label}</text>
                                     </g>
                                 ))}
                                 {xTicks.map((tick, i) => (
                                     <g key={i}>
-                                        <line x1={tick.x} y1={120} x2={tick.x} y2={130} stroke="#e5e7eb" />
+                                        {/* Removed vertical tick mark to simplify design; keep label */}
                                         <text x={tick.x} y={145} textAnchor="middle" fontSize="12" fill="#6b7280">{tick.label}</text>
                                     </g>
                                 ))}

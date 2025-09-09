@@ -141,19 +141,17 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
                         <stop offset="100%" stopColor={scope === 'campaigns' ? '#6366F1' : scope === 'flows' ? '#10B981' : '#8b5cf6'} stopOpacity="0.04" />
                     </linearGradient>
                 </defs>
-                {/* Grid + Y ticks */}
+                {/* Grid + Y ticks (lines removed, labels kept) */}
                 {metricTickValues.map((v, i) => {
                     const y = yMetric(v); return (
                         <g key={i}>
-                            <line x1={PADDING_LEFT} y1={y} x2={VIEW_W - PADDING_RIGHT} y2={y} className="stroke-gray-200 dark:stroke-gray-700" strokeDasharray="2 2" />
                             <text x={PADDING_LEFT - 6} y={y + 4} textAnchor="end" fontSize={11} className="tabular-nums fill-gray-600 dark:fill-gray-400">{metricTickLabels[i]}</text>
                         </g>
                     );
                 })}
-                {/* X axis ticks */}
+                {/* X axis ticks (tick lines removed, labels kept) */}
                 {xTicks.map((t, i) => (
                     <g key={i}>
-                        <line x1={t.x} y1={GRAPH_H} x2={t.x} y2={GRAPH_H + 10} className="stroke-gray-200 dark:stroke-gray-700" />
                         <text x={t.x} y={GRAPH_H + 25} textAnchor="middle" fontSize={11} className="fill-gray-600 dark:fill-gray-400">{t.label}</text>
                     </g>
                 ))}
