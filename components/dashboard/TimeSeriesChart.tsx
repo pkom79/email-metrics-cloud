@@ -76,8 +76,6 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
 
     const pts = primary.map((p, i) => ({ x: xScale(i), y: yScale(p.value) }));
     const pathD = buildSmoothPath(pts);
-    // Primary is line-only (no area fill)
-    const areaD = '';
 
     const cmpPts = (compare || undefined) ? (compare || []).map((p, i) => ({ x: xScale(i), y: yScale(p.value) })) : [];
     const cmpPathD = cmpPts.length >= 2 ? buildSmoothPath(cmpPts) : '';
@@ -120,7 +118,7 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
     const labelForPoint = (i: number) => primary[i]?.date || '';
     const formatVal = (v: number) => valueType === 'currency' ? fmt.currency(v) : valueType === 'percentage' ? fmt.percentageDynamic(v) : fmt.number(v);
     const color = colorHue; const dColor = darkColorHue || colorHue;
-    const gradLineId = `tsc-line-${idSuffix}`; const gradAreaId = `tsc-area-${idSuffix}`; const cmpAreaId = `tsc-cmp-area-${idSuffix}`;
+    const cmpAreaId = `tsc-cmp-area-${idSuffix}`;
 
     return (
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 mb-8">
@@ -176,15 +174,22 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
             <div className="relative" style={{ width: '100%' }}>
                 <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="block select-none">
                     <defs>
-                        <linearGradient id={gradLineId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.9} /><stop offset="100%" stopColor={color} stopOpacity={0.5} /></linearGradient>
-                        <linearGradient id={gradAreaId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.25} /><stop offset="100%" stopColor={color} stopOpacity={0.05} /></linearGradient>
                         <linearGradient id={cmpAreaId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.22} /><stop offset="100%" stopColor={color} stopOpacity={0.08} /></linearGradient>
                     </defs>
                     {/* Compare shaded area (previous period) */}
                     {cmpAreaD && <path d={cmpAreaD} fill={`url(#${cmpAreaId})`} stroke="none" />}
                     {/* Primary line (selected date range) */}
-                    {areaD && <path d={areaD} fill={`url(#${gradAreaId})`} stroke="none" />}
-                    {pathD && <path d={pathD} fill="none" stroke={`url(#${gradLineId})`} strokeWidth={2} />}
+                    {pathD && (
+                        <path
+                            d={pathD}
+                            fill="none"
+                            stroke={color}
+                            strokeWidth={2.5}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            opacity={0.9}
+                        />
+                    )}
                     {/* Y tick labels */}
                     {yTickValues.map((v, i) => { const y = yScale(v); const label = yTickLabels[i] ?? ''; return <text key={i} x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{label}</text>; })}
                     {/* X axis baseline */}
@@ -216,7 +221,7 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                 <div className="mt-3 pb-1 flex items-center gap-6 text-xs text-gray-600 dark:text-gray-300">
                     <div className="flex items-center gap-2">
                         <svg width="22" height="8" viewBox="0 0 22 8" aria-hidden>
-                            <line x1="1" y1="4" x2="21" y2="4" stroke={color} strokeWidth="2" />
+                            <line x1="1" y1="4" x2="21" y2="4" stroke={color} strokeWidth="2.5" strokeLinecap="round" />
                         </svg>
                         <span>Selected date range</span>
                     </div>
