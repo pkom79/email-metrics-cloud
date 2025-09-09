@@ -3,6 +3,7 @@ import React, { useMemo } from 'react';
 import { Grid as GridIcon, Info } from 'lucide-react';
 import type { ProcessedSubscriber } from '../../lib/data/dataTypes';
 import { DataManager } from '../../lib/data/dataManager';
+import TooltipPortal from '../TooltipPortal';
 
 interface Props {
     subscribers: ProcessedSubscriber[];
@@ -159,17 +160,30 @@ export default function EngagementByTenure({ subscribers, dateRange, customTo }:
                                 <td className="sticky left-0 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 px-2 py-1 border-b border-gray-100 dark:border-gray-800 font-medium whitespace-nowrap">{row.label} <span className="text-xs text-gray-500 dark:text-gray-400">({row.denom.toLocaleString()})</span></td>
                                 {row.percents.map((cell) => (
                                     <td key={cell.key} className="px-2 py-1 border-b border-gray-100 dark:border-gray-800">
-                                        <div className={`group relative rounded-md h-7 flex items-center justify-center ${colorFor(cell.percent, row.rowMax)}`}>
-                                            <span className="text-xs font-semibold tabular-nums">{fmtP(cell.percent)}</span>
-                                            <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition z-10 absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-xs text-gray-700 dark:text-gray-300">
-                                                <div className="font-semibold mb-1">{row.label} × {engDefs.find(e => e.key === cell.key)?.label}</div>
-                                                <ul className="space-y-0.5">
-                                                    <li><span className="text-gray-500 dark:text-gray-400">Percent:</span> {fmtP(cell.percent)}</li>
-                                                    <li><span className="text-gray-500 dark:text-gray-400">Count:</span> {cell.count.toLocaleString('en-US')} of {row.denom.toLocaleString('en-US')}</li>
-                                                </ul>
-                                                <div className="absolute left-1/2 top-0 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-white dark:bg-gray-900 border-t border-l border-gray-200 dark:border-gray-700" />
+                                        <TooltipPortal
+                                            placement="auto"
+                                            content={(
+                                                <div className="w-64 text-xs text-gray-700 dark:text-gray-300">
+                                                    <div className="mb-2">
+                                                        <span className="font-semibold text-gray-900 dark:text-gray-100">Profile Age: </span>
+                                                        <span>{row.label}</span>
+                                                    </div>
+                                                    <div className="mb-2">
+                                                        <span className="font-semibold text-gray-900 dark:text-gray-100">Last Engaged: </span>
+                                                        <span>{engDefs.find(e => e.key === cell.key)?.label}</span>
+                                                    </div>
+                                                    <div className="mb-0.5">
+                                                        <span className="font-semibold text-gray-900 dark:text-gray-100">Share: </span>
+                                                        <span>{fmtP(cell.percent)}</span>
+                                                    </div>
+                                                    <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Count: {cell.count.toLocaleString('en-US')} of {row.denom.toLocaleString('en-US')}</div>
+                                                </div>
+                                            )}
+                                        >
+                                            <div className={`rounded-md h-7 flex items-center justify-center ${colorFor(cell.percent, row.rowMax)}`}>
+                                                <span className="text-xs font-semibold tabular-nums">{fmtP(cell.percent)}</span>
                                             </div>
-                                        </div>
+                                        </TooltipPortal>
                                     </td>
                                 ))}
                             </tr>
