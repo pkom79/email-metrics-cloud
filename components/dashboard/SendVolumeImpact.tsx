@@ -162,8 +162,10 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
                 )}
                 {/* Emails area */}
                 {emailsArea && <path d={emailsArea} fill="url(#svi-emails)" stroke="none" />}
+                {/* Ultra-light baseline within drawable area */}
+                <line x1={PADDING_LEFT} y1={GRAPH_H} x2={VIEW_W - PADDING_RIGHT} y2={GRAPH_H} className="stroke-gray-200 dark:stroke-gray-700" />
                 {/* Metric line */}
-                {metricPath && <path d={metricPath} fill="none" stroke={scope === 'campaigns' ? '#6366F1' : scope === 'flows' ? '#10B981' : '#8b5cf6'} strokeWidth={2} />}
+                {metricPath && <path d={metricPath} fill="none" stroke={scope === 'campaigns' ? '#6366F1' : scope === 'flows' ? '#10B981' : '#8b5cf6'} strokeWidth={2.5} />}
                 {/* Compare ghost line removed per simplification (kept for delta calc only) */}
                 {/* Invisible hover zones (no white dots) */}
                 {points.map((p, i) => { if (p.value == null) return null; const x = xScale(i); const y = yMetric(p.value); const cellW = innerW / Math.max(1, (points.length - 1)); return <rect key={i} x={x - cellW / 2} y={0} width={cellW} height={GRAPH_H + 30} fill="transparent" onMouseEnter={() => setHover({ idx: i, x, y })} onMouseLeave={() => setHover(null)} />; })}

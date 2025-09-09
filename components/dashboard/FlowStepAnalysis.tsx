@@ -573,8 +573,10 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                             {compareArea && (
                                                 <path d={compareArea} fill={`url(#cmp-gradient-${index})`} stroke="none" />
                                             )}
+                                            {/* Ultra-light baseline within drawable area (under line, above area) */}
+                                            <line x1={0} y1={120} x2={850} y2={120} className="stroke-gray-200 dark:stroke-gray-700" />
                                             {/* Primary line (selected date range) */}
-                                            <path d={pathD} fill="none" stroke={chartColor} strokeWidth="2" />
+                                            <path d={pathD} fill="none" stroke={chartColor} strokeWidth="2.5" />
                                             {/* Hover points */}
                                             {points.map((point, i) => (
                                                 <circle
@@ -697,7 +699,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 <div className="mt-3 pb-1 flex items-center gap-6 text-xs text-gray-600 dark:text-gray-300">
                     <div className="flex items-center gap-2">
                         <svg width="22" height="8" viewBox="0 0 22 8" aria-hidden>
-                            <line x1="1" y1="4" x2="21" y2="4" stroke={chartColor} strokeWidth="2" />
+                            <line x1="1" y1="4" x2="21" y2="4" stroke={chartColor} strokeWidth="2.5" />
                         </svg>
                         <span>Selected date range</span>
                     </div>
