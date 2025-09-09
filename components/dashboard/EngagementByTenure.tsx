@@ -129,10 +129,10 @@ export default function EngagementByTenure({ subscribers, dateRange, customTo }:
     };
 
     return (
-        <div className="mt-6 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-            <div className="flex items-center gap-2 mb-4">
+        <div className="mt-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+            <div className="flex items-center gap-2 mb-3">
                 <GridIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Engagement by Audience Age</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Engagement by Profile Age</h3>
                 <div className="group relative">
                     <Info className="w-4 h-4 text-gray-400 group-hover:text-gray-700 dark:text-gray-500 dark:group-hover:text-gray-300 cursor-pointer" />
                     <div className="absolute left-0 top-6 z-20 hidden group-hover:block w-80 text-xs leading-snug bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3 space-y-2">
@@ -140,7 +140,6 @@ export default function EngagementByTenure({ subscribers, dateRange, customTo }:
                         <p className="text-gray-600 dark:text-gray-300">Percent of profiles in each age group by last engagement window.</p>
                         <p className="text-gray-700 dark:text-gray-200 font-semibold">How</p>
                         <p className="text-gray-600 dark:text-gray-300">Age based on Profile Created. Engagement uses latest of last open or click. Buckets are exclusive: 0–30, 31–60, 61–90, 91–120, 120+, and Never engaged. Rows are normalized (deepest purple = highest % in that row).</p>
-                        <p className="text-gray-500 dark:text-gray-400">Anchor date: {anchor.toISOString().slice(0, 10)} (UTC)</p>
                     </div>
                 </div>
             </div>
@@ -148,28 +147,27 @@ export default function EngagementByTenure({ subscribers, dateRange, customTo }:
                 <table className="min-w-full border-separate" style={{ borderSpacing: 0 }}>
                     <thead>
                         <tr>
-                            <th className="sticky left-0 bg-white dark:bg-gray-900 text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-2 py-2 border-b border-gray-200 dark:border-gray-800">Age group</th>
+                            <th className="sticky left-0 bg-white dark:bg-gray-900 text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-2 py-1 border-b border-gray-200 dark:border-gray-800">Profile age</th>
                             {engDefs.map((e) => (
-                                <th key={e.key} className="text-xs font-medium text-gray-500 dark:text-gray-400 px-2 py-2 border-b border-gray-200 dark:border-gray-800 text-left whitespace-nowrap">{e.label}</th>
+                                <th key={e.key} className="text-xs font-medium text-gray-500 dark:text-gray-400 px-2 py-1 border-b border-gray-200 dark:border-gray-800 text-left whitespace-nowrap">{e.label}</th>
                             ))}
                         </tr>
                     </thead>
                     <tbody>
                         {table.map((row) => (
                             <tr key={row.key}>
-                                <td className="sticky left-0 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 px-2 py-2 border-b border-gray-100 dark:border-gray-800 font-medium whitespace-nowrap">{row.label} <span className="text-xs text-gray-500 dark:text-gray-400">({row.denom.toLocaleString()})</span></td>
+                                <td className="sticky left-0 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 px-2 py-1 border-b border-gray-100 dark:border-gray-800 font-medium whitespace-nowrap">{row.label} <span className="text-xs text-gray-500 dark:text-gray-400">({row.denom.toLocaleString()})</span></td>
                                 {row.percents.map((cell) => (
-                                    <td key={cell.key} className="px-2 py-2 border-b border-gray-100 dark:border-gray-800">
-                                        <div className={`group relative rounded-md h-9 flex items-center justify-center ${colorFor(cell.percent, row.rowMax)}`}>
+                                    <td key={cell.key} className="px-2 py-1 border-b border-gray-100 dark:border-gray-800">
+                                        <div className={`group relative rounded-md h-7 flex items-center justify-center ${colorFor(cell.percent, row.rowMax)}`}>
                                             <span className="text-xs font-semibold tabular-nums">{fmtP(cell.percent)}</span>
-                                            <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition z-10 absolute -top-1 left-1/2 -translate-x-1/2 -translate-y-full w-64 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-xs text-gray-700 dark:text-gray-300">
+                                            <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition z-10 absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-xs text-gray-700 dark:text-gray-300">
                                                 <div className="font-semibold mb-1">{row.label} × {engDefs.find(e => e.key === cell.key)?.label}</div>
                                                 <ul className="space-y-0.5">
                                                     <li><span className="text-gray-500 dark:text-gray-400">Percent:</span> {fmtP(cell.percent)}</li>
                                                     <li><span className="text-gray-500 dark:text-gray-400">Count:</span> {cell.count.toLocaleString('en-US')} of {row.denom.toLocaleString('en-US')}</li>
-                                                    <li><span className="text-gray-500 dark:text-gray-400">Anchor:</span> {anchor.toISOString().slice(0, 10)} UTC</li>
                                                 </ul>
-                                                <div className="absolute left-1/2 bottom-0 translate-y-full -translate-x-1/2 w-3 h-3 rotate-45 bg-white dark:bg-gray-900 border-b border-r border-gray-200 dark:border-gray-700" />
+                                                <div className="absolute left-1/2 top-0 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-white dark:bg-gray-900 border-t border-l border-gray-200 dark:border-gray-700" />
                                             </div>
                                         </div>
                                     </td>
