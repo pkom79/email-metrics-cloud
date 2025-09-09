@@ -1,6 +1,7 @@
 "use client";
-import React, { useMemo, useState } from 'react';
-import { Info, TrendingUp, TrendingDown } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { TrendingUp, TrendingDown } from 'lucide-react';
+import InfoTooltipIcon from '../InfoTooltipIcon';
 import type { ProcessedCampaign } from '../../lib/data/dataTypes';
 
 interface EngagementDecayCurveProps {
@@ -20,7 +21,6 @@ const fmtPct = (v: number) => `${v.toFixed(1)}%`;
  * Decay %  = (Recent - Baseline) / Baseline (negative implies decay)
  */
 export default function EngagementDecayCurve({ campaigns, dateRange }: EngagementDecayCurveProps) {
-    const [showHelp, setShowHelp] = useState(false);
     const data = useMemo(() => {
         const all = campaigns;
         if (!all.length) return [] as { day: string; ts: number; openRate: number; clickRate: number }[];
@@ -98,22 +98,22 @@ export default function EngagementDecayCurve({ campaigns, dateRange }: Engagemen
                 <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 tracking-tight">Campaign Engagement Trend</h3>
-                        <button onClick={() => setShowHelp(s => !s)} aria-label="Explain engagement trend" className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors">
-                            <Info className="w-3.5 h-3.5" />
-                        </button>
+                        <InfoTooltipIcon
+                            placement="bottom-start"
+                            content={(
+                                <div className="max-w-sm">
+                                    <p className="text-gray-700 dark:text-gray-200 mb-1"><span className="font-semibold">How to read:</span> We group all emails by day and compute daily open & click rates.</p>
+                                    <ul className="list-disc pl-4 space-y-0.5 text-gray-600 dark:text-gray-300">
+                                        <li><span className="text-purple-600 font-medium">Baseline</span> = avg of first N days.</li>
+                                        <li><span className="text-indigo-500 font-medium">Latest</span> = avg of last N days.</li>
+                                        <li>Δ shows relative change vs baseline (green = improvement).</li>
+                                    </ul>
+                                    <p className="mt-1 text-gray-500 dark:text-gray-400">N scales with available data (≤7 days window).</p>
+                                </div>
+                            )}
+                        />
                     </div>
                 </div>
-                {showHelp && (
-                    <div className="absolute z-10 top-10 left-4 max-w-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 text-[11px] leading-relaxed shadow-lg">
-                        <p className="text-gray-700 dark:text-gray-200 mb-1"><span className="font-semibold">How to read:</span> We group all emails by day and compute daily open & click rates.</p>
-                        <ul className="list-disc pl-4 space-y-0.5 text-gray-600 dark:text-gray-300">
-                            <li><span className="text-purple-600 font-medium">Baseline</span> = avg of first N days.</li>
-                            <li><span className="text-indigo-500 font-medium">Latest</span> = avg of last N days.</li>
-                            <li>Δ shows relative change vs baseline (green = improvement).</li>
-                        </ul>
-                        <p className="mt-1 text-gray-500 dark:text-gray-400">N scales with available data (≤7 days window).</p>
-                    </div>
-                )}
                 {data.length < 5 && (
                     <p className="text-xs text-gray-500 dark:text-gray-400">Not enough daily data points yet to calculate decay.</p>
                 )}

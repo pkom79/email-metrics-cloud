@@ -1,6 +1,7 @@
 "use client";
 import React from 'react';
 import { Users, UserCheck, DollarSign, TrendingUp, Calendar, AlertCircle, Trash2, PiggyBank, CheckCircle } from 'lucide-react';
+import InfoTooltipIcon from '../InfoTooltipIcon';
 import InactivityRevenueDrain from './InactivityRevenueDrain';
 import EngagementByTenure from './EngagementByTenure';
 import { DataManager } from '../../lib/data/dataManager';
@@ -383,9 +384,8 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                     <div className="flex items-center gap-2 mb-4">
                         <Trash2 className="w-5 h-5 text-purple-600" />
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Dead Weight Audience
-                            <span className="relative group inline-flex items-center">
-                                <span className="w-4 h-4 inline-flex items-center justify-center rounded-full bg-gray-200 text-gray-600 text-[10px] font-medium cursor-pointer group-hover:bg-gray-300">i</span>
-                                <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-80 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
+                            <InfoTooltipIcon placement="top" content={(
+                                <div className="leading-snug">
                                     <span className="font-semibold block mb-1">What is Dead Weight?</span>
                                     These are subscribers who haven’t opened or clicked in a long time or were never active after signup. Keeping a large inactive segment inflates your Klaviyo billing and can slowly hurt deliverability (lower engagement signals). Purging or suppressing them periodically helps:
                                     <ul className="list-disc pl-4 mt-2 space-y-1 text-gray-700 dark:text-gray-300">
@@ -394,8 +394,8 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                                         <li>Focus re‑activation efforts on a smaller, fresher segment</li>
                                     </ul>
                                     <span className="block mt-2 text-gray-500 dark:text-gray-400">Always run a light re‑engagement flow before suppressing.</span>
-                                </span>
-                            </span>
+                                </div>
+                            )} />
                         </h3>
                     </div>
 

@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Clock } from 'lucide-react';
 import SelectBase from "../ui/SelectBase";
+import InfoTooltipIcon from "../InfoTooltipIcon";
 import { ProcessedCampaign } from '../../lib/data/dataTypes';
 import { DataManager } from '../../lib/data/dataManager';
 
@@ -126,14 +127,14 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
                     <Clock className="w-5 h-5 text-purple-600" />
                     <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                         Campaign Performance by Hour of Day
-                        <span className="relative group inline-flex items-center">
-                            <span className="w-4 h-4 inline-flex items-center justify-center rounded-full bg-gray-200 text-gray-600 text-[10px] font-medium cursor-pointer group-hover:bg-gray-300">i</span>
-                            <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-6 z-30 hidden group-hover:block w-72 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 text-[11px] leading-snug p-3 rounded-lg shadow-xl">
+                        <InfoTooltipIcon placement="top" content={(
+                            <div className="leading-snug">
                                 <span className="font-semibold block mb-1">What is this?</span>
                                 Aggregates campaign performance by send hour (local time) across the selected range so you can spot hourly engagement or revenue concentration.
-                                <br /><br /><span className="font-semibold">Best Hour logic:</span> Winner only if top hour ≥1.8 MAD above median AND has ≥ {minCampaignsRequired} campaigns (dynamic threshold = ceil(5% of all campaigns, capped at 12, floor 3). Current threshold: {minCampaignsRequired}). Otherwise we show &quot;No clear winner&quot; to avoid random spikes.
-                            </span>
-                        </span>
+                                <br /><br />
+                                <span className="font-semibold">Best Hour logic:</span> Winner only if top hour ≥ 1.8 MAD above median AND has ≥ {minCampaignsRequired} campaigns (dynamic threshold = ceil(5% of all campaigns, capped at 12, floor 3). Current threshold: {minCampaignsRequired}). Otherwise we show "No clear winner" to avoid random spikes.
+                            </div>
+                        )} />
                     </h3>
                 </div>
                 <div className="relative">
