@@ -30,9 +30,11 @@ export default function UploadPage() {
     const allUploaded = uploads.subscribers && uploads.flows && uploads.campaigns;
 
     const uploadZones = [
-        { id: 'subscribers', title: 'Subscribers Report', description: 'Import your subscriber list and segmentation data', icon: FileText, uploaded: uploads.subscribers, gradient: 'from-blue-500 to-purple-600' },
-        { id: 'flows', title: 'Email Flows Report', description: 'Automated email sequences and journey performance', icon: Zap, uploaded: uploads.flows, gradient: 'from-purple-500 to-pink-600' },
-        { id: 'campaigns', title: 'Email Campaigns Report', description: 'One-time campaign metrics and engagement data', icon: Send, uploaded: uploads.campaigns, gradient: 'from-pink-500 to-red-500' },
+        // Note: "iconBg" controls the solid background color of the icon square.
+        // Keep the existing "gradient" for card hover glow overlays.
+        { id: 'subscribers', title: 'Subscribers Report', description: 'Import your subscriber list and segmentation data', icon: FileText, uploaded: uploads.subscribers, gradient: 'from-blue-500 to-purple-600', iconBg: 'bg-purple-600' },
+        { id: 'flows', title: 'Email Flows Report', description: 'Automated email sequences and journey performance', icon: Zap, uploaded: uploads.flows, gradient: 'from-purple-500 to-pink-600', iconBg: 'bg-emerald-600' },
+        { id: 'campaigns', title: 'Email Campaigns Report', description: 'One-time campaign metrics and engagement data', icon: Send, uploaded: uploads.campaigns, gradient: 'from-pink-500 to-red-500', iconBg: 'bg-indigo-600' },
     ] as const;
 
     const handleFileSelect = async (type: 'subscribers' | 'flows' | 'campaigns') => {
@@ -173,7 +175,7 @@ export default function UploadPage() {
                 <div className={`absolute inset-0 bg-gradient-to-br ${zone.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
                 <div className={`absolute inset-0 rounded-2xl bg-gradient-to-r ${zone.gradient} opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-300`} />
                 <div className="relative z-10">
-                    <div className={`inline-flex items-center justify-center w-16 h-16 rounded-xl mb-6 transition-all duration-300 ${uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? 'bg-green-100 dark:bg-green-900/30' : `bg-gradient-to-br ${zone.gradient} group-hover:scale-110`}`}>
+                    <div className={`inline-flex items-center justify-center w-16 h-16 rounded-xl mb-6 transition-all duration-300 ${uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? 'bg-green-100 dark:bg-green-900/30' : `${(zone as any).iconBg} group-hover:scale-110`}`}>
                         {uploads[zone.id as 'subscribers' | 'flows' | 'campaigns'] ? <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" /> : <Icon className="w-8 h-8 text-white" />}
                     </div>
                     <h3 className={`text-xl font-semibold mb-3 transition-colors duration-200 text-gray-900 dark:text-gray-100 ${isHovered && !isProcessing ? 'text-purple-600 dark:text-purple-400' : ''}`}>{zone.title}</h3>
