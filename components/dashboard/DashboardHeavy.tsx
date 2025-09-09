@@ -16,6 +16,7 @@ import DataAgeNotice from './DataAgeNotice';
 import CampaignSendFrequency from './CampaignSendFrequency';
 import CampaignGapsAndLosses from './CampaignGapsAndLosses';
 import { BarChart3, Calendar, GitCompare, Mail, Send, Zap, Star, Upload as UploadIcon, X, Share2 } from 'lucide-react';
+import InfoTooltipIcon from '../InfoTooltipIcon';
 import SelectBase from "../ui/SelectBase";
 import UploadWizard from '../../components/UploadWizard';
 import { usePendingUploadsLinker } from '../../lib/utils/usePendingUploadsLinker';
@@ -895,7 +896,21 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             <div className="p-6"><div className="max-w-7xl mx-auto space-y-8">
                 {overviewMetrics && (
                     <section>
-                        <div className="flex items-center gap-2 mb-3"><Mail className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Email Performance Overview</h2></div>
+                        <div className="flex items-center gap-2 mb-3">
+                            <Mail className="w-5 h-5 text-purple-600" />
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Email Performance Overview
+                                <InfoTooltipIcon placement="top" content={(
+                                    <div>
+                                        <p className="font-semibold mb-1">What</p>
+                                        <p>Your email KPIs over time.</p>
+                                        <p className="font-semibold mt-2 mb-1">How</p>
+                                        <p>Switch metrics and compare to a prior period to spot trends.</p>
+                                        <p className="font-semibold mt-2 mb-1">Why</p>
+                                        <p>If core rates slip, improve list quality, content, timing, and deliverability before scaling volume.</p>
+                                    </div>
+                                )} />
+                            </h2>
+                        </div>
                         {/* Overview Timeseries Chart */}
                         <TimeSeriesChart
                             title="Email Performance Overview"
@@ -947,7 +962,21 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 )}
                 {campaignMetrics && (
                     <section>
-                        <div className="flex items-center gap-2 mb-3"><Send className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Campaign Performance</h2></div>
+                        <div className="flex items-center gap-2 mb-3">
+                            <Send className="w-5 h-5 text-purple-600" />
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Performance
+                                <InfoTooltipIcon placement="top" content={(
+                                    <div>
+                                        <p className="font-semibold mb-1">What</p>
+                                        <p>KPIs for campaign sends only.</p>
+                                        <p className="font-semibold mt-2 mb-1">How</p>
+                                        <p>Pick a metric and see trends and compare.</p>
+                                        <p className="font-semibold mt-2 mb-1">Why</p>
+                                        <p>If efficiency falls as volume rises, slow down or segment better.</p>
+                                    </div>
+                                )} />
+                            </h2>
+                        </div>
                         {/* Campaign Timeseries Chart */}
                         <TimeSeriesChart
                             title="Campaign Performance"
@@ -1008,7 +1037,18 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     <section>
                         <div className="section-card">
                             <div className="section-header">
-                                <div className="flex items-center gap-2"><Star className="w-5 h-5 text-purple-600" /><h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Top Campaigns ({getSortedCampaigns().length})</h3></div>
+                                <div className="flex items-center gap-2"><Star className="w-5 h-5 text-purple-600" /><h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Top Campaigns ({getSortedCampaigns().length})
+                                    <InfoTooltipIcon placement="top" content={(
+                                        <div>
+                                            <p className="font-semibold mb-1">What</p>
+                                            <p>Your best campaigns by the metric you pick.</p>
+                                            <p className="font-semibold mt-2 mb-1">How</p>
+                                            <p>We rank campaigns and show key stats.</p>
+                                            <p className="font-semibold mt-2 mb-1">Why</p>
+                                            <p>Reuse what works like offer, timing, and creative. Iterate on weak ones.</p>
+                                        </div>
+                                    )} />
+                                </h3></div>
                                 <div className="relative"><SelectBase value={selectedCampaignMetric} onChange={e => setSelectedCampaignMetric((e.target as HTMLSelectElement).value)} className="px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">{campaignMetricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</SelectBase></div>
                             </div>
                             <div>{getSortedCampaigns().slice(0, displayedCampaigns).map((c, i) => (
@@ -1055,7 +1095,18 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 {flowMetrics && (
                     <section>
                         <div className="flex items-center justify-between gap-2 mb-3">
-                            <div className="flex items-center gap-2"><Zap className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Flow Performance</h2></div>
+                            <div className="flex items-center gap-2"><Zap className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Flow Performance
+                                <InfoTooltipIcon placement="top" content={(
+                                    <div>
+                                        <p className="font-semibold mb-1">What</p>
+                                        <p>KPIs for flows across all flows or one flow.</p>
+                                        <p className="font-semibold mt-2 mb-1">How</p>
+                                        <p>Pick a metric and see trend and compare.</p>
+                                        <p className="font-semibold mt-2 mb-1">Why</p>
+                                        <p>If a key flow underperforms, fix triggers, content, and timing.</p>
+                                    </div>
+                                )} />
+                            </h2></div>
                             <div className="relative">
                                 <SelectBase value={selectedFlow} onChange={e => { setSelectedFlow((e.target as HTMLSelectElement).value); }} className="px-4 py-2 pr-9 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm" minWidthClass="min-w-[220px]">
                                     <option value="all">All Flows</option>

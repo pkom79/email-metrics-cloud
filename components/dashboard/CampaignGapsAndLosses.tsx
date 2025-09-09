@@ -2,6 +2,7 @@
 import React, { useMemo } from 'react';
 import { AlertTriangle, CalendarRange, Layers, LineChart, MailX, Percent } from 'lucide-react';
 import MetricCard from './MetricCard';
+import InfoTooltipIcon from '../InfoTooltipIcon';
 import TooltipPortal from '../TooltipPortal';
 import { DataManager } from '../../lib/data/dataManager';
 import type { ProcessedCampaign } from '../../lib/data/dataTypes';
@@ -52,7 +53,18 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
     if (!weekly90Plus) {
         return (
             <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
-                <div className="flex items-center gap-2 mb-2"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Gaps & Losses</h3></div>
+                <div className="flex items-center gap-2 mb-2"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Gaps & Losses
+                    <InfoTooltipIcon placement="top" content={(
+                        <div>
+                            <p className="font-semibold mb-1">What</p>
+                            <p>Weeks you did not send and what that might have cost.</p>
+                            <p className="font-semibold mt-2 mb-1">How</p>
+                            <p>We find weeks without campaigns and estimate missed revenue.</p>
+                            <p className="font-semibold mt-2 mb-1">Why</p>
+                            <p>Keep a steady weekly cadence going forward. Plan a realistic schedule and monitor for new gaps.</p>
+                        </div>
+                    )} />
+                </h3></div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">This module is available only in the Weekly view for ranges 90 days or longer.</div>
             </div>
         );
