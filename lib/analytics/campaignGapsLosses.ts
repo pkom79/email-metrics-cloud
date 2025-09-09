@@ -13,10 +13,19 @@ export interface GapsLossesResult {
   zeroCampaignSendWeeks: number;
   longestZeroSendGap: number;
   pctWeeksWithCampaignsSent: number; // 0-100
+  // Explicit counts for tooltip "X of Y weeks"
+  weeksWithCampaignsSent: number; // numerator (based on raw-campaign UTC buckets)
+  weeksInRangeFull: number;       // denominator (full weeks fully within range)
+  // Lists for tooltips
+  zeroSendWeekStarts?: string[];      // ISO YYYY-MM-DD of week starts (complete weeks only)
+  longestGapWeekStarts?: string[];    // ISO YYYY-MM-DD for the longest zero-send run (complete weeks only)
   // Row 2 — Impact & Effectiveness
   estimatedLostRevenue?: number; // undefined when insufficient data for computation
   lowEffectivenessCampaigns: number; // campaigns with revenue == 0
+  zeroRevenueCampaigns?: number;     // alias for UI label
+  zeroRevenueCampaignDetails?: { date: string; title: string }[]; // for tooltip list
   avgCampaignsPerWeek: number;
+  totalCampaignsInFullWeeks?: number; // for tooltip explanation
   // Flags/notes
   allWeeksSent: boolean;
   insufficientWeeklyData: boolean; // true if < ceil(66%) of weeks in the selected range have campaigns sent
@@ -63,8 +72,11 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
       zeroCampaignSendWeeks: 0,
       longestZeroSendGap: 0,
       pctWeeksWithCampaignsSent: 0,
+  weeksWithCampaignsSent: 0,
+  weeksInRangeFull: 0,
       estimatedLostRevenue: undefined,
-      lowEffectivenessCampaigns: 0,
+  lowEffectivenessCampaigns: 0,
+  zeroRevenueCampaigns: 0,
       avgCampaignsPerWeek: 0,
       allWeeksSent: false,
   insufficientWeeklyData: true,
@@ -102,7 +114,8 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   // We'll compute an alternate sent-weeks count directly from raw campaigns (defined below) and prefer it for coverage
   let sentWeeksAll = sentWeeksAllAgg;
   let pctWeeksWithCampaignsSent = coverageDenom > 0 ? (sentWeeksAll / coverageDenom) * 100 : 0;
-  const avgCampaignsPerWeek = coverageDenom > 0 ? (fullInRangeWeeks.reduce((s,w)=> s + (w.campaignsSent || 0), 0) / coverageDenom) : 0;
+  const totalCampaignsInFullWeeks = fullInRangeWeeks.reduce((s,w)=> s + (w.campaignsSent || 0), 0);
+  const avgCampaignsPerWeek = coverageDenom > 0 ? (totalCampaignsInFullWeeks / coverageDenom) : 0;
   // Debug: surface coverage math to help diagnose gating issues in the field
   try {
     // eslint-disable-next-line no-console
@@ -135,7 +148,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
       const key = ws.toISOString();
       altMap[key] = (altMap[key] || 0) + 1;
     }
-    const altWeeks = fullInRangeWeeks.map(w => ({ key: w.weekStart.toISOString(), sent: (altMap[w.weekStart.toISOString()]||0) > 0, count: (altMap[w.weekStart.toISOString()]||0) }));
+  const altWeeks = fullInRangeWeeks.map(w => ({ key: w.weekStart.toISOString(), sent: (altMap[w.weekStart.toISOString()]||0) > 0, count: (altMap[w.weekStart.toISOString()]||0) }));
   const altSentWeeks = altWeeks.filter(w => w.sent).length;
   const mismatches = fullInRangeWeeks.filter(w => ((w.campaignsSent||0)>0) !== ((altMap[w.weekStart.toISOString()]||0)>0)).map(w => w.weekStart.toISOString().slice(0,10));
   // Prefer raw-campaign-derived count for gating and display to avoid aggregation inconsistencies
@@ -155,10 +168,18 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
 
   // Low-Effectiveness Campaigns: count individual campaigns with revenue==0 in the selected range
   let lowEffectivenessCampaigns = 0;
+  const zeroRevenueCampaignDetails: { date: string; title: string }[] = [];
   for (const c of campaigns) {
     if (!(c.sentDate instanceof Date) || isNaN(c.sentDate.getTime())) continue;
-    if (c.sentDate >= rangeStart && c.sentDate <= rangeEnd && (c.revenue || 0) === 0) lowEffectivenessCampaigns++;
+    if (c.sentDate >= rangeStart && c.sentDate <= rangeEnd && (c.revenue || 0) === 0) {
+      lowEffectivenessCampaigns++;
+      const dateIso = new Date(c.sentDate).toISOString();
+      const title = (c.campaignName || c.subject || '').toString();
+      zeroRevenueCampaignDetails.push({ date: dateIso, title });
+    }
   }
+  // Sort details by date desc for display
+  zeroRevenueCampaignDetails.sort((a,b)=> (b.date.localeCompare(a.date)));
 
   const allWeeksSent = coverageDenom > 0 && fullInRangeWeeks.every(w => (w.campaignsSent || 0) > 0);
   // Weekly sufficiency gate: require ceil(66%) of full-in-range weeks to have at least one campaign sent
@@ -251,16 +272,34 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
     }
   }
 
+  // Build lists for tooltips
+  const zeroSendWeekStarts = completeWeeks.filter(w => isZeroSend(w)).map(w => w.weekStart.toISOString().slice(0,10));
+  const longestGapWeekStarts = ((): string[] => {
+    if (longestGapStartIdx == null || longestGap <= 0) return [];
+    const out: string[] = [];
+    for (let k = longestGapStartIdx; k < longestGapStartIdx + longestGap && k < completeWeeks.length; k++) {
+      out.push(completeWeeks[k].weekStart.toISOString().slice(0,10));
+    }
+    return out;
+  })();
+
   return {
     zeroCampaignSendWeeks: zeroSendWeeks,
     longestZeroSendGap: longestGap,
     pctWeeksWithCampaignsSent,
+  weeksWithCampaignsSent: sentWeeksAll,
+  weeksInRangeFull: coverageDenom,
     estimatedLostRevenue,
-    lowEffectivenessCampaigns,
+  lowEffectivenessCampaigns,
+  zeroRevenueCampaigns: lowEffectivenessCampaigns,
+  zeroRevenueCampaignDetails,
     avgCampaignsPerWeek,
+  totalCampaignsInFullWeeks,
     allWeeksSent,
     insufficientWeeklyData,
     hasLongGaps,
     suspectedCsvCoverageGap,
+  zeroSendWeekStarts,
+  longestGapWeekStarts,
   };
 }

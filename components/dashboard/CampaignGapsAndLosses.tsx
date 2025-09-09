@@ -2,6 +2,7 @@
 import React, { useMemo } from 'react';
 import { AlertTriangle, CalendarRange, Layers, LineChart, MailX, Percent } from 'lucide-react';
 import MetricCard from './MetricCard';
+import TooltipPortal from '../TooltipPortal';
 import { DataManager } from '../../lib/data/dataManager';
 import type { ProcessedCampaign } from '../../lib/data/dataTypes';
 import { computeCampaignGapsAndLosses } from '../../lib/analytics/campaignGapsLosses';
@@ -94,13 +95,128 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Row 1 — Consistency & Gaps */}
-                <MetricCard title="Zero Campaign Send Weeks" value={result.zeroCampaignSendWeeks.toLocaleString()} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline />
-                <MetricCard title="Longest Gap Without Campaigns" value={`${result.longestZeroSendGap.toLocaleString()} wk${result.longestZeroSendGap === 1 ? '' : 's'}`} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline />
-                <MetricCard title="% of Weeks With Campaigns Sent" value={`${result.pctWeeksWithCampaignsSent.toFixed(1)}%`} change={0} isPositive={true} dateRange={dateRange} category="campaign" hideSparkline />
+                <div className="relative">
+                    <TooltipPortal
+                        content={(
+                            <div className="max-w-xs text-gray-900 dark:text-gray-100">
+                                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Definition</div>
+                                <div className="text-sm">Weeks in the selected range with no campaign sends.</div>
+                                {!!(result.zeroSendWeekStarts?.length) && (
+                                    <div className="mt-2">
+                                        <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Weeks</div>
+                                        <ul className="max-h-48 overflow-auto space-y-1 pr-1">
+                                            {result.zeroSendWeekStarts.slice(0, 10).map((d) => (<li key={d} className="text-xs tabular-nums">{d}</li>))}
+                                            {result.zeroSendWeekStarts.length > 10 && (
+                                                <li className="text-xs text-gray-600 dark:text-gray-400">+{result.zeroSendWeekStarts.length - 10} more</li>
+                                            )}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    >
+                        <div>
+                            <MetricCard title="Zero Campaign Send Weeks" value={result.zeroCampaignSendWeeks.toLocaleString()} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline />
+                        </div>
+                    </TooltipPortal>
+                </div>
+                <div className="relative">
+                    <TooltipPortal
+                        content={(
+                            <div className="max-w-xs text-gray-900 dark:text-gray-100">
+                                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Definition</div>
+                                <div className="text-sm">The longest consecutive streak of weeks with zero campaign sends.</div>
+                                {!!(result.longestGapWeekStarts?.length) && (
+                                    <div className="mt-2">
+                                        <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Weeks in this gap</div>
+                                        <ul className="max-h-48 overflow-auto space-y-1 pr-1">
+                                            {result.longestGapWeekStarts.slice(0, 10).map((d) => (<li key={d} className="text-xs tabular-nums">{d}</li>))}
+                                            {result.longestGapWeekStarts.length > 10 && (
+                                                <li className="text-xs text-gray-600 dark:text-gray-400">+{result.longestGapWeekStarts.length - 10} more</li>
+                                            )}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    >
+                        <div>
+                            <MetricCard title="Longest Gap Without Campaigns" value={`${result.longestZeroSendGap.toLocaleString()} ${result.longestZeroSendGap === 1 ? 'week' : 'weeks'}`} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline />
+                        </div>
+                    </TooltipPortal>
+                </div>
+                <div className="relative">
+                    <TooltipPortal
+                        content={(
+                            <div className="max-w-xs text-gray-900 dark:text-gray-100">
+                                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Definition</div>
+                                <div className="text-sm">Full weeks inside the range that had at least one campaign.</div>
+                                <div className="text-sm font-semibold mt-2 tabular-nums">{result.weeksWithCampaignsSent.toLocaleString()} of {result.weeksInRangeFull.toLocaleString()} weeks</div>
+                            </div>
+                        )}
+                    >
+                        <div>
+                            <MetricCard title="% of Weeks With Campaigns Sent" value={`${result.pctWeeksWithCampaignsSent.toFixed(1)}%`} change={0} isPositive={true} dateRange={dateRange} category="campaign" hideSparkline />
+                        </div>
+                    </TooltipPortal>
+                </div>
                 {/* Row 2 — Impact & Effectiveness */}
-                <MetricCard title="Estimated Lost Revenue" value={formatCurrency(result.estimatedLostRevenue || 0)} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline />
-                <MetricCard title="Low-Effectiveness Campaigns" value={result.lowEffectivenessCampaigns.toLocaleString()} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline />
-                <MetricCard title="Average Campaigns per Week" value={result.avgCampaignsPerWeek.toFixed(2)} change={0} isPositive={true} dateRange={dateRange} category="campaign" hideSparkline />
+                <div className="relative">
+                    <TooltipPortal
+                        content={(
+                            <div className="max-w-xs text-gray-900 dark:text-gray-100">
+                                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Definition</div>
+                                <div className="text-sm">Conservative estimate of revenue missed during short gaps (1–4 weeks). We look at typical nearby weeks, cap outliers, and multiply by the number of missing weeks.</div>
+                            </div>
+                        )}
+                    >
+                        <div>
+                            <MetricCard title="Estimated Lost Revenue" value={formatCurrency(result.estimatedLostRevenue || 0)} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline />
+                        </div>
+                    </TooltipPortal>
+                </div>
+                <div className="relative">
+                    <TooltipPortal
+                        content={(
+                            <div className="max-w-xs text-gray-900 dark:text-gray-100">
+                                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Definition</div>
+                                <div className="text-sm">Campaigns in this range with $0 revenue.</div>
+                                {!!(result.zeroRevenueCampaignDetails?.length) && (
+                                    <div className="mt-2">
+                                        <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Campaigns</div>
+                                        <ul className="max-h-48 overflow-auto space-y-1 pr-1">
+                                            {result.zeroRevenueCampaignDetails.slice(0, 10).map((c, i) => (
+                                                <li key={`${c.date}-${i}`} className="text-xs"><span className="tabular-nums mr-1">{new Date(c.date).toISOString().slice(0, 10)}</span> — <span className="truncate inline-block max-w-[12rem] align-bottom" title={c.title}>{c.title || 'Untitled'}</span></li>
+                                            ))}
+                                            {result.zeroRevenueCampaignDetails.length > 10 && (
+                                                <li className="text-xs text-gray-600 dark:text-gray-400">+{result.zeroRevenueCampaignDetails.length - 10} more</li>
+                                            )}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    >
+                        <div>
+                            <MetricCard title="Zero revenue campaigns" value={(result.zeroRevenueCampaigns ?? result.lowEffectivenessCampaigns).toLocaleString()} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline />
+                        </div>
+                    </TooltipPortal>
+                </div>
+                <div className="relative">
+                    <TooltipPortal
+                        content={(
+                            <div className="max-w-xs text-gray-900 dark:text-gray-100">
+                                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Definition</div>
+                                <div className="text-sm">Total campaigns divided by the number of full weeks in range.</div>
+                                <div className="text-sm font-semibold mt-2 tabular-nums">{(result.totalCampaignsInFullWeeks ?? 0).toLocaleString()} total ÷ {result.weeksInRangeFull.toLocaleString()} weeks</div>
+                            </div>
+                        )}
+                    >
+                        <div>
+                            <MetricCard title="Average Campaigns per Week" value={result.avgCampaignsPerWeek.toFixed(2)} change={0} isPositive={true} dateRange={dateRange} category="campaign" hideSparkline />
+                        </div>
+                    </TooltipPortal>
+                </div>
             </div>
         </div>
     );
