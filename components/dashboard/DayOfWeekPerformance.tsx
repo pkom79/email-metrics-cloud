@@ -135,7 +135,7 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
                             const value = maxValue * ratio;
                             return (
                                 <g key={index}>
-                                    <line x1={x} y1={chartHeight + 15} x2={x} y2={chartHeight + 20} stroke="#9ca3af" strokeWidth={1} />
+                                    {/* Removed x-axis notch lines; keep labels */}
                                     <text x={x} y={chartHeight + 35} textAnchor="middle" className="text-xs fill-gray-500">
                                         {formatMetricValue(value, selectedMetric)}
                                     </text>

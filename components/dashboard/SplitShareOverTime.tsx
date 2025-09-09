@@ -75,7 +75,7 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
         <div className="mt-4">
             <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
                 <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Campaign vs Flow split over time</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Campaign vs Flow Split Over Time</p>
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500 dark:text-gray-400">Metric:</span>
                         <div className="flex rounded-md overflow-hidden border border-gray-200 dark:border-gray-700">
@@ -143,9 +143,8 @@ function BarShareChart({
 
     return (
         <div className="relative" role="img" aria-label="Campaign vs Flow split over time">
-            <svg width="100%" viewBox={`0 0 ${viewW} ${H + 40}`} className="block select-none">
-                {/* baseline 50% guide */}
-                <line x1={paddingL} y1={yForPct(50)} x2={viewW - paddingR} y2={yForPct(50)} className="stroke-gray-200 dark:stroke-gray-800" strokeDasharray="3 3" />
+            <svg width="100%" viewBox={`0 0 ${viewW} ${H + 40}`} className="block select-none" aria-label="Campaign vs Flow Split Over Time">
+                {/* 50% guide removed by request */}
                 {/* bars */}
                 {data.map((d, i) => {
                     const x = xFor(i);
@@ -171,12 +170,7 @@ function BarShareChart({
                     for (let i = 0; i < count; i++) {
                         const idx = Math.round((i / (count - 1)) * (data.length - 1));
                         const x = xFor(idx) + barW / 2;
-                        nodes.push(
-                            <g key={i}>
-                                <line x1={x} y1={H} x2={x} y2={H + 6} className="stroke-gray-200 dark:stroke-gray-800" />
-                                <text x={x} y={H + 18} textAnchor="middle" fontSize={11} className="fill-gray-600 dark:fill-gray-400">{data[idx].label}</text>
-                            </g>
-                        );
+                        nodes.push(<text key={i} x={x} y={H + 18} textAnchor="middle" fontSize={11} className="fill-gray-600 dark:fill-gray-400">{data[idx].label}</text>);
                     }
                     return nodes;
                 })()}

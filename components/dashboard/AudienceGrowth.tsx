@@ -189,7 +189,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                         <linearGradient id="ag-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.25} /><stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.05} /></linearGradient>
                     </defs>
                     {areaD && <path d={areaD} fill="url(#ag-area)" stroke="none" />}
-                    {pathD && <path d={pathD} fill="none" stroke="url(#ag-line)" strokeWidth={2} />}
+                    {pathD && <path d={pathD} fill="none" stroke="#8b5cf6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />}
                     {/* Y axis */}
                     {/* Y axis ticks (labels only, no horizontal grid lines) */}
                     {yTickValues.map((v, i) => {

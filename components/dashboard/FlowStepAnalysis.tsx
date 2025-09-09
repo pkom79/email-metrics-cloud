@@ -573,10 +573,12 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                             {compareArea && (
                                                 <path d={compareArea} fill={`url(#cmp-gradient-${index})`} stroke="none" />
                                             )}
-                                            {/* Ultra-light baseline within drawable area (under line, above area) */}
+                                            {/* Ultra-light baseline within drawable area (draw once under line) */}
                                             <line x1={0} y1={120} x2={850} y2={120} className="stroke-gray-200 dark:stroke-gray-700" />
                                             {/* Primary line (selected date range) */}
                                             <path d={pathD} fill="none" stroke={chartColor} strokeWidth="2.5" />
+                                            {/* Overlay baseline to mask the line exactly at baseline for crisp resting effect */}
+                                            <line x1={0} y1={120} x2={850} y2={120} className="stroke-gray-200 dark:stroke-gray-700" />
                                             {/* Hover points */}
                                             {points.map((point, i) => (
                                                 <circle
