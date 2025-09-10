@@ -1095,7 +1095,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
                                     {/* Metric (col 3) */}
                                     <div className="md:col-start-3 md:col-end-4 text-right">
-                                        <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">{formatMetricValue((c as any)[selectedCampaignMetric] as number, selectedCampaignMetric)}</p>
+                                        <p className="text-xl font-semibold text-gray-900 dark:text-gray-100">{formatMetricValue((c as any)[selectedCampaignMetric] as number, selectedCampaignMetric)}</p>
                                         <p className="text-sm text-gray-500 dark:text-gray-400">{campaignMetricOptions.find(m => m.value === selectedCampaignMetric)?.label}</p>
                                     </div>
                                 </div>

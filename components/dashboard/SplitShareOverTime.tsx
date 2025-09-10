@@ -186,20 +186,16 @@ function BarShareChart({
                     </div>
                     {showCompare && typeof active.cmpCampPct === 'number' && typeof active.cmpFlowPct === 'number' && (
                         <div className="mt-1 pt-1 border-t border-gray-200 dark:border-gray-700">
-                            <div className="text-[11px] text-gray-500 mb-0.5">Compare</div>
+                            <div className="font-semibold mb-0.5 text-gray-900 dark:text-gray-100">{(() => {
+                                // Prefer the same label format as x-axis; if a compare label exists, show it
+                                return active.label;
+                            })()}</div>
                             <div className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5 items-center">
                                 <div className="flex items-center gap-2"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: '#6366F1' }} /> Campaigns</div>
                                 <div className="tabular-nums text-right">{active.cmpCampPct!.toFixed(1)}% • {valueFormatter(active.cmpCampVal || 0)}</div>
                                 <div className="flex items-center gap-2"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: '#10B981' }} /> Flows</div>
                                 <div className="tabular-nums text-right">{active.cmpFlowPct!.toFixed(1)}% • {valueFormatter(active.cmpFlowVal || 0)}</div>
                                 <div className="text-gray-500 col-span-2">Total: {valueFormatter(active.cmpTotal || 0)}</div>
-                            </div>
-                            {/* deltas */}
-                            <div className="mt-1 grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5 items-center">
-                                <div className="text-gray-500">Delta Campaigns</div>
-                                <div className="tabular-nums text-right">{(active.campPct - (active.cmpCampPct || 0)).toFixed(1)}% • {valueFormatter(active.campVal - (active.cmpCampVal || 0))}</div>
-                                <div className="text-gray-500">Delta Flows</div>
-                                <div className="tabular-nums text-right">{(active.flowPct - (active.cmpFlowPct || 0)).toFixed(1)}% • {valueFormatter(active.flowVal - (active.cmpFlowVal || 0))}</div>
                             </div>
                         </div>
                     )}

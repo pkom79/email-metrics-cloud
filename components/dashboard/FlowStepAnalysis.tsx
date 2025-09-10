@@ -505,12 +505,6 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         <stop offset="100%" stopColor={chartColor} stopOpacity="0.08" />
                                     </linearGradient>
                                 </defs>
-                                {yTicks.map((tick, i) => (
-                                    <g key={i}>
-                                        {/* Removed horizontal grid line to simplify design; keep label */}
-                                        <text x={-5} y={tick.y + 4} textAnchor="end" fontSize="12" fill="#6b7280">{tick.label}</text>
-                                    </g>
-                                ))}
                                 {xTicks.map((tick, i) => (
                                     <g key={i}>
                                         {/* Removed vertical tick mark to simplify design; keep label */}
@@ -757,13 +751,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 </div>
             </div>
 
-            <div className={`mb-4 rounded-lg border px-3 py-2 text-sm flex items-start gap-2 ${hasDuplicateNames ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300'}`}>
-                <AlertTriangle className={`mt-0.5 w-4 h-4 ${hasDuplicateNames ? 'text-amber-600' : 'text-gray-500'}`} />
-                <div>
-                    <div className="font-medium">Naming affects step order{hasDuplicateNames && (<span className="ml-2 font-normal">Duplicate step names detected in this flow.</span>)}</div>
-                    <div className="text-xs mt-0.5">Use unique, consistent names for each step. A/B tests can create multiple messages with similar names; add clear suffixes like “- A” and “- B”.</div>
-                </div>
-            </div>
+            {/* Notice moved above charts and restyled to match Data Coverage Notice */}
 
             {selectedFlow && (
                 <div className="space-y-4">

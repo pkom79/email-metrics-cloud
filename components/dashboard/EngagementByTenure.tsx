@@ -178,8 +178,9 @@ export default function EngagementByTenure({ subscribers, dateRange, customTo }:
                                                         <span>{engDefs.find(e => e.key === cell.key)?.label}</span>
                                                     </div>
                                                     <div className="mb-0.5">
-                                                        <span className="font-semibold text-gray-900 dark:text-gray-100">Share: </span>
-                                                        <span>{fmtP(cell.percent)}</span>
+                                                        <span className="font-semibold text-gray-900 dark:text-gray-100">Segment size: </span>
+                                                        <span>{Math.round((row.denom * (cell.percent / 100)) || 0).toLocaleString()} profiles</span>
+                                                        <span className="text-gray-500 dark:text-gray-400"> &nbsp;(age × last engagement)</span>
                                                     </div>
                                                 </div>
                                             )}

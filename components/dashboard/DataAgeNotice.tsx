@@ -34,7 +34,7 @@ export default function DataAgeNotice({ dataManager, onUploadClick }: DataAgeNot
                                         year: 'numeric',
                                         month: 'long',
                                         day: 'numeric'
-                                    })} ({daysDiff} days ago). Upload fresh reports to see your latest email performance.
+                                    })} ({daysDiff} days ago). Upload fresh reports to see your latest email performance. Data is capped at 2 years.
                                 </p>
                             </div>
                             <button
