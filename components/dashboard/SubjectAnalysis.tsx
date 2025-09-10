@@ -31,8 +31,8 @@ export default function SubjectAnalysis({ campaigns }: Props) {
 
     const liftFmt = (v: number) => {
         const isCurrency = metric === 'revenuePerEmail';
-        const s = isCurrency ? formatCurrency(v) : `${v >= 0 ? '+' : ''}${v.toFixed(1)}pp`;
-        return s;
+        if (isCurrency) return `${v >= 0 ? '+' : ''}${formatCurrency(Math.abs(v))}`;
+        return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
     };
 
     return (
@@ -73,14 +73,26 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                 <div className="mb-4">
                     <div className="flex items-center gap-2 mb-2"><Timer className="w-4 h-4 text-purple-600" /><h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Performance by Subject Length</h4></div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {result.lengthBins.map(b => (
-                            <div key={b.key} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900">
-                                <div className="text-xs text-gray-600 dark:text-gray-400">{b.label} chars</div>
-                                <div className="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">{fmt(b.value)}</div>
-                                <div className="text-[11px] text-gray-600 dark:text-gray-400">{b.countCampaigns} campaigns • {b.totalEmails.toLocaleString()} emails</div>
-                                <div className={`text-[11px] ${b.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(b.liftVsBaseline)}</div>
-                            </div>
-                        ))}
+                        {result.lengthBins
+                            .filter(b => b.countCampaigns > 0)
+                            .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
+                            .map(b => (
+                                <TooltipPortal key={b.key} content={(
+                                    <div>
+                                        <div className="text-xs font-medium mb-1">Examples</div>
+                                        <ul className="list-disc pl-4 text-xs space-y-1">
+                                            {(b.examples || []).map((ex, i) => (<li key={i} className="truncate max-w-xs" title={ex}>{ex}</li>))}
+                                        </ul>
+                                    </div>
+                                )}>
+                                    <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900">
+                                        <div className="text-xs text-gray-600 dark:text-gray-400">{b.label} chars</div>
+                                        <div className="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">{fmt(b.value)}</div>
+                                        <div className="text-[11px] text-gray-600 dark:text-gray-400">{b.countCampaigns} campaigns • {b.totalEmails.toLocaleString()} emails</div>
+                                        <div className={`text-[11px] ${b.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(b.liftVsBaseline)}</div>
+                                    </div>
+                                </TooltipPortal>
+                            ))}
                     </div>
                 </div>
 
@@ -88,15 +100,28 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                 <div className="mb-4">
                     <div className="flex items-center gap-2 mb-2"><Tags className="w-4 h-4 text-purple-600" /><h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Keyword & Emoji Lift</h4></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {result.keywordEmojis.slice(0, 8).map(f => (
-                            <div key={f.key} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
-                                <div>
-                                    <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
-                                    <div className="text-[11px] text-gray-600 dark:text-gray-400">{f.countCampaigns} campaigns • {f.totalEmails.toLocaleString()} emails</div>
-                                </div>
-                                <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
-                            </div>
-                        ))}
+                        {result.keywordEmojis
+                            .filter(f => f.countCampaigns > 0)
+                            .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
+                            .slice(0, 8)
+                            .map(f => (
+                                <TooltipPortal key={f.key} content={(
+                                    <div>
+                                        <div className="text-xs font-medium mb-1">Examples</div>
+                                        <ul className="list-disc pl-4 text-xs space-y-1">
+                                            {(f.examples || []).map((ex, i) => (<li key={i} className="truncate max-w-xs" title={ex}>{ex}</li>))}
+                                        </ul>
+                                    </div>
+                                )}>
+                                    <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                        <div>
+                                            <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
+                                            <div className="text-[11px] text-gray-600 dark:text-gray-400">{f.countCampaigns} campaigns • {f.totalEmails.toLocaleString()} emails</div>
+                                        </div>
+                                        <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
+                                    </div>
+                                </TooltipPortal>
+                            ))}
                     </div>
                 </div>
 
@@ -104,15 +129,28 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                 <div className="mb-4">
                     <div className="flex items-center gap-2 mb-2"><Hash className="w-4 h-4 text-purple-600" /><h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Punctuation & Casing Effects</h4></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {result.punctuationCasing.slice(0, 6).map(f => (
-                            <div key={f.key} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
-                                <div>
-                                    <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
-                                    <div className="text-[11px] text-gray-600 dark:text-gray-400">{f.countCampaigns} campaigns • {f.totalEmails.toLocaleString()} emails</div>
-                                </div>
-                                <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
-                            </div>
-                        ))}
+                        {result.punctuationCasing
+                            .filter(f => f.countCampaigns > 0)
+                            .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
+                            .slice(0, 6)
+                            .map(f => (
+                                <TooltipPortal key={f.key} content={(
+                                    <div>
+                                        <div className="text-xs font-medium mb-1">Examples</div>
+                                        <ul className="list-disc pl-4 text-xs space-y-1">
+                                            {(f.examples || []).map((ex, i) => (<li key={i} className="truncate max-w-xs" title={ex}>{ex}</li>))}
+                                        </ul>
+                                    </div>
+                                )}>
+                                    <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                        <div>
+                                            <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
+                                            <div className="text-[11px] text-gray-600 dark:text-gray-400">{f.countCampaigns} campaigns • {f.totalEmails.toLocaleString()} emails</div>
+                                        </div>
+                                        <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
+                                    </div>
+                                </TooltipPortal>
+                            ))}
                     </div>
                 </div>
 
@@ -120,15 +158,28 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                 <div className="mb-4">
                     <div className="flex items-center gap-2 mb-2"><Zap className="w-4 h-4 text-purple-600" /><h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Deadline & Urgency Words</h4></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {result.deadlines.slice(0, 8).map(f => (
-                            <div key={f.key} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
-                                <div>
-                                    <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
-                                    <div className="text-[11px] text-gray-600 dark:text-gray-400">{f.countCampaigns} campaigns • {f.totalEmails.toLocaleString()} emails</div>
-                                </div>
-                                <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
-                            </div>
-                        ))}
+                        {result.deadlines
+                            .filter(f => f.countCampaigns > 0)
+                            .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
+                            .slice(0, 8)
+                            .map(f => (
+                                <TooltipPortal key={f.key} content={(
+                                    <div>
+                                        <div className="text-xs font-medium mb-1">Examples</div>
+                                        <ul className="list-disc pl-4 text-xs space-y-1">
+                                            {(f.examples || []).map((ex, i) => (<li key={i} className="truncate max-w-xs" title={ex}>{ex}</li>))}
+                                        </ul>
+                                    </div>
+                                )}>
+                                    <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                        <div>
+                                            <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
+                                            <div className="text-[11px] text-gray-600 dark:text-gray-400">{f.countCampaigns} campaigns • {f.totalEmails.toLocaleString()} emails</div>
+                                        </div>
+                                        <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
+                                    </div>
+                                </TooltipPortal>
+                            ))}
                     </div>
                 </div>
 
@@ -137,29 +188,53 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                     <div>
                         <div className="flex items-center gap-2 mb-2"><Tags className="w-4 h-4 text-purple-600" /><h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Personalization Markers</h4></div>
                         <div className="space-y-3">
-                            {result.personalization.map(f => (
-                                <div key={f.key} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
-                                    <div>
-                                        <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
-                                        <div className="text-[11px] text-gray-600 dark:text-gray-400">{f.countCampaigns} campaigns • {f.totalEmails.toLocaleString()} emails</div>
-                                    </div>
-                                    <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
-                                </div>
-                            ))}
+                            {result.personalization
+                                .filter(f => f.countCampaigns > 0)
+                                .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
+                                .map(f => (
+                                    <TooltipPortal key={f.key} content={(
+                                        <div>
+                                            <div className="text-xs font-medium mb-1">Examples</div>
+                                            <ul className="list-disc pl-4 text-xs space-y-1">
+                                                {(f.examples || []).map((ex, i) => (<li key={i} className="truncate max-w-xs" title={ex}>{ex}</li>))}
+                                            </ul>
+                                        </div>
+                                    )}>
+                                        <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                            <div>
+                                                <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
+                                                <div className="text-[11px] text-gray-600 dark:text-gray-400">{f.countCampaigns} campaigns • {f.totalEmails.toLocaleString()} emails</div>
+                                            </div>
+                                            <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
+                                        </div>
+                                    </TooltipPortal>
+                                ))}
                         </div>
                     </div>
                     <div>
                         <div className="flex items-center gap-2 mb-2"><Tags className="w-4 h-4 text-purple-600" /><h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Price Anchoring</h4></div>
                         <div className="space-y-3">
-                            {result.priceAnchoring.map(f => (
-                                <div key={f.key} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
-                                    <div>
-                                        <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
-                                        <div className="text-[11px] text-gray-600 dark:text-gray-400">{f.countCampaigns} campaigns • {f.totalEmails.toLocaleString()} emails</div>
-                                    </div>
-                                    <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
-                                </div>
-                            ))}
+                            {result.priceAnchoring
+                                .filter(f => f.countCampaigns > 0)
+                                .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
+                                .map(f => (
+                                    <TooltipPortal key={f.key} content={(
+                                        <div>
+                                            <div className="text-xs font-medium mb-1">Examples</div>
+                                            <ul className="list-disc pl-4 text-xs space-y-1">
+                                                {(f.examples || []).map((ex, i) => (<li key={i} className="truncate max-w-xs" title={ex}>{ex}</li>))}
+                                            </ul>
+                                        </div>
+                                    )}>
+                                        <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                            <div>
+                                                <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
+                                                <div className="text-[11px] text-gray-600 dark:text-gray-400">{f.countCampaigns} campaigns • {f.totalEmails.toLocaleString()} emails</div>
+                                            </div>
+                                            <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
+                                        </div>
+                                    </TooltipPortal>
+                                ))}
                         </div>
                     </div>
                 </div>
@@ -169,12 +244,23 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                     <div>
                         <div className="flex items-center gap-2 mb-2"><Type className="w-4 h-4 text-purple-600" /><h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Imperative Start</h4></div>
                         <div className="space-y-3">
-                            {result.imperativeStart.map(f => (
-                                <div key={f.key} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
-                                    <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
-                                    <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
-                                </div>
-                            ))}
+                            {result.imperativeStart
+                                .filter(f => f.countCampaigns > 0)
+                                .map(f => (
+                                    <TooltipPortal key={f.key} content={(
+                                        <div>
+                                            <div className="text-xs font-medium mb-1">Examples</div>
+                                            <ul className="list-disc pl-4 text-xs space-y-1">
+                                                {(f.examples || []).map((ex, i) => (<li key={i} className="truncate max-w-xs" title={ex}>{ex}</li>))}
+                                            </ul>
+                                        </div>
+                                    )}>
+                                        <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                            <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
+                                            <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
+                                        </div>
+                                    </TooltipPortal>
+                                ))}
                         </div>
                     </div>
                     <div>

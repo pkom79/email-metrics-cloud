@@ -15,6 +15,7 @@ export interface FeatureStat extends MetricAggregate {
   key: string;
   label: string;
   liftVsBaseline: number; // value - baseline (pp for rates, absolute for currency)
+  examples?: string[]; // sample subjects included in this feature
 }
 
 export interface LengthBinStat extends FeatureStat {
@@ -138,7 +139,13 @@ function computeFeatureGroup(
   for (const c of campaigns) { if (predicate(c.subject || c.campaignName || '')) subset.push(c); }
   const agg = computeAggregate(subset, metric);
   const baseline = computeAggregate(campaigns, metric);
-  return { key, label, countCampaigns: agg.countCampaigns, totalEmails: agg.totalEmails, totalOpens: agg.totalOpens, totalClicks: agg.totalClicks, totalRevenue: agg.totalRevenue, value: agg.value, liftVsBaseline: agg.value - baseline.value };
+  const examples = subset
+    .slice()
+    .sort((a, b) => (b.emailsSent || 0) - (a.emailsSent || 0))
+    .map(c => normalize(c.subject || c.campaignName || ''))
+    .filter(Boolean)
+    .slice(0, 5);
+  return { key, label, countCampaigns: agg.countCampaigns, totalEmails: agg.totalEmails, totalOpens: agg.totalOpens, totalClicks: agg.totalClicks, totalRevenue: agg.totalRevenue, value: agg.value, liftVsBaseline: agg.value - baseline.value, examples };
 }
 
 export function filterBySegment(campaigns: ProcessedCampaign[], segment?: string | null): ProcessedCampaign[] {
@@ -169,14 +176,22 @@ export function computeSubjectAnalysis(
   const lengthBins: LengthBinStat[] = Array.from(byBin.entries()).map(([key, list]) => {
     const agg = computeAggregate(list, metric);
     const info = binInfo.get(key)!;
-    return { key, label: info.label, range: info.range, countCampaigns: agg.countCampaigns, totalEmails: agg.totalEmails, totalOpens: agg.totalOpens, totalClicks: agg.totalClicks, totalRevenue: agg.totalRevenue, value: agg.value, liftVsBaseline: agg.value - baseline.value };
+    const examples = list
+      .slice()
+      .sort((a, b) => (b.emailsSent || 0) - (a.emailsSent || 0))
+      .map(c => normalize(c.subject || c.campaignName || ''))
+      .filter(Boolean)
+      .slice(0, 5);
+    return { key, label: info.label, range: info.range, countCampaigns: agg.countCampaigns, totalEmails: agg.totalEmails, totalOpens: agg.totalOpens, totalClicks: agg.totalClicks, totalRevenue: agg.totalRevenue, value: agg.value, liftVsBaseline: agg.value - baseline.value, examples };
   }).sort((a, b) => a.label.localeCompare(b.label));
 
   // Keyword & emoji presence (curated tokens)
   const keywordEmojis: FeatureStat[] = [
     computeFeatureGroup(campaigns, metric, 'Emoji present', (s) => EMOJI_RE.test(s), 'emoji'),
     ...KEYWORD_TOKENS.map(tok => computeFeatureGroup(campaigns, metric, tok, (s) => includesWord(s, tok), `kw:${tok}`)),
-  ].sort((a, b) => (b.totalEmails - a.totalEmails));
+  ]
+    .filter(f => f.countCampaigns > 0)
+    .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline) || (b.totalEmails - a.totalEmails));
 
   // Punctuation & casing
   const punctuationCasing: FeatureStat[] = [
@@ -186,24 +201,32 @@ export function computeSubjectAnalysis(
     computeFeatureGroup(campaigns, metric, 'Has number', hasNumber, 'number'),
     computeFeatureGroup(campaigns, metric, 'Has %', hasPercent, 'percent'),
     computeFeatureGroup(campaigns, metric, 'Has brackets/parentheses', s => /[\[\](){}]/.test(s), 'brackets'),
-  ].sort((a, b) => (b.totalEmails - a.totalEmails));
+  ]
+    .filter(f => f.countCampaigns > 0)
+    .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline) || (b.totalEmails - a.totalEmails));
 
   // Deadlines
-  const deadlines: FeatureStat[] = DEADLINE_WORDS.map(w => computeFeatureGroup(campaigns, metric, w, s => includesWord(s, w), `deadline:${w}`))
-    .sort((a, b) => (b.totalEmails - a.totalEmails));
+  const deadlines: FeatureStat[] = DEADLINE_WORDS
+    .map(w => computeFeatureGroup(campaigns, metric, w, s => includesWord(s, w), `deadline:${w}`))
+    .filter(f => f.countCampaigns > 0)
+    .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline) || (b.totalEmails - a.totalEmails));
 
   // Personalization
   const personalization: FeatureStat[] = [
     computeFeatureGroup(campaigns, metric, 'Contains “you/your”', s => hasPersonalization(s).youYour, 'p:you'),
     computeFeatureGroup(campaigns, metric, 'Has first-name token', s => hasPersonalization(s).firstNameToken, 'p:first'),
-  ].sort((a, b) => (b.totalEmails - a.totalEmails));
+  ]
+    .filter(f => f.countCampaigns > 0)
+    .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline) || (b.totalEmails - a.totalEmails));
 
   // Price anchoring
   const priceAnchoring: FeatureStat[] = [
     computeFeatureGroup(campaigns, metric, 'Has currency ($/£/€)', hasCurrency, 'cur'),
     computeFeatureGroup(campaigns, metric, 'Has numeric price', hasPriceNumber, 'price'),
     computeFeatureGroup(campaigns, metric, 'Has % discount', hasPercent, 'pct'),
-  ].sort((a, b) => (b.totalEmails - a.totalEmails));
+  ]
+    .filter(f => f.countCampaigns > 0)
+    .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline) || (b.totalEmails - a.totalEmails));
 
   // Imperative start
   const imperativeStart: FeatureStat[] = [
