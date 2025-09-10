@@ -622,7 +622,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // Overlay now only tied to isInitialLoading; metric calculations are synchronous & cached
 
     const campaignMetricOptions = [
-        { value: 'revenue', label: 'Revenue' },
+        { value: 'revenue', label: 'Total Revenue' },
         { value: 'avgOrderValue', label: 'Avg Order Value' },
         { value: 'revenuePerEmail', label: 'Revenue per Email' },
         { value: 'openRate', label: 'Open Rate' },
@@ -890,7 +890,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 </div>
             )}
             {/* Data coverage notice */}
-            {hasData && (<div className="py-3"><div className="max-w-7xl mx-auto"><div className="mx-4 sm:mx-6"><div className="p-0 text-purple-700 dark:text-purple-200"><span className="text-xs"><span className="font-medium">Data Coverage Notice:</span>{(() => { const dates = [...defCampaigns, ...defFlows].map(e => e.sentDate.getTime()); let lastVisible = dm.getLastEmailDate(); if (dates.length) { let maxTime = dates[0]; for (let i = 1; i < dates.length; i++) { if (dates[i] > maxTime) maxTime = dates[i]; } lastVisible = new Date(maxTime); } return ` All dashboard metrics reflect email channel performance only and exclude SMS-attributed revenue through ${lastVisible.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.`; })()}</span></div></div></div></div>)}
+            {hasData && (<div className="py-3"><div className="max-w-7xl mx-auto"><div className="mx-4 sm:mx-6"><div className="p-0 text-purple-700 dark:text-purple-200"><span className="text-xs"><span className="font-medium">Data Coverage Notice:</span>{(() => { const dates = [...defCampaigns, ...defFlows].map(e => e.sentDate.getTime()); let lastVisible = dm.getLastEmailDate(); if (dates.length) { let maxTime = dates[0]; for (let i = 1; i < dates.length; i++) { if (dates[i] > maxTime) maxTime = dates[i]; } lastVisible = new Date(maxTime); } return ` All dashboard metrics reflect email channel performance only and exclude SMS-attributed revenue through ${lastVisible.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}. Data is capped at 2 years.`; })()}</span></div></div></div></div>)}
             {/* Data age notice */}
             {hasData && <DataAgeNotice dataManager={dm} onUploadClick={() => setShowUploadModal(true)} />}
             {/* Main content */}

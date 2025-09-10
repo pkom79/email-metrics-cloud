@@ -468,7 +468,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             yTicks = vals.map((v, i) => ({ y: 120 - ((v - yAxisRange.min) / (axisMax - yAxisRange.min)) * 100, label: labels[i] }));
         }
         return (
-            <div key={step.sequencePosition} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
+            <div key={step.sequencePosition} className="bg-white dark:bg-gray-900 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <span className="font-semibold text-gray-900 dark:text-gray-100">{step.emailName}</span>
@@ -750,11 +750,15 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                     </div>
                 </div>
             </div>
-
-            {/* Notice moved above charts and restyled to match Data Coverage Notice */}
+            {/* Naming note styled like Data Coverage Notice */}
+            <div className="mb-3">
+                <div className="p-0 text-emerald-700 dark:text-emerald-200">
+                    <span className="text-xs"><span className="font-medium">Naming Note:</span> Steps are labeled using your flow’s message names. If multiple steps share a name, they’re suffixed with “(2)”, “(3)”, etc. Rename in Klaviyo for clarity.</span>
+                </div>
+            </div>
 
             {selectedFlow && (
-                <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {flowStepMetrics.map((step, index) => renderStepChart(step, index))}
                 </div>
             )}

@@ -2,7 +2,7 @@
 
 This guide defines the design tokens, components, and patterns used across the app. Treat it as the single source of truth and keep it updated as we standardize. When adding or modifying UI, reference this document and prefer the shared components listed here.
 
-Last updated: 2025-09-09
+Last updated: 2025-09-09 (dashboard polish)
 
 ## theme and modes
 - Tailwind: v3.x, darkMode: class
@@ -91,9 +91,18 @@ Do:
 
 Don’t:
 - Use `title=` for contentful guidance; reserve `title` for micro-hints only.
+
+Note:
+- For tiny stat cards where an info icon is too heavy, prefer `title` attributes for one-line hints.
 - Embed long-form help in tooltips; link to docs instead.
 
 ### Charts
+Flow Step Analysis layout:
+- Use a simple grid with gaps (no inner card borders or shadows per step).
+- Keep bars minimal and rely on section container for framing.
+
+Notices:
+- Data Coverage Notice must include: “Data is capped at 2 years.”
 - Lines/areas follow scope color:
   - Campaigns: `#6366F1`
   - Flows: `#10B981`
