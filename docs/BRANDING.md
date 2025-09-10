@@ -49,6 +49,12 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 ### Section Containers
 - `.section-card`: Rounded card with border and padding.
 - `.section-header`: Title at left, controls at right.
+### Export controls
+- Use a primary action button styled with brand purple for download/export actions when they are high-intent and safe.
+- Class guidance: `px-3 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-700 inline-flex items-center gap-1.5 border border-purple-600`.
+- Icon: `Download` from lucide-react at 14px–16px (`w-3.5 h-3.5`).
+- Placement: Right side of dashboard header controls, after Compare mode.
+
 - `.section-controls`: Right-aligned inline controls.
 
 Defined in `app/globals.css` under `@layer components`.

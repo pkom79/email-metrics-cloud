@@ -925,6 +925,27 @@ export class DataManager {
         };
     }
 
+    /**
+     * Public helper to resolve the exact start/end Date objects used by charts/time-series
+     * for a given dateRange input (including custom). This mirrors the private
+     * _computeDateRangeForTimeSeries logic so that external modules (e.g., exporters)
+     * can align bucket boundaries and comparisons exactly with the UI.
+     */
+    getResolvedDateRange(
+        dateRange: string,
+        customFrom?: string,
+        customTo?: string
+    ): { startDate: Date; endDate: Date } | null {
+        try {
+            // Delegate to the same internal logic used by time series.
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore - accessing private method within the class implementation scope is allowed
+            return this._computeDateRangeForTimeSeries(dateRange, customFrom, customTo);
+        } catch {
+            return null;
+        }
+    }
+
     getAudienceInsights(): AudienceInsights { return this.subscriberTransformer.getAudienceInsights(this.subscribers); }
 
     getSummaryStats() {

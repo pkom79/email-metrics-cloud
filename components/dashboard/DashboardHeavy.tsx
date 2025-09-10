@@ -1,4 +1,5 @@
 "use client";
+import { Download } from 'lucide-react';
 import React, { useMemo, useState, useEffect, useDeferredValue, useRef, useCallback } from 'react';
 import { DataManager } from '../../lib/data/dataManager';
 import MetricCard from './MetricCard';
@@ -108,6 +109,33 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [compareMode, setCompareMode] = useState<'prev-period' | 'prev-year'>('prev-period');
     const [selectedFlow, setSelectedFlow] = useState('all');
     const [selectedCampaignMetric, setSelectedCampaignMetric] = useState('revenue');
+    // Export JSON (LLM-ready) handler
+    const onExportJson = useCallback(async () => {
+        try {
+            const { buildLlmExportJson } = await import('../../lib/export/exportBuilder');
+            const effectiveRange = (dateRange === 'custom' && customActive && customFrom && customTo) ? 'custom' : dateRange;
+            const payload = await buildLlmExportJson({
+                dateRange: effectiveRange,
+                granularity,
+                compareMode,
+                customFrom: customActive ? customFrom : undefined,
+                customTo: customActive ? customTo : undefined,
+            });
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const ts = new Date();
+            const stamp = `${ts.getFullYear()}${String(ts.getMonth() + 1).padStart(2, '0')}${String(ts.getDate()).padStart(2, '0')}-${String(ts.getHours()).padStart(2, '0')}${String(ts.getMinutes()).padStart(2, '0')}`;
+            a.href = url;
+            a.download = `email-metrics-export-${stamp}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            // eslint-disable-next-line no-console
+            console.error('Export JSON failed', e);
+            alert('Export failed. Please try again.');
+        }
+    }, [dateRange, customActive, customFrom, customTo, granularity, compareMode]);
     // Chart metric selections (defaults: Total Revenue)
     const [overviewChartMetric, setOverviewChartMetric] = useState<'revenue' | 'avgOrderValue' | 'revenuePerEmail' | 'openRate' | 'clickRate' | 'clickToOpenRate' | 'emailsSent' | 'totalOrders' | 'conversionRate' | 'unsubscribeRate' | 'spamRate' | 'bounceRate'>('revenue');
     const [campaignChartMetric, setCampaignChartMetric] = useState<typeof overviewChartMetric>('revenue');
@@ -886,6 +914,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 </button>
                             )}
                         </div>
+                    </div>
+                    {/* Export JSON */}
+                    <div className="flex items-center ml-2">
+                        <button onClick={onExportJson} className="px-3 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-700 inline-flex items-center gap-1.5 border border-purple-600">
+                            <Download className="w-3.5 h-3.5" /> Export JSON
+                        </button>
                     </div>
                 </div>
             )}
