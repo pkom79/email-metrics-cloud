@@ -8,15 +8,20 @@ begin;
 -- Ensure extensions schema exists
 create schema if not exists extensions;
 
--- Move pgjwt to extensions schema if installed in public
+-- Move pgjwt to extensions schema only if the extension is relocatable; otherwise skip
 do $$
+declare
+  v_relocatable boolean;
 begin
-  if exists (
-    select 1 from pg_extension e
-    join pg_namespace n on n.oid = e.extnamespace
-    where e.extname = 'pgjwt' and n.nspname <> 'extensions'
-  ) then
+  select e.extrelocatable into v_relocatable
+  from pg_extension e
+  where e.extname = 'pgjwt';
+
+  if coalesce(v_relocatable, false) then
     execute 'alter extension pgjwt set schema extensions';
+  else
+    -- Not relocatable on this stack; leave as-is
+    perform 1;
   end if;
 end $$;
 
