@@ -785,7 +785,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 </div>
             )}
             {/* Header */}
-            <div className="pt-4 sm:pt-6"><div className="max-w-7xl mx-auto"><div className="p-6 sm:p-8 mb-4"><div className="flex items-start justify-between gap-4"><div><h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>{businessName && <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>}</div><div className="flex items-center gap-3 relative">{!isAdmin && (<button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"><UploadIcon className="h-4 w-4" />Upload New Reports</button>)}{isAdmin && (<div className="relative"><SelectBase value={selectedAccountId} onChange={e => { const val = (e.target as HTMLSelectElement).value; setSelectedAccountId(val); const a = (allAccounts || []).find(x => x.id === val); setSelectedAccountLabel(a?.label || a?.businessName || a?.id || ''); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="text-sm" minWidthClass="min-w-[240px]">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</SelectBase></div>)}</div></div></div></div></div>
+            <div className="pt-4 sm:pt-6"><div className="max-w-7xl mx-auto"><div className="p-6 sm:p-8 mb-4"><div className="flex items-start justify-between gap-4"><div><h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>{businessName && <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>}</div><div className="flex items-center gap-3 relative">{!isAdmin && (<><button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"><UploadIcon className="h-4 w-4" />Upload New Reports</button><button onClick={onExportJson} className="inline-flex items-center gap-1.5 rounded-lg border border-purple-600 bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"><Download className="w-3.5 h-3.5" />Export JSON</button></>)}{isAdmin && (<><div className="relative"><SelectBase value={selectedAccountId} onChange={e => { const val = (e.target as HTMLSelectElement).value; setSelectedAccountId(val); const a = (allAccounts || []).find(x => x.id === val); setSelectedAccountLabel(a?.label || a?.businessName || a?.id || ''); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="text-sm" minWidthClass="min-w-[240px]">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</SelectBase></div><button onClick={onExportJson} className="inline-flex items-center gap-1.5 rounded-lg border border-purple-600 bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"><Download className="w-3.5 h-3.5" />Export JSON</button></>)}</div></div></div></div></div>
 
             {/* Debug panel for link errors */}
             {linkDebugInfo && (
@@ -888,15 +888,46 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     <div className="flex items-center gap-1.5"><BarChart3 className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Granularity:</span><div className="flex gap-1.5 ml-2 flex-nowrap">{granularityOptions.map(option => <button key={option.key} onClick={() => { if (!option.disabled && option.key !== granularity) { setGranularity(option.key); } }} disabled={option.disabled} title={option.tooltip} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${granularity === option.key ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'} ${option.disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>{option.label}</button>)}</div></div>
                     {/* Compare Mode */}
                     {(() => {
-                        const prevAvail = dm.isCompareWindowAvailable(dateRange === 'custom' && customActive ? `custom:${customFrom}:${customTo}` : dateRange, 'prev-period', customFrom, customTo); const yearAvail = dm.isCompareWindowAvailable(dateRange === 'custom' && customActive ? `custom:${customFrom}:${customTo}` : dateRange, 'prev-year', customFrom, customTo); return (
-                            <div className="flex items-center gap-1.5"><GitCompare className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Compare:</span><div className="flex gap-1.5 ml-1 flex-nowrap">
-                                <button onClick={() => { if (compareMode !== 'prev-period' && prevAvail) setCompareMode('prev-period'); }} disabled={!prevAvail} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${compareMode === 'prev-period' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Prev Period</button>
-                                <button onClick={() => { if (compareMode !== 'prev-year' && yearAvail) setCompareMode('prev-year'); }} disabled={!yearAvail} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${compareMode === 'prev-year' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Prev Year</button>
-                            </div>
-                                {/* Export JSON */}
-                                <div className="flex items-center ml-2">
-                                    <button onClick={onExportJson} className="px-3 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-700 inline-flex items-center gap-1.5 border border-purple-600">
-                                        <Download className="w-3.5 h-3.5" /> Export JSON
+                        const prevAvail = dm.isCompareWindowAvailable(
+                            dateRange === 'custom' && customActive ? `custom:${customFrom}:${customTo}` : dateRange,
+                            'prev-period',
+                            customFrom,
+                            customTo
+                        );
+                        const yearAvail = dm.isCompareWindowAvailable(
+                            dateRange === 'custom' && customActive ? `custom:${customFrom}:${customTo}` : dateRange,
+                            'prev-year',
+                            customFrom,
+                            customTo
+                        );
+                        return (
+                            <div className="flex items-center gap-1.5">
+                                <GitCompare className="w-4 h-4 text-gray-500" />
+                                <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Compare:</span>
+                                <div className="flex gap-1.5 ml-1 flex-nowrap">
+                                    <button
+                                        onClick={() => {
+                                            if (compareMode !== 'prev-period' && prevAvail) setCompareMode('prev-period');
+                                        }}
+                                        disabled={!prevAvail}
+                                        className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${compareMode === 'prev-period'
+                                                ? 'bg-purple-600 text-white border-purple-600'
+                                                : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'
+                                            }`}
+                                    >
+                                        Prev Period
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            if (compareMode !== 'prev-year' && yearAvail) setCompareMode('prev-year');
+                                        }}
+                                        disabled={!yearAvail}
+                                        className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${compareMode === 'prev-year'
+                                                ? 'bg-purple-600 text-white border-purple-600'
+                                                : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'
+                                            }`}
+                                    >
+                                        Prev Year
                                     </button>
                                 </div>
                             </div>
