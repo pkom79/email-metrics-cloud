@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo } from 'react';
-import { Columns3 } from 'lucide-react';
+import { TableColumnsSplit } from 'lucide-react';
 import type { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 
@@ -34,7 +34,7 @@ export default function RevenueSplitBar({ campaigns, flows }: RevenueSplitBarPro
         <div className="mt-4 mb-4">
             <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
                 <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2"><Columns3 className="w-5 h-5 text-purple-600" /> Campaign vs Flow Revenue Split
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2"><TableColumnsSplit className="w-5 h-5 text-purple-600" /> Campaign vs Flow Revenue Split
                         <InfoTooltipIcon placement="top" content={(
                             <div>
                                 <p className="font-semibold mb-1">What</p>
