@@ -40,6 +40,7 @@ type Bucket = {
 
 const metricOptions = [
     { value: 'avgCampaignRevenue', label: 'Avg Campaign Revenue', kind: 'currency' }, // default
+    { value: 'sumRevenue', label: 'Total Revenue', kind: 'currency' },
     { value: 'aov', label: 'Average Order Value (AOV)', kind: 'currency' },
     { value: 'revenuePerEmail', label: 'Revenue per Email', kind: 'currency' },
     { value: 'openRate', label: 'Open Rate', kind: 'percent' },
@@ -253,6 +254,7 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                                         <li><span className="text-gray-500 dark:text-gray-400">Campaigns:</span> {b.campaigns.length}</li>
                                         <li><span className="text-gray-500 dark:text-gray-400">Total Emails:</span> {formatNumber(b.sumEmails)}</li>
                                         <li><span className="text-gray-500 dark:text-gray-400">Avg Campaign Revenue:</span> {formatCurrency(b.avgCampaignRevenue)}</li>
+                                        <li><span className="text-gray-500 dark:text-gray-400">Total Revenue:</span> {formatCurrency(b.sumRevenue)}</li>
                                         <li><span className="text-gray-500 dark:text-gray-400">AOV:</span> {formatCurrency(b.aov)}</li>
                                         <li><span className="text-gray-500 dark:text-gray-400">Rev / Email:</span> {formatCurrency(b.revenuePerEmail)}</li>
                                         <li><span className="text-gray-500 dark:text-gray-400">Open Rate:</span> {formatPercent(b.openRate)}</li>
