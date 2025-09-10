@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { Users, UserCheck, DollarSign, TrendingUp, CalendarRange, AlertCircle, Trash2, PiggyBank, CheckCircle, MousePointerClick } from 'lucide-react';
+import { Users, UserCheck, DollarSign, TrendingUp, SquareUser, AlertCircle, Trash2, PiggyBank, CheckCircle, MousePointerClick, Repeat2 } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import InactivityRevenueDrain from './InactivityRevenueDrain';
 import EngagementByTenure from './EngagementByTenure';
@@ -310,7 +310,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-2 mb-4">
-                        <UserCheck className="w-5 h-5 text-purple-600" />
+                        <Repeat2 className="w-5 h-5 text-purple-600" />
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Purchase Frequency Distribution
                             <InfoTooltipIcon placement="top" content={(
                                 <div>
@@ -340,7 +340,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 </div>
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-2 mb-4">
-                        <CalendarRange className="w-5 h-5 text-purple-600" />
+                        <SquareUser className="w-5 h-5 text-purple-600" />
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Audience Lifetime
                             <InfoTooltipIcon placement="top" content={(
                                 <div>
