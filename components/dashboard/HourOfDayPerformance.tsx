@@ -135,7 +135,7 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
                                 <p>We group campaigns by local send hour and show the metric you chose.</p>
                                 <p className="font-semibold mt-2 mb-1">Why</p>
                                 <p>Favor hours that regularly work. If unclear, A/B nearby hours and standardize.</p>
-                                <p className="mt-2 text-gray-500 dark:text-gray-400">Note: If your account uses send time per recipient in Klaviyo, results may be skewed and might not match Klaviyo. There might not be a clear winner sometimes because messages are spread across hours for each person or the sample is small.</p>
+                                <p className="mt-2 text-gray-500 dark:text-gray-400">Note: If your account uses send time per recipient in Klaviyo, results may be skewed and might not match Klaviyo. Sometimes we don’t have a clear winner because the best hour doesn’t have enough campaigns, or the difference from normal activity isn’t big enough. Short ranges, uneven sending, or mixed audiences can also blur the signal.</p>
                             </div>
                         )} />
                     </h3>
@@ -255,7 +255,6 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
                 {/* Summary stats (no separator to match DayOfWeek) */}
                 <div className="mt-4 flex flex-wrap justify-center gap-6 text-xs pb-4">
                     {(() => {
-                        const activeHours = hourOfDayData.length;
                         const totalCampaigns = filteredCampaigns.length;
                         const vals = hourOfDayData.map(d => d.value);
                         const n = vals.length; const median = (() => { const s = [...vals].sort((a, b) => a - b); return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; })();
@@ -268,21 +267,17 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
                         const peakVal = Math.max(...vals, 0);
                         return (
                             <>
-                                <div className="min-w-[110px] text-center">
-                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Active Hours</p>
-                                    <p className="font-semibold text-xl text-gray-900 dark:text-gray-100 tabular-nums">{activeHours}</p>
-                                </div>
-                                <div className="min-w-[140px] text-center">
-                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Best Hour (stat)</p>
-                                    <p className="font-semibold text-xl text-gray-900 dark:text-gray-100">{significant ? best.hourLabel : 'No clear winner'}</p>
-                                </div>
-                                <div className="min-w-[120px] text-center">
-                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Highest Value</p>
-                                    <p className="font-semibold text-xl text-gray-900 dark:text-gray-100">{formatMetricValue(peakVal, selectedMetric)}</p>
-                                </div>
                                 <div className="min-w-[130px] text-center">
                                     <p className="text-gray-500 dark:text-gray-400 mb-1">Total Campaigns</p>
                                     <p className="font-semibold text-xl text-gray-900 dark:text-gray-100 tabular-nums">{totalCampaigns}</p>
+                                </div>
+                                <div className="min-w-[140px] text-center">
+                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Best Hour</p>
+                                    <p className="font-semibold text-xl text-gray-900 dark:text-gray-100">{significant ? best.hourLabel : 'No clear winner'}</p>
+                                </div>
+                                <div className="min-w-[120px] text-center">
+                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Best Value</p>
+                                    <p className="font-semibold text-xl text-gray-900 dark:text-gray-100">{formatMetricValue(peakVal, selectedMetric)}</p>
                                 </div>
                             </>
                         );

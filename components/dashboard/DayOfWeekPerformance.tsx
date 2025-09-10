@@ -93,7 +93,7 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
                                 <p>We group campaigns by the day they were sent and show the metric you chose.</p>
                                 <p className="font-semibold mt-2 mb-1">Why</p>
                                 <p>Send more on the days that consistently win. If there is no clear pattern, test a couple of days.</p>
-                                <p className="mt-2 text-gray-500 dark:text-gray-400">Note: If your account uses send time per recipient in Klaviyo, results may be skewed and might not match Klaviyo. There might not be a clear winner sometimes because messages are spread across days for each person or the sample is small.</p>
+                                <p className="mt-2 text-gray-500 dark:text-gray-400">Note: If your account uses send time per recipient in Klaviyo, results may be skewed and might not match Klaviyo. Sometimes we don’t have a clear winner because the best day doesn’t have enough campaigns, or the difference from normal activity isn’t big enough. Short ranges, uneven sending, or mixed audiences can also blur the signal.</p>
                             </div>
                         )} />
                     </h3>
@@ -218,11 +218,11 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
                                     <p className="font-semibold text-xl text-gray-900 dark:text-gray-100 tabular-nums">{totalCampaigns}</p>
                                 </div>
                                 <div className="min-w-[140px] text-center">
-                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Best Day (stat)</p>
+                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Best Day</p>
                                     <p className="font-semibold text-xl text-gray-900 dark:text-gray-100">{significant ? best.day : 'No clear winner'}</p>
                                 </div>
                                 <div className="min-w-[120px] text-center">
-                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Highest Value</p>
+                                    <p className="text-gray-500 dark:text-gray-400 mb-1">Best Value</p>
                                     <p className="font-semibold text-xl text-gray-900 dark:text-gray-100">{formatMetricValue(maxValue, selectedMetric)}</p>
                                 </div>
                             </>
