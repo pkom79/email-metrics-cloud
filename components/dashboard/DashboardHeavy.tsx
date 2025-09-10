@@ -15,7 +15,7 @@ import CustomSegmentBlock from './CustomSegmentBlock';
 import DataAgeNotice from './DataAgeNotice';
 import CampaignSendFrequency from './CampaignSendFrequency';
 import CampaignGapsAndLosses from './CampaignGapsAndLosses';
-import { BarChart3, Calendar, GitCompare, Mail, Send, Zap, Star, Upload as UploadIcon, X, Share2 } from 'lucide-react';
+import { BarChart3, Calendar, GitCompare, Mail, Send, Zap, MailSearch, Upload as UploadIcon, X, Share2 } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import SelectBase from "../ui/SelectBase";
 import UploadWizard from '../../components/UploadWizard';
@@ -724,7 +724,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric)) return formatPercent(v);
         return formatNumber(v);
     };
-    const getSortedCampaigns = () => [...defCampaigns].sort((a, b) => { const av = Number((a as any)[selectedCampaignMetric]) || 0; const bv = Number((b as any)[selectedCampaignMetric]) || 0; return bv - av; });
+    const [campaignSortOrder, setCampaignSortOrder] = useState<'desc' | 'asc'>('desc');
+    const getSortedCampaigns = () => [...defCampaigns].sort((a, b) => { const av = Number((a as any)[selectedCampaignMetric]) || 0; const bv = Number((b as any)[selectedCampaignMetric]) || 0; return campaignSortOrder === 'desc' ? (bv - av) : (av - bv); });
 
     // If admin and there are zero accounts, don't block UI with overlay after initial load
     const noAccounts = isAdmin && (allAccounts?.length === 0);
@@ -1037,25 +1038,35 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     <section>
                         <div className="section-card">
                             <div className="section-header">
-                                <div className="flex items-center gap-2"><Star className="w-5 h-5 text-purple-600" /><h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Top Campaigns ({getSortedCampaigns().length})
+                                <div className="flex items-center gap-2"><MailSearch className="w-5 h-5 text-purple-600" /><h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Details
                                     <InfoTooltipIcon placement="top" content={(
                                         <div>
                                             <p className="font-semibold mb-1">What</p>
-                                            <p>Your best campaigns by the metric you pick.</p>
+                                            <p>Your campaigns listed by the metric you pick.</p>
                                             <p className="font-semibold mt-2 mb-1">How</p>
-                                            <p>We rank campaigns and show key stats.</p>
+                                            <p>Sort ascending/descending and inspect details to learn what drives outcomes.</p>
                                             <p className="font-semibold mt-2 mb-1">Why</p>
                                             <p>Reuse what works like offer, timing, and creative. Iterate on weak ones.</p>
                                         </div>
                                     )} />
                                 </h3></div>
-                                <div className="relative"><SelectBase value={selectedCampaignMetric} onChange={e => setSelectedCampaignMetric((e.target as HTMLSelectElement).value)} className="px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">{campaignMetricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</SelectBase></div>
+                                <div className="section-controls">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Sort:</span>
+                                        <div className="flex gap-1.5 ml-1 flex-nowrap">
+                                            <button onClick={() => setCampaignSortOrder('desc')} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${campaignSortOrder === 'desc' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Desc</button>
+                                            <button onClick={() => setCampaignSortOrder('asc')} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${campaignSortOrder === 'asc' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Asc</button>
+                                        </div>
+                                    </div>
+                                    <div className="relative"><SelectBase value={selectedCampaignMetric} onChange={e => setSelectedCampaignMetric((e.target as HTMLSelectElement).value)} className="px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">{campaignMetricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</SelectBase></div>
+                                </div>
                             </div>
+                            <div className="-mt-2 mb-2 text-sm text-gray-600 dark:text-gray-400">You sent {filteredCampaigns.length} {filteredCampaigns.length === 1 ? 'campaign' : 'campaigns'} in this time range.</div>
                             <div>{getSortedCampaigns().slice(0, displayedCampaigns).map((c, i) => (
                                 <div key={c.id} className={`group relative p-4 avoid-break ${i !== 0 ? 'border-t border-gray-200 dark:border-gray-800' : ''} md:grid md:items-center md:gap-4 md:[grid-template-columns:minmax(0,1fr)_400px_max-content]`}>
                                     {/* Subject (col 1) */}
                                     <div className="md:col-start-1 md:col-end-2 min-w-0">
-                                        <div className="flex items-center gap-3 mb-1.5"><span className="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium bg-purple-100 text-purple-900">{i + 1}</span><h4 className="font-medium text-gray-900 dark:text-gray-100 truncate">{c.subject}</h4></div>
+                                        <div className="flex items-center gap-3 mb-1.5"><h4 className="font-medium text-gray-900 dark:text-gray-100 truncate">{c.subject}</h4></div>
                                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-1 truncate">{c.campaignName}</p>
                                         <p className="text-sm text-gray-500 dark:text-gray-400">Sent on {c.sentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                                     </div>
