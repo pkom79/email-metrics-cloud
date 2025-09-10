@@ -2,7 +2,7 @@
 
 This guide defines the design tokens, components, and patterns used across the app. Treat it as the single source of truth and keep it updated as we standardize. When adding or modifying UI, reference this document and prefer the shared components listed here.
 
-Last updated: 2025-09-09 (dashboard polish)
+Last updated: 2025-09-10 (icons + subject analysis naming)
 
 ## theme and modes
 - Tailwind: v3.x, darkMode: class
@@ -29,7 +29,7 @@ Use Tailwind’s palette with these role mappings:
   - Surfaces: `bg-white` (light), `dark:bg-gray-900` (dark)
 
 - Brand accents
-  - Primary accent (purple): `purple-600` (UI icons) and `#8b5cf6` (violet-ish) in charts when “All” scope
+  - Primary accent (purple): `purple-600` (UI icons). Use purple for all section header icons for consistency. In charts, use `#8b5cf6` when the scope is “All”.
   - Campaigns: `#6366F1` (indigo)
   - Flows: `#10B981` (emerald)
 
@@ -115,14 +115,15 @@ Notices:
 - Hover overlays: app-specific, not part of the standardized Info tooltip scope.
 
 Audience Size Performance (new):
-- Section: use the standard section container and header with `Layers` icon and `InfoTooltipIcon`.
+- Section: use the standard section container and header with calendar icon (`CalendarFold`) and `InfoTooltipIcon`.
 - Controls: single metric dropdown using `SelectBase` (h-9). Default metric is “Avg Campaign Revenue”.
 - Buckets: 4 bars/cards laid left→right with indigo-filled bars and subtle indigo gradient backdrop.
 - Tooltips: per-bar hover tooltip mirrors Send Frequency with 11px text, shows campaign count, total emails, averages, and weighted rates.
 - Limited-data notice: show a small secondary line when sample < 12 campaigns.
 
-Subject Analysis (new):
+Subject Line Analysis (new):
 - Section: use standard section container and header with `Type` icon and `InfoTooltipIcon`.
+- Subsections should not include leading icons in their sub-headers; keep the main header icon only.
 - Controls: two dropdowns using `SelectBase` (h-9): left is Segment (default “All Segments”), right is Metric (Open Rate default; also CTO, Click Rate, Revenue per Email).
 - Notices: include an info tooltip noting Apple MPP inflation on opens and that comparisons are weighted by emails sent; also mention the 2-year cap.
 - Cards: compact bordered cards for length bins and feature lifts; use semantic colors for lift deltas (`text-emerald-600` positive, `text-rose-600` negative). Text sizes 11–14px per this guide.

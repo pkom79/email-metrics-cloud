@@ -38,7 +38,7 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                 <div className="section-header mb-3 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                         <Type className="w-5 h-5 text-purple-600" />
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Subject Analysis
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Subject Line Analysis
                             <InfoTooltipIcon placement="top" content={(<div>
                                 <p className="font-semibold mb-1">What</p>
                                 <p>How subject line features correlate with performance for Campaigns.</p>
@@ -69,7 +69,7 @@ export default function SubjectAnalysis({ campaigns }: Props) {
 
                 {/* Length bins */}
                 <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-3 justify-center"><Ruler className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Performance by Subject Length</h4></div>
+                    <div className="flex items-center gap-2 mb-3 justify-center"><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Performance by Subject Length</h4></div>
                     <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-4">
                         {/* Baseline card at top-left */}
                         <TooltipPortal content={(<div className="text-xs">Reference average for comparison.</div>)}>
@@ -106,7 +106,7 @@ export default function SubjectAnalysis({ campaigns }: Props) {
 
                 {/* Keyword & Emoji */}
                 <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-3 justify-center"><Sparkles className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Keyword & Emoji Lift</h4></div>
+                    <div className="flex items-center gap-2 mb-3 justify-center"><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Keyword & Emoji Lift</h4></div>
                     <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
                         {result.keywordEmojis
                             .filter(f => f.countCampaigns > 0 && !(f.key?.startsWith('none:')))
@@ -135,7 +135,7 @@ export default function SubjectAnalysis({ campaigns }: Props) {
 
                 {/* Punctuation & Casing */}
                 <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-3 justify-center"><CaseSensitive className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Punctuation & Casing Effects</h4></div>
+                    <div className="flex items-center gap-2 mb-3 justify-center"><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Punctuation & Casing Effects</h4></div>
                     <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
                         {result.punctuationCasing
                             .filter(f => f.countCampaigns > 0 && !(f.key?.startsWith('none:')))
@@ -164,7 +164,7 @@ export default function SubjectAnalysis({ campaigns }: Props) {
 
                 {/* Deadline/Urgency */}
                 <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-3 justify-center"><AlarmClock className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Deadline & Urgency Words</h4></div>
+                    <div className="flex items-center gap-2 mb-3 justify-center"><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Deadline & Urgency Words</h4></div>
                     <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
                         {result.deadlines
                             .filter(f => f.countCampaigns > 0 && !(f.key?.startsWith('none:')))
@@ -194,7 +194,7 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                 {/* Personalization & Price Anchoring */}
                 <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
-                        <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><User className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Personalization Markers</h4></div>
+                        <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Personalization Markers</h4></div>
                         <div className="space-y-4">
                             {result.personalization
                                 .filter(f => f.countCampaigns > 0 && !(f.key?.startsWith('none:')))
@@ -220,7 +220,7 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                         </div>
                     </div>
                     <div>
-                        <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><BadgeDollarSign className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Price Anchoring</h4></div>
+                        <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Price Anchoring</h4></div>
                         <div className="space-y-4">
                             {result.priceAnchoring
                                 .filter(f => f.countCampaigns > 0 && !(f.key?.startsWith('none:')))
@@ -250,7 +250,7 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                 {/* Imperative start & Reuse */}
                 <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-5 mt-6">
                     <div>
-                        <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><Play className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Imperative Start</h4></div>
+                        <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Imperative Start</h4></div>
                         <div className="space-y-4">
                             {result.imperativeStart
                                 .filter(f => f.countCampaigns > 0 && !(f.key?.startsWith('none:')))
@@ -273,7 +273,7 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                         </div>
                     </div>
                     <div>
-                        <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><RefreshCcw className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Reuse Fatigue (exact match)</h4></div>
+                        <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Reuse Fatigue (exact match)</h4></div>
                         <div className="space-y-3 max-h-72 overflow-auto pr-1">
                             {result.reuse.slice(0, 10).map(r => (
                                 <TooltipPortal key={r.subject} content={(<div>

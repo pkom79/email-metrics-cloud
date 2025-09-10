@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { Users, UserCheck, DollarSign, TrendingUp, Calendar, AlertCircle, Trash2, PiggyBank, CheckCircle } from 'lucide-react';
+import { Users, UserCheck, DollarSign, TrendingUp, CalendarRange, AlertCircle, Trash2, PiggyBank, CheckCircle, MousePointerClick } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import InactivityRevenueDrain from './InactivityRevenueDrain';
 import EngagementByTenure from './EngagementByTenure';
@@ -273,14 +273,12 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-3 mb-2">
-                        <Users className="w-5 h-5 text-purple-600" />
                         <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Active Audience</p>
                     </div>
                     <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{audienceInsights.totalSubscribers.toLocaleString()}</p>
                 </div>
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-3 mb-2">
-                        <UserCheck className="w-5 h-5 text-purple-600" />
                         <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Buyers</p>
                     </div>
                     <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{audienceInsights.buyerCount.toLocaleString()}</p>
@@ -293,14 +291,12 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 </div>
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-3 mb-2">
-                        <DollarSign className="w-5 h-5 text-purple-600" />
                         <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Avg CLV (All)</p>
                     </div>
                     <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(audienceInsights.avgClvAll)}</p>
                 </div>
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-3 mb-2">
-                        <TrendingUp className="w-5 h-5 text-purple-600" />
                         <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Avg CLV (Buyers)</p>
                     </div>
                     <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(audienceInsights.avgClvBuyers)}</p>
@@ -344,7 +340,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 </div>
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-2 mb-4">
-                        <Calendar className="w-5 h-5 text-purple-600" />
+                        <CalendarRange className="w-5 h-5 text-purple-600" />
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Audience Lifetime
                             <InfoTooltipIcon placement="top" content={(
                                 <div>
@@ -409,7 +405,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             {/* Last Active Segments */}
             <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-4">
-                    <Calendar className="w-5 h-5 text-purple-600" />
+                    <MousePointerClick className="w-5 h-5 text-purple-600" />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Last Active Segments
                         <InfoTooltipIcon placement="top" content={(
                             <div>

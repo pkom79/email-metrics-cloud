@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState, useCallback } from 'react';
-import { Users, Info } from 'lucide-react';
+import { ArrowUpRight, Info } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
@@ -152,7 +152,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 mb-8">
             <div className="flex items-start justify-between mb-6 sticky top-14 z-20 bg-white dark:bg-gray-900 border-b border-transparent pb-2">
                 <div className="flex items-center gap-2">
-                    <Users className="w-5 h-5 text-purple-600" />
+                    <ArrowUpRight className="w-5 h-5 text-purple-600" />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight flex items-center gap-2">Audience Growth
                         <InfoTooltipIcon
                             placement="bottom"

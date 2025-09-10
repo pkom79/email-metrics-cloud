@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState } from 'react';
-import { Layers } from 'lucide-react';
+import { CalendarFold } from 'lucide-react';
 import SelectBase from "../ui/SelectBase";
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import { ProcessedCampaign } from '../../lib/data/dataTypes';
@@ -191,7 +191,7 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
     if (!campaigns?.length) {
         return (
             <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
-                <div className="flex items-center gap-2 mb-2"><Layers className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Performance by Audience Size</h3></div>
+                <div className="flex items-center gap-2 mb-2"><CalendarFold className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Performance by Audience Size</h3></div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">No campaigns in the selected date range.</p>
             </div>
         );
@@ -208,7 +208,7 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
         <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
                 <div className="flex items-center gap-2">
-                    <Layers className="w-5 h-5 text-purple-600" />
+                    <CalendarFold className="w-5 h-5 text-purple-600" />
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Performance by Audience Size</h3>
                     <InfoTooltipIcon
                         placement="bottom-start"
