@@ -200,6 +200,7 @@ export default function CampaignSendFrequency({ campaigns }: Props) {
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
                     <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100 mr-1">View:</span>
                         {(['week', 'campaign'] as const).map(m => (
                             <button key={m} onClick={() => setMode(m)} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${mode === m ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>{m === 'week' ? 'Per Week' : 'Per Campaign'}</button>
                         ))}

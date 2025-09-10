@@ -23,7 +23,7 @@ interface Bucket {
 }
 
 const METRIC_OPTIONS: { value: MetricKey; label: string; unit: string }[] = [
-    { value: 'totalRevenue', label: 'Total Revenue', unit: '$' },
+    { value: 'totalRevenue', label: 'Average Revenue', unit: '$' },
     { value: 'revenuePerEmail', label: 'Revenue / Email', unit: '$' },
     { value: 'unsubsPer1k', label: 'Unsubs / 1K', unit: 'per 1k sends' },
     { value: 'spamPer1k', label: 'Spam / 1K', unit: 'per 1k sends' },
@@ -411,8 +411,9 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 tracking-tight flex items-center gap-2">Send Volume Impact
                         <InfoTooltipIcon placement="top" content={(
                             <div className="leading-snug">
-                                <span className="font-semibold">How to interpret</span><br />
-                                Purple line = selected performance metric. Shaded background = relative send volume (emails). Toggle between chronological and volume-sorted views. Correlation is always computed on the chronological data. Rising negative rate metrics (unsubs, spam, bounces) with higher volume indicates pressure. Partial period ends are trimmed.
+                                <div><span className="font-semibold">What:</span> Purple line = selected performance metric. Shaded background = relative send volume (emails).</div>
+                                <div className="mt-1"><span className="font-semibold">How:</span> Toggle between chronological and volume-sorted views. Correlation is computed on chronological data only.</div>
+                                <div className="mt-1"><span className="font-semibold">Why:</span> Watch how efficiency and risk move as you scale. Rising negative-rate metrics (unsubs, spam, bounces) with higher volume indicates pressure. Partial period ends are trimmed.</div>
                             </div>
                         )} />
                     </h3>
@@ -426,15 +427,15 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                         </div>
                     </div>
                     <div className="relative">
-                        <SelectBase value={metric} onChange={e => setMetric((e.target as HTMLSelectElement).value as MetricKey)} className="px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
-                            {METRIC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </SelectBase>
-                    </div>
-                    <div className="relative">
                         <SelectBase value={scope} onChange={e => setScope((e.target as HTMLSelectElement).value as SourceScope)} className="px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                             <option value="all">All Emails</option>
                             <option value="campaigns">Campaigns</option>
                             <option value="flows">Flows</option>
+                        </SelectBase>
+                    </div>
+                    <div className="relative">
+                        <SelectBase value={metric} onChange={e => setMetric((e.target as HTMLSelectElement).value as MetricKey)} className="px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                            {METRIC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </SelectBase>
                     </div>
                 </div>
@@ -442,47 +443,27 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             <div className="flex items-start justify-between mb-4">
                 <div />
                 <div className="text-right">
-                    <div className="flex items-center justify-end gap-2 mb-0.5">
-                        <div className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 font-medium">Avg {METRIC_OPTIONS.find(m => m.value === metric)?.label}</div>
-                        {(() => { if (!avgValue || !compareSeries.length || compareSeries.length !== points.length) return null; const compVals = compareSeries.filter(v => v != null) as number[]; if (compVals.length < 2) return null; const compAvg = compVals.reduce((s, v) => s + v, 0) / compVals.length; if (!compAvg) return null; const pct = ((avgValue - compAvg) / compAvg) * 100; const improved = negativeMetric ? pct < 0 : pct > 0; const arrowUp = pct > 0; const cls = improved ? 'text-emerald-600' : 'text-rose-600'; return <span className={`flex items-center gap-1 text-[11px] font-medium ${cls}`}>{arrowUp ? '↑' : '↓'} {Math.abs(pct).toFixed(1)}%</span>; })()}
-                    </div>
                     <div className="text-3xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{formatValue(avgValue)}</div>
+                    {(() => { if (!avgValue || !compareSeries.length || compareSeries.length !== points.length) return null; const compVals = compareSeries.filter(v => v != null) as number[]; if (compVals.length < 2) return null; const compAvg = compVals.reduce((s, v) => s + v, 0) / compVals.length; if (!compAvg) return null; const pct = ((avgValue - compAvg) / compAvg) * 100; const improved = negativeMetric ? pct < 0 : pct > 0; const arrowUp = pct > 0; const cls = improved ? 'text-emerald-600' : 'text-rose-600'; return <div className={`mt-1 text-[11px] font-medium ${cls}`}>{arrowUp ? '↑' : '↓'} {Math.abs(pct).toFixed(1)}% <span className="text-gray-500 dark:text-gray-400">vs prior</span></div>; })()}
                 </div>
             </div>
             <ChartContainer points={points} metric={metric} emailsMax={emailsMax} metricMax={metricMax} formatValue={formatValue} compareSeries={sortMode === 'time' ? compareSeries : undefined} axisMode={sortMode} scope={scope} />
             {!baseSeries.length && (<div className="mt-4 text-xs text-gray-500 dark:text-gray-400">No sends in selected range.</div>)}
             <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 text-[11px]">
-                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
-                    <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Avg Sends
-                        <InfoTooltipIcon placement="top" content={"Mean emails per bucket after trimming partial periods."} />
-                    </div>
+                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Mean emails per bucket after trimming partial periods.">
+                    <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium">Avg Sends</div>
                     <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro?.avgEmails?.toLocaleString() || '—'}</div>
                 </div>
-                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
-                    <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Revenue / 1k
-                        <InfoTooltipIcon placement="top" content={"Total revenue divided by total emails, scaled per 1,000 sends."} />
-                    </div>
+                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Total revenue divided by total emails, scaled per 1,000 sends.">
+                    <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium">Revenue / 1k</div>
                     <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro ? fmtCurrency(micro.rpmE) : '—'}</div>
                 </div>
-                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
-                    <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Median Unsub/1k
-                        <InfoTooltipIcon placement="top" content={"Median bucket unsubscribe count normalized per 1,000 emails."} />
-                    </div>
+                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Median bucket unsubscribe count normalized per 1,000 emails.">
+                    <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium">Median Unsub/1k</div>
                     <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro ? (micro.medianUnsub >= 1 ? micro.medianUnsub.toFixed(2) : micro.medianUnsub.toFixed(3)) : '—'}</div>
                 </div>
-                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
-                    <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium flex items-center gap-1">Correlation
-                        <InfoTooltipIcon placement="top" content={(
-                            <div className="leading-snug">
-                                Pearson correlation (r) between send volume and this metric over time (n ≥ 3).
-                                <br /><br />
-                                Positive means the metric tends to be higher in higher-volume periods.
-                                Negative means it tends to be lower when volume is higher.
-                                <br /><br />
-                                Strength: Neg &lt;0.1, Weak &lt;0.3, Moderate &lt;0.5, Strong &lt;0.7.
-                            </div>
-                        )} />
-                    </div>
+                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Pearson correlation (r) between send volume and this metric over time (n ≥ 3). Positive means the metric tends to be higher in higher-volume periods. Negative means it tends to be lower when volume is higher. Strength: Neg <0.1, Weak <0.3, Moderate <0.5, Strong <0.7.">
+                    <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium">Correlation</div>
                     {(() => {
                         if (!correlationInfo) return <div className="text-lg font-semibold text-gray-500">—</div>;
                         const r = correlationInfo.r;

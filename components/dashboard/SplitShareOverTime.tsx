@@ -52,6 +52,7 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
                 row.cmpCampVal = cc; row.cmpFlowVal = ff; row.cmpTotal = t;
                 row.cmpCampPct = t > 0 ? (cc / t) * 100 : 0;
                 row.cmpFlowPct = t > 0 ? (ff / t) * 100 : 0;
+                row.cmpLabel = camp.compare[i]?.date || flo.compare[i]?.date || undefined;
             }
             items.push(row);
         }
@@ -77,7 +78,7 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
                 <div className="flex items-center justify-between mb-2">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign vs Flow Split Over Time</h3>
                     <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 dark:text-gray-400">Metric:</span>
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Metric:</span>
                         <div className="flex items-center gap-1.5">
                             <button onClick={() => setMetric('revenue')} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${metric === 'revenue' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Revenue</button>
                             <button onClick={() => setMetric('emailsSent')} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${metric === 'emailsSent' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Emails Sent</button>
@@ -98,12 +99,12 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
                         valueFormatter={valueFormatter}
                         showCompare={Boolean(series[0]?.cmpCampPct != null)}
                         metric={metric}
+                        granularity={granularity}
                     />
                 )}
                 <div className="mt-2 flex items-center gap-4 text-xs text-gray-600 dark:text-gray-400">
                     <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-indigo-600" /><span>Campaigns</span></div>
                     <div className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-500" /><span>Flows</span></div>
-                    <div className="ml-auto text-[11px] text-gray-500 dark:text-gray-400">Compare shown in tooltip</div>
                 </div>
             </div>
         </div>
@@ -121,10 +122,11 @@ function BarShareChart({
     valueFormatter,
     showCompare,
     metric,
+    granularity,
 }: {
-    data: { label: string; campVal: number; flowVal: number; total: number; campPct: number; flowPct: number; cmpCampVal?: number; cmpFlowVal?: number; cmpTotal?: number; cmpCampPct?: number; cmpFlowPct?: number; }[];
+    data: { label: string; campVal: number; flowVal: number; total: number; campPct: number; flowPct: number; cmpCampVal?: number; cmpFlowVal?: number; cmpTotal?: number; cmpCampPct?: number; cmpFlowPct?: number; cmpLabel?: string; }[];
     barW: number; barGap: number; viewW: number; viewH: number; paddingL: number; paddingR: number;
-    valueFormatter: (v: number) => string; showCompare: boolean; metric: Metric;
+    valueFormatter: (v: number) => string; showCompare: boolean; metric: Metric; granularity: Gran;
 }) {
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
     const H = 120; // drawing height inside viewBox
@@ -176,7 +178,35 @@ function BarShareChart({
                     top: `${((yForPct(0)) / (H + 40)) * 100}%`,
                     transform: 'translate(-50%, 0)'
                 }}>
-                    <div className="font-medium mb-1 text-gray-900 dark:text-gray-100">{active.label}</div>
+                    <div className="font-medium mb-1 text-gray-900 dark:text-gray-100">{(() => {
+                        // Format label like the big charts
+                        const formatDaily = (s: string) => {
+                            const d = new Date(s);
+                            return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                        };
+                        const formatMonthly = (s: string) => {
+                            const d = new Date(s);
+                            return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                        };
+                        const formatWeekly = (s: string) => {
+                            // Treat label as start-of-week (Mon). Show Mon–Sun range.
+                            const d = new Date(s);
+                            if (isNaN(d.getTime())) return s;
+                            // Ensure Monday start
+                            const day = d.getDay();
+                            const diffToMon = day === 0 ? -6 : (1 - day);
+                            const mon = new Date(d); mon.setDate(mon.getDate() + diffToMon);
+                            const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
+                            const start = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                            const endMonth = sun.toLocaleDateString('en-US', { month: 'short' });
+                            const sameMonth = mon.getMonth() === sun.getMonth();
+                            const end = sun.toLocaleDateString('en-US', { day: 'numeric', year: 'numeric' });
+                            return sameMonth ? `${start}–${sun.getDate()}, ${sun.getFullYear()}` : `${start}–${endMonth} ${sun.getDate()}, ${sun.getFullYear()}`;
+                        };
+                        if (granularity === 'daily') return formatDaily(active.label);
+                        if (granularity === 'monthly') return formatMonthly(active.label);
+                        return formatWeekly(active.label);
+                    })()}</div>
                     <div className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5 items-center">
                         <div className="flex items-center gap-2"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: '#6366F1' }} /> Campaigns</div>
                         <div className="tabular-nums text-right">{active.campPct.toFixed(1)}% • {valueFormatter(active.campVal)}</div>
@@ -187,8 +217,21 @@ function BarShareChart({
                     {showCompare && typeof active.cmpCampPct === 'number' && typeof active.cmpFlowPct === 'number' && (
                         <div className="mt-1 pt-1 border-t border-gray-200 dark:border-gray-700">
                             <div className="font-semibold mb-0.5 text-gray-900 dark:text-gray-100">{(() => {
-                                // Prefer the same label format as x-axis; if a compare label exists, show it
-                                return active.label;
+                                const s = active.cmpLabel || active.label;
+                                const d = new Date(s);
+                                if (granularity === 'daily') return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                if (granularity === 'monthly') return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                                // weekly
+                                if (isNaN(d.getTime())) return s;
+                                const day = d.getDay();
+                                const diffToMon = day === 0 ? -6 : (1 - day);
+                                const mon = new Date(d); mon.setDate(mon.getDate() + diffToMon);
+                                const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
+                                const start = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                const endMonth = sun.toLocaleDateString('en-US', { month: 'short' });
+                                const sameMonth = mon.getMonth() === sun.getMonth();
+                                const end = sun.toLocaleDateString('en-US', { day: 'numeric', year: 'numeric' });
+                                return sameMonth ? `${start}–${sun.getDate()}, ${sun.getFullYear()}` : `${start}–${endMonth} ${sun.getDate()}, ${sun.getFullYear()}`;
                             })()}</div>
                             <div className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5 items-center">
                                 <div className="flex items-center gap-2"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: '#6366F1' }} /> Campaigns</div>
