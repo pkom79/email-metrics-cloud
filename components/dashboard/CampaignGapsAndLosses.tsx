@@ -127,7 +127,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                         )}
                     >
                         <div>
-                            <MetricCard title="Zero Campaign Send Weeks" value={result.zeroCampaignSendWeeks.toLocaleString()} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline />
+                            <MetricCard title="Zero Campaign Send Weeks" value={result.zeroCampaignSendWeeks.toLocaleString()} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline variant="stat" />
                         </div>
                     </TooltipPortal>
                 </div>
@@ -151,7 +151,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                         )}
                     >
                         <div>
-                            <MetricCard title="Longest Gap Without Campaigns" value={`${result.longestZeroSendGap.toLocaleString()} ${result.longestZeroSendGap === 1 ? 'week' : 'weeks'}`} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline />
+                            <MetricCard title="Longest Gap Without Campaigns" value={`${result.longestZeroSendGap.toLocaleString()} ${result.longestZeroSendGap === 1 ? 'week' : 'weeks'}`} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline variant="stat" />
                         </div>
                     </TooltipPortal>
                 </div>
@@ -165,7 +165,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                         )}
                     >
                         <div>
-                            <MetricCard title="% of Weeks With Campaigns Sent" value={`${result.pctWeeksWithCampaignsSent.toFixed(1)}%`} change={0} isPositive={true} dateRange={dateRange} category="campaign" hideSparkline />
+                            <MetricCard title="% of Weeks With Campaigns Sent" value={`${result.pctWeeksWithCampaignsSent.toFixed(1)}%`} change={0} isPositive={true} dateRange={dateRange} category="campaign" hideSparkline variant="stat" />
                         </div>
                     </TooltipPortal>
                 </div>
@@ -179,7 +179,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                         )}
                     >
                         <div>
-                            <MetricCard title="Estimated Lost Revenue" value={formatCurrency(result.estimatedLostRevenue || 0)} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline />
+                            <MetricCard title="Estimated Lost Revenue" value={formatCurrency(result.estimatedLostRevenue || 0)} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline variant="stat" />
                         </div>
                     </TooltipPortal>
                 </div>
@@ -205,7 +205,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                         )}
                     >
                         <div>
-                            <MetricCard title="Zero revenue campaigns" value={(result.zeroRevenueCampaigns ?? result.lowEffectivenessCampaigns).toLocaleString()} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline />
+                            <MetricCard title="Zero Revenue Campaigns" value={(result.zeroRevenueCampaigns ?? result.lowEffectivenessCampaigns).toLocaleString()} change={0} isPositive={false} dateRange={dateRange} category="campaign" hideSparkline variant="stat" />
                         </div>
                     </TooltipPortal>
                 </div>
@@ -219,7 +219,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                         )}
                     >
                         <div>
-                            <MetricCard title="Average Campaigns per Week" value={result.avgCampaignsPerWeek.toFixed(2)} change={0} isPositive={true} dateRange={dateRange} category="campaign" hideSparkline />
+                            <MetricCard title="Average Campaigns per Week" value={result.avgCampaignsPerWeek.toFixed(2)} change={0} isPositive={true} dateRange={dateRange} category="campaign" hideSparkline variant="stat" />
                         </div>
                     </TooltipPortal>
                 </div>

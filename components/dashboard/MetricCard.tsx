@@ -14,6 +14,7 @@ interface MetricCardProps {
     metricKey?: string;
     sparklineData?: { value: number; date: string }[];
     hideSparkline?: boolean;
+    variant?: 'default' | 'stat';
     // Kept for compatibility but not rendered anymore
     granularity?: 'daily' | 'weekly' | 'monthly';
     // Previous period tooltip data
@@ -33,6 +34,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
     metricKey,
     sparklineData = [],
     hideSparkline = false,
+    variant = 'default',
     previousValue,
     previousPeriod,
     compareMode = 'prev-period',
@@ -81,13 +83,15 @@ const MetricCard: React.FC<MetricCardProps> = ({
         <div className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4 hover:shadow-lg transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-[1.03] hover:z-20 will-change-transform origin-center`}>
             <div className="flex items-center justify-between mb-2">
                 <div className="flex-1">
-                    <p className={`text-sm font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400`}>
+                    <p className={variant === 'stat'
+                        ? `text-sm font-medium text-gray-500 dark:text-gray-400 mb-2`
+                        : `text-sm font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400`}>
                         {title}
                     </p>
                 </div>
             </div>
 
-            {!hideSparkline && (
+            {!hideSparkline && variant !== 'stat' && (
                 <Sparkline
                     isPositive={shouldShowAsPositive}
                     change={change}
@@ -102,7 +106,9 @@ const MetricCard: React.FC<MetricCardProps> = ({
             )}
 
             <div className="flex items-end justify-between">
-                <p className={`text-2xl font-bold text-gray-900 dark:text-white`}>
+                <p className={variant === 'stat'
+                    ? `text-2xl md:text-3xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums leading-none`
+                    : `text-2xl font-bold text-gray-900 dark:text-white`}>
                     {value}
                 </p>
                 <div className="flex items-center gap-2">

@@ -3,6 +3,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import SelectBase from "../ui/SelectBase";
 import { Activity } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
+import TooltipPortal from '../TooltipPortal';
 import { DataManager } from '../../lib/data/dataManager';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
 import { computeAxisMax, thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
@@ -451,58 +452,57 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             {!baseSeries.length && (<div className="mt-4 text-xs text-gray-500 dark:text-gray-400">No sends in selected range.</div>)}
             <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 text-[11px]">
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Mean emails per bucket after trimming partial periods.">
-                    <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium">Avg Sends</div>
-                    <div className="text-gray-900 dark:text-gray-100 font-semibold text-2xl tabular-nums">{micro?.avgEmails?.toLocaleString() || '—'}</div>
+                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Avg Sends</div>
+                    <div className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums leading-none">{micro?.avgEmails?.toLocaleString() || '—'}</div>
                 </div>
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Total revenue divided by total emails, scaled per 1,000 sends.">
-                    <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium">Revenue / 1k</div>
-                    <div className="text-gray-900 dark:text-gray-100 font-semibold text-2xl tabular-nums">{micro ? fmtCurrency(micro.rpmE) : '—'}</div>
+                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Revenue / 1k</div>
+                    <div className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums leading-none">{micro ? fmtCurrency(Number(micro.rpmE.toFixed(2))) : '—'}</div>
                 </div>
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Median bucket unsubscribe count normalized per 1,000 emails.">
-                    <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium">Median Unsub/1k</div>
-                    <div className="text-gray-900 dark:text-gray-100 font-semibold text-2xl tabular-nums">{micro ? (micro.medianUnsub >= 1 ? micro.medianUnsub.toFixed(2) : micro.medianUnsub.toFixed(3)) : '—'}</div>
+                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Median Unsub/1k</div>
+                    <div className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums leading-none">{micro ? Number(micro.medianUnsub.toFixed(2)).toFixed(2) : '—'}</div>
                 </div>
-                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Pearson correlation (r) between send volume and this metric over time (n ≥ 3). Positive means the metric tends to be higher in higher-volume periods. Negative means it tends to be lower when volume is higher. Strength: Neg <0.1, Weak <0.3, Moderate <0.5, Strong <0.7.">
-                    <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium">Correlation</div>
-                    {(() => {
-                        if (!correlationInfo) return <div className="text-2xl font-semibold text-gray-500">—</div>;
-                        const r = correlationInfo.r;
-                        const metricLabel = METRIC_OPTIONS.find(m => m.value === metric)?.label || 'Metric';
-                        let narrative = '';
-                        if (r == null) narrative = correlationInfo.label || 'Insufficient data';
-                        else {
-                            const pos = r > 0.05; const neg = r < -0.05; const isNegativeMetric = NEGATIVE_METRICS.includes(metric);
-                            if (!pos && !neg) narrative = `Little relationship between volume and ${metricLabel}.`;
-                            else if (pos) {
-                                if (metric === 'totalRevenue') narrative = 'Higher send volume often coincides with higher total revenue.';
-                                else if (metric === 'revenuePerEmail') narrative = 'Scaling volume hasn’t hurt efficiency (revenue/email rises with volume).';
-                                else if (isNegativeMetric) narrative = `Higher volume periods tend to have higher ${metricLabel.toLowerCase()} (monitor).`;
-                            } else if (neg) {
-                                if (metric === 'totalRevenue') narrative = 'Higher volume is not translating into more total revenue.';
-                                else if (metric === 'revenuePerEmail') narrative = 'Efficiency drops at higher volume (revenue/email falls).';
-                                else if (isNegativeMetric) narrative = `Higher volume does not increase ${metricLabel.toLowerCase()} (good).`;
-                            }
+                {(() => {
+                    const r = correlationInfo?.r ?? null;
+                    const metricLabel = METRIC_OPTIONS.find(m => m.value === metric)?.label || 'Metric';
+                    let narrative = '';
+                    if (!correlationInfo) narrative = '';
+                    else if (r == null) narrative = correlationInfo.label || 'Insufficient data';
+                    else {
+                        const pos = r > 0.05; const neg = r < -0.05; const isNegativeMetric = NEGATIVE_METRICS.includes(metric);
+                        if (!pos && !neg) narrative = `Little relationship between volume and ${metricLabel}.`;
+                        else if (pos) {
+                            if (metric === 'totalRevenue') narrative = 'Higher send volume often coincides with higher total revenue.';
+                            else if (metric === 'revenuePerEmail') narrative = 'Scaling volume hasn’t hurt efficiency (revenue/email rises with volume).';
+                            else if (isNegativeMetric) narrative = `Higher volume periods tend to have higher ${metricLabel.toLowerCase()} (monitor).`;
+                        } else if (neg) {
+                            if (metric === 'totalRevenue') narrative = 'Higher volume is not translating into more total revenue.';
+                            else if (metric === 'revenuePerEmail') narrative = 'Efficiency drops at higher volume (revenue/email falls).';
+                            else if (isNegativeMetric) narrative = `Higher volume does not increase ${metricLabel.toLowerCase()} (good).`;
                         }
-                        return r != null ? (
-                            <div>
-                                {(() => {
-                                    // Adjust coloring logic: positive correlation for negative metrics is unfavorable (red), negative correlation favorable (green)
-                                    const isNegMetric = NEGATIVE_METRICS.includes(metric);
-                                    const favorable = !isNegMetric ? (r > 0.05) : (r < -0.05);
-                                    const unfavorable = !isNegMetric ? (r < -0.05) : (r > 0.05);
-                                    const colorClass = favorable ? 'text-emerald-600' : unfavorable ? 'text-rose-600' : 'text-gray-600 dark:text-gray-300';
-                                    return (
-                                        <div className={`text-2xl font-semibold tabular-nums ${colorClass}`}>{r.toFixed(2)}</div>
-                                    );
-                                })()}
-                                <div className="mt-1 text-[10px] font-medium text-gray-500 dark:text-gray-400">{correlationInfo.label}{correlationInfo.n ? ` · n=${correlationInfo.n}` : ''}</div>
-                                <div className="mt-1 text-[10px] leading-snug text-gray-500 dark:text-gray-400 max-w-[200px] pr-1">{narrative}</div>
+                    }
+                    const labelText = correlationInfo?.label || 'Neutral';
+                    const isNegMetric = NEGATIVE_METRICS.includes(metric);
+                    const favorable = r != null ? (!isNegMetric ? (r > 0.05) : (r < -0.05)) : false;
+                    const unfavorable = r != null ? (!isNegMetric ? (r < -0.05) : (r > 0.05)) : false;
+                    const colorClass = favorable ? 'text-emerald-600' : unfavorable ? 'text-rose-600' : 'text-gray-600 dark:text-gray-300';
+                    const tooltip = (
+                        <div className="text-gray-900 dark:text-gray-100">
+                            <div className="text-sm font-semibold mb-1">{labelText}</div>
+                            <div className="text-[11px]">r = {r == null ? 'n/a' : r.toFixed(2)} · n = {correlationInfo?.n ?? 'n/a'}</div>
+                            <div className="text-[11px] mt-1 max-w-[220px] leading-snug">{narrative}</div>
+                        </div>
+                    );
+                    return (
+                        <TooltipPortal content={tooltip}>
+                            <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Pearson correlation (r) between send volume and this metric over time (n ≥ 3). Positive means the metric tends to be higher in higher-volume periods. Negative means it tends to be lower when volume is higher. Strength: Neg <0.1, Weak <0.3, Moderate <0.5, Strong <0.7.">
+                                <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Correlation</div>
+                                <div className={`text-2xl md:text-3xl font-semibold leading-none ${colorClass}`}>{labelText}</div>
                             </div>
-                        ) : (
-                            <div className="text-2xl font-semibold text-gray-500 dark:text-gray-400">—<span className="ml-2 text-[11px] font-medium">{correlationInfo?.label || '—'}</span></div>
-                        );
-                    })()}
-                </div>
+                        </TooltipPortal>
+                    );
+                })()}
             </div>
         </div>
     );
