@@ -938,7 +938,7 @@ export class DataManager {
     ): { startDate: Date; endDate: Date } | null {
         try {
             // Delegate to the same internal logic used by time series.
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // eslint-disable-next-line
             // @ts-ignore - accessing private method within the class implementation scope is allowed
             return this._computeDateRangeForTimeSeries(dateRange, customFrom, customTo);
         } catch {

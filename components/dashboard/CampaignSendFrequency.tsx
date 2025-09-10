@@ -193,7 +193,7 @@ export default function CampaignSendFrequency({ campaigns }: Props) {
                                 <p className="font-semibold mt-2 mb-1">How</p>
                                 <p>We group weeks by the number of campaigns sent and show averages. Use the toggle to switch between per week and per campaign views. Rates are weighted by total emails and events.</p>
                                 <p className="font-semibold mt-2 mb-1">Why</p>
-                                <p>Find your sweet spot. If more sending doesn't improve revenue per email or lifts unsub/spam, pull back. If results hold steady, a higher cadence may be safe.</p>
+                                <p>Find your sweet spot. If more sending doesn&apos;t improve revenue per email or lifts unsub/spam, pull back. If results hold steady, a higher cadence may be safe.</p>
                             </div>
                         )}
                     />
