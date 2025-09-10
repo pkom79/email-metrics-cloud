@@ -84,7 +84,7 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
             <div className="flex items-center justify-between px-6 py-4">
                 <div className="flex items-center gap-3">
                     <Calendar className="w-5 h-5 text-purple-600" />
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Performance by Day of Week
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Performance by Day of Week
                         <InfoTooltipIcon placement="top" content={(
                             <div className="leading-snug">
                                 <p className="font-semibold mb-1">What</p>

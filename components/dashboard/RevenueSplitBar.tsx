@@ -33,7 +33,7 @@ export default function RevenueSplitBar({ campaigns, flows }: RevenueSplitBarPro
         <div className="mt-4 mb-4">
             <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
                 <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign vs Flow Revenue Split
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign vs Flow Revenue Split
                         <InfoTooltipIcon placement="top" content={(
                             <div>
                                 <p className="font-semibold mb-1">What</p>
@@ -44,7 +44,7 @@ export default function RevenueSplitBar({ campaigns, flows }: RevenueSplitBarPro
                                 <p>Balance investment. Strong flows suggest lifecycle wins; low flow share may mean missed automation revenue.</p>
                             </div>
                         )} />
-                    </p>
+                    </h3>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{totalRevenue > 0 ? formatCurrency(totalRevenue) + ' total' : 'No revenue in range'}</p>
                 </div>
                 {totalRevenue > 0 ? (

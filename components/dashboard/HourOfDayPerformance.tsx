@@ -86,7 +86,7 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
                 <div className="flex items-center justify-between px-6 py-4">
                     <div className="flex items-center gap-3">
                         <Clock className="w-5 h-5 text-purple-600" />
-                        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                             Campaign Performance by Hour of Day
                         </h3>
                     </div>
@@ -125,7 +125,7 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
             <div className="flex items-center justify-between px-6 py-4">
                 <div className="flex items-center gap-3">
                     <Clock className="w-5 h-5 text-purple-600" />
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                         Campaign Performance by Hour of Day
                         <InfoTooltipIcon placement="top" content={(
                             <div className="leading-snug">
