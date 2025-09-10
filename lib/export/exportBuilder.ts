@@ -131,12 +131,10 @@ export interface LlmExportJson {
   };
   // Additional dashboard blocks
   dayOfWeekPerformance?: {
-    metric: 'revenue' | 'avgOrderValue' | 'revenuePerEmail' | 'openRate' | 'clickRate' | 'clickToOpenRate' | 'emailsSent' | 'totalOrders' | 'conversionRate' | 'unsubscribeRate' | 'spamRate' | 'bounceRate';
-    data: Array<{ day: string; dayIndex: number; value: number; campaignCount: number }>
+  metrics: Record<'revenue' | 'avgOrderValue' | 'revenuePerEmail' | 'openRate' | 'clickRate' | 'clickToOpenRate' | 'emailsSent' | 'totalOrders' | 'conversionRate' | 'unsubscribeRate' | 'spamRate' | 'bounceRate', Array<{ day: string; dayIndex: number; value: number; campaignCount: number }>>
   };
   hourOfDayPerformance?: {
-    metric: 'revenue' | 'avgOrderValue' | 'revenuePerEmail' | 'openRate' | 'clickRate' | 'clickToOpenRate' | 'emailsSent' | 'totalOrders' | 'conversionRate' | 'unsubscribeRate' | 'spamRate' | 'bounceRate';
-    data: Array<{ hour: number; hourLabel: string; value: number; campaignCount: number; percentageOfTotal: number }>
+  metrics: Record<'revenue' | 'avgOrderValue' | 'revenuePerEmail' | 'openRate' | 'clickRate' | 'clickToOpenRate' | 'emailsSent' | 'totalOrders' | 'conversionRate' | 'unsubscribeRate' | 'spamRate' | 'bounceRate', Array<{ hour: number; hourLabel: string; value: number; campaignCount: number; percentageOfTotal: number }>>
   };
   campaignSendFrequency?: {
     buckets: import('../analytics/campaignSendFrequency').FrequencyBucketAggregate[];
@@ -164,8 +162,16 @@ export interface LlmExportJson {
   reliability?: {
     coverageDenom?: number;
     sentWeeksAll?: number;
+  zeroCampaignSendWeeks?: number;
+  longestZeroSendGap?: number;
+  zeroSendWeekStarts?: string[];
+  longestGapWeekStarts?: string[];
+  avgCampaignsPerWeek?: number;
+  totalCampaignsInFullWeeks?: number;
     insufficientWeeklyData?: boolean;
+  estimatedLostRevenue?: number;
     zeroRevenueCampaignDetails?: Array<{ date: string; title: string }>;
+  suspectedCsvCoverageGap?: { weeks: number; start: string; end: string } | null;
     notes?: string;
   };
   insights?: {
@@ -440,7 +446,7 @@ export async function buildLlmExportJson(params: {
 
   const json: LlmExportJson = {
     meta: {
-      version: "1.2.0",
+  version: "1.3.0",
       generatedAt: new Date().toISOString(),
       currency: "USD",
       accountTimezone: null, // TODO: surface from account/report settings if available
@@ -511,14 +517,22 @@ export async function buildLlmExportJson(params: {
     },
   };
 
-  // Day of Week and Hour of Day performance (for campaigns in range)
+  // Day of Week and Hour of Day performance (for campaigns in range) — all metrics
   try {
-    const dayData = dm.getCampaignPerformanceByDayOfWeek(campaigns, 'revenue');
-    (json as any).dayOfWeekPerformance = { metric: 'revenue', data: dayData };
+    const metricKeys = ['revenue','avgOrderValue','revenuePerEmail','openRate','clickRate','clickToOpenRate','emailsSent','totalOrders','conversionRate','unsubscribeRate','spamRate','bounceRate'] as const;
+    const dayMetrics: any = {};
+    for (const mk of metricKeys) {
+      dayMetrics[mk] = dm.getCampaignPerformanceByDayOfWeek(campaigns, mk);
+    }
+    (json as any).dayOfWeekPerformance = { metrics: dayMetrics };
   } catch {}
   try {
-    const hourData = dm.getCampaignPerformanceByHourOfDay(campaigns, 'revenue');
-    (json as any).hourOfDayPerformance = { metric: 'revenue', data: hourData };
+    const metricKeys = ['revenue','avgOrderValue','revenuePerEmail','openRate','clickRate','clickToOpenRate','emailsSent','totalOrders','conversionRate','unsubscribeRate','spamRate','bounceRate'] as const;
+    const hourMetrics: any = {};
+    for (const mk of metricKeys) {
+      hourMetrics[mk] = dm.getCampaignPerformanceByHourOfDay(campaigns, mk);
+    }
+    (json as any).hourOfDayPerformance = { metrics: hourMetrics };
   } catch {}
 
   // Campaign Send Frequency buckets for campaigns in range
@@ -545,6 +559,22 @@ export async function buildLlmExportJson(params: {
         (step as any).series = series;
       }
     }
+  } catch {}
+
+  // Enrich reliability block with more details from gaps analysis
+  try {
+    const r = (json as any).reliability || {};
+    (json as any).reliability = {
+      ...r,
+      zeroCampaignSendWeeks: (gaps as any).zeroCampaignSendWeeks,
+      longestZeroSendGap: (gaps as any).longestZeroSendGap,
+      zeroSendWeekStarts: (gaps as any).zeroSendWeekStarts,
+      longestGapWeekStarts: (gaps as any).longestGapWeekStarts,
+      avgCampaignsPerWeek: (gaps as any).avgCampaignsPerWeek,
+      totalCampaignsInFullWeeks: (gaps as any).totalCampaignsInFullWeeks,
+      estimatedLostRevenue: (gaps as any).estimatedLostRevenue,
+      suspectedCsvCoverageGap: (gaps as any).suspectedCsvCoverageGap,
+    };
   } catch {}
 
   // Send Volume Impact export block (chronological, all emails)
