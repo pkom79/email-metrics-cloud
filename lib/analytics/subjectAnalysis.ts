@@ -14,7 +14,7 @@ export interface MetricAggregate {
 export interface FeatureStat extends MetricAggregate {
   key: string;
   label: string;
-  liftVsBaseline: number; // value - baseline (pp for rates, absolute for currency)
+  liftVsBaseline: number; // relative % change vs baseline: (value - baseline) / baseline * 100
   examples?: string[]; // sample subjects included in this feature
 }
 
@@ -27,7 +27,7 @@ export interface ReuseStat {
   occurrences: number;
   firstValue: number;
   lastValue: number;
-  change: number; // last - first
+  change: number; // relative % change: (last - first) / first * 100
   totalEmails: number;
 }
 
@@ -117,9 +117,38 @@ function hasAllCapsWord(subject: string): boolean {
 }
 
 function hasPercent(subject: string): boolean { return subject.includes('%'); }
-function hasNumber(subject: string): boolean { return /\d/.test(subject); }
 function hasCurrency(subject: string): boolean { return /[$£€]/.test(subject); }
-function hasPriceNumber(subject: string): boolean { return /[$£€]\s?\d|\d+(?:\.\d{2})?/.test(subject); }
+
+// Has number (exclude currency & %, exclude alphanumeric mixes like 4Runner; keep years)
+function hasStandaloneNumber(subject: string): boolean {
+  const s = subject || '';
+  const re = /\d+[\d.,]*/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s)) !== null) {
+    const start = m.index;
+    const end = start + m[0].length;
+    const prev = start > 0 ? s[start - 1] : '';
+    const next = end < s.length ? s[end] : '';
+    // Exclude if adjacent to a letter (alphanumeric like 4Runner)
+    if ((/[A-Za-z]/.test(prev)) || (/[A-Za-z]/.test(next))) continue;
+    // Exclude if currency symbol immediately before
+    if (prev && /[$£€]/.test(prev)) continue;
+    // Exclude if followed by % (allow whitespace)
+    const afterSlice = s.slice(end).trimStart();
+    if (afterSlice.startsWith('%')) continue;
+    // Looks like a standalone number
+    return true;
+  }
+  return false;
+}
+
+// Has $ discount (e.g., Save $100, $100 off, Get $20 back)
+function hasDollarDiscount(subject: string): boolean {
+  const s = subject || '';
+  const pat1 = /(save|get|take)\s+\$\s?\d[\d,]*(?:[.\,]\d{2})?/i;
+  const pat2 = /\$\s?\d[\d,]*(?:[.\,]\d{2})?\s*(off|back|rebate|credit|discount|savings)/i;
+  return pat1.test(s) || pat2.test(s);
+}
 
 function hasPersonalization(subject: string): { youYour: boolean; firstNameToken: boolean } {
   const s = subject.toLowerCase();
@@ -145,7 +174,8 @@ function computeFeatureGroup(
     .map(c => normalize(c.subject || c.campaignName || ''))
     .filter(Boolean)
     .slice(0, 5);
-  return { key, label, countCampaigns: agg.countCampaigns, totalEmails: agg.totalEmails, totalOpens: agg.totalOpens, totalClicks: agg.totalClicks, totalRevenue: agg.totalRevenue, value: agg.value, liftVsBaseline: agg.value - baseline.value, examples };
+  const lift = baseline.value > 0 ? ((agg.value - baseline.value) / baseline.value) * 100 : 0;
+  return { key, label, countCampaigns: agg.countCampaigns, totalEmails: agg.totalEmails, totalOpens: agg.totalOpens, totalClicks: agg.totalClicks, totalRevenue: agg.totalRevenue, value: agg.value, liftVsBaseline: lift, examples };
 }
 
 export function filterBySegment(campaigns: ProcessedCampaign[], segment?: string | null): ProcessedCampaign[] {
@@ -182,7 +212,8 @@ export function computeSubjectAnalysis(
       .map(c => normalize(c.subject || c.campaignName || ''))
       .filter(Boolean)
       .slice(0, 5);
-    return { key, label: info.label, range: info.range, countCampaigns: agg.countCampaigns, totalEmails: agg.totalEmails, totalOpens: agg.totalOpens, totalClicks: agg.totalClicks, totalRevenue: agg.totalRevenue, value: agg.value, liftVsBaseline: agg.value - baseline.value, examples };
+  const lift = baseline.value > 0 ? ((agg.value - baseline.value) / baseline.value) * 100 : 0;
+  return { key, label: info.label, range: info.range, countCampaigns: agg.countCampaigns, totalEmails: agg.totalEmails, totalOpens: agg.totalOpens, totalClicks: agg.totalClicks, totalRevenue: agg.totalRevenue, value: agg.value, liftVsBaseline: lift, examples };
   }).sort((a, b) => a.label.localeCompare(b.label));
 
   // Keyword & emoji presence (curated tokens)
@@ -198,9 +229,9 @@ export function computeSubjectAnalysis(
     computeFeatureGroup(campaigns, metric, 'Has question mark (?)', s => s.includes('?'), 'qmark'),
     computeFeatureGroup(campaigns, metric, 'Has exclamation (!)', s => s.includes('!'), 'exclaim'),
     computeFeatureGroup(campaigns, metric, 'Has ALL CAPS word', hasAllCapsWord, 'allcaps'),
-    computeFeatureGroup(campaigns, metric, 'Has number', hasNumber, 'number'),
+    computeFeatureGroup(campaigns, metric, 'Has number', hasStandaloneNumber, 'number'),
     computeFeatureGroup(campaigns, metric, 'Has %', hasPercent, 'percent'),
-    computeFeatureGroup(campaigns, metric, 'Has brackets/parentheses', s => /[\[\](){}]/.test(s), 'brackets'),
+    computeFeatureGroup(campaigns, metric, 'Has brackets/parentheses', s => /[\[\](){}]/.test(s) && !/\[MULTIPLE VARIATIONS\]/i.test(s), 'brackets'),
   ]
     .filter(f => f.countCampaigns > 0)
     .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline) || (b.totalEmails - a.totalEmails));
@@ -222,7 +253,7 @@ export function computeSubjectAnalysis(
   // Price anchoring
   const priceAnchoring: FeatureStat[] = [
     computeFeatureGroup(campaigns, metric, 'Has currency ($/£/€)', hasCurrency, 'cur'),
-    computeFeatureGroup(campaigns, metric, 'Has numeric price', hasPriceNumber, 'price'),
+    computeFeatureGroup(campaigns, metric, 'Has $ discount', hasDollarDiscount, 'price$'),
     computeFeatureGroup(campaigns, metric, 'Has % discount', hasPercent, 'pct'),
   ]
     .filter(f => f.countCampaigns > 0)
@@ -237,6 +268,7 @@ export function computeSubjectAnalysis(
   const bySubject = new Map<string, ProcessedCampaign[]>();
   for (const c of campaigns) {
     const key = normalize(c.subject || c.campaignName || '');
+    if (/\[MULTIPLE VARIATIONS\]/i.test(key)) continue; // exclude A/B test tag subjects
     const arr = bySubject.get(key) || [];
     arr.push(c);
     bySubject.set(key, arr);
@@ -245,10 +277,11 @@ export function computeSubjectAnalysis(
   for (const [subj, list] of bySubject.entries()) {
     if (list.length < 2) continue;
     const sorted = list.slice().sort((a, b) => a.sentDate.getTime() - b.sentDate.getTime());
-    const firstAgg = computeAggregate([sorted[0]], metric);
-    const lastAgg = computeAggregate([sorted[sorted.length - 1]], metric);
+  const firstAgg = computeAggregate([sorted[0]], metric);
+  const lastAgg = computeAggregate([sorted[sorted.length - 1]], metric);
     const totalEmails = sorted.reduce((s, c) => s + (c.emailsSent || 0), 0);
-    reuse.push({ subject: subj, occurrences: sorted.length, firstValue: firstAgg.value, lastValue: lastAgg.value, change: lastAgg.value - firstAgg.value, totalEmails });
+  const deltaPct = firstAgg.value > 0 ? ((lastAgg.value - firstAgg.value) / firstAgg.value) * 100 : 0;
+  reuse.push({ subject: subj, occurrences: sorted.length, firstValue: firstAgg.value, lastValue: lastAgg.value, change: deltaPct, totalEmails });
   }
   reuse.sort((a, b) => b.totalEmails - a.totalEmails);
 

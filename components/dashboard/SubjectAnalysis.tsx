@@ -29,11 +29,8 @@ export default function SubjectAnalysis({ campaigns }: Props) {
     const formatCurrency = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0);
     const fmt = (v: number) => metric === 'revenuePerEmail' ? formatCurrency(v) : formatPercent(v);
 
-    const liftFmt = (v: number) => {
-        const isCurrency = metric === 'revenuePerEmail';
-        if (isCurrency) return `${v >= 0 ? '+' : ''}${formatCurrency(Math.abs(v))}`;
-        return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
-    };
+    // Lifts are always shown as relative % change vs baseline, even for RPE
+    const liftFmt = (v: number) => `${v >= 0 ? '+' : ''}${(v ?? 0).toFixed(1)}%`;
 
     return (
         <section className="mt-6">
@@ -49,6 +46,7 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                                 <ul className="list-disc pl-4 space-y-1">
                                     <li>Open Rate can be inflated by Apple MPP; prefer CTR/CTO/RPE for decisions.</li>
                                     <li>Comparisons are weighted by emails sent.</li>
+                                    <li>Lifts show relative % change vs Baseline, including for RPE.</li>
                                     <li>Exact-match reuse only. Data is capped at 2 years.</li>
                                 </ul>
                             </div>)} />
@@ -73,6 +71,18 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                 <div className="mb-6">
                     <div className="flex items-center gap-2 mb-3 justify-center"><Timer className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Performance by Subject Length</h4></div>
                     <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Baseline card */}
+                        <TooltipPortal content={(
+                            <div>
+                                <div className="text-xs">Weighted average across all campaigns in the selected period/segment.</div>
+                            </div>
+                        )}>
+                            <div className="w-full rounded-2xl border border-gray-200 dark:border-gray-800 p-5 bg-white dark:bg-gray-900">
+                                <div className="text-base text-gray-600 dark:text-gray-400">Baseline</div>
+                                <div className="text-3xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{fmt(result.baseline.value)}</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">{result.baseline.countCampaigns} campaigns • {result.baseline.totalEmails.toLocaleString()} emails</div>
+                            </div>
+                        </TooltipPortal>
                         {result.lengthBins
                             .filter(b => b.countCampaigns > 0)
                             .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
@@ -100,6 +110,16 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                 <div className="mb-6">
                     <div className="flex items-center gap-2 mb-3 justify-center"><Tags className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Keyword & Emoji Lift</h4></div>
                     <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Baseline card */}
+                        <TooltipPortal content={(<div className="text-xs">Reference average for comparison.</div>)}>
+                            <div className="w-full rounded-2xl border border-gray-200 dark:border-gray-800 p-5 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                <div>
+                                    <div className="text-base text-gray-900 dark:text-gray-100">Baseline</div>
+                                    <div className="text-sm text-gray-600 dark:text-gray-400">{result.baseline.countCampaigns} campaigns • {result.baseline.totalEmails.toLocaleString()} emails</div>
+                                </div>
+                                <div className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{fmt(result.baseline.value)}</div>
+                            </div>
+                        </TooltipPortal>
                         {result.keywordEmojis
                             .filter(f => f.countCampaigns > 0)
                             .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
@@ -129,6 +149,16 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                 <div className="mb-6">
                     <div className="flex items-center gap-2 mb-3 justify-center"><Hash className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Punctuation & Casing Effects</h4></div>
                     <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Baseline card */}
+                        <TooltipPortal content={(<div className="text-xs">Reference average for comparison.</div>)}>
+                            <div className="w-full rounded-2xl border border-gray-200 dark:border-gray-800 p-5 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                <div>
+                                    <div className="text-base text-gray-900 dark:text-gray-100">Baseline</div>
+                                    <div className="text-sm text-gray-600 dark:text-gray-400">{result.baseline.countCampaigns} campaigns • {result.baseline.totalEmails.toLocaleString()} emails</div>
+                                </div>
+                                <div className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{fmt(result.baseline.value)}</div>
+                            </div>
+                        </TooltipPortal>
                         {result.punctuationCasing
                             .filter(f => f.countCampaigns > 0)
                             .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
@@ -158,6 +188,16 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                 <div className="mb-6">
                     <div className="flex items-center gap-2 mb-3 justify-center"><Zap className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Deadline & Urgency Words</h4></div>
                     <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Baseline card */}
+                        <TooltipPortal content={(<div className="text-xs">Reference average for comparison.</div>)}>
+                            <div className="w-full rounded-2xl border border-gray-200 dark:border-gray-800 p-5 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                <div>
+                                    <div className="text-base text-gray-900 dark:text-gray-100">Baseline</div>
+                                    <div className="text-sm text-gray-600 dark:text-gray-400">{result.baseline.countCampaigns} campaigns • {result.baseline.totalEmails.toLocaleString()} emails</div>
+                                </div>
+                                <div className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{fmt(result.baseline.value)}</div>
+                            </div>
+                        </TooltipPortal>
                         {result.deadlines
                             .filter(f => f.countCampaigns > 0)
                             .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
@@ -188,6 +228,16 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                     <div>
                         <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><Tags className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Personalization Markers</h4></div>
                         <div className="space-y-4">
+                            {/* Baseline card */}
+                            <TooltipPortal content={(<div className="text-xs">Reference average for comparison.</div>)}>
+                                <div className="w-full rounded-2xl border border-gray-200 dark:border-gray-800 p-5 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                    <div>
+                                        <div className="text-base text-gray-900 dark:text-gray-100">Baseline</div>
+                                        <div className="text-sm text-gray-600 dark:text-gray-400">{result.baseline.countCampaigns} campaigns • {result.baseline.totalEmails.toLocaleString()} emails</div>
+                                    </div>
+                                    <div className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{fmt(result.baseline.value)}</div>
+                                </div>
+                            </TooltipPortal>
                             {result.personalization
                                 .filter(f => f.countCampaigns > 0)
                                 .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
@@ -214,6 +264,16 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                     <div>
                         <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><Tags className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Price Anchoring</h4></div>
                         <div className="space-y-4">
+                            {/* Baseline card */}
+                            <TooltipPortal content={(<div className="text-xs">Reference average for comparison.</div>)}>
+                                <div className="w-full rounded-2xl border border-gray-200 dark:border-gray-800 p-5 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                    <div>
+                                        <div className="text-base text-gray-900 dark:text-gray-100">Baseline</div>
+                                        <div className="text-sm text-gray-600 dark:text-gray-400">{result.baseline.countCampaigns} campaigns • {result.baseline.totalEmails.toLocaleString()} emails</div>
+                                    </div>
+                                    <div className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{fmt(result.baseline.value)}</div>
+                                </div>
+                            </TooltipPortal>
                             {result.priceAnchoring
                                 .filter(f => f.countCampaigns > 0)
                                 .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
@@ -244,6 +304,13 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                     <div>
                         <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><Type className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Imperative Start</h4></div>
                         <div className="space-y-4">
+                            {/* Baseline card */}
+                            <TooltipPortal content={(<div className="text-xs">Reference average for comparison.</div>)}>
+                                <div className="w-full rounded-2xl border border-gray-200 dark:border-gray-800 p-5 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                    <div className="text-base text-gray-900 dark:text-gray-100">Baseline</div>
+                                    <div className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{fmt(result.baseline.value)}</div>
+                                </div>
+                            </TooltipPortal>
                             {result.imperativeStart
                                 .filter(f => f.countCampaigns > 0)
                                 .map(f => (
@@ -266,6 +333,13 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                     <div>
                         <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><Type className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Reuse Fatigue (exact match)</h4></div>
                         <div className="space-y-3 max-h-72 overflow-auto pr-1">
+                            {/* Baseline card */}
+                            <TooltipPortal content={(<div className="text-xs">Reference average for comparison.</div>)}>
+                                <div className="w-full rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900">
+                                    <div className="text-sm text-gray-900 dark:text-gray-100">Baseline</div>
+                                    <div className="text-base font-semibold tabular-nums text-gray-900 dark:text-gray-100">{fmt(result.baseline.value)}</div>
+                                </div>
+                            </TooltipPortal>
                             {result.reuse.slice(0, 10).map(r => (
                                 <TooltipPortal key={r.subject} content={(<div>
                                     <div className="text-sm">Occurrences: {r.occurrences}</div>

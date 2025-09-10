@@ -127,6 +127,7 @@ Subject Analysis (new):
 - Notices: include an info tooltip noting Apple MPP inflation on opens and that comparisons are weighted by emails sent; also mention the 2-year cap.
 - Cards: compact bordered cards for length bins and feature lifts; use semantic colors for lift deltas (`text-emerald-600` positive, `text-rose-600` negative). Text sizes 11–14px per this guide.
 - Accessibility: tooltips use the standardized `TooltipPortal` with 100ms delay.
+ - Baseline: include a left-most Baseline card in each section showing the weighted average metric for the selection. All lifts are shown as relative % change vs Baseline (including RPE).
 
 ### Status coloring (correlations, trends)
 - Favorable vs unfavorable coloring depends on metric semantics:
