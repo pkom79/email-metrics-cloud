@@ -208,8 +208,11 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
                         const absDevs = vals.map(v => Math.abs(v - median));
                         const mad = (() => { const s = [...absDevs].sort((a, b) => a - b); return n ? (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2) : 0; })();
                         const scale = mad * 1.4826 || 1e-6; // approx std
-                        const best = dayOfWeekData.reduce((max, d) => d.value > max.value ? d : max, dayOfWeekData[0]);
-                        const z = (best.value - median) / scale;
+                        const isNegative = negativeMetrics.includes(selectedMetric as any);
+                        const best = isNegative
+                            ? dayOfWeekData.reduce((min, d) => d.value < min.value ? d : min, dayOfWeekData[0])
+                            : dayOfWeekData.reduce((max, d) => d.value > max.value ? d : max, dayOfWeekData[0]);
+                        const z = ((isNegative ? (median - best.value) : (best.value - median)) / scale);
                         const significant = z >= 1.5 && best.campaignCount >= minCampaignsRequired; // dynamic threshold
                         return (
                             <>
@@ -223,7 +226,7 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
                                 </div>
                                 <div className="min-w-[120px] text-center">
                                     <p className="text-gray-500 dark:text-gray-400 mb-1">Best Value</p>
-                                    <p className="font-semibold text-xl text-gray-900 dark:text-gray-100">{formatMetricValue(maxValue, selectedMetric)}</p>
+                                    <p className="font-semibold text-xl text-gray-900 dark:text-gray-100">{formatMetricValue(best.value, selectedMetric)}</p>
                                 </div>
                             </>
                         );

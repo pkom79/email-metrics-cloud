@@ -261,10 +261,13 @@ const HourOfDayPerformance: React.FC<HourOfDayPerformanceProps> = ({
                         const absDevs = vals.map(v => Math.abs(v - median));
                         const mad = (() => { const s = [...absDevs].sort((a, b) => a - b); return n ? (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2) : 0; })();
                         const scale = mad * 1.4826 || 1e-6;
-                        const best = hourOfDayData.reduce((m, d) => d.value > m.value ? d : m, hourOfDayData[0]);
-                        const z = (best.value - median) / scale;
+                        const isNegative = negativeMetrics.includes(selectedMetric as any);
+                        const best = isNegative
+                            ? hourOfDayData.reduce((m, d) => d.value < m.value ? d : m, hourOfDayData[0])
+                            : hourOfDayData.reduce((m, d) => d.value > m.value ? d : m, hourOfDayData[0]);
+                        const z = ((isNegative ? (median - best.value) : (best.value - median)) / scale);
                         const significant = z >= 1.8 && best.campaignCount >= minCampaignsRequired; // dynamic threshold
-                        const peakVal = Math.max(...vals, 0);
+                        const peakVal = best.value;
                         return (
                             <>
                                 <div className="min-w-[130px] text-center">
