@@ -452,20 +452,20 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 text-[11px]">
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Mean emails per bucket after trimming partial periods.">
                     <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium">Avg Sends</div>
-                    <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro?.avgEmails?.toLocaleString() || '—'}</div>
+                    <div className="text-gray-900 dark:text-gray-100 font-semibold text-2xl tabular-nums">{micro?.avgEmails?.toLocaleString() || '—'}</div>
                 </div>
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Total revenue divided by total emails, scaled per 1,000 sends.">
                     <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium">Revenue / 1k</div>
-                    <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro ? fmtCurrency(micro.rpmE) : '—'}</div>
+                    <div className="text-gray-900 dark:text-gray-100 font-semibold text-2xl tabular-nums">{micro ? fmtCurrency(micro.rpmE) : '—'}</div>
                 </div>
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Median bucket unsubscribe count normalized per 1,000 emails.">
                     <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium">Median Unsub/1k</div>
-                    <div className="text-gray-900 dark:text-gray-100 font-semibold text-lg tabular-nums">{micro ? (micro.medianUnsub >= 1 ? micro.medianUnsub.toFixed(2) : micro.medianUnsub.toFixed(3)) : '—'}</div>
+                    <div className="text-gray-900 dark:text-gray-100 font-semibold text-2xl tabular-nums">{micro ? (micro.medianUnsub >= 1 ? micro.medianUnsub.toFixed(2) : micro.medianUnsub.toFixed(3)) : '—'}</div>
                 </div>
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Pearson correlation (r) between send volume and this metric over time (n ≥ 3). Positive means the metric tends to be higher in higher-volume periods. Negative means it tends to be lower when volume is higher. Strength: Neg <0.1, Weak <0.3, Moderate <0.5, Strong <0.7.">
                     <div className="text-gray-500 dark:text-gray-400 mb-1 font-medium">Correlation</div>
                     {(() => {
-                        if (!correlationInfo) return <div className="text-lg font-semibold text-gray-500">—</div>;
+                        if (!correlationInfo) return <div className="text-2xl font-semibold text-gray-500">—</div>;
                         const r = correlationInfo.r;
                         const metricLabel = METRIC_OPTIONS.find(m => m.value === metric)?.label || 'Metric';
                         let narrative = '';
@@ -492,14 +492,14 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                                     const unfavorable = !isNegMetric ? (r < -0.05) : (r > 0.05);
                                     const colorClass = favorable ? 'text-emerald-600' : unfavorable ? 'text-rose-600' : 'text-gray-600 dark:text-gray-300';
                                     return (
-                                        <div className={`text-lg font-semibold tabular-nums ${colorClass}`}>{r.toFixed(2)}</div>
+                                        <div className={`text-2xl font-semibold tabular-nums ${colorClass}`}>{r.toFixed(2)}</div>
                                     );
                                 })()}
                                 <div className="mt-1 text-[10px] font-medium text-gray-500 dark:text-gray-400">{correlationInfo.label}{correlationInfo.n ? ` · n=${correlationInfo.n}` : ''}</div>
                                 <div className="mt-1 text-[10px] leading-snug text-gray-500 dark:text-gray-400 max-w-[200px] pr-1">{narrative}</div>
                             </div>
                         ) : (
-                            <div className="text-lg font-semibold text-gray-500 dark:text-gray-400">—<span className="ml-2 text-[11px] font-medium">{correlationInfo?.label || '—'}</span></div>
+                            <div className="text-2xl font-semibold text-gray-500 dark:text-gray-400">—<span className="ml-2 text-[11px] font-medium">{correlationInfo?.label || '—'}</span></div>
                         );
                     })()}
                 </div>
