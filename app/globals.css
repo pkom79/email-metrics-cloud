@@ -27,4 +27,14 @@
     .section-controls {
         @apply flex items-center gap-4 text-sm;
     }
+
+    /* Standardize module header size within section containers to h3 scale */
+    .section-card>.section-header h1,
+    .section-card>.section-header h2,
+    .section-card>.section-header h3,
+    .section-card>.section-header h4,
+    .section-card>.section-header h5 {
+        /* Force h3 scale for module titles inside section containers */
+        @apply text-lg font-semibold text-gray-900 dark:text-gray-100;
+    }
 }
