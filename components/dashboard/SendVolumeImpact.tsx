@@ -418,10 +418,12 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     </h3>
                 </div>
                 <div className="section-controls">
-                    <div className="flex gap-1 rounded-lg bg-gray-100 dark:bg-gray-800 p-1 h-9 items-center">
-                        {(['time', 'volume'] as const).map(m => (
-                            <button key={m} onClick={() => setSortMode(m)} className={`px-3 h-7 rounded-md text-xs font-medium transition ${sortMode === m ? 'bg-white dark:bg-gray-900 shadow border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'}`}>{m === 'time' ? 'Time' : 'Volume'}</button>
-                        ))}
+                    <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Sort:</span>
+                        <div className="flex gap-1.5 ml-1 flex-nowrap">
+                            <button onClick={() => setSortMode('time')} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${sortMode === 'time' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Time</button>
+                            <button onClick={() => setSortMode('volume')} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${sortMode === 'volume' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Volume</button>
+                        </div>
                     </div>
                     <div className="relative">
                         <SelectBase value={metric} onChange={e => setMetric((e.target as HTMLSelectElement).value as MetricKey)} className="px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">

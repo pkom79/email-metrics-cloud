@@ -78,15 +78,9 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign vs Flow Split Over Time</h3>
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500 dark:text-gray-400">Metric:</span>
-                        <div className="flex rounded-md overflow-hidden border border-gray-200 dark:border-gray-700">
-                            <button
-                                className={`px-2.5 py-1 text-xs ${metric === 'revenue' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200'}`}
-                                onClick={() => setMetric('revenue')}
-                            >Revenue</button>
-                            <button
-                                className={`px-2.5 py-1 text-xs border-l border-gray-200 dark:border-gray-700 ${metric === 'emailsSent' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200'}`}
-                                onClick={() => setMetric('emailsSent')}
-                            >Emails Sent</button>
+                        <div className="flex items-center gap-1.5">
+                            <button onClick={() => setMetric('revenue')} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${metric === 'revenue' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Revenue</button>
+                            <button onClick={() => setMetric('emailsSent')} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${metric === 'emailsSent' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Emails Sent</button>
                         </div>
                     </div>
                 </div>

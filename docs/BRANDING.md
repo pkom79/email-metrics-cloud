@@ -53,6 +53,20 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 
 Defined in `app/globals.css` under `@layer components`.
 
+### Toggle group (segmented buttons)
+- Use compact bordered buttons with selected state in brand purple.
+- Pattern mirrors the Compare and Sort controls in dashboard headers.
+- Anatomy:
+  - Optional label on the left (e.g., "Compare:", "Sort:") using `text-sm font-medium` and neutral color.
+  - Two or more buttons in a row with 4px gap.
+- States:
+  - Selected: `bg-purple-600 text-white border-purple-600`
+  - Unselected: `bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200`
+  - Dark mode unselected: `dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700`
+- Sizing: `px-2.5 py-1` text `text-xs font-medium` with `rounded` and `border`.
+- Example:
+  - Time/Volume, Asc/Desc, Revenue/Emails Sent
+
 ### Selects
 - Use `SelectBase` for dropdowns; has consistent padding, border, focus ring:
   - Class: `.select-base`
