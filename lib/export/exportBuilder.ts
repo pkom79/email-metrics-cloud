@@ -4,6 +4,9 @@
 import { DataManager } from "../data/dataManager";
 import type { AggregatedMetrics, ProcessedCampaign, ProcessedFlowEmail } from "../data/dataTypes";
 import { computeCampaignGapsAndLosses } from "../analytics/campaignGapsLosses";
+import { computeAudienceSizeBuckets } from "../analytics/audienceSizePerformance";
+import { computeSubjectAnalysis, type SubjectMetricKey } from "../analytics/subjectAnalysis";
+import { computeDeadWeightSavings } from "../analytics/deadWeightSavings";
 
 // Minimal shape exported; kept in its own module so UI can call it safely client-side.
 export interface LlmExportJson {
@@ -64,9 +67,44 @@ export interface LlmExportJson {
       deadWeightEstimate?: { monthlySavings: number | null; annualSavings: number | null } | null;
     };
   };
+  audienceSizePerformance?: {
+    buckets: Array<{
+      key: string;
+      rangeLabel: string;
+      rangeMin: number;
+      rangeMax: number;
+      campaignCount: number;
+      sumRevenue: number;
+      sumEmails: number;
+      sumOrders: number;
+      sumOpens: number;
+      sumClicks: number;
+      sumUnsubs: number;
+      sumSpam: number;
+      sumBounces: number;
+      avgCampaignRevenue: number;
+      avgCampaignEmails: number;
+      aov: number;
+      revenuePerEmail: number;
+      openRate: number;
+      clickRate: number;
+      clickToOpenRate: number;
+      conversionRate: number;
+      unsubscribeRate: number;
+      spamRate: number;
+      bounceRate: number;
+    }>;
+    limited: boolean;
+  };
+  subjectLineAnalysis?: {
+    metrics: Record<SubjectMetricKey, import("../analytics/subjectAnalysis").SubjectAnalysisResult>;
+    compare?: Record<SubjectMetricKey, import("../analytics/subjectAnalysis").SubjectAnalysisResult> | null;
+  };
   deliverabilityRisk?: {
     weekly: Array<{ weekStartISO: string; emailsSent: number; revenue: number; bounces: number; spam: number; unsubs: number }>;
-    last8?: { prev: any; curr: any; deltas: any };
+    last8?: { prev: { emailsSent: number; revenue: number; revenuePerEmail: number; unsubRate: number; spamRate: number; bounceRate: number };
+             curr: { emailsSent: number; revenue: number; revenuePerEmail: number; unsubRate: number; spamRate: number; bounceRate: number };
+             deltas: { emails: number; revenue: number; rpe: number; unsubRate: number; spamRate: number; bounceRate: number } };
     elasticity?: { revenuePer1k: number; unsubsPer1k: number; spamPer1k: number; bouncesPer1k: number; r2Revenue: number; unstable: boolean };
     classification?: string;
     score?: number;
@@ -77,6 +115,13 @@ export interface LlmExportJson {
     insufficientWeeklyData?: boolean;
     zeroRevenueCampaignDetails?: Array<{ date: string; title: string }>;
     notes?: string;
+  };
+  insights?: {
+    deadWeightSavings?: { monthly: number | null; annual: number | null } | null;
+    lostRevenueZeroCampaigns?: { amount?: number; weeks?: number; longestGapWeeks?: number };
+    sendVolumeImpact?: { emailsDeltaPct?: number; revenueDeltaPct?: number; rpeDeltaPct?: number; classification?: string; score?: number };
+    subjectLineFindings?: { topLengthBins?: string[]; topKeywords?: string[] };
+    audienceSizeFindings?: { bestBucketByRPE?: string | null };
   };
 }
 
@@ -244,6 +289,9 @@ export async function buildLlmExportJson(params: {
   const last8 = weeklyAgg.slice(-8);
   let elasticity: LlmExportJson["deliverabilityRisk"] extends { elasticity: infer T } ? T : any = undefined;
   let classification: string | undefined = undefined; let score: number | undefined = undefined;
+  let last8Prev: { emailsSent: number; revenue: number; revenuePerEmail: number; unsubRate: number; spamRate: number; bounceRate: number } | undefined;
+  let last8Curr: { emailsSent: number; revenue: number; revenuePerEmail: number; unsubRate: number; spamRate: number; bounceRate: number } | undefined;
+  let last8Deltas: { emails: number; revenue: number; rpe: number; unsubRate: number; spamRate: number; bounceRate: number } | undefined;
   if (last8.length >= 8) {
     const agg = (arr: typeof last8) => {
       const emailsSent = arr.reduce((s,w)=> s + w.emailsSent, 0);
@@ -253,9 +301,10 @@ export async function buildLlmExportJson(params: {
       const unsubs = arr.reduce((s,w)=> s + w.unsubs, 0);
       return { emailsSent, revenue, bounces, spam, unsubs, bounceRate: emailsSent ? bounces/emailsSent : 0, spamRate: emailsSent ? spam/emailsSent : 0, unsubRate: emailsSent ? unsubs/emailsSent : 0, revenuePerEmail: emailsSent ? revenue/emailsSent : 0 };
     };
-    const prev = agg(last8.slice(0,4)); const curr = agg(last8.slice(4));
-    const change = (a:number,b:number) => (a===0 && b===0) ? 0 : (b - a) / (a || 1e-9);
-    const deltas = { emails: change(prev.emailsSent, curr.emailsSent), revenue: change(prev.revenue, curr.revenue), rpe: change(prev.revenuePerEmail, curr.revenuePerEmail), unsubRate: change(prev.unsubRate, curr.unsubRate), spamRate: change(prev.spamRate, curr.spamRate), bounceRate: change(prev.bounceRate, curr.bounceRate) };
+  const prev = agg(last8.slice(0,4)); const curr = agg(last8.slice(4));
+  last8Prev = prev; last8Curr = curr;
+  const change = (a:number,b:number) => (a===0 && b===0) ? 0 : (b - a) / (a || 1e-9);
+  last8Deltas = { emails: change(prev.emailsSent, curr.emailsSent), revenue: change(prev.revenue, curr.revenue), rpe: change(prev.revenuePerEmail, curr.revenuePerEmail), unsubRate: change(prev.unsubRate, curr.unsubRate), spamRate: change(prev.spamRate, curr.spamRate), bounceRate: change(prev.bounceRate, curr.bounceRate) };
 
     // Regression slopes over last up to 12 weeks
     const reg = weeklyAgg.slice(-12);
@@ -300,9 +349,41 @@ export async function buildLlmExportJson(params: {
   // Reliability diagnostics via campaignGapsLosses (weekly coverage)
   const gaps = computeCampaignGapsAndLosses({ campaigns: campaignsAll, flows: flowsAll, rangeStart: startDate, rangeEnd: endDate });
 
+  // Audience size performance (campaigns in range only)
+  const asp = computeAudienceSizeBuckets(campaigns);
+
+  // Subject line analysis for all 4 metrics; compare window mirrors flows compare logic
+  const subjectMetrics: SubjectMetricKey[] = ['openRate', 'clickToOpenRate', 'clickRate', 'revenuePerEmail'];
+  const subjectPrimary: Record<SubjectMetricKey, ReturnType<typeof computeSubjectAnalysis>> = {
+    openRate: computeSubjectAnalysis(campaigns, 'openRate', 'ALL_SEGMENTS'),
+    clickToOpenRate: computeSubjectAnalysis(campaigns, 'clickToOpenRate', 'ALL_SEGMENTS'),
+    clickRate: computeSubjectAnalysis(campaigns, 'clickRate', 'ALL_SEGMENTS'),
+    revenuePerEmail: computeSubjectAnalysis(campaigns, 'revenuePerEmail', 'ALL_SEGMENTS'),
+  };
+  let subjectCompare: Record<SubjectMetricKey, ReturnType<typeof computeSubjectAnalysis>> | null = null;
+  if (dateRange !== 'all') {
+    const resolved = dm.getResolvedDateRange(dateRange, customFrom, customTo);
+    if (resolved) {
+      const { startDate: s, endDate: e } = resolved;
+      let prevS = new Date(s); let prevE = new Date(e);
+      if (compareMode === 'prev-year') { prevS.setFullYear(prevS.getFullYear() - 1); prevE.setFullYear(prevE.getFullYear() - 1); }
+      else { prevE = new Date(s.getTime() - 1); prevS = new Date(prevE.getTime() - (e.getTime() - s.getTime())); prevS.setHours(0,0,0,0); prevE.setHours(23,59,59,999); }
+      const prevCampaigns = campaignsAll.filter(c => c.sentDate >= prevS && c.sentDate <= prevE);
+      subjectCompare = {
+        openRate: computeSubjectAnalysis(prevCampaigns, 'openRate', 'ALL_SEGMENTS'),
+        clickToOpenRate: computeSubjectAnalysis(prevCampaigns, 'clickToOpenRate', 'ALL_SEGMENTS'),
+        clickRate: computeSubjectAnalysis(prevCampaigns, 'clickRate', 'ALL_SEGMENTS'),
+        revenuePerEmail: computeSubjectAnalysis(prevCampaigns, 'revenuePerEmail', 'ALL_SEGMENTS'),
+      };
+    }
+  }
+
+  // Dead weight savings (Klaviyo pricing model) — omit PII
+  const dws = computeDeadWeightSavings();
+
   const json: LlmExportJson = {
     meta: {
-      version: "1.0.0",
+      version: "1.1.0",
       generatedAt: new Date().toISOString(),
       currency: "USD",
       accountTimezone: null, // TODO: surface from account/report settings if available
@@ -325,11 +406,13 @@ export async function buildLlmExportJson(params: {
     audience: {
       insights,
       growth: { buckets: growthBuckets, compare: growthCompare },
-      inactivity: { deadWeightEstimate: null },
+      inactivity: { deadWeightEstimate: dws ? { monthlySavings: dws.monthlySavings, annualSavings: dws.annualSavings } : null },
     },
+    audienceSizePerformance: { buckets: asp.buckets, limited: asp.limited },
+    subjectLineAnalysis: { metrics: subjectPrimary, compare: subjectCompare },
     deliverabilityRisk: {
       weekly: weeklyAgg,
-      last8: last8.length >= 8 ? { prev: undefined, curr: undefined, deltas: undefined } : undefined,
+  last8: last8Prev && last8Curr && last8Deltas ? { prev: last8Prev, curr: last8Curr, deltas: last8Deltas } : undefined,
       elasticity: elasticity as any,
       classification,
       score,
@@ -340,6 +423,24 @@ export async function buildLlmExportJson(params: {
       insufficientWeeklyData: (gaps as any).insufficientWeeklyData,
       zeroRevenueCampaignDetails: (gaps as any).zeroRevenueCampaignDetails,
       notes: gaps.insufficientWeeklyData ? 'Less than ~66% of full weeks have campaign sends; treat weekly comparisons cautiously.' : undefined,
+    },
+    insights: {
+      deadWeightSavings: dws ? { monthly: dws.monthlySavings, annual: dws.annualSavings } : null,
+      lostRevenueZeroCampaigns: { amount: (gaps as any).estimatedLostRevenue, weeks: (gaps as any).zeroCampaignSendWeeks, longestGapWeeks: (gaps as any).longestZeroSendGap },
+  sendVolumeImpact: last8Prev && last8Curr ? { emailsDeltaPct: (last8Prev.emailsSent===0&&last8Curr.emailsSent===0?0: (last8Curr.emailsSent - last8Prev.emailsSent)/(last8Prev.emailsSent||1e-9)), revenueDeltaPct: (last8Prev.revenue===0&&last8Curr.revenue===0?0: (last8Curr.revenue - last8Prev.revenue)/(last8Prev.revenue||1e-9)), rpeDeltaPct: (last8Prev.revenuePerEmail===0&&last8Curr.revenuePerEmail===0?0: (last8Curr.revenuePerEmail - last8Prev.revenuePerEmail)/(last8Prev.revenuePerEmail||1e-9)), classification, score } : undefined,
+      subjectLineFindings: {
+        topLengthBins: subjectPrimary.openRate.lengthBins
+          .slice()
+          .sort((a,b)=> b.liftVsBaseline - a.liftVsBaseline)
+          .slice(0,2)
+          .map(b=> b.label),
+        topKeywords: subjectPrimary.openRate.keywordEmojis
+          .slice()
+          .sort((a,b)=> b.liftVsBaseline - a.liftVsBaseline)
+          .slice(0,3)
+          .map(f=> f.label),
+      },
+      audienceSizeFindings: { bestBucketByRPE: asp.buckets.length ? asp.buckets.slice().sort((a,b)=> (b.revenuePerEmail - a.revenuePerEmail))[0].rangeLabel : null },
     },
   };
 

@@ -753,7 +753,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             {/* Naming note styled like Data Coverage Notice (purple) */}
             <div className="mb-3">
                 <div className="p-0 text-purple-700 dark:text-purple-200">
-                    <span className="text-xs"><span className="font-medium">Naming Note:</span> Steps are labeled using your flow’s message names. If multiple steps share a name, they’re suffixed with “(2)”, “(3)”, etc. Rename in Klaviyo for clarity.</span>
+                    <span className="text-xs"><span className="font-medium">Naming Note:</span> Flow steps are organized by message names. When you create an A/B test, Klaviyo may give the same name to multiple emails, which can mess up the order. To avoid this, rename emails with clear suffixes like “-A” and “-B” so the order stays correct.</span>
                 </div>
             </div>
 
