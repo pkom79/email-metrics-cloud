@@ -1,0 +1,200 @@
+"use client";
+import React, { useMemo, useState } from 'react';
+import { Type, Tags, Hash, Timer, Zap } from 'lucide-react';
+import SelectBase from "../ui/SelectBase";
+import InfoTooltipIcon from "../InfoTooltipIcon";
+import TooltipPortal from "../TooltipPortal";
+import type { ProcessedCampaign } from "../../lib/data/dataTypes";
+import { computeSubjectAnalysis, uniqueSegmentsFromCampaigns, type SubjectMetricKey } from "../../lib/analytics/subjectAnalysis";
+
+interface Props {
+    campaigns: ProcessedCampaign[];
+}
+
+const metricOptions: { value: SubjectMetricKey; label: string }[] = [
+    { value: 'openRate', label: 'Open Rate' },
+    { value: 'clickToOpenRate', label: 'Click-to-Open Rate' },
+    { value: 'clickRate', label: 'Click Rate' },
+    { value: 'revenuePerEmail', label: 'Revenue per Email' },
+];
+
+export default function SubjectAnalysis({ campaigns }: Props) {
+    const [metric, setMetric] = useState<SubjectMetricKey>('openRate');
+    const segments = useMemo(() => uniqueSegmentsFromCampaigns(campaigns), [campaigns]);
+    const [segment, setSegment] = useState<string>('ALL_SEGMENTS');
+
+    const result = useMemo(() => computeSubjectAnalysis(campaigns, metric, segment), [campaigns, metric, segment]);
+
+    const formatPercent = (v: number) => `${(v ?? 0).toFixed(1)}%`;
+    const formatCurrency = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0);
+    const fmt = (v: number) => metric === 'revenuePerEmail' ? formatCurrency(v) : formatPercent(v);
+
+    const liftFmt = (v: number) => {
+        const isCurrency = metric === 'revenuePerEmail';
+        const s = isCurrency ? formatCurrency(v) : `${v >= 0 ? '+' : ''}${v.toFixed(1)}pp`;
+        return s;
+    };
+
+    return (
+        <section className="mt-6">
+            <div className="section-card">
+                <div className="section-header mb-3 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                        <Type className="w-5 h-5 text-purple-600" />
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Subject Analysis
+                            <InfoTooltipIcon placement="top" content={(<div>
+                                <p className="font-semibold mb-1">What</p>
+                                <p>How subject line features correlate with performance for Campaigns.</p>
+                                <p className="font-semibold mt-2 mb-1">Notes</p>
+                                <ul className="list-disc pl-4 space-y-1">
+                                    <li>Open Rate can be inflated by Apple MPP; prefer CTR/CTO/RPE for decisions.</li>
+                                    <li>Comparisons are weighted by emails sent.</li>
+                                    <li>Exact-match reuse only. Data is capped at 2 years.</li>
+                                </ul>
+                            </div>)} />
+                        </h3>
+                    </div>
+                    <div className="section-controls flex items-center gap-2">
+                        <div className="relative">
+                            <SelectBase value={segment} onChange={e => setSegment((e.target as HTMLSelectElement).value)} className="select-base h-9">
+                                <option value="ALL_SEGMENTS">All Segments</option>
+                                {segments.map(s => (<option key={s} value={s}>{s}</option>))}
+                            </SelectBase>
+                        </div>
+                        <div className="relative">
+                            <SelectBase value={metric} onChange={e => setMetric((e.target as HTMLSelectElement).value as SubjectMetricKey)} className="select-base h-9">
+                                {metricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                            </SelectBase>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Length bins */}
+                <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-2"><Timer className="w-4 h-4 text-purple-600" /><h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Performance by Subject Length</h4></div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {result.lengthBins.map(b => (
+                            <div key={b.key} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900">
+                                <div className="text-xs text-gray-600 dark:text-gray-400">{b.label} chars</div>
+                                <div className="text-lg font-semibold tabular-nums text-gray-900 dark:text-gray-100">{fmt(b.value)}</div>
+                                <div className="text-[11px] text-gray-600 dark:text-gray-400">{b.countCampaigns} campaigns • {b.totalEmails.toLocaleString()} emails</div>
+                                <div className={`text-[11px] ${b.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(b.liftVsBaseline)}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Keyword & Emoji */}
+                <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-2"><Tags className="w-4 h-4 text-purple-600" /><h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Keyword & Emoji Lift</h4></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {result.keywordEmojis.slice(0, 8).map(f => (
+                            <div key={f.key} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                <div>
+                                    <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
+                                    <div className="text-[11px] text-gray-600 dark:text-gray-400">{f.countCampaigns} campaigns • {f.totalEmails.toLocaleString()} emails</div>
+                                </div>
+                                <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Punctuation & Casing */}
+                <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-2"><Hash className="w-4 h-4 text-purple-600" /><h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Punctuation & Casing Effects</h4></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {result.punctuationCasing.slice(0, 6).map(f => (
+                            <div key={f.key} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                <div>
+                                    <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
+                                    <div className="text-[11px] text-gray-600 dark:text-gray-400">{f.countCampaigns} campaigns • {f.totalEmails.toLocaleString()} emails</div>
+                                </div>
+                                <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Deadline/Urgency */}
+                <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-2"><Zap className="w-4 h-4 text-purple-600" /><h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Deadline & Urgency Words</h4></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {result.deadlines.slice(0, 8).map(f => (
+                            <div key={f.key} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                <div>
+                                    <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
+                                    <div className="text-[11px] text-gray-600 dark:text-gray-400">{f.countCampaigns} campaigns • {f.totalEmails.toLocaleString()} emails</div>
+                                </div>
+                                <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Personalization & Price Anchoring */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <div className="flex items-center gap-2 mb-2"><Tags className="w-4 h-4 text-purple-600" /><h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Personalization Markers</h4></div>
+                        <div className="space-y-3">
+                            {result.personalization.map(f => (
+                                <div key={f.key} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                    <div>
+                                        <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
+                                        <div className="text-[11px] text-gray-600 dark:text-gray-400">{f.countCampaigns} campaigns • {f.totalEmails.toLocaleString()} emails</div>
+                                    </div>
+                                    <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2 mb-2"><Tags className="w-4 h-4 text-purple-600" /><h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Price Anchoring</h4></div>
+                        <div className="space-y-3">
+                            {result.priceAnchoring.map(f => (
+                                <div key={f.key} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                    <div>
+                                        <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
+                                        <div className="text-[11px] text-gray-600 dark:text-gray-400">{f.countCampaigns} campaigns • {f.totalEmails.toLocaleString()} emails</div>
+                                    </div>
+                                    <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Imperative start & Reuse */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div>
+                        <div className="flex items-center gap-2 mb-2"><Type className="w-4 h-4 text-purple-600" /><h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Imperative Start</h4></div>
+                        <div className="space-y-3">
+                            {result.imperativeStart.map(f => (
+                                <div key={f.key} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900 flex items-center justify-between">
+                                    <div className="text-sm text-gray-900 dark:text-gray-100">{f.label}</div>
+                                    <div className={`text-sm font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2 mb-2"><Type className="w-4 h-4 text-purple-600" /><h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Reuse Fatigue (exact match)</h4></div>
+                        <div className="space-y-2 max-h-64 overflow-auto pr-1">
+                            {result.reuse.slice(0, 10).map(r => (
+                                <TooltipPortal key={r.subject} content={(<div>
+                                    <div className="text-sm">Occurrences: {r.occurrences}</div>
+                                    <div className="text-[11px]">First: {fmt(r.firstValue)} • Last: {fmt(r.lastValue)}</div>
+                                </div>)}>
+                                    <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white dark:bg-gray-900">
+                                        <div className="text-xs truncate text-gray-900 dark:text-gray-100" title={r.subject}>{r.subject || 'Untitled'}</div>
+                                        <div className={`text-[11px] ${r.change >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(r.change)}</div>
+                                    </div>
+                                </TooltipPortal>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    );
+}

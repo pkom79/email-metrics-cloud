@@ -121,6 +121,13 @@ Audience Size Performance (new):
 - Tooltips: per-bar hover tooltip mirrors Send Frequency with 11px text, shows campaign count, total emails, averages, and weighted rates.
 - Limited-data notice: show a small secondary line when sample < 12 campaigns.
 
+Subject Analysis (new):
+- Section: use standard section container and header with `Type` icon and `InfoTooltipIcon`.
+- Controls: two dropdowns using `SelectBase` (h-9): left is Segment (default “All Segments”), right is Metric (Open Rate default; also CTO, Click Rate, Revenue per Email).
+- Notices: include an info tooltip noting Apple MPP inflation on opens and that comparisons are weighted by emails sent; also mention the 2-year cap.
+- Cards: compact bordered cards for length bins and feature lifts; use semantic colors for lift deltas (`text-emerald-600` positive, `text-rose-600` negative). Text sizes 11–14px per this guide.
+- Accessibility: tooltips use the standardized `TooltipPortal` with 100ms delay.
+
 ### Status coloring (correlations, trends)
 - Favorable vs unfavorable coloring depends on metric semantics:
   - Positive metrics (e.g., revenue): upward/positive correlation is `text-emerald-600`, negative is `text-rose-600`.

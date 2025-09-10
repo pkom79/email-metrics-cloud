@@ -17,6 +17,7 @@ import DataAgeNotice from './DataAgeNotice';
 import CampaignSendFrequency from './CampaignSendFrequency';
 import AudienceSizePerformance from './AudienceSizePerformance';
 import CampaignGapsAndLosses from './CampaignGapsAndLosses';
+import SubjectAnalysis from './SubjectAnalysis';
 import { BarChart3, Calendar, GitCompare, Mail, Send, Zap, MailSearch, Upload as UploadIcon, X, Share2 } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import TooltipPortal from '../TooltipPortal';
@@ -1083,6 +1084,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         {/* Send Frequency Module */}
                         <CampaignSendFrequency campaigns={filteredCampaigns} />
                         <AudienceSizePerformance campaigns={filteredCampaigns} />
+                        {/* Subject Analysis Module — Campaigns only */}
+                        <SubjectAnalysis campaigns={filteredCampaigns} />
                         {/* Campaign Gaps & Losses — placed below Campaign Send Frequency */}
                         <CampaignGapsAndLosses
                             dateRange={dateRange}
