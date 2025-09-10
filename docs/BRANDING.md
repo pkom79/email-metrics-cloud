@@ -114,6 +114,13 @@ Notices:
 - Volume shading uses gradient with low opacity.
 - Hover overlays: app-specific, not part of the standardized Info tooltip scope.
 
+Audience Size Performance (new):
+- Section: use the standard section container and header with `Layers` icon and `InfoTooltipIcon`.
+- Controls: single metric dropdown using `SelectBase` (h-9). Default metric is “Avg Campaign Revenue”.
+- Buckets: 4 bars/cards laid left→right with indigo-filled bars and subtle indigo gradient backdrop.
+- Tooltips: per-bar hover tooltip mirrors Send Frequency with 11px text, shows campaign count, total emails, averages, and weighted rates.
+- Limited-data notice: show a small secondary line when sample < 12 campaigns.
+
 ### Status coloring (correlations, trends)
 - Favorable vs unfavorable coloring depends on metric semantics:
   - Positive metrics (e.g., revenue): upward/positive correlation is `text-emerald-600`, negative is `text-rose-600`.

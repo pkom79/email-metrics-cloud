@@ -15,6 +15,7 @@ import FlowStepAnalysis from './FlowStepAnalysis';
 import CustomSegmentBlock from './CustomSegmentBlock';
 import DataAgeNotice from './DataAgeNotice';
 import CampaignSendFrequency from './CampaignSendFrequency';
+import AudienceSizePerformance from './AudienceSizePerformance';
 import CampaignGapsAndLosses from './CampaignGapsAndLosses';
 import { BarChart3, Calendar, GitCompare, Mail, Send, Zap, MailSearch, Upload as UploadIcon, X, Share2 } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
@@ -911,8 +912,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                         }}
                                         disabled={!prevAvail}
                                         className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${compareMode === 'prev-period'
-                                                ? 'bg-purple-600 text-white border-purple-600'
-                                                : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'
+                                            ? 'bg-purple-600 text-white border-purple-600'
+                                            : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'
                                             }`}
                                     >
                                         Prev Period
@@ -923,8 +924,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                         }}
                                         disabled={!yearAvail}
                                         className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${compareMode === 'prev-year'
-                                                ? 'bg-purple-600 text-white border-purple-600'
-                                                : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'
+                                            ? 'bg-purple-600 text-white border-purple-600'
+                                            : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'
                                             }`}
                                     >
                                         Prev Year
@@ -1081,6 +1082,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         </div>
                         {/* Send Frequency Module */}
                         <CampaignSendFrequency campaigns={filteredCampaigns} />
+                        <AudienceSizePerformance campaigns={filteredCampaigns} />
                         {/* Campaign Gaps & Losses — placed below Campaign Send Frequency */}
                         <CampaignGapsAndLosses
                             dateRange={dateRange}
