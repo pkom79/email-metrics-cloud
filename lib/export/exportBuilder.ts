@@ -84,7 +84,15 @@ export interface LlmExportJson {
     };
     inactivity: {
       // Keep concise flags/counters; omit PII lists
-      deadWeightEstimate?: { monthlySavings: number | null; annualSavings: number | null } | null;
+      deadWeightEstimate?: {
+        currentSubscribers: number;
+        deadWeightCount: number;
+        projectedSubscribers: number;
+        currentMonthlyPrice: number | null;
+        projectedMonthlyPrice: number | null;
+        monthlySavings: number | null;
+        annualSavings: number | null;
+      } | null;
     };
   };
   audienceSizePerformance?: {
@@ -175,7 +183,15 @@ export interface LlmExportJson {
     notes?: string;
   };
   insights?: {
-    deadWeightSavings?: { monthly: number | null; annual: number | null } | null;
+    deadWeightSavings?: {
+      monthly: number | null;
+      annual: number | null;
+      currentSubscribers?: number;
+      deadWeightCount?: number;
+      projectedSubscribers?: number;
+      currentMonthlyPrice?: number | null;
+      projectedMonthlyPrice?: number | null;
+    } | null;
     lostRevenueZeroCampaigns?: { amount?: number; weeks?: number; longestGapWeeks?: number };
     sendVolumeImpact?: { emailsDeltaPct?: number; revenueDeltaPct?: number; rpeDeltaPct?: number; classification?: string; score?: number };
     subjectLineFindings?: { topLengthBins?: string[]; topKeywords?: string[] };
@@ -446,7 +462,7 @@ export async function buildLlmExportJson(params: {
 
   const json: LlmExportJson = {
     meta: {
-  version: "1.3.0",
+      version: "1.3.1",
       generatedAt: new Date().toISOString(),
       currency: "USD",
       accountTimezone: null, // TODO: surface from account/report settings if available
@@ -479,7 +495,15 @@ export async function buildLlmExportJson(params: {
     audience: {
       insights,
       growth: { buckets: growthBuckets, compare: growthCompare },
-      inactivity: { deadWeightEstimate: dws ? { monthlySavings: dws.monthlySavings, annualSavings: dws.annualSavings } : null },
+      inactivity: { deadWeightEstimate: dws ? {
+        currentSubscribers: dws.currentSubscribers,
+        deadWeightCount: dws.deadWeightCount,
+        projectedSubscribers: dws.projectedSubscribers,
+        currentMonthlyPrice: dws.currentMonthlyPrice,
+        projectedMonthlyPrice: dws.projectedMonthlyPrice,
+        monthlySavings: dws.monthlySavings,
+        annualSavings: dws.annualSavings,
+      } : null },
     },
     audienceSizePerformance: { buckets: asp.buckets, limited: asp.limited },
     subjectLineAnalysis: { metrics: subjectPrimary, compare: subjectCompare },
@@ -498,7 +522,15 @@ export async function buildLlmExportJson(params: {
       notes: gaps.insufficientWeeklyData ? 'Less than ~66% of full weeks have campaign sends; treat weekly comparisons cautiously.' : undefined,
     },
     insights: {
-      deadWeightSavings: dws ? { monthly: dws.monthlySavings, annual: dws.annualSavings } : null,
+      deadWeightSavings: dws ? {
+        monthly: dws.monthlySavings,
+        annual: dws.annualSavings,
+        currentSubscribers: dws.currentSubscribers,
+        deadWeightCount: dws.deadWeightCount,
+        projectedSubscribers: dws.projectedSubscribers,
+        currentMonthlyPrice: dws.currentMonthlyPrice,
+        projectedMonthlyPrice: dws.projectedMonthlyPrice,
+      } : null,
       lostRevenueZeroCampaigns: { amount: (gaps as any).estimatedLostRevenue, weeks: (gaps as any).zeroCampaignSendWeeks, longestGapWeeks: (gaps as any).longestZeroSendGap },
   sendVolumeImpact: last8Prev && last8Curr ? { emailsDeltaPct: (last8Prev.emailsSent===0&&last8Curr.emailsSent===0?0: (last8Curr.emailsSent - last8Prev.emailsSent)/(last8Prev.emailsSent||1e-9)), revenueDeltaPct: (last8Prev.revenue===0&&last8Curr.revenue===0?0: (last8Curr.revenue - last8Prev.revenue)/(last8Prev.revenue||1e-9)), rpeDeltaPct: (last8Prev.revenuePerEmail===0&&last8Curr.revenuePerEmail===0?0: (last8Curr.revenuePerEmail - last8Prev.revenuePerEmail)/(last8Prev.revenuePerEmail||1e-9)), classification, score } : undefined,
       subjectLineFindings: {
