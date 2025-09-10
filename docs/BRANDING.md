@@ -103,7 +103,7 @@ Note:
 Flow Step Analysis layout:
 - Use a simple grid with gaps (no inner card borders or shadows per step).
 - Keep bars minimal and rely on section container for framing.
- - Header per step: big value at right with small arrow+percent change next to it (emerald for positive, rose for negative, gray arrow for 0.0%). Metric name is shown only in the section dropdown, not under each value.
+ - Header per step: big value at right with small arrow+percent change below it (emerald for positive, rose for negative, gray arrow for 0.0%). Metric name is shown only in the section dropdown, not under each value.
 
 Notices:
 - Data Coverage Notice must include: “Data is capped at 2 years.”
@@ -116,7 +116,7 @@ Notices:
 - Hover overlays: app-specific, not part of the standardized Info tooltip scope.
 
 Audience Growth header:
-- Show the big total number at top-right; to its right, show the compact arrow+percent change matching the big cards. No additional "Total …" label; rely on the metric dropdown.
+- Show the big total number at top-right; below it, show the compact arrow+percent change matching the big cards. No additional "Total …" label; rely on the metric dropdown.
 
 Audience Size Performance (new):
 - Section: use the standard section container and header with calendar icon (`CalendarFold`) and `InfoTooltipIcon`.

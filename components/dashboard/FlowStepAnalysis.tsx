@@ -484,8 +484,10 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                             {selectedMetric === 'conversionRate' && value > 100 && (
                                 <span className="text-xs px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-700 bg-emerald-50 dark:border-emerald-700 dark:text-emerald-200 dark:bg-emerald-900/30">Includes view-through</span>
                             )}
-                            {periodChange && dateRange !== 'all' && changeNode}
                         </div>
+                        {periodChange && dateRange !== 'all' && (
+                            <div className="mt-1">{changeNode}</div>
+                        )}
                         {/* Metric label intentionally omitted per design: metric is indicated in the dropdown */}
                     </div>
                 </div>

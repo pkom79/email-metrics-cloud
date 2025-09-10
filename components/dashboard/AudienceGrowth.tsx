@@ -182,20 +182,20 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
             <div className="flex items-start justify-between mb-4">
                 <div />
                 <div className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                        <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{total.toLocaleString()}</div>
-                        {pctChange != null && (() => {
-                            const zero = Math.abs(pctChange) < 0.01;
-                            const positive = pctChange > 0;
-                            const color = zero ? 'text-gray-600 dark:text-gray-400' : positive ? 'text-emerald-600' : 'text-rose-600';
-                            return (
+                    <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{total.toLocaleString()}</div>
+                    {pctChange != null && (() => {
+                        const zero = Math.abs(pctChange) < 0.01;
+                        const positive = pctChange > 0;
+                        const color = zero ? 'text-gray-600 dark:text-gray-400' : positive ? 'text-emerald-600' : 'text-rose-600';
+                        return (
+                            <div className="mt-1 flex justify-end">
                                 <span className={`text-sm font-semibold tabular-nums inline-flex items-center ${color}`} title={prevTotal ? `Previous period: ${prevTotal.toLocaleString()}` : ''}>
                                     {zero ? <ArrowRight className="w-4 h-4 mr-1" /> : positive ? <ArrowUp className="w-4 h-4 mr-1" /> : <ArrowDown className="w-4 h-4 mr-1" />}
                                     {zero ? '0.0' : Math.abs(pctChange).toFixed(1)}%
                                 </span>
-                            );
-                        })()}
-                    </div>
+                            </div>
+                        );
+                    })()}
                 </div>
             </div>
             <div className="relative" style={{ width: '100%' }}>
