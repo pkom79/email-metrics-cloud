@@ -891,7 +891,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             <div className="flex items-center gap-1.5"><GitCompare className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Compare:</span><div className="flex gap-1.5 ml-1 flex-nowrap">
                                 <button onClick={() => { if (compareMode !== 'prev-period' && prevAvail) setCompareMode('prev-period'); }} disabled={!prevAvail} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${compareMode === 'prev-period' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Prev Period</button>
                                 <button onClick={() => { if (compareMode !== 'prev-year' && yearAvail) setCompareMode('prev-year'); }} disabled={!yearAvail} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${compareMode === 'prev-year' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Prev Year</button>
-                            </div></div>
+                            </div>
+                                {/* Export JSON */}
+                                <div className="flex items-center ml-2">
+                                    <button onClick={onExportJson} className="px-3 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-700 inline-flex items-center gap-1.5 border border-purple-600">
+                                        <Download className="w-3.5 h-3.5" /> Export JSON
+                                    </button>
+                                </div>
+                            </div>
                         );
                     })()}
                 </div></div></div></div>
@@ -914,12 +921,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 </button>
                             )}
                         </div>
-                    </div>
-                    {/* Export JSON */}
-                    <div className="flex items-center ml-2">
-                        <button onClick={onExportJson} className="px-3 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-700 inline-flex items-center gap-1.5 border border-purple-600">
-                            <Download className="w-3.5 h-3.5" /> Export JSON
-                        </button>
                     </div>
                 </div>
             )}
