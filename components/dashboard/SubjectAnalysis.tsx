@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState } from 'react';
-import { Type, Tags, Hash, Timer, Zap } from 'lucide-react';
+import { Type, Ruler, Sparkles, CaseSensitive, AlarmClock, User, BadgeDollarSign, Play, RefreshCcw } from 'lucide-react';
 import SelectBase from "../ui/SelectBase";
 import InfoTooltipIcon from "../InfoTooltipIcon";
 import TooltipPortal from "../TooltipPortal";
@@ -69,11 +69,21 @@ export default function SubjectAnalysis({ campaigns }: Props) {
 
                 {/* Length bins */}
                 <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-3 justify-center"><Timer className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Performance by Subject Length</h4></div>
+                    <div className="flex items-center gap-2 mb-3 justify-center"><Ruler className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Performance by Subject Length</h4></div>
                     <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-4">
+                        {/* Baseline card at top-left */}
+                        <TooltipPortal content={(<div className="text-xs">Reference average for comparison.</div>)}>
+                            <div className="w-full rounded-2xl border border-gray-200 dark:border-gray-800 p-5 bg-white dark:bg-gray-900">
+                                <div className="text-base text-gray-600 dark:text-gray-400">Baseline</div>
+                                <div className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{fmt(result.baseline.value)}</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">{result.baseline.countCampaigns} campaigns • {result.baseline.totalEmails.toLocaleString()} emails</div>
+                                <div className="text-sm text-gray-500 dark:text-gray-500">&nbsp;</div>
+                            </div>
+                        </TooltipPortal>
                         {result.lengthBins
                             .filter(b => b.countCampaigns > 0)
                             .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
+                            .slice(0, 3)
                             .map(b => (
                                 <TooltipPortal key={b.key} content={(
                                     <div>
@@ -96,12 +106,11 @@ export default function SubjectAnalysis({ campaigns }: Props) {
 
                 {/* Keyword & Emoji */}
                 <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-3 justify-center"><Tags className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Keyword & Emoji Lift</h4></div>
+                    <div className="flex items-center gap-2 mb-3 justify-center"><Sparkles className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Keyword & Emoji Lift</h4></div>
                     <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
                         {result.keywordEmojis
-                            .filter(f => f.countCampaigns > 0)
+                            .filter(f => f.countCampaigns > 0 && !(f.key?.startsWith('none:')))
                             .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
-                            .sort((a, b) => (a.key?.startsWith('none:') ? 1 : 0) - (b.key?.startsWith('none:') ? 1 : 0))
                             .slice(0, 8)
                             .map(f => (
                                 <TooltipPortal key={f.key} content={(
@@ -126,12 +135,11 @@ export default function SubjectAnalysis({ campaigns }: Props) {
 
                 {/* Punctuation & Casing */}
                 <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-3 justify-center"><Hash className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Punctuation & Casing Effects</h4></div>
+                    <div className="flex items-center gap-2 mb-3 justify-center"><CaseSensitive className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Punctuation & Casing Effects</h4></div>
                     <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
                         {result.punctuationCasing
-                            .filter(f => f.countCampaigns > 0)
+                            .filter(f => f.countCampaigns > 0 && !(f.key?.startsWith('none:')))
                             .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
-                            .sort((a, b) => (a.key?.startsWith('none:') ? 1 : 0) - (b.key?.startsWith('none:') ? 1 : 0))
                             .slice(0, 6)
                             .map(f => (
                                 <TooltipPortal key={f.key} content={(
@@ -156,12 +164,11 @@ export default function SubjectAnalysis({ campaigns }: Props) {
 
                 {/* Deadline/Urgency */}
                 <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-3 justify-center"><Zap className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Deadline & Urgency Words</h4></div>
+                    <div className="flex items-center gap-2 mb-3 justify-center"><AlarmClock className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Deadline & Urgency Words</h4></div>
                     <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
                         {result.deadlines
-                            .filter(f => f.countCampaigns > 0)
+                            .filter(f => f.countCampaigns > 0 && !(f.key?.startsWith('none:')))
                             .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
-                            .sort((a, b) => (a.key?.startsWith('none:') ? 1 : 0) - (b.key?.startsWith('none:') ? 1 : 0))
                             .slice(0, 8)
                             .map(f => (
                                 <TooltipPortal key={f.key} content={(
@@ -187,12 +194,11 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                 {/* Personalization & Price Anchoring */}
                 <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
-                        <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><Tags className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Personalization Markers</h4></div>
+                        <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><User className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Personalization Markers</h4></div>
                         <div className="space-y-4">
                             {result.personalization
-                                .filter(f => f.countCampaigns > 0)
+                                .filter(f => f.countCampaigns > 0 && !(f.key?.startsWith('none:')))
                                 .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
-                                .sort((a, b) => (a.key?.startsWith('none:') ? 1 : 0) - (b.key?.startsWith('none:') ? 1 : 0))
                                 .map(f => (
                                     <TooltipPortal key={f.key} content={(
                                         <div>
@@ -214,12 +220,11 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                         </div>
                     </div>
                     <div>
-                        <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><Tags className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Price Anchoring</h4></div>
+                        <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><BadgeDollarSign className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Price Anchoring</h4></div>
                         <div className="space-y-4">
                             {result.priceAnchoring
-                                .filter(f => f.countCampaigns > 0)
+                                .filter(f => f.countCampaigns > 0 && !(f.key?.startsWith('none:')))
                                 .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
-                                .sort((a, b) => (a.key?.startsWith('none:') ? 1 : 0) - (b.key?.startsWith('none:') ? 1 : 0))
                                 .map(f => (
                                     <TooltipPortal key={f.key} content={(
                                         <div>
@@ -245,10 +250,10 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                 {/* Imperative start & Reuse */}
                 <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-5 mt-6">
                     <div>
-                        <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><Type className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Imperative Start</h4></div>
+                        <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><Play className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Imperative Start</h4></div>
                         <div className="space-y-4">
                             {result.imperativeStart
-                                .filter(f => f.countCampaigns > 0)
+                                .filter(f => f.countCampaigns > 0 && !(f.key?.startsWith('none:')))
                                 .sort((a, b) => (a.key?.startsWith('none:') ? 1 : 0) - (b.key?.startsWith('none:') ? 1 : 0))
                                 .map(f => (
                                     <TooltipPortal key={f.key} content={(
@@ -268,15 +273,8 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                         </div>
                     </div>
                     <div>
-                        <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><Type className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Reuse Fatigue (exact match)</h4></div>
+                        <div className="flex items-center gap-2 mb-3 justify-center md:justify-start"><RefreshCcw className="w-5 h-5 text-purple-600" /><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Reuse Fatigue (exact match)</h4></div>
                         <div className="space-y-3 max-h-72 overflow-auto pr-1">
-                            {/* Baseline card */}
-                            <TooltipPortal content={(<div className="text-xs">Reference average for comparison.</div>)}>
-                                <div className="w-full rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900">
-                                    <div className="text-sm text-gray-900 dark:text-gray-100">Baseline</div>
-                                    <div className="text-base font-semibold tabular-nums text-gray-900 dark:text-gray-100">{fmt(result.baseline.value)}</div>
-                                </div>
-                            </TooltipPortal>
                             {result.reuse.slice(0, 10).map(r => (
                                 <TooltipPortal key={r.subject} content={(<div>
                                     <div className="text-sm">Occurrences: {r.occurrences}</div>

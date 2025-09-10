@@ -223,15 +223,6 @@ export function computeSubjectAnalysis(
   ]
     .filter(f => f.countCampaigns > 0)
     .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline) || (b.totalEmails - a.totalEmails));
-  // None of the above (no emoji and none of the keywords)
-  const kwNone = computeFeatureGroup(
-    campaigns,
-    metric,
-    'None of the above',
-    (s) => !EMOJI_RE.test(s) && KEYWORD_TOKENS.every(tok => !includesWord(s, tok)),
-    'none:kw'
-  );
-  if (kwNone.countCampaigns > 0) keywordEmojis.push(kwNone);
 
   // Punctuation & casing
   const punctuationCasing: FeatureStat[] = [
@@ -244,33 +235,12 @@ export function computeSubjectAnalysis(
   ]
     .filter(f => f.countCampaigns > 0)
     .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline) || (b.totalEmails - a.totalEmails));
-  const punctNone = computeFeatureGroup(
-    campaigns,
-    metric,
-    'None of the above',
-    (s) => !s.includes('?')
-      && !s.includes('!')
-      && !hasAllCapsWord(s)
-      && !hasStandaloneNumber(s)
-      && !hasPercent(s)
-      && !( /[\[\](){}]/.test(s) && !/\[MULTIPLE VARIATIONS\]/i.test(s) ),
-    'none:punct'
-  );
-  if (punctNone.countCampaigns > 0) punctuationCasing.push(punctNone);
 
   // Deadlines
   const deadlines: FeatureStat[] = DEADLINE_WORDS
     .map(w => computeFeatureGroup(campaigns, metric, w, s => includesWord(s, w), `deadline:${w}`))
     .filter(f => f.countCampaigns > 0)
     .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline) || (b.totalEmails - a.totalEmails));
-  const deadlineNone = computeFeatureGroup(
-    campaigns,
-    metric,
-    'None of the above',
-    (s) => DEADLINE_WORDS.every(w => !includesWord(s, w)),
-    'none:deadline'
-  );
-  if (deadlineNone.countCampaigns > 0) deadlines.push(deadlineNone);
 
   // Personalization
   const personalization: FeatureStat[] = [
@@ -279,17 +249,6 @@ export function computeSubjectAnalysis(
   ]
     .filter(f => f.countCampaigns > 0)
     .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline) || (b.totalEmails - a.totalEmails));
-  const personalizationNone = computeFeatureGroup(
-    campaigns,
-    metric,
-    'None of the above',
-    (s) => {
-      const p = hasPersonalization(s);
-      return !p.youYour && !p.firstNameToken;
-    },
-    'none:pers'
-  );
-  if (personalizationNone.countCampaigns > 0) personalization.push(personalizationNone);
 
   // Price anchoring
   const priceAnchoring: FeatureStat[] = [
@@ -299,27 +258,11 @@ export function computeSubjectAnalysis(
   ]
     .filter(f => f.countCampaigns > 0)
     .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline) || (b.totalEmails - a.totalEmails));
-  const priceNone = computeFeatureGroup(
-    campaigns,
-    metric,
-    'None of the above',
-    (s) => !hasCurrency(s) && !hasDollarDiscount(s) && !hasPercent(s),
-    'none:price'
-  );
-  if (priceNone.countCampaigns > 0) priceAnchoring.push(priceNone);
 
   // Imperative start
   const imperativeStart: FeatureStat[] = [
     computeFeatureGroup(campaigns, metric, 'Starts with a verb (Shop/Save/Get…)', isImperativeStart, 'imperative')
   ];
-  const imperativeNone = computeFeatureGroup(
-    campaigns,
-    metric,
-    'None of the above',
-    (s) => !isImperativeStart(s),
-    'none:imperative'
-  );
-  if (imperativeNone.countCampaigns > 0) imperativeStart.push(imperativeNone);
 
   // Reuse fatigue — exact match only
   const bySubject = new Map<string, ProcessedCampaign[]>();
