@@ -44,7 +44,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
     } | null>(null);
 
     const metricOptions = [
-        { value: 'revenue', label: 'Revenue', format: 'currency' },
+        // Display label changed per request; metric key remains 'revenue'
+        { value: 'revenue', label: 'Total Revenue', format: 'currency' },
         { value: 'emailsSent', label: 'Emails Sent', format: 'number' },
         { value: 'openRate', label: 'Open Rate', format: 'percentage' },
         { value: 'clickRate', label: 'Click Rate', format: 'percentage' },
@@ -392,7 +393,6 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
     const renderStepChart = (step: FlowStepMetrics, index: number) => {
         const sparklineData = getStepSparklineData(step.sequencePosition, selectedMetric);
         const periodChange = getStepPeriodChange(step.sequencePosition, selectedMetric);
-        const metricConfig = (metricOptions as any).find((m: any) => m.value === selectedMetric);
         const value = step[selectedMetric as keyof FlowStepMetrics] as number;
         const yAxisRange = sharedYAxisRange;
         let chartColor = '#10b981';
@@ -412,11 +412,11 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 // Gray arrow for exactly 0% change
                 colorClass = 'text-gray-600 dark:text-gray-400';
             } else if (hasInsufficientData) {
-                // Emerald for insufficient data
+                // Treat as neutral display in emerald per brand (rare path)
                 colorClass = 'text-emerald-600 dark:text-emerald-400';
             } else {
-                // Normal green/red for actual changes
-                colorClass = isGood ? 'text-green-600' : 'text-red-600';
+                // Brand colors for actual changes
+                colorClass = isGood ? 'text-emerald-600' : 'text-rose-600';
             }
 
             const isSingleDay = formatDate(periodChange.previousPeriod.startDate) === formatDate(periodChange.previousPeriod.endDate);
@@ -425,16 +425,16 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 ? `${label} (${formatDate(periodChange.previousPeriod.startDate)}): ${formatMetricValue(periodChange.previousValue, selectedMetric)}`
                 : `${label} (${formatDate(periodChange.previousPeriod.startDate)} – ${formatDate(periodChange.previousPeriod.endDate)}): ${formatMetricValue(periodChange.previousValue, selectedMetric)}`;
 
-            // Chart color: Keep emerald for neutral cases, use proper red/green for actual changes
+            // Chart color: keep emerald for all lines; compare arrow conveys sentiment
             if (isZeroChange || hasInsufficientData) {
                 chartColor = '#10b981'; // Emerald for neutral cases
             } else {
-                chartColor = isGood ? '#10b981' : '#10b981'; // Keep emerald for charts, compare arrows will show the proper colors
+                chartColor = '#10b981'; // Keep emerald for charts, compare arrows show sentiment
             }
             dotColor = chartColor;
 
             changeNode = (
-                <span className={`text-lg font-bold px-2 py-1 rounded ${colorClass}`} title={trendTooltip} aria-label={trendTooltip}>
+                <span className={`text-sm font-semibold tabular-nums ${colorClass}`} title={trendTooltip} aria-label={trendTooltip}>
                     {isZeroChange ? (
                         <ArrowRight className="inline w-4 h-4 mr-1" />
                     ) : (isIncrease ? (
@@ -484,11 +484,9 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                             {selectedMetric === 'conversionRate' && value > 100 && (
                                 <span className="text-xs px-2 py-0.5 rounded-full border border-emerald-200 text-emerald-700 bg-emerald-50 dark:border-emerald-700 dark:text-emerald-200 dark:bg-emerald-900/30">Includes view-through</span>
                             )}
-                            {periodChange && dateRange !== 'all' && (
-                                <span className="text-lg font-bold px-2 py-1 rounded" style={{ color: chartColor, background: 'transparent' }}>{changeNode}</span>
-                            )}
+                            {periodChange && dateRange !== 'all' && changeNode}
                         </div>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">{(metricConfig as any)?.label}</span>
+                        {/* Metric label intentionally omitted per design: metric is indicated in the dropdown */}
                     </div>
                 </div>
                 <div className="mt-6 relative" style={{ height: '160px' }}>

@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState, useCallback } from 'react';
-import { ArrowUpRight, Info } from 'lucide-react';
+import { ArrowUpRight, Info, ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
@@ -182,11 +182,20 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
             <div className="flex items-start justify-between mb-4">
                 <div />
                 <div className="text-right">
-                    <div className="flex items-center justify-end gap-2 mb-0.5">
-                        <div className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 font-medium">Total {metric === 'created' ? 'Created' : metric === 'firstActive' ? 'First Active' : 'Subscribed'}</div>
-                        {pctChange != null && <span className={`text-[11px] font-medium flex items-center gap-0.5 ${pctChange >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{pctChange >= 0 ? '↑' : '↓'} {Math.abs(pctChange).toFixed(1)}%</span>}
+                    <div className="flex items-center justify-end gap-2">
+                        <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{total.toLocaleString()}</div>
+                        {pctChange != null && (() => {
+                            const zero = Math.abs(pctChange) < 0.01;
+                            const positive = pctChange > 0;
+                            const color = zero ? 'text-gray-600 dark:text-gray-400' : positive ? 'text-emerald-600' : 'text-rose-600';
+                            return (
+                                <span className={`text-sm font-semibold tabular-nums inline-flex items-center ${color}`} title={prevTotal ? `Previous period: ${prevTotal.toLocaleString()}` : ''}>
+                                    {zero ? <ArrowRight className="w-4 h-4 mr-1" /> : positive ? <ArrowUp className="w-4 h-4 mr-1" /> : <ArrowDown className="w-4 h-4 mr-1" />}
+                                    {zero ? '0.0' : Math.abs(pctChange).toFixed(1)}%
+                                </span>
+                            );
+                        })()}
                     </div>
-                    <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{total.toLocaleString()}</div>
                 </div>
             </div>
             <div className="relative" style={{ width: '100%' }}>
