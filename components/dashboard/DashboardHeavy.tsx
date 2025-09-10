@@ -911,24 +911,22 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">
                                 {isAdmin ? (selectedAccountId ? 'No data for this account yet' : 'Select an account to view data') : 'Get started by uploading your reports'}
                             </h2>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                                {isAdmin ? (
-                                    selectedAccountId ? 'This account has no processed snapshots. Once an upload is processed, metrics will appear here.' : 'Choose an account from the dropdown in the header to view its metrics.'
-                                ) : 'Upload your campaigns, flows, and subscribers CSV exports to see performance metrics and insights.'}
-                            </p>
                             {!isAdmin && (
-                                <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-purple-500 bg-purple-600 text-white px-5 py-2 text-sm font-medium shadow hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500">
-                                    <UploadIcon className="h-4 w-4" /> Upload Reports
-                                </button>
+                                <div className="mt-4 flex items-center justify-center gap-3">
+                                    <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                        <UploadIcon className="h-4 w-4" />
+                                        Upload New Reports
+                                    </button>
+                                    <button onClick={onExportJson} className="inline-flex items-center gap-1.5 rounded-lg border border-purple-600 bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700">
+                                        <Download className="w-3.5 h-3.5" />
+                                        Export JSON
+                                    </button>
+                                </div>
                             )}
                         </div>
                     </div>
                 </div>
             )}
-            {/* Data coverage notice */}
-            {hasData && (<div className="py-3"><div className="max-w-7xl mx-auto"><div className="mx-4 sm:mx-6"><div className="p-0 text-purple-700 dark:text-purple-200"><span className="text-xs"><span className="font-medium">Data Coverage Notice:</span>{(() => { const dates = [...defCampaigns, ...defFlows].map(e => e.sentDate.getTime()); let lastVisible = dm.getLastEmailDate(); if (dates.length) { let maxTime = dates[0]; for (let i = 1; i < dates.length; i++) { if (dates[i] > maxTime) maxTime = dates[i]; } lastVisible = new Date(maxTime); } return ` All dashboard metrics reflect email channel performance only and exclude SMS-attributed revenue through ${lastVisible.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}. Data is capped at 2 years.`; })()}</span></div></div></div></div>)}
-            {/* Data age notice */}
-            {hasData && <DataAgeNotice dataManager={dm} onUploadClick={() => setShowUploadModal(true)} />}
             {/* Main content */}
             <div className="p-6"><div className="max-w-7xl mx-auto space-y-8">
                 {overviewMetrics && (
@@ -1104,9 +1102,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     <div className="md:col-start-1 md:col-end-2 min-w-0">
                                         <div className="flex items-center gap-3 mb-1.5"><h4 className="font-medium text-gray-900 dark:text-gray-100 truncate">{c.subject}</h4></div>
                                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-1 truncate">{c.campaignName}</p>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                                            Sent on {c.sentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                            {Array.isArray((c as any).segmentsUsed) && (c as any).segmentsUsed.length > 0 && (
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">Sent on {c.sentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                        {Array.isArray((c as any).segmentsUsed) && (c as any).segmentsUsed.length > 0 && (
+                                            <div className="mt-0.5">
                                                 <TooltipPortal placement="top" content={(
                                                     <div className="max-h-48 overflow-auto pr-1">
                                                         {((c as any).segmentsUsed as string[]).map((s: string, idx: number) => (
@@ -1114,12 +1112,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                                         ))}
                                                     </div>
                                                 )}>
-                                                    <button type="button" className="ml-2 text-purple-600 hover:text-purple-700 focus:outline-none text-xs align-baseline">
+                                                    <button type="button" className="text-purple-600 hover:text-purple-700 focus:outline-none text-xs">
                                                         Segments ({(c as any).segmentsUsed.length})
                                                     </button>
                                                 </TooltipPortal>
-                                            )}
-                                        </p>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Details (col 2 on md+, below on mobile) */}
