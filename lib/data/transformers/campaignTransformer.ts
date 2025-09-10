@@ -54,6 +54,23 @@ export class CampaignTransformer {
     private transformSingle(raw: RawCampaignCSV, id: number): ProcessedCampaign | null {
         const name = (this.findAnyField(raw, ['Campaign Name', 'Name']) ?? (raw as any)['Campaign Name'] ?? (raw as any)['Name'] ?? '') as string;
         const subject = (this.findField(raw, 'Subject') ?? (raw as any)['Subject'] ?? name) as string;
+        // Segments/lists: tolerate "List", "Lists", case/dup variations. Split by comma (and defensively semicolon), trim, dedupe preserving first occurrence.
+        const listsRaw = (this.findAnyField(raw, ['Lists', 'List']) ?? (raw as any)['Lists'] ?? (raw as any)['List'] ?? '') as any;
+        const segmentsUsed: string[] = (() => {
+            if (listsRaw === undefined || listsRaw === null) return [];
+            const s = String(listsRaw);
+            if (!s.trim()) return [];
+            // Primary: comma-separated. Also split on semicolons if present.
+            const parts = s.split(/[;,]/g).map(p => p.replace(/^\s+|\s+$/g, '')); // trim without depending on String.trim for weird unicode
+            const seen = new Set<string>();
+            const out: string[] = [];
+            for (const p of parts) {
+                if (!p) continue;
+                const key = p; // case-sensitive preserve
+                if (!seen.has(key)) { seen.add(key); out.push(p); }
+            }
+            return out;
+        })();
         const sendVal = this.findAnyField(raw, ['Send Time', 'Send Time (UTC)', 'Send Date', 'Sent At', 'Send Date (UTC)', 'Send Date (GMT)', 'Date']);
         const sentDate = this.parseDateStrict(sendVal);
         if (!sentDate) return null; // skip if date unparseable
@@ -85,6 +102,7 @@ export class CampaignTransformer {
             sentDate,
             dayOfWeek: sentDate.getDay(),
             hourOfDay: sentDate.getHours(),
+            segmentsUsed,
             emailsSent,
             uniqueOpens,
             uniqueClicks,

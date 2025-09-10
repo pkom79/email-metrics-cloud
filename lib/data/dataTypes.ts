@@ -8,6 +8,8 @@ export interface ProcessedCampaign {
     sentDate: Date;
     dayOfWeek: number;
     hourOfDay: number;
+    // Segment/list names used for the send (parsed from CSV "Lists"/"List")
+    segmentsUsed: string[];
     emailsSent: number;
     uniqueOpens: number;
     uniqueClicks: number;

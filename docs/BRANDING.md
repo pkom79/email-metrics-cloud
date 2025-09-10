@@ -50,16 +50,13 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - `.section-card`: Rounded card with border and padding.
 - `.section-header`: Title at left, controls at right.
 ### Export controls
-- Use a primary action button styled with brand purple for download/export actions when they are high-intent and safe.
-- Class guidance: `px-3 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-700 inline-flex items-center gap-1.5 border border-purple-600`.
-- Icon: `Download` from lucide-react at 14px–16px (`w-3.5 h-3.5`).
-- Placement: Right side of dashboard header controls, after Compare mode.
 
+## Inline data links + tooltip (Segments)
+- Trigger: small text button, purple-600 text, no underline on hover, placed inline after contextual label (e.g., "Sent on …").
+- Tooltip: reuse general tooltip container (rounded-lg, subtle border, white/dark bg, shadow). Max-height ~12rem with overflow auto for long lists. Text size ~11px-12px, tight line-height.
+- Accessibility: focusable, dismiss on click outside or blur; ensure hover/focus both show tooltip with a short show delay.
 - `.section-controls`: Right-aligned inline controls.
 
-Defined in `app/globals.css` under `@layer components`.
-
-### Toggle group (segmented buttons)
 - Use compact bordered buttons with selected state in brand purple.
 - Pattern mirrors the Compare and Sort controls in dashboard headers.
 - Anatomy:

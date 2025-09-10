@@ -18,6 +18,7 @@ import CampaignSendFrequency from './CampaignSendFrequency';
 import CampaignGapsAndLosses from './CampaignGapsAndLosses';
 import { BarChart3, Calendar, GitCompare, Mail, Send, Zap, MailSearch, Upload as UploadIcon, X, Share2 } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
+import TooltipPortal from '../TooltipPortal';
 import SelectBase from "../ui/SelectBase";
 import UploadWizard from '../../components/UploadWizard';
 import { usePendingUploadsLinker } from '../../lib/utils/usePendingUploadsLinker';
@@ -1103,7 +1104,22 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     <div className="md:col-start-1 md:col-end-2 min-w-0">
                                         <div className="flex items-center gap-3 mb-1.5"><h4 className="font-medium text-gray-900 dark:text-gray-100 truncate">{c.subject}</h4></div>
                                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-1 truncate">{c.campaignName}</p>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">Sent on {c.sentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                                            Sent on {c.sentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                            {Array.isArray((c as any).segmentsUsed) && (c as any).segmentsUsed.length > 0 && (
+                                                <TooltipPortal placement="top" content={(
+                                                    <div className="max-h-48 overflow-auto pr-1">
+                                                        {((c as any).segmentsUsed as string[]).map((s: string, idx: number) => (
+                                                            <div key={idx} className="py-0.5">{s}</div>
+                                                        ))}
+                                                    </div>
+                                                )}>
+                                                    <button type="button" className="ml-2 text-purple-600 hover:text-purple-700 focus:outline-none text-xs align-baseline">
+                                                        Segments ({(c as any).segmentsUsed.length})
+                                                    </button>
+                                                </TooltipPortal>
+                                            )}
+                                        </p>
                                     </div>
 
                                     {/* Details (col 2 on md+, below on mobile) */}

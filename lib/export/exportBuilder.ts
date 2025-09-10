@@ -140,6 +140,7 @@ export async function buildLlmExportJson(params: {
     name: c.campaignName,
     subject: c.subject,
     sentDate: c.sentDate.toISOString(),
+  segmentsUsed: Array.isArray((c as any).segmentsUsed) ? (c as any).segmentsUsed : [],
     emailsSent: c.emailsSent,
     revenue: c.revenue,
     totalOrders: c.totalOrders,
