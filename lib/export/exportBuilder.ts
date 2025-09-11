@@ -98,6 +98,24 @@ export interface LlmExportJson {
     zeroRevenueCampaigns: number;
     averageCampaignsPerWeek: number;
   };
+  // Campaign Performance by Day of Week (lookback period)
+  campaignPerformanceByDayOfWeek?: Array<{
+    day: string; // Sun..Sat
+    dayIndex: number; // 0..6
+    campaignsCount: number;
+    totalRevenue: number;
+    avgOrderValue: number;
+    totalOrders: number;
+    conversionRate: number;
+    openRate: number;
+    clickRate: number;
+    clickToOpenRate: number;
+    revenuePerEmail: number;
+    emailsSent: number;
+    unsubscribeRate: number;
+    spamRate: number;
+    bounceRate: number;
+  }>;
   // Subject Line Analysis (All Segments): provide only lifts vs account-average for the selected time period
   subjectLineAnalysis?: {
     openRate: SubjectMetricLiftSet;
@@ -263,7 +281,8 @@ export async function buildLlmExportJson(params: {
         campaignSendFrequency: 'KPIs by weekly send frequency buckets (1, 2, 3, 4+) over the selected lookback period; includes campaign counts.',
         subjectLineAnalysis: 'Lifts vs account average for subject features (All Segments) over the selected lookback period; includes counts where available.',
         audienceSizePerformance: 'KPIs by audience size (emails sent) buckets over the selected lookback period; includes campaign counts and audience size totals.',
-        campaignGapsAndLosses: 'Weekly-only analysis identifying zero-send weeks, longest gaps, coverage, estimated lost revenue, and zero-revenue campaigns over the lookback period.'
+        campaignGapsAndLosses: 'Weekly-only analysis identifying zero-send weeks, longest gaps, coverage, estimated lost revenue, and zero-revenue campaigns over the lookback period.',
+        campaignPerformanceByDayOfWeek: 'KPIs by weekday over the selected lookback period; includes how many campaigns were sent on each day.'
       },
       kpiDescriptions: {
         zeroCampaignSendWeeks: 'Number of complete weeks in the selected range with no campaign sends.',
@@ -565,6 +584,43 @@ export async function buildLlmExportJson(params: {
           zeroRevenueCampaigns: gaps.zeroRevenueCampaigns ?? gaps.lowEffectivenessCampaigns,
           averageCampaignsPerWeek: gaps.avgCampaignsPerWeek,
         };
+      } catch {}
+
+      // Campaign Performance by Day of Week — aggregate over lookback
+      try {
+        // We need all metrics, not one at a time. We'll aggregate raw sums per day and derive KPIs.
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const byDay = dayNames.map((d, i) => ({ day: d, dayIndex: i, campaignsCount: 0, totalRevenue: 0, emailsSent: 0, totalOrders: 0, totalOpens: 0, totalClicks: 0, totalUnsubs: 0, totalSpam: 0, totalBounces: 0 }));
+        for (const c of campaigns as any[]) {
+          const idx = (c.dayOfWeek ?? (c.sentDate instanceof Date ? c.sentDate.getDay() : 0)) as number;
+          const d = byDay[idx];
+          d.campaignsCount += 1;
+          d.totalRevenue += (c.revenue || 0);
+          d.emailsSent += (c.emailsSent || 0);
+          d.totalOrders += (c.totalOrders || 0);
+          d.totalOpens += (c.uniqueOpens || 0);
+          d.totalClicks += (c.uniqueClicks || 0);
+          d.totalUnsubs += (c.unsubscribesCount || 0);
+          d.totalSpam += (c.spamComplaintsCount || 0);
+          d.totalBounces += (c.bouncesCount || 0);
+        }
+        json.campaignPerformanceByDayOfWeek = byDay.map(d => ({
+          day: d.day,
+          dayIndex: d.dayIndex,
+          campaignsCount: d.campaignsCount,
+          totalRevenue: d.totalRevenue,
+          avgOrderValue: d.totalOrders > 0 ? d.totalRevenue / d.totalOrders : 0,
+          totalOrders: d.totalOrders,
+          conversionRate: d.totalClicks > 0 ? (d.totalOrders / d.totalClicks) * 100 : 0,
+          openRate: d.emailsSent > 0 ? (d.totalOpens / d.emailsSent) * 100 : 0,
+          clickRate: d.emailsSent > 0 ? (d.totalClicks / d.emailsSent) * 100 : 0,
+          clickToOpenRate: d.totalOpens > 0 ? (d.totalClicks / d.totalOpens) * 100 : 0,
+          revenuePerEmail: d.emailsSent > 0 ? d.totalRevenue / d.emailsSent : 0,
+          emailsSent: d.emailsSent,
+          unsubscribeRate: d.emailsSent > 0 ? (d.totalUnsubs / d.emailsSent) * 100 : 0,
+          spamRate: d.emailsSent > 0 ? (d.totalSpam / d.emailsSent) * 100 : 0,
+          bounceRate: d.emailsSent > 0 ? (d.totalBounces / d.emailsSent) * 100 : 0,
+        }));
       } catch {}
     }
   } catch (e) {
