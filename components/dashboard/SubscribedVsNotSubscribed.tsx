@@ -48,12 +48,6 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
     const anchor = useMemo(() => dm.getLastEmailDate() || new Date(), [dm]);
     const split = useMemo(() => getConsentSplitMetrics(filteredSubs, metric, anchor), [filteredSubs, metric, anchor]);
 
-    if (!filteredSubs.length) return null;
-
-    // Prepare chart values
-    const maxValue = Math.max(...split.groups.map(g => g.value), 0);
-    const chartHeight = 150; const barH = 30; const spacing = 12; const startY = 40; const labelW = 130; const width = 800;
-
     const periodLabel = useMemo(() => {
         if (!range) return '';
         // Friendly label depending on dateRange
@@ -65,6 +59,12 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
         const to = range.end.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
         return `Created between ${from} – ${to}`;
     }, [range, dateRange]);
+
+    if (!filteredSubs.length) return null;
+
+    // Prepare chart values
+    const maxValue = Math.max(...split.groups.map(g => g.value), 0);
+    const chartHeight = 150; const barH = 30; const spacing = 12; const startY = 40; const labelW = 130; const width = 800;
 
     return (
         <section className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
