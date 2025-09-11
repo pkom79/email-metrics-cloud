@@ -112,13 +112,13 @@ export async function buildLlmExportJson(params: {
 
   // Monthly Campaign vs Flow split for revenue and emailsSent over the full-month window
   const mkSplit = (metric: 'revenue' | 'emailsSent') => {
-    const camp = dm.getMetricTimeSeries(dm.getCampaigns(), [], metric, 'custom', 'monthly', start.toISOString(), end.toISOString()) as Array<{ date: string; value: number }>;
-    const flow = dm.getMetricTimeSeries([], dm.getFlowEmails(), metric, 'custom', 'monthly', start.toISOString(), end.toISOString()) as Array<{ date: string; value: number }>;
-    // Filter to only months within [start,end] as YYYY-MM
+    const camp = dm.getMetricTimeSeries(dm.getCampaigns(), [], metric, 'custom', 'monthly', start.toISOString(), end.toISOString()) as Array<{ date: string; iso?: string; value: number }>;
+    const flow = dm.getMetricTimeSeries([], dm.getFlowEmails(), metric, 'custom', 'monthly', start.toISOString(), end.toISOString()) as Array<{ date: string; iso?: string; value: number }>;
+    // Group strictly by YYYY-MM using the iso field returned by DataManager
     const monthly: Array<{ month: string; campaigns: number; flows: number; total: number; campaignPct: number; flowPct: number }> = [];
     const byMonth = new Map<string, { c: number; f: number }>();
-    for (const p of camp) { const m = (p.date || '').slice(0,7); if (m) { const r = byMonth.get(m) || { c: 0, f: 0 }; r.c += p.value || 0; byMonth.set(m, r); } }
-    for (const p of flow) { const m = (p.date || '').slice(0,7); if (m) { const r = byMonth.get(m) || { c: 0, f: 0 }; r.f += p.value || 0; byMonth.set(m, r); } }
+    for (const p of camp) { const m = ((p.iso || p.date) || '').slice(0,7); if (m) { const r = byMonth.get(m) || { c: 0, f: 0 }; r.c += p.value || 0; byMonth.set(m, r); } }
+    for (const p of flow) { const m = ((p.iso || p.date) || '').slice(0,7); if (m) { const r = byMonth.get(m) || { c: 0, f: 0 }; r.f += p.value || 0; byMonth.set(m, r); } }
     const monthsKeys: string[] = [];
     const cursor = new Date(start);
     while (cursor <= end) { monthsKeys.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`); cursor.setMonth(cursor.getMonth() + 1); }
