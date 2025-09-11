@@ -7,6 +7,7 @@ export type ConsentSplitMetric =
   | "repeatBuyers"
   | "ltvBuyers"
   | "ltvAll"
+  | "totalRevenue"
   | "engaged30"
   | "engaged60"
   | "engaged90";
@@ -87,6 +88,10 @@ export function getConsentSplitMetrics(
         const avg = sample > 0 ? arr.reduce((sum, s) => sum + (s.totalClv || 0), 0) / sample : 0;
         return { value: avg, sample };
       }
+      case "totalRevenue": {
+        const sum = arr.reduce((acc, s) => acc + (s.totalClv || 0), 0);
+        return { value: sum, sample };
+      }
       case "engaged30":
       case "engaged60":
       case "engaged90": {
@@ -112,7 +117,7 @@ export function getConsentSplitMetrics(
 }
 
 export function formatConsentMetricValue(metric: ConsentSplitMetric, value: number): string {
-  if (metric === "ltvBuyers" || metric === "ltvAll") {
+  if (metric === "ltvBuyers" || metric === "ltvAll" || metric === "totalRevenue") {
     return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
   }
   return Math.round(value || 0).toLocaleString("en-US");

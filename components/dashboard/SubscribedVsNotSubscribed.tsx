@@ -96,6 +96,7 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
                         <option value="repeatBuyers">Repeat Buyers</option>
                         <option value="ltvBuyers">LTV Buyers</option>
                         <option value="ltvAll">LTV All</option>
+                        <option value="totalRevenue">Total Revenue</option>
                         <option value="engaged30">Engaged in Last 30 days</option>
                         <option value="engaged60">Engaged in Last 60 days</option>
                         <option value="engaged90">Engaged in Last 90 days</option>

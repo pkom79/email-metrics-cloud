@@ -114,7 +114,7 @@ Notices:
   - Subscribed vs Not Subscribed: two horizontal bars using `#8b5cf6` (purple) to match the All scope accent.
     - Header icon: `BarChart3` in `purple-600`.
     - Metric dropdown: `SelectBase` (`h-9`) with focus ring `purple-500`.
-    - Values: counts as integers (`tabular-nums`), LTV metrics in USD with 2 decimals.
+  - Values: counts as integers (`tabular-nums`), LTV metrics in USD with 2 decimals, Total Revenue in USD with 2 decimals.
     - Tooltip: What/How/Why with definitions for “Subscribed” and “Not Subscribed”.
 - Grid labels: 11px; `fill-gray-600 dark:fill-gray-400`
 - Volume shading uses gradient with low opacity.
