@@ -35,7 +35,7 @@ export interface LlmExportJson {
 
 type CorrelationValue = { r: number | null; n: number };
 type CorrelationSet = {
-  totalRevenue: CorrelationValue; // revenue vs emails
+  averageRevenue: CorrelationValue; // per-bucket revenue vs emails
   revenuePerEmail: CorrelationValue;
   unsubsPer1k: CorrelationValue;
   bouncesPer1k: CorrelationValue;
@@ -176,7 +176,7 @@ export async function buildLlmExportJson(params: {
       const f = seg === 'flows' ? dm.getFlowEmails() : [];
       const xs = dm.getMetricTimeSeries(c, f, 'emailsSent', dateRange, granularity, customFrom, customTo).map(p => p.value || 0);
       const series = {
-        totalRevenue: dm.getMetricTimeSeries(c, f, 'revenue', dateRange, granularity, customFrom, customTo).map(p => p.value || 0),
+        averageRevenue: dm.getMetricTimeSeries(c, f, 'revenue', dateRange, granularity, customFrom, customTo).map(p => p.value || 0),
         revenuePerEmail: dm.getMetricTimeSeries(c, f, 'revenuePerEmail', dateRange, granularity, customFrom, customTo).map(p => p.value || 0),
         unsubsPer1k: dm.getMetricTimeSeries(c, f, 'unsubscribeRate', dateRange, granularity, customFrom, customTo).map(p => p.value || 0),
         bouncesPer1k: dm.getMetricTimeSeries(c, f, 'bounceRate', dateRange, granularity, customFrom, customTo).map(p => p.value || 0),
@@ -199,7 +199,7 @@ export async function buildLlmExportJson(params: {
         return { r: num / Math.sqrt(dxs * dys), n: pairs.length };
       };
       return {
-        totalRevenue: pearson(xs, series.totalRevenue),
+        averageRevenue: pearson(xs, series.averageRevenue),
         revenuePerEmail: pearson(xs, series.revenuePerEmail),
         unsubsPer1k: pearson(xs, series.unsubsPer1k),
         bouncesPer1k: pearson(xs, series.bouncesPer1k),
