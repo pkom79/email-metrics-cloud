@@ -93,6 +93,10 @@ export interface LlmExportJson {
         monthlySavings: number | null;
         annualSavings: number | null;
       } | null;
+      inactivityRevenueDrain?: {
+        buckets: Array<{ key: '30+' | '60+' | '90+' | '120+'; count: number; totalClv: number; predictedClv: number }>;
+        currency: string;
+      } | null;
     };
   };
   audienceSizePerformance?: {
@@ -196,6 +200,7 @@ export interface LlmExportJson {
     sendVolumeImpact?: { emailsDeltaPct?: number; revenueDeltaPct?: number; rpeDeltaPct?: number; classification?: string; score?: number };
     subjectLineFindings?: { topLengthBins?: string[]; topKeywords?: string[] };
     audienceSizeFindings?: { bestBucketByRPE?: string | null };
+  inactivityRevenueDrain?: { clv90Plus?: number; clv120Plus?: number; count90Plus?: number; count120Plus?: number };
   };
 }
 
@@ -314,6 +319,29 @@ export async function buildLlmExportJson(params: {
   const insights = dm.getAudienceInsights();
   const subs = dm.getSubscribers();
   const activeSubs = subs.filter(s => (s.emailConsent || s.canReceiveEmail !== false));
+  // Inactivity Revenue Drain (CLV-based) — derive buckets by days since last active
+  const inactivityDrain = (() => {
+    if (!subs.length) return null as null | { buckets: Array<{ key: '30+' | '60+' | '90+' | '120+'; count: number; totalClv: number; predictedClv: number }>; currency: string };
+    const now = dm.getLastEmailDate();
+    const daysSince = (d?: Date | null) => (d instanceof Date && !isNaN(d.getTime())) ? Math.floor((now.getTime() - d.getTime()) / (1000*60*60*24)) : Infinity;
+    const buckets: Record<'30+'|'60+'|'90+'|'120+', { count: number; totalClv: number; predictedClv: number }> = {
+      '30+': { count: 0, totalClv: 0, predictedClv: 0 },
+      '60+': { count: 0, totalClv: 0, predictedClv: 0 },
+      '90+': { count: 0, totalClv: 0, predictedClv: 0 },
+      '120+': { count: 0, totalClv: 0, predictedClv: 0 },
+    };
+    for (const s of subs) {
+      const last = s.lastActive instanceof Date ? s.lastActive : (s.lastClick instanceof Date ? s.lastClick : (s.lastOpen instanceof Date ? s.lastOpen : null));
+      const age = daysSince(last);
+      const totalClv = (s as any).totalClv || 0;
+      const predictedClv = (s as any).predictedClv || 0;
+      if (age >= 120) { buckets['120+'].count++; buckets['120+'].totalClv += totalClv; buckets['120+'].predictedClv += predictedClv; }
+      else if (age >= 90) { buckets['90+'].count++; buckets['90+'].totalClv += totalClv; buckets['90+'].predictedClv += predictedClv; }
+      else if (age >= 60) { buckets['60+'].count++; buckets['60+'].totalClv += totalClv; buckets['60+'].predictedClv += predictedClv; }
+      else if (age >= 30) { buckets['30+'].count++; buckets['30+'].totalClv += totalClv; buckets['30+'].predictedClv += predictedClv; }
+    }
+    return { buckets: (['30+','60+','90+','120+'] as const).map(k => ({ key: k, ...buckets[k] })), currency: 'USD' };
+  })();
   const buildBuckets = (start: Date, end: Date) => {
     // Buckets align with granularity
     const buckets: Array<{ date: string; created: number; firstActive: number; subscribed: number }> = [];
@@ -503,7 +531,7 @@ export async function buildLlmExportJson(params: {
         projectedMonthlyPrice: dws.projectedMonthlyPrice,
         monthlySavings: dws.monthlySavings,
         annualSavings: dws.annualSavings,
-      } : null },
+      } : null, inactivityRevenueDrain: inactivityDrain },
     },
     audienceSizePerformance: { buckets: asp.buckets, limited: asp.limited },
     subjectLineAnalysis: { metrics: subjectPrimary, compare: subjectCompare },
@@ -545,7 +573,8 @@ export async function buildLlmExportJson(params: {
           .slice(0,3)
           .map(f=> f.label),
       },
-      audienceSizeFindings: { bestBucketByRPE: asp.buckets.length ? asp.buckets.slice().sort((a,b)=> (b.revenuePerEmail - a.revenuePerEmail))[0].rangeLabel : null },
+  audienceSizeFindings: { bestBucketByRPE: asp.buckets.length ? asp.buckets.slice().sort((a,b)=> (b.revenuePerEmail - a.revenuePerEmail))[0].rangeLabel : null },
+  inactivityRevenueDrain: inactivityDrain ? { clv90Plus: inactivityDrain.buckets.find(b=>b.key==='90+')!.totalClv, clv120Plus: inactivityDrain.buckets.find(b=>b.key==='120+')!.totalClv, count90Plus: inactivityDrain.buckets.find(b=>b.key==='90+')!.count, count120Plus: inactivityDrain.buckets.find(b=>b.key==='120+')!.count } : undefined,
     },
   };
 

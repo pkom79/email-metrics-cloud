@@ -307,6 +307,10 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 {/* Audience Growth module */}
                 {React.createElement(require('./AudienceGrowth').default, { dateRange, granularity, customFrom, customTo })}
             </div>
+            {/* Subscribed vs Not Subscribed module (below Audience Growth) */}
+            <div className="mb-8">
+                {React.createElement(require('./SubscribedVsNotSubscribed').default, { dateRange, customFrom, customTo })}
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-2 mb-4">
