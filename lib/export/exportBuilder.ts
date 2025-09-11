@@ -112,8 +112,11 @@ export async function buildLlmExportJson(params: {
 
   // Monthly Campaign vs Flow split for revenue and emailsSent over the full-month window
   const mkSplit = (metric: 'revenue' | 'emailsSent') => {
-    const camp = dm.getMetricTimeSeries(dm.getCampaigns(), [], metric, 'custom', 'monthly', start.toISOString(), end.toISOString()) as Array<{ date: string; iso?: string; value: number }>;
-    const flow = dm.getMetricTimeSeries([], dm.getFlowEmails(), metric, 'custom', 'monthly', start.toISOString(), end.toISOString()) as Array<{ date: string; iso?: string; value: number }>;
+    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const fromDay = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2,'0')}-01`;
+    const toDay = fmt(end);
+    const camp = dm.getMetricTimeSeries(dm.getCampaigns(), [], metric, 'custom', 'monthly', fromDay, toDay) as Array<{ date: string; iso?: string; value: number }>;
+    const flow = dm.getMetricTimeSeries([], dm.getFlowEmails(), metric, 'custom', 'monthly', fromDay, toDay) as Array<{ date: string; iso?: string; value: number }>;
     // Group strictly by YYYY-MM using the iso field returned by DataManager
     const monthly: Array<{ month: string; campaigns: number; flows: number; total: number; campaignPct: number; flowPct: number }> = [];
     const byMonth = new Map<string, { c: number; f: number }>();
