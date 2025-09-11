@@ -54,6 +54,30 @@ export interface LlmExportJson {
       };
     }>;
   };
+  // Campaign Performance by Audience Size (lookback period)
+  audienceSizePerformance?: {
+    lookbackWeeks: number;
+    limited: boolean;
+    buckets: Array<{
+      rangeLabel: string;
+      rangeMin: number;
+      rangeMax: number;
+      totalCampaigns: number;
+      // requested metrics
+      avgCampaignRevenue: number;
+      totalRevenue: number;
+      avgOrderValue: number;
+      revenuePerEmail: number;
+      conversionRate: number;
+      openRate: number;
+      clickRate: number;
+      clickToOpenRate: number;
+      avgWeeklyEmailsSent: number;
+      unsubscribeRate: number;
+      spamRate: number;
+      bounceRate: number;
+    }>;
+  };
   // Subject Line Analysis (All Segments): provide only lifts vs account-average for the selected time period
   subjectLineAnalysis?: {
     openRate: SubjectMetricLiftSet;
@@ -383,6 +407,107 @@ export async function buildLlmExportJson(params: {
         clickRate: buildSubjectSet('clickRate'),
         revenuePerEmail: buildSubjectSet('revenuePerEmail'),
       };
+
+      // Campaign Performance by Audience Size — compute buckets like the dashboard component
+      const computeAudienceBuckets = () => {
+        const campaignsValid = campaigns.filter(c => typeof (c as any).emailsSent === 'number' && (c as any).emailsSent >= 0);
+        const total = campaignsValid.length;
+        let filtered = campaignsValid as any[];
+        if (total >= 12) {
+          const sortedForP = [...campaignsValid].sort((a: any, b: any) => a.emailsSent - b.emailsSent);
+          const p5Index = Math.max(0, Math.floor(0.05 * (sortedForP.length - 1)));
+          const p5 = sortedForP[p5Index]?.emailsSent ?? 0;
+          const threshold = Math.max(100, Math.min(1000, p5));
+          filtered = sortedForP.filter((c: any) => c.emailsSent >= threshold);
+        }
+        const sample = filtered.length;
+        const limited = sample < 12;
+        if (sample === 0) return { buckets: [] as any[], limited };
+        const sorted = [...filtered].sort((a: any, b: any) => a.emailsSent - b.emailsSent);
+        const min = sorted[0].emailsSent;
+        const max = sorted[sorted.length - 1].emailsSent;
+        const boundaries: number[] = [min];
+        if (sample >= 12 && min !== max) {
+          const q = (p: number) => {
+            const idx = (sorted.length - 1) * p;
+            const lo = Math.floor(idx);
+            const hi = Math.ceil(idx);
+            const val = lo === hi ? sorted[lo].emailsSent : (sorted[lo].emailsSent * (hi - idx) + sorted[hi].emailsSent * (idx - lo));
+            return Math.round(val);
+          };
+          boundaries.push(q(0.25), q(0.50), q(0.75), max);
+        } else {
+          if (min === max) {
+            boundaries.push(max, max, max, max);
+          } else {
+            for (let i = 1; i <= 4; i++) boundaries.push(Math.round(min + (i * (max - min)) / 4));
+          }
+        }
+        const bRanges = [
+          [boundaries[0], boundaries[1]],
+          [boundaries[1], boundaries[2]],
+          [boundaries[2], boundaries[3]],
+          [boundaries[3], boundaries[4]],
+        ] as const;
+        const niceRangeLabel = (lo: number, hi: number) => {
+          const formatEmailsShort = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1)}k` : `${n}`;
+          const roundTo = (x: number) => x >= 1_000_000 ? Math.round(x / 100_000) * 100_000 : x >= 100_000 ? Math.round(x / 10_000) * 10_000 : x >= 10_000 ? Math.round(x / 1_000) * 1_000 : x >= 1_000 ? Math.round(x / 100) * 100 : Math.round(x);
+          const a = roundTo(lo); const b = roundTo(hi);
+          return `${formatEmailsShort(a)}–${formatEmailsShort(b)}`;
+        };
+        const msPerDay = 24 * 60 * 60 * 1000;
+        const days = Math.max(1, Math.round((e.getTime() - s.getTime()) / msPerDay));
+        const lookbackWeeks = Math.max(1, Math.round(days / 7));
+        const buckets = bRanges.map(([lo, hi], idx) => {
+          const bucketCampaigns = sorted.filter((c: any) => idx === 0 ? (c.emailsSent >= lo && c.emailsSent <= hi) : (c.emailsSent > lo && c.emailsSent <= hi));
+          let sumRevenue = 0, sumEmails = 0, sumOrders = 0, sumOpens = 0, sumClicks = 0, sumUnsubs = 0, sumSpam = 0, sumBounces = 0;
+          for (const c of bucketCampaigns) {
+            sumRevenue += (c.revenue || 0);
+            sumEmails += (c.emailsSent || 0);
+            sumOrders += (c.totalOrders || 0);
+            sumOpens += (c.uniqueOpens || 0);
+            sumClicks += (c.uniqueClicks || 0);
+            sumUnsubs += (c.unsubscribesCount || 0);
+            sumSpam += (c.spamComplaintsCount || 0);
+            sumBounces += (c.bouncesCount || 0);
+          }
+          const totalCampaigns = bucketCampaigns.length;
+          const avgCampaignRevenue = totalCampaigns > 0 ? sumRevenue / totalCampaigns : 0;
+          const aov = sumOrders > 0 ? sumRevenue / sumOrders : 0;
+          const revenuePerEmail = sumEmails > 0 ? sumRevenue / sumEmails : 0;
+          const openRate = sumEmails > 0 ? (sumOpens / sumEmails) * 100 : 0;
+          const clickRate = sumEmails > 0 ? (sumClicks / sumEmails) * 100 : 0;
+          const clickToOpenRate = sumOpens > 0 ? (sumClicks / sumOpens) * 100 : 0;
+          const conversionRate = sumClicks > 0 ? (sumOrders / sumClicks) * 100 : 0;
+          const unsubscribeRate = sumEmails > 0 ? (sumUnsubs / sumEmails) * 100 : 0;
+          const spamRate = sumEmails > 0 ? (sumSpam / sumEmails) * 100 : 0;
+          const bounceRate = sumEmails > 0 ? (sumBounces / sumEmails) * 100 : 0;
+          const avgWeeklyEmailsSent = lookbackWeeks > 0 ? (sumEmails / lookbackWeeks) : 0;
+          return {
+            rangeLabel: niceRangeLabel(lo, hi),
+            rangeMin: lo,
+            rangeMax: hi,
+            totalCampaigns,
+            avgCampaignRevenue,
+            totalRevenue: sumRevenue,
+            avgOrderValue: aov,
+            revenuePerEmail,
+            conversionRate,
+            openRate,
+            clickRate,
+            clickToOpenRate,
+            avgWeeklyEmailsSent,
+            unsubscribeRate,
+            spamRate,
+            bounceRate,
+          };
+        }).filter(b => b.totalCampaigns > 0);
+        return { buckets, limited, lookbackWeeks };
+      };
+      const asp = computeAudienceBuckets();
+      if (asp.buckets.length) {
+        json.audienceSizePerformance = asp as any;
+      }
     }
   } catch (e) {
     // Non-fatal
