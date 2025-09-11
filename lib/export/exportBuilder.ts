@@ -4,6 +4,7 @@
 import { DataManager } from "../data/dataManager";
 import { computeCampaignSendFrequency } from "../analytics/campaignSendFrequency";
 import { computeSubjectAnalysis } from "../analytics/subjectAnalysis";
+import { computeCampaignGapsAndLosses } from "../analytics/campaignGapsLosses";
 import type { AggregatedMetrics } from "../data/dataTypes";
 
 export interface LlmExportJson {
@@ -11,6 +12,7 @@ export interface LlmExportJson {
   meta?: {
     account?: { name: string; url?: string };
     moduleDescriptions?: Record<string, string>;
+    kpiDescriptions?: Record<string, string>;
     conversionRateDefinition?: string; // placed orders divided by clicks
     generatedAt?: string; // ISO timestamp
   };
@@ -86,6 +88,15 @@ export interface LlmExportJson {
       spamRate: number;
       bounceRate: number;
     }>;
+  };
+  // Campaign Gaps & Losses (weekly-only analysis over lookback period)
+  campaignGapsAndLosses?: {
+    zeroCampaignSendWeeks: number;
+    longestGapWithoutCampaign: number;
+    pctWeeksWithCampaignSent: number;
+    estimatedLostRevenue: number | null;
+    zeroRevenueCampaigns: number;
+    averageCampaignsPerWeek: number;
   };
   // Subject Line Analysis (All Segments): provide only lifts vs account-average for the selected time period
   subjectLineAnalysis?: {
@@ -251,7 +262,16 @@ export async function buildLlmExportJson(params: {
         sendVolumeImpact: 'Correlation between emails sent and performance metrics across the selected lookback buckets, by segment (Campaigns/Flows).',
         campaignSendFrequency: 'KPIs by weekly send frequency buckets (1, 2, 3, 4+) over the selected lookback period; includes campaign counts.',
         subjectLineAnalysis: 'Lifts vs account average for subject features (All Segments) over the selected lookback period; includes counts where available.',
-        audienceSizePerformance: 'KPIs by audience size (emails sent) buckets over the selected lookback period; includes campaign counts and audience size totals.'
+        audienceSizePerformance: 'KPIs by audience size (emails sent) buckets over the selected lookback period; includes campaign counts and audience size totals.',
+        campaignGapsAndLosses: 'Weekly-only analysis identifying zero-send weeks, longest gaps, coverage, estimated lost revenue, and zero-revenue campaigns over the lookback period.'
+      },
+      kpiDescriptions: {
+        zeroCampaignSendWeeks: 'Number of complete weeks in the selected range with no campaign sends.',
+        longestGapWithoutCampaign: 'The longest consecutive run of weeks with zero campaign sends.',
+        pctWeeksWithCampaignSent: 'Percentage of full weeks within the range that had at least one campaign sent.',
+        estimatedLostRevenue: 'Conservative estimate of revenue missed during short gaps (1–4 weeks) using nearby typical weeks with outliers capped.',
+        zeroRevenueCampaigns: 'Count of campaigns in the period with $0 revenue.',
+        averageCampaignsPerWeek: 'Total campaigns divided by the number of full weeks in range.'
       }
     },
     period: { fromMonth, toMonth, months },
@@ -533,6 +553,19 @@ export async function buildLlmExportJson(params: {
       if (asp.buckets.length) {
         json.audienceSizePerformance = asp as any;
       }
+
+      // Campaign Gaps & Losses — weekly-only analysis over lookback
+      try {
+        const gaps = computeCampaignGapsAndLosses({ campaigns: campaigns as any, flows: [], rangeStart: s, rangeEnd: e });
+        json.campaignGapsAndLosses = {
+          zeroCampaignSendWeeks: gaps.zeroCampaignSendWeeks,
+          longestGapWithoutCampaign: gaps.longestZeroSendGap,
+          pctWeeksWithCampaignSent: gaps.pctWeeksWithCampaignsSent,
+          estimatedLostRevenue: typeof gaps.estimatedLostRevenue === 'number' ? gaps.estimatedLostRevenue : null,
+          zeroRevenueCampaigns: gaps.zeroRevenueCampaigns ?? gaps.lowEffectivenessCampaigns,
+          averageCampaignsPerWeek: gaps.avgCampaignsPerWeek,
+        };
+      } catch {}
     }
   } catch (e) {
     // Non-fatal
