@@ -18,6 +18,7 @@ import AudienceSizePerformance from './AudienceSizePerformance';
 import CampaignGapsAndLosses from './CampaignGapsAndLosses';
 import SubjectAnalysis from './SubjectAnalysis';
 import { BarChart3, Calendar, GitCompare, Mail, Send, Zap, MailSearch, Upload as UploadIcon, X, Share2 } from 'lucide-react';
+import { buildLlmExportJson } from '../../lib/export/exportBuilder';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import TooltipPortal from '../TooltipPortal';
 import SelectBase from "../ui/SelectBase";
@@ -119,6 +120,32 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [displayedCampaigns, setDisplayedCampaigns] = useState(5);
     const [stickyBar, setStickyBar] = useState(false);
     const [showCustomDateModal, setShowCustomDateModal] = useState(false);
+    const [exportBusy, setExportBusy] = useState(false);
+
+    const handleExportJson = useCallback(async () => {
+        try {
+            setExportBusy(true);
+            const payload = await buildLlmExportJson({
+                dateRange,
+                granularity,
+                compareMode,
+                customFrom,
+                customTo
+            });
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const ts = new Date();
+            const pad = (n: number) => String(n).padStart(2, '0');
+            const fname = `email-metrics-export-${ts.getFullYear()}${pad(ts.getMonth() + 1)}${pad(ts.getDate())}-${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}.json`;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('JSON export failed', err);
+            alert('Sorry, the JSON export failed. Please try again.');
+        } finally {
+            setExportBusy(false);
+        }
+    }, [dateRange, granularity, compareMode, customFrom, customTo]);
 
     // Granularity validation logic
     const totalDays = useMemo(() => {
@@ -760,7 +787,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 </div>
             )}
             {/* Header */}
-            <div className="pt-4 sm:pt-6"><div className="max-w-7xl mx-auto"><div className="p-6 sm:p-8 mb-4"><div className="flex items-start justify-between gap-4"><div><h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>{businessName && <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>}</div><div className="flex items-center gap-3 relative">{!isAdmin && (<><button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"><UploadIcon className="h-4 w-4" />Upload New Reports</button></>)}{isAdmin && (<><div className="relative"><SelectBase value={selectedAccountId} onChange={e => { const val = (e.target as HTMLSelectElement).value; setSelectedAccountId(val); const a = (allAccounts || []).find(x => x.id === val); setSelectedAccountLabel(a?.label || a?.businessName || a?.id || ''); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="text-sm" minWidthClass="min-w-[240px]">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</SelectBase></div></>)}</div></div></div></div></div>
+            <div className="pt-4 sm:pt-6"><div className="max-w-7xl mx-auto"><div className="p-6 sm:p-8 mb-4"><div className="flex items-start justify-between gap-4"><div><h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>{businessName && <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>}</div><div className="flex items-center gap-3 relative">{!isAdmin && (<><button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"><UploadIcon className="h-4 w-4" />Upload New Reports</button><button onClick={handleExportJson} disabled={exportBusy} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button></>)}{isAdmin && (<><div className="relative"><SelectBase value={selectedAccountId} onChange={e => { const val = (e.target as HTMLSelectElement).value; setSelectedAccountId(val); const a = (allAccounts || []).find(x => x.id === val); setSelectedAccountLabel(a?.label || a?.businessName || a?.id || ''); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="text-sm" minWidthClass="min-w-[240px]">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</SelectBase></div></>)}</div></div></div></div></div>
 
             {/* Debug panel for link errors */}
             {linkDebugInfo && (
