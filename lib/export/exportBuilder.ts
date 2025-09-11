@@ -31,6 +31,17 @@ export interface LlmExportJson {
     campaignsOnly: AggregatedMetrics;
     flowsOnly: AggregatedMetrics;
   };
+  // Monthly split of Campaign vs Flow for key metrics + overall period totals
+  campaignFlowSplit?: {
+    revenue: {
+      monthly: Array<{ month: string; campaigns: number; flows: number; total: number; campaignPct: number; flowPct: number }>;
+      period: { campaigns: number; flows: number; total: number; campaignPct: number; flowPct: number };
+    };
+    emailsSent: {
+      monthly: Array<{ month: string; campaigns: number; flows: number; total: number; campaignPct: number; flowPct: number }>;
+      period: { campaigns: number; flows: number; total: number; campaignPct: number; flowPct: number };
+    };
+  };
   timeSeries: {
   revenue: { primary: Array<{ date: string; campaigns: number; flows: number; total: number }>; compare: Array<{ date: string; campaigns: number; flows: number; total: number }> | null };
   emailsSent: { primary: Array<{ date: string; campaigns: number; flows: number; total: number }>; compare: Array<{ date: string; campaigns: number; flows: number; total: number }> | null };
@@ -168,6 +179,23 @@ export interface LlmExportJson {
       unsubsPer1k: { r: number | null; n: number };
       spamPer1k: { r: number | null; n: number };
       bouncesPer1k: { r: number | null; n: number };
+    };
+    // New: overall correlations across individual sends (not time buckets), by segment
+    correlationBySegment?: {
+      campaigns: {
+        totalRevenue: { r: number | null; n: number };
+        revenuePerEmail: { r: number | null; n: number };
+        unsubsPer1k: { r: number | null; n: number };
+        spamPer1k: { r: number | null; n: number };
+        bouncesPer1k: { r: number | null; n: number };
+      };
+      flows: {
+        totalRevenue: { r: number | null; n: number };
+        revenuePerEmail: { r: number | null; n: number };
+        unsubsPer1k: { r: number | null; n: number };
+        spamPer1k: { r: number | null; n: number };
+        bouncesPer1k: { r: number | null; n: number };
+      };
     };
     averages: { avgEmails: number; revenuePer1k: number; medianUnsubPer1k: number };
   };
@@ -610,7 +638,7 @@ export async function buildLlmExportJson(params: {
 
   const json: LlmExportJson = {
     meta: {
-      version: "1.3.1",
+  version: "1.3.2",
       generatedAt: new Date().toISOString(),
       currency: "USD",
       accountTimezone: null, // TODO: surface from account/report settings if available
@@ -697,6 +725,42 @@ export async function buildLlmExportJson(params: {
   inactivityRevenueDrain: inactivityDrain ? { clv90Plus: inactivityDrain.buckets.find(b=>b.key==='90+')!.totalClv, clv120Plus: inactivityDrain.buckets.find(b=>b.key==='120+')!.totalClv, count90Plus: inactivityDrain.buckets.find(b=>b.key==='90+')!.count, count120Plus: inactivityDrain.buckets.find(b=>b.key==='120+')!.count } : undefined,
     },
   };
+
+  // Campaign vs Flow Split — Monthly breakdown + period totals for revenue and emails
+  try {
+    const mkSplit = (metric: 'revenue' | 'emailsSent') => {
+      const camp = dm.getMetricTimeSeries(campaignsAll, [], metric, dateRange, 'monthly', customFrom, customTo) as Array<{ date: string; value: number }>;
+      const flow = dm.getMetricTimeSeries([], flowsAll, metric, dateRange, 'monthly', customFrom, customTo) as Array<{ date: string; value: number }>;
+      const len = Math.max(camp.length, flow.length);
+      const monthly: Array<{ month: string; campaigns: number; flows: number; total: number; campaignPct: number; flowPct: number }> = [];
+      for (let i = 0; i < len; i++) {
+        const c = camp[i]?.value ?? 0;
+        const f = flow[i]?.value ?? 0;
+        const month = (camp[i]?.date || flow[i]?.date || '').slice(0, 7); // YYYY-MM from series label
+        const total = c + f;
+        const campaignPct = total > 0 ? (c / total) * 100 : 0;
+        const flowPct = total > 0 ? (f / total) * 100 : 0;
+        if (month) monthly.push({ month, campaigns: c, flows: f, total, campaignPct, flowPct });
+      }
+      // Period totals based on aggregates to ensure exact window boundaries
+      const cAgg = metric === 'revenue' ? campaignsOnly.totalRevenue : campaignsOnly.emailsSent;
+      const fAgg = metric === 'revenue' ? flowsOnly.totalRevenue : flowsOnly.emailsSent;
+      const tAgg = cAgg + fAgg;
+      const period = {
+        campaigns: cAgg,
+        flows: fAgg,
+        total: tAgg,
+        campaignPct: tAgg > 0 ? (cAgg / tAgg) * 100 : 0,
+        flowPct: tAgg > 0 ? (fAgg / tAgg) * 100 : 0,
+      };
+      return { monthly, period };
+    };
+
+    (json as any).campaignFlowSplit = {
+      revenue: mkSplit('revenue'),
+      emailsSent: mkSplit('emailsSent'),
+    };
+  } catch {}
 
   // Day of Week and Hour of Day performance (for campaigns in range) — all metrics
   try {
@@ -822,9 +886,71 @@ export async function buildLlmExportJson(params: {
     const rpmE = totals.em > 0 ? (totals.rev / totals.em) * 1000 : 0;
     const unsubVals = buckets.filter(b => b.emails > 0 && b.unsubsPer1k != null).map(b => b.unsubsPer1k as number).sort((a, b) => a - b);
     const medianUnsubPer1k = unsubVals.length ? unsubVals[Math.floor(unsubVals.length / 2)] : 0;
+    // Helper: Pearson r for raw pairs
+    const pearson = (xs: number[], ys: number[]) => {
+      const n = Math.min(xs.length, ys.length);
+      if (n < 3) return { r: null as number | null, n };
+      const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
+      const mx = mean(xs); const my = mean(ys);
+      let num = 0, dxs = 0, dys = 0;
+      for (let i = 0; i < n; i++) { const dx = xs[i] - mx; const dy = ys[i] - my; num += dx * dy; dxs += dx * dx; dys += dy * dy; }
+      if (dxs === 0 || dys === 0) return { r: null as number | null, n };
+      return { r: num / Math.sqrt(dxs * dys), n };
+    };
+
+    // Per-segment raw correlations across individual sends within the selected period
+    const inWindow = (e: { sentDate: Date }) => e.sentDate >= startDate && e.sentDate <= endDate;
+    const campSends = campaignsAll.filter(inWindow);
+    const flowSends = flowsAll.filter(inWindow);
+    const safeDiv = (a: number, b: number) => (b > 0 ? a / b : 0);
+    const mkPairs = (items: Array<ProcessedCampaign | ProcessedFlowEmail>) => {
+      const emails: number[] = [];
+      const revenue: number[] = [];
+      const rpe: number[] = [];
+      const unsubPer1k: number[] = [];
+      const spamPer1k: number[] = [];
+      const bouncePer1k: number[] = [];
+      for (const e of items) {
+        const em = (e as any).emailsSent || 0;
+        const rev = (e as any).revenue || 0;
+        const unsubs = (e as any).unsubscribesCount || 0;
+        const spam = (e as any).spamComplaintsCount || 0;
+        const bnc = (e as any).bouncesCount || 0;
+        if (em <= 0) continue; // skip zero-email sends to avoid undefined per-1k
+        emails.push(em);
+        revenue.push(rev);
+        rpe.push(safeDiv(rev, em));
+        unsubPer1k.push((unsubs / em) * 1000);
+        spamPer1k.push((spam / em) * 1000);
+        bouncePer1k.push((bnc / em) * 1000);
+      }
+      return { emails, revenue, rpe, unsubPer1k, spamPer1k, bouncePer1k };
+    };
+
+    const campPairs = mkPairs(campSends);
+    const flowPairs = mkPairs(flowSends);
+
+    const correlationBySegment = {
+      campaigns: {
+        totalRevenue: pearson(campPairs.emails, campPairs.revenue),
+        revenuePerEmail: pearson(campPairs.emails, campPairs.rpe),
+        unsubsPer1k: pearson(campPairs.emails, campPairs.unsubPer1k),
+        spamPer1k: pearson(campPairs.emails, campPairs.spamPer1k),
+        bouncesPer1k: pearson(campPairs.emails, campPairs.bouncePer1k),
+      },
+      flows: {
+        totalRevenue: pearson(flowPairs.emails, flowPairs.revenue),
+        revenuePerEmail: pearson(flowPairs.emails, flowPairs.rpe),
+        unsubsPer1k: pearson(flowPairs.emails, flowPairs.unsubPer1k),
+        spamPer1k: pearson(flowPairs.emails, flowPairs.spamPer1k),
+        bouncesPer1k: pearson(flowPairs.emails, flowPairs.bouncePer1k),
+      },
+    };
+
     (json as any).sendVolumeImpact = {
       buckets,
       correlation,
+      correlationBySegment,
       averages: { avgEmails: buckets.length ? Math.round(totals.em / buckets.length) : 0, revenuePer1k: Number(rpmE.toFixed(2)), medianUnsubPer1k: Number(medianUnsubPer1k.toFixed(2)) },
     };
   } catch {}
