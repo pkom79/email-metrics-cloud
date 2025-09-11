@@ -123,6 +123,22 @@ export interface LlmExportJson {
     clickRate: SubjectMetricLiftSet;
     revenuePerEmail: SubjectMetricLiftSet;
   };
+  // Flow Step Analysis (lookback totals + time series per selected granularity)
+  flowStepAnalysis?: {
+    granularity: 'daily' | 'weekly' | 'monthly';
+    disclaimer: string;
+    flows: Array<{
+      flowName: string;
+      total: FlowMetricTotals;
+      series: FlowMetricSeries;
+      steps: Array<{
+        stepNumber: number;
+        emailName?: string;
+        total: FlowMetricTotals;
+        series: FlowMetricSeries;
+      }>;
+    }>;
+  };
 }
 
 type CorrelationValue = { r: number | null; n: number };
@@ -167,6 +183,36 @@ type SubjectMetricLiftSet = {
   priceAnchoring: { currency: number; percentDiscount: number; dollarDiscount: number };
   imperativeStart: { startsWithVerb: number };
   reuseFatigue: { averageChange: number; subjectsCount: number };
+};
+
+type FlowMetricTotals = {
+  totalRevenue: number;
+  avgOrderValue: number;
+  totalOrders: number;
+  conversionRate: number;
+  openRate: number;
+  clickRate: number;
+  clickToOpenRate: number;
+  revenuePerEmail: number;
+  emailsSent: number;
+  unsubscribeRate: number;
+  spamRate: number;
+  bounceRate: number;
+};
+
+type FlowMetricSeries = {
+  revenue: Array<{ date: string; value: number }>;
+  avgOrderValue: Array<{ date: string; value: number }>;
+  totalOrders: Array<{ date: string; value: number }>;
+  conversionRate: Array<{ date: string; value: number }>;
+  openRate: Array<{ date: string; value: number }>;
+  clickRate: Array<{ date: string; value: number }>;
+  clickToOpenRate: Array<{ date: string; value: number }>;
+  revenuePerEmail: Array<{ date: string; value: number }>;
+  emailsSent: Array<{ date: string; value: number }>;
+  unsubscribeRate: Array<{ date: string; value: number }>;
+  spamRate: Array<{ date: string; value: number }>;
+  bounceRate: Array<{ date: string; value: number }>;
 };
 
 export async function buildLlmExportJson(params: {
@@ -282,7 +328,8 @@ export async function buildLlmExportJson(params: {
         subjectLineAnalysis: 'Lifts vs account average for subject features (All Segments) over the selected lookback period; includes counts where available.',
         audienceSizePerformance: 'KPIs by audience size (emails sent) buckets over the selected lookback period; includes campaign counts and audience size totals.',
         campaignGapsAndLosses: 'Weekly-only analysis identifying zero-send weeks, longest gaps, coverage, estimated lost revenue, and zero-revenue campaigns over the lookback period.',
-        campaignPerformanceByDayOfWeek: 'KPIs by weekday over the selected lookback period; includes how many campaigns were sent on each day.'
+        campaignPerformanceByDayOfWeek: 'KPIs by weekday over the selected lookback period; includes how many campaigns were sent on each day.',
+        flowStepAnalysis: 'KPIs for every step in every active flow and roll-ups per flow over the selected lookback period, including time series by selected granularity. Disclaimer: step order may be imperfect due to inconsistent flow email naming.'
       },
       kpiDescriptions: {
         zeroCampaignSendWeeks: 'Number of complete weeks in the selected range with no campaign sends.',
@@ -621,6 +668,96 @@ export async function buildLlmExportJson(params: {
           spamRate: d.emailsSent > 0 ? (d.totalSpam / d.emailsSent) * 100 : 0,
           bounceRate: d.emailsSent > 0 ? (d.totalBounces / d.emailsSent) * 100 : 0,
         }));
+      } catch {}
+
+      // Flow Step Analysis — totals for lookback and series by selected granularity
+      try {
+        const flowsAll = dm.getFlowEmails();
+        const flowsInRange = flowsAll.filter(f => {
+          const d = (f as any).sentDate as Date | undefined;
+          return d instanceof Date && !isNaN(d.getTime()) && d >= s && d <= e;
+        });
+        const uniqueFlowNames = Array.from(new Set(flowsInRange.map(f => f.flowName))).sort((a, b) => a.localeCompare(b));
+        const disclaimer = 'Step order might not be perfectly accurate due to inconsistent naming of flow emails.';
+        const metricKeys = ['revenue','avgOrderValue','totalOrders','conversionRate','openRate','clickRate','clickToOpenRate','revenuePerEmail','emailsSent','unsubscribeRate','spamRate','bounceRate'] as const;
+        const toTotals = (list: any[]): FlowMetricTotals => {
+          const sums = {
+            revenue: 0, emailsSent: 0, totalOrders: 0, opens: 0, clicks: 0, unsubs: 0, spam: 0, bounces: 0
+          };
+          for (const f of list) {
+            sums.revenue += (f.revenue || 0);
+            sums.emailsSent += (f.emailsSent || 0);
+            sums.totalOrders += (f.totalOrders || 0);
+            sums.opens += (f.uniqueOpens || 0);
+            sums.clicks += (f.uniqueClicks || 0);
+            sums.unsubs += (f.unsubscribesCount || 0);
+            sums.spam += (f.spamComplaintsCount || 0);
+            sums.bounces += (f.bouncesCount || 0);
+          }
+          const avgOrderValue = sums.totalOrders > 0 ? sums.revenue / sums.totalOrders : 0;
+          const conversionRate = sums.clicks > 0 ? (sums.totalOrders / sums.clicks) * 100 : 0;
+          const openRate = sums.emailsSent > 0 ? (sums.opens / sums.emailsSent) * 100 : 0;
+          const clickRate = sums.emailsSent > 0 ? (sums.clicks / sums.emailsSent) * 100 : 0;
+          const clickToOpenRate = sums.opens > 0 ? (sums.clicks / sums.opens) * 100 : 0;
+          const revenuePerEmail = sums.emailsSent > 0 ? sums.revenue / sums.emailsSent : 0;
+          const unsubscribeRate = sums.emailsSent > 0 ? (sums.unsubs / sums.emailsSent) * 100 : 0;
+          const spamRate = sums.emailsSent > 0 ? (sums.spam / sums.emailsSent) * 100 : 0;
+          const bounceRate = sums.emailsSent > 0 ? (sums.bounces / sums.emailsSent) * 100 : 0;
+          return {
+            totalRevenue: sums.revenue,
+            avgOrderValue,
+            totalOrders: sums.totalOrders,
+            conversionRate,
+            openRate,
+            clickRate,
+            clickToOpenRate,
+            revenuePerEmail,
+            emailsSent: sums.emailsSent,
+            unsubscribeRate,
+            spamRate,
+            bounceRate,
+          };
+        };
+        const buildSeries = (c: any[], f: any[], g: 'daily'|'weekly'|'monthly'): FlowMetricSeries => {
+          const get = (key: string) => dm.getMetricTimeSeries(c, f, key, dateRange, g, customFrom, customTo).map(p => ({ date: (p as any).iso || p.date, value: p.value || 0 }));
+          return {
+            revenue: get('revenue'),
+            avgOrderValue: get('avgOrderValue'),
+            totalOrders: get('totalOrders'),
+            conversionRate: get('conversionRate'),
+            openRate: get('openRate'),
+            clickRate: get('clickRate'),
+            clickToOpenRate: get('clickToOpenRate'),
+            revenuePerEmail: get('revenuePerEmail'),
+            emailsSent: get('emailsSent'),
+            unsubscribeRate: get('unsubscribeRate'),
+            spamRate: get('spamRate'),
+            bounceRate: get('bounceRate'),
+          };
+        };
+        const flowObjs = uniqueFlowNames.map(flowName => {
+          const flowItems = flowsInRange.filter(f => f.flowName === flowName);
+          const stepMap = new Map<number, any[]>();
+          for (const f of flowItems) {
+            const k = Number.isFinite(f.sequencePosition) ? f.sequencePosition : 0;
+            stepMap.set(k, [...(stepMap.get(k) || []), f]);
+          }
+          const steps = Array.from(stepMap.entries()).sort((a,b)=>a[0]-b[0]).map(([seq, list]) => ({
+            stepNumber: seq,
+            emailName: list[0]?.emailName,
+            total: toTotals(list),
+            series: buildSeries([], list as any[], granularity),
+          }));
+          return {
+            flowName,
+            total: toTotals(flowItems),
+            series: buildSeries([], flowItems as any[], granularity),
+            steps,
+          };
+        }).filter(f => (f.steps?.length || 0) > 0);
+        if (flowObjs.length) {
+          json.flowStepAnalysis = { granularity, disclaimer, flows: flowObjs };
+        }
       } catch {}
     }
   } catch (e) {
