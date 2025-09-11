@@ -93,6 +93,10 @@ type SubjectMetricLiftSet = {
   keywordEmoji: {
     exclusive: number; sale: number; emojiPresent: number; limited: number; save: number; off: number; discount: number; percentOff: number;
   };
+  // Number of campaigns where each keyword/emoji feature was present (for significance)
+  keywordEmojiCounts: {
+    exclusive: number; sale: number; emojiPresent: number; limited: number; save: number; off: number; discount: number; percentOff: number;
+  };
   punctuationCasing: {
     brackets: number; exclamation: number; percent: number; allCaps: number; questionMark: number; number: number;
   };
@@ -309,6 +313,10 @@ export async function buildLlmExportJson(params: {
           const f = arr.find(x => x.key === key);
           return f ? f.liftVsBaseline : 0;
         };
+        const getCount = (arr: Array<{ key: string; countCampaigns?: number }>, key: string): number => {
+          const f = arr.find(x => x.key === key) as any;
+          return f && typeof f.countCampaigns === 'number' ? f.countCampaigns : 0;
+        };
         const lb = (k: '0-30' | '31-50' | '51-70'): number => {
           const f = (res.lengthBins || []).find(x => (x as any).key === k);
           return f ? (f as any).liftVsBaseline : 0;
@@ -330,6 +338,16 @@ export async function buildLlmExportJson(params: {
             off: getLift(res.keywordEmojis as any, 'kw:off'),
             discount: getLift(res.keywordEmojis as any, 'kw:discount'),
             percentOff: getLift(res.keywordEmojis as any, 'kw:% off'),
+          },
+          keywordEmojiCounts: {
+            exclusive: getCount(res.keywordEmojis as any, 'kw:exclusive'),
+            sale: getCount(res.keywordEmojis as any, 'kw:sale'),
+            emojiPresent: getCount(res.keywordEmojis as any, 'emoji'),
+            limited: getCount(res.keywordEmojis as any, 'kw:limited'),
+            save: getCount(res.keywordEmojis as any, 'kw:save'),
+            off: getCount(res.keywordEmojis as any, 'kw:off'),
+            discount: getCount(res.keywordEmojis as any, 'kw:discount'),
+            percentOff: getCount(res.keywordEmojis as any, 'kw:% off'),
           },
           punctuationCasing: {
             brackets: getLift(res.punctuationCasing as any, 'brackets'),
