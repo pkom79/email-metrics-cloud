@@ -80,8 +80,7 @@ export function computeDeadWeightSavings(): DeadWeightSavingsSummary | null {
   const anchor = dm.getLastEmailDate();
   const daysDiff = (a: Date, b: Date) => Math.floor((a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24));
 
-  const seg1: string[] = [];
-  const seg2: string[] = [];
+  let deadWeightCount = 0;
 
   subscribers.forEach(sub => {
     const created = sub.profileCreated instanceof Date ? sub.profileCreated : null;
@@ -91,19 +90,19 @@ export function computeDeadWeightSavings(): DeadWeightSavingsSummary | null {
 
     const firstActiveUnset = !sub.firstActiveRaw;
     const lastActiveUnset = !sub.lastActive;
-    if (firstActiveUnset && lastActiveUnset && createdAge >= 30) {
-      seg1.push('1');
-    }
+    const cond1 = firstActiveUnset && lastActiveUnset && createdAge >= 30;
 
+    let cond2 = false;
     if (createdAge >= 90) {
       const openAge = lastOpen ? daysDiff(anchor, lastOpen) : Infinity;
       const clickAge = lastClick ? daysDiff(anchor, lastClick) : Infinity;
-      if (openAge >= 90 && clickAge >= 90) seg2.push('1');
+      cond2 = openAge >= 90 && clickAge >= 90;
     }
+
+    if (cond1 || cond2) deadWeightCount += 1;
   });
 
   const currentCount = subscribers.length;
-  const deadWeightCount = new Set([...seg1, ...seg2]).size; // only counts, no emails
   const projectedCount = Math.max(0, currentCount - deadWeightCount);
 
   const currentMonthlyPrice = priceFor(currentCount);
