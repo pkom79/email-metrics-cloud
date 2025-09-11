@@ -11,6 +11,13 @@ interface Props { dateRange: string; customFrom?: string; customTo?: string; }
 export default function SubscribedVsNotSubscribed({ dateRange, customFrom, customTo }: Props) {
     const dm = DataManager.getInstance();
     const [metric, setMetric] = useState<ConsentSplitMetric>("count");
+    const [hovered, setHovered] = useState<{
+        key: string;
+        value: number;
+        sampleSize: number;
+        percentOfGroup?: number | null;
+        idx: number;
+    } | null>(null);
 
     const range = useMemo(() => {
         // Reuse DataManager logic to compute start/end dates analogous to other modules
@@ -102,7 +109,7 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
 
             <div className="px-6 pb-5">
                 <div className="relative w-full">
-                    <svg width="100%" height={chartHeight + 60} viewBox={`0 0 ${width} ${chartHeight + 60}`}>
+                    <svg width="100%" height={chartHeight + 60} viewBox={`0 0 ${width} ${chartHeight + 60}`} onMouseLeave={() => setHovered(null)}>
                         <defs>
                             <linearGradient id="svns-bar" x1="0%" y1="0%" x2="100%" y2="0%">
                                 <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.95} />
@@ -130,7 +137,18 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
                             const w = maxValue > 0 ? (g.value / maxValue) * (width - labelW - 60) : 0;
                             return (
                                 <g key={g.key}>
-                                    <rect x={labelW} y={y} width={Math.max(w, 2)} height={barH} fill="url(#svns-bar)" rx="4" ry="4" filter="url(#svns-shadow)">
+                                    <rect
+                                        x={labelW}
+                                        y={y}
+                                        width={Math.max(w, 2)}
+                                        height={barH}
+                                        fill="url(#svns-bar)"
+                                        rx="4"
+                                        ry="4"
+                                        filter="url(#svns-shadow)"
+                                        className="cursor-pointer transition-opacity hover:opacity-90"
+                                        onMouseEnter={() => setHovered({ key: g.key, value: g.value, sampleSize: g.sampleSize, percentOfGroup: g.percentOfGroup ?? null, idx })}
+                                    >
                                         <title>
                                             {`${g.key} • ${formatConsentMetricValue(metric, g.value)} • ${g.sampleSize.toLocaleString()} profiles${g.percentOfGroup != null ? ` • ${(g.percentOfGroup).toFixed(1)}% of group` : ''}`}
                                         </title>
@@ -143,6 +161,26 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
                         <line x1={labelW} y1={startY} x2={labelW} y2={chartHeight + 15} stroke="#d1d5db" strokeWidth={2} />
                         <line x1={labelW} y1={chartHeight + 15} x2={width - 40} y2={chartHeight + 15} stroke="#d1d5db" strokeWidth={2} />
                     </svg>
+
+                    {hovered && (
+                        (() => {
+                            const barWidth = maxValue > 0 ? (hovered.value / maxValue) * (width - labelW - 60) : 0;
+                            const leftPercent = ((labelW + (barWidth / 2)) / (width / 100));
+                            const topPx = startY + (hovered.idx * (barH + spacing)) + (barH / 2) - 20;
+                            return (
+                                <div
+                                    className="absolute z-20 p-3 rounded-lg shadow-xl border text-sm pointer-events-none backdrop-blur-sm bg-white/95 dark:bg-gray-800/95 border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 transform -translate-x-1/2 -translate-y-full"
+                                    style={{ left: `${leftPercent}%`, top: `${topPx}px` }}
+                                >
+                                    <div className="font-semibold mb-1">{hovered.key}</div>
+                                    <div className="font-medium text-purple-600 dark:text-purple-400">{formatConsentMetricValue(metric, hovered.value)}</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                                        {hovered.sampleSize.toLocaleString()} profiles{hovered.percentOfGroup != null ? ` • ${hovered.percentOfGroup.toFixed(1)}% of group` : ''}
+                                    </div>
+                                </div>
+                            );
+                        })()
+                    )}
                 </div>
             </div>
         </section>
