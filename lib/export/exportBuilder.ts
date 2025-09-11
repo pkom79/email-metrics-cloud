@@ -672,7 +672,11 @@ export async function buildLlmExportJson(params: {
 
       // Flow Step Analysis — totals for lookback and series by selected granularity
       try {
-        const flowsAll = dm.getFlowEmails();
+        // Only include LIVE flows (exclude draft/manual) per requirement
+        const flowsAll = dm.getFlowEmails().filter(f => {
+          const status = (f as any).status;
+          return typeof status === 'string' && status.toLowerCase() === 'live';
+        });
         const flowsInRange = flowsAll.filter(f => {
           const d = (f as any).sentDate as Date | undefined;
           return d instanceof Date && !isNaN(d.getTime()) && d >= s && d <= e;
