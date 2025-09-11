@@ -3,6 +3,7 @@
 
 import { DataManager } from "../data/dataManager";
 import { computeCampaignSendFrequency } from "../analytics/campaignSendFrequency";
+import { computeSubjectAnalysis } from "../analytics/subjectAnalysis";
 import type { AggregatedMetrics } from "../data/dataTypes";
 
 export interface LlmExportJson {
@@ -53,6 +54,13 @@ export interface LlmExportJson {
       };
     }>;
   };
+  // Subject Line Analysis (All Segments): provide only lifts vs account-average for the selected time period
+  subjectLineAnalysis?: {
+    openRate: SubjectMetricLiftSet;
+    clickToOpenRate: SubjectMetricLiftSet;
+    clickRate: SubjectMetricLiftSet;
+    revenuePerEmail: SubjectMetricLiftSet;
+  };
 }
 
 type CorrelationValue = { r: number | null; n: number };
@@ -77,6 +85,22 @@ export type ExportMetricValues = {
   unsubscribeRate: number;
   spamRate: number;
   bounceRate: number;
+};
+
+// Lifts set for one metric across requested feature groups
+type SubjectMetricLiftSet = {
+  lengthBins: { '0-30': number; '31-50': number; '51-70': number };
+  keywordEmoji: {
+    exclusive: number; sale: number; emojiPresent: number; limited: number; save: number; off: number; discount: number; percentOff: number;
+  };
+  punctuationCasing: {
+    brackets: number; exclamation: number; percent: number; allCaps: number; questionMark: number; number: number;
+  };
+  urgency: { tonight: number; now: number; hours: number; midnight: number; final: number; today: number; ends: number; ending: number };
+  personalization: { youYour: number };
+  priceAnchoring: { currency: number; percentDiscount: number; dollarDiscount: number };
+  imperativeStart: { startsWithVerb: number };
+  reuseFatigue: { averageChange: number; subjectsCount: number };
 };
 
 export async function buildLlmExportJson(params: {
@@ -276,6 +300,70 @@ export async function buildLlmExportJson(params: {
             bounceRate: b.bounceRate,
           },
         }))
+      };
+
+      // Subject Line Analysis (All Segments) — compute per metric and map to requested keys
+      const buildSubjectSet = (metric: 'openRate' | 'clickToOpenRate' | 'clickRate' | 'revenuePerEmail'): SubjectMetricLiftSet => {
+        const res = computeSubjectAnalysis(campaigns as any, metric, 'ALL_SEGMENTS');
+        const getLift = (arr: Array<{ key: string; liftVsBaseline: number }>, key: string): number => {
+          const f = arr.find(x => x.key === key);
+          return f ? f.liftVsBaseline : 0;
+        };
+        const lb = (k: '0-30' | '31-50' | '51-70'): number => {
+          const f = (res.lengthBins || []).find(x => (x as any).key === k);
+          return f ? (f as any).liftVsBaseline : 0;
+        };
+        const avgChange = (() => {
+          const list = res.reuse || [];
+          if (!list.length) return 0;
+          const sum = list.reduce((s, r) => s + (r.change || 0), 0);
+          return sum / list.length;
+        })();
+        return {
+          lengthBins: { '0-30': lb('0-30'), '31-50': lb('31-50'), '51-70': lb('51-70') },
+          keywordEmoji: {
+            exclusive: getLift(res.keywordEmojis as any, 'kw:exclusive'),
+            sale: getLift(res.keywordEmojis as any, 'kw:sale'),
+            emojiPresent: getLift(res.keywordEmojis as any, 'emoji'),
+            limited: getLift(res.keywordEmojis as any, 'kw:limited'),
+            save: getLift(res.keywordEmojis as any, 'kw:save'),
+            off: getLift(res.keywordEmojis as any, 'kw:off'),
+            discount: getLift(res.keywordEmojis as any, 'kw:discount'),
+            percentOff: getLift(res.keywordEmojis as any, 'kw:% off'),
+          },
+          punctuationCasing: {
+            brackets: getLift(res.punctuationCasing as any, 'brackets'),
+            exclamation: getLift(res.punctuationCasing as any, 'exclaim'),
+            percent: getLift(res.punctuationCasing as any, 'percent'),
+            allCaps: getLift(res.punctuationCasing as any, 'allcaps'),
+            questionMark: getLift(res.punctuationCasing as any, 'qmark'),
+            number: getLift(res.punctuationCasing as any, 'number'),
+          },
+          urgency: {
+            tonight: getLift(res.deadlines as any, 'deadline:tonight'),
+            now: getLift(res.deadlines as any, 'deadline:now'),
+            hours: getLift(res.deadlines as any, 'deadline:hours'),
+            midnight: getLift(res.deadlines as any, 'deadline:midnight'),
+            final: getLift(res.deadlines as any, 'deadline:final'),
+            today: getLift(res.deadlines as any, 'deadline:today'),
+            ends: getLift(res.deadlines as any, 'deadline:ends'),
+            ending: getLift(res.deadlines as any, 'deadline:ending'),
+          },
+          personalization: { youYour: getLift(res.personalization as any, 'p:you') },
+          priceAnchoring: {
+            currency: getLift(res.priceAnchoring as any, 'cur'),
+            percentDiscount: getLift(res.priceAnchoring as any, 'pct'),
+            dollarDiscount: getLift(res.priceAnchoring as any, 'price$'),
+          },
+          imperativeStart: { startsWithVerb: getLift(res.imperativeStart as any, 'imperative') },
+          reuseFatigue: { averageChange: avgChange, subjectsCount: (res.reuse || []).length },
+        };
+      };
+      json.subjectLineAnalysis = {
+        openRate: buildSubjectSet('openRate'),
+        clickToOpenRate: buildSubjectSet('clickToOpenRate'),
+        clickRate: buildSubjectSet('clickRate'),
+        revenuePerEmail: buildSubjectSet('revenuePerEmail'),
       };
     }
   } catch (e) {
