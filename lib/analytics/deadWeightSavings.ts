@@ -8,6 +8,8 @@ export interface DeadWeightSavingsSummary {
   projectedMonthlyPrice: number | null;
   monthlySavings: number | null;
   annualSavings: number | null;
+  // Indicates we produced an estimated savings value for custom (>250k) pricing
+  usedCustomPricingEstimate?: boolean;
 }
 
 // Klaviyo pricing tiers snapshot used in UI; custom pricing for >250k
@@ -107,8 +109,19 @@ export function computeDeadWeightSavings(): DeadWeightSavingsSummary | null {
 
   const currentMonthlyPrice = priceFor(currentCount);
   const projectedMonthlyPrice = priceFor(projectedCount);
-  const monthlySavings = currentMonthlyPrice !== null && projectedMonthlyPrice !== null ? currentMonthlyPrice - projectedMonthlyPrice : null;
-  const annualSavings = monthlySavings !== null ? monthlySavings * 12 : null;
+  let monthlySavings = currentMonthlyPrice !== null && projectedMonthlyPrice !== null ? currentMonthlyPrice - projectedMonthlyPrice : null;
+  let annualSavings = monthlySavings !== null ? monthlySavings * 12 : null;
+  let usedCustomPricingEstimate = false;
 
-  return { currentSubscribers: currentCount, deadWeightCount, projectedSubscribers: projectedCount, currentMonthlyPrice, projectedMonthlyPrice, monthlySavings, annualSavings };
+  // Optional conservative estimate for >250k (custom pricing): extrapolate from last public tier $/subscriber
+  if (monthlySavings === null && currentCount > 250000) {
+    const lastTier = PRICING[PRICING.length - 1]; // 200001-250000 tier
+    const perSub = lastTier.price / lastTier.max; // approximate $ per subscriber at top of tier
+    const estimatedDelta = deadWeightCount * perSub;
+    monthlySavings = Number(estimatedDelta.toFixed(2));
+    annualSavings = Number((estimatedDelta * 12).toFixed(2));
+    usedCustomPricingEstimate = true;
+  }
+
+  return { currentSubscribers: currentCount, deadWeightCount, projectedSubscribers: projectedCount, currentMonthlyPrice, projectedMonthlyPrice, monthlySavings, annualSavings, usedCustomPricingEstimate };
 }
