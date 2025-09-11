@@ -7,6 +7,13 @@ import { computeSubjectAnalysis } from "../analytics/subjectAnalysis";
 import type { AggregatedMetrics } from "../data/dataTypes";
 
 export interface LlmExportJson {
+  // Metadata about this export and helpful descriptions
+  meta?: {
+    account?: { name: string; url?: string };
+    moduleDescriptions?: Record<string, string>;
+    conversionRateDefinition?: string; // placed orders divided by clicks
+    generatedAt?: string; // ISO timestamp
+  };
   // ISO YYYY-MM range of full months included
   period: { fromMonth: string | null; toMonth: string | null; months: number };
   // Aggregated values for the full-month window
@@ -233,6 +240,20 @@ export async function buildLlmExportJson(params: {
 
   // Build base JSON
   const json: LlmExportJson = {
+    meta: {
+      account: { name: 'Trail Grid Pro', url: 'https://www.trailgridpro.com' },
+      conversionRateDefinition: 'Conversion Rate (%) = placed orders divided by clicks',
+      generatedAt: new Date().toISOString(),
+      moduleDescriptions: {
+        period: 'Full-month window used for full-period metrics and monthly splits (fromMonth–toMonth inclusive).',
+        metrics: 'Full-month aggregated KPIs for the window; split into overall, campaigns-only, and flows-only.',
+        campaignFlowSplit: 'Monthly split of revenue and emails between Campaigns vs Flows over the full-month window, plus period totals.',
+        sendVolumeImpact: 'Correlation between emails sent and performance metrics across the selected lookback buckets, by segment (Campaigns/Flows).',
+        campaignSendFrequency: 'KPIs by weekly send frequency buckets (1, 2, 3, 4+) over the selected lookback period; includes campaign counts.',
+        subjectLineAnalysis: 'Lifts vs account average for subject features (All Segments) over the selected lookback period; includes counts where available.',
+        audienceSizePerformance: 'KPIs by audience size (emails sent) buckets over the selected lookback period; includes campaign counts and audience size totals.'
+      }
+    },
     period: { fromMonth, toMonth, months },
     metrics: {
       overall: pick(overallAgg),
