@@ -2,6 +2,7 @@
 // Uses DataManager processed data; outputs only the requested metrics and splits.
 
 import { DataManager } from "../data/dataManager";
+import { computeCampaignSendFrequency } from "../analytics/campaignSendFrequency";
 import type { AggregatedMetrics } from "../data/dataTypes";
 
 export interface LlmExportJson {
@@ -30,6 +31,27 @@ export interface LlmExportJson {
       campaigns: CorrelationSet;
       flows: CorrelationSet;
     };
+  };
+  // Campaign Performance by Send Frequency over the selected lookback period (not trimmed to full months)
+  campaignSendFrequency?: {
+    buckets: Array<{
+      key: '1' | '2' | '3' | '4+';
+      weeksCount: number;
+      totalCampaigns: number; // number of campaigns in this bucket during lookback
+      perWeek: { avgWeeklyRevenue: number; avgWeeklyOrders: number; avgWeeklyEmails: number };
+      perCampaign: { avgCampaignRevenue: number; avgCampaignOrders: number; avgCampaignEmails: number };
+      rates: {
+        avgOrderValue: number; // AOV
+        conversionRate: number;
+        openRate: number;
+        clickRate: number;
+        clickToOpenRate: number;
+        revenuePerEmail: number;
+        unsubscribeRate: number;
+        spamRate: number;
+        bounceRate: number;
+      };
+    }>;
   };
 }
 
@@ -212,6 +234,50 @@ export async function buildLlmExportJson(params: {
         flows: buildCorr('flows'),
       },
     };
+  } catch (e) {
+    // Non-fatal
+  }
+
+  // Campaign Performance by Send Frequency (lookback period as selected, not full-month trimmed)
+  try {
+    const resolvedRange = dm.getResolvedDateRange(dateRange, customFrom, customTo);
+    const s = resolvedRange?.startDate;
+    const e = resolvedRange?.endDate;
+    if (s && e) {
+      const campaigns = dm.getCampaigns().filter(c => {
+        const d = (c as any).sentDate as Date | undefined;
+        return d instanceof Date && !isNaN(d.getTime()) && d >= s && d <= e;
+      });
+      const agg = computeCampaignSendFrequency(campaigns);
+      json.campaignSendFrequency = {
+        buckets: agg.map(b => ({
+          key: b.key,
+          weeksCount: b.weeksCount,
+          totalCampaigns: b.totalCampaigns,
+          perWeek: {
+            avgWeeklyRevenue: b.avgWeeklyRevenue,
+            avgWeeklyOrders: b.avgWeeklyOrders,
+            avgWeeklyEmails: b.avgWeeklyEmails,
+          },
+          perCampaign: {
+            avgCampaignRevenue: (b as any).avgCampaignRevenue,
+            avgCampaignOrders: (b as any).avgCampaignOrders,
+            avgCampaignEmails: (b as any).avgCampaignEmails,
+          },
+          rates: {
+            avgOrderValue: b.aov,
+            conversionRate: b.conversionRate,
+            openRate: b.openRate,
+            clickRate: b.clickRate,
+            clickToOpenRate: b.clickToOpenRate,
+            revenuePerEmail: b.revenuePerEmail,
+            unsubscribeRate: b.unsubscribeRate,
+            spamRate: b.spamRate,
+            bounceRate: b.bounceRate,
+          },
+        }))
+      };
+    }
   } catch (e) {
     // Non-fatal
   }
