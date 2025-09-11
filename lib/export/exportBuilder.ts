@@ -24,7 +24,23 @@ export interface LlmExportJson {
       period: { campaigns: number; flows: number; total: number; campaignPct: number; flowPct: number };
     };
   };
+  // Send Volume Impact: total correlation across selected time period buckets (not per-bucket breakdown)
+  sendVolumeImpact?: {
+    correlationBySegment: {
+      campaigns: CorrelationSet;
+      flows: CorrelationSet;
+    };
+  };
 }
+
+type CorrelationValue = { r: number | null; n: number };
+type CorrelationSet = {
+  totalRevenue: CorrelationValue; // revenue vs emails
+  revenuePerEmail: CorrelationValue;
+  unsubsPer1k: CorrelationValue;
+  bouncesPer1k: CorrelationValue;
+  spamPer1k: CorrelationValue;
+};
 
 export type ExportMetricValues = {
   totalRevenue: number;
@@ -49,7 +65,7 @@ export async function buildLlmExportJson(params: {
   customTo?: string;
 }): Promise<LlmExportJson> {
   const dm = DataManager.getInstance();
-  const { dateRange, customFrom, customTo } = params;
+  const { dateRange, customFrom, customTo, granularity } = params as any;
 
   // Resolve window then trim to full months
   const resolved = dm.getResolvedDateRange(dateRange, customFrom, customTo);
@@ -139,7 +155,8 @@ export async function buildLlmExportJson(params: {
     return { monthly, period };
   };
 
-  return {
+  // Build base JSON
+  const json: LlmExportJson = {
     period: { fromMonth, toMonth, months },
     metrics: {
       overall: pick(overallAgg),
@@ -151,6 +168,55 @@ export async function buildLlmExportJson(params: {
       emailsSent: mkSplit('emailsSent'),
     },
   };
+
+  // Send Volume Impact: correlations across selected period buckets by segment
+  try {
+    const buildCorr = (seg: 'campaigns' | 'flows'): CorrelationSet => {
+      const c = seg === 'campaigns' ? dm.getCampaigns() : [];
+      const f = seg === 'flows' ? dm.getFlowEmails() : [];
+      const xs = dm.getMetricTimeSeries(c, f, 'emailsSent', dateRange, granularity, customFrom, customTo).map(p => p.value || 0);
+      const series = {
+        totalRevenue: dm.getMetricTimeSeries(c, f, 'revenue', dateRange, granularity, customFrom, customTo).map(p => p.value || 0),
+        revenuePerEmail: dm.getMetricTimeSeries(c, f, 'revenuePerEmail', dateRange, granularity, customFrom, customTo).map(p => p.value || 0),
+        unsubsPer1k: dm.getMetricTimeSeries(c, f, 'unsubscribeRate', dateRange, granularity, customFrom, customTo).map(p => p.value || 0),
+        bouncesPer1k: dm.getMetricTimeSeries(c, f, 'bounceRate', dateRange, granularity, customFrom, customTo).map(p => p.value || 0),
+        spamPer1k: dm.getMetricTimeSeries(c, f, 'spamRate', dateRange, granularity, customFrom, customTo).map(p => p.value || 0),
+      };
+      const pearson = (xsArr: number[], ysArr: number[]): CorrelationValue => {
+        const n = Math.min(xsArr.length, ysArr.length);
+        const pairs: { x: number; y: number }[] = [];
+        for (let i = 0; i < n; i++) {
+          const x = xsArr[i]; const y = ysArr[i];
+          if (Number.isFinite(x) && Number.isFinite(y)) pairs.push({ x, y });
+        }
+        if (pairs.length < 3) return { r: null, n: pairs.length };
+        const xVals = pairs.map(p => p.x); const yVals = pairs.map(p => p.y);
+        const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
+        const mx = mean(xVals); const my = mean(yVals);
+        let num = 0, dxs = 0, dys = 0;
+        for (let i = 0; i < pairs.length; i++) { const dx = xVals[i] - mx; const dy = yVals[i] - my; num += dx * dy; dxs += dx * dx; dys += dy * dy; }
+        if (dxs === 0 || dys === 0) return { r: null, n: pairs.length };
+        return { r: num / Math.sqrt(dxs * dys), n: pairs.length };
+      };
+      return {
+        totalRevenue: pearson(xs, series.totalRevenue),
+        revenuePerEmail: pearson(xs, series.revenuePerEmail),
+        unsubsPer1k: pearson(xs, series.unsubsPer1k),
+        bouncesPer1k: pearson(xs, series.bouncesPer1k),
+        spamPer1k: pearson(xs, series.spamPer1k),
+      };
+    };
+    json.sendVolumeImpact = {
+      correlationBySegment: {
+        campaigns: buildCorr('campaigns'),
+        flows: buildCorr('flows'),
+      },
+    };
+  } catch (e) {
+    // Non-fatal
+  }
+
+  return json;
 }
 
 function zeroMetrics(): ExportMetricValues {
