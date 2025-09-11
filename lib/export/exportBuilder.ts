@@ -63,6 +63,8 @@ export interface LlmExportJson {
       rangeMin: number;
       rangeMax: number;
       totalCampaigns: number;
+      totalEmailsSent: number;
+      avgCampaignEmails: number;
       // requested metrics
       avgCampaignRevenue: number;
       totalRevenue: number;
@@ -488,6 +490,8 @@ export async function buildLlmExportJson(params: {
             rangeMin: lo,
             rangeMax: hi,
             totalCampaigns,
+            totalEmailsSent: sumEmails,
+            avgCampaignEmails: totalCampaigns > 0 ? (sumEmails / totalCampaigns) : 0,
             avgCampaignRevenue,
             totalRevenue: sumRevenue,
             avgOrderValue: aov,
