@@ -204,6 +204,126 @@ export interface LlmExportJson {
   };
 }
 
+// New minimal export focused on core dashboard metrics, respecting selected range/granularity
+export type CoreMetricKey =
+  | "revenue"
+  | "avgOrderValue"
+  | "totalOrders"
+  | "conversionRate"
+  | "openRate"
+  | "clickRate"
+  | "clickToOpenRate"
+  | "revenuePerEmail"
+  | "emailsSent"
+  | "unsubscribeRate"
+  | "spamRate"
+  | "bounceRate";
+
+export interface CoreMetricsExport {
+  meta: {
+    version: string;
+    generatedAt: string;
+  };
+  selection: {
+    dateRange: string;
+    granularity: "daily" | "weekly" | "monthly";
+    fromISO: string;
+    toISO: string;
+  };
+  series: Record<CoreMetricKey, Array<{ date: string; all: number; campaigns: number; flows: number }>>;
+}
+
+/**
+ * Build a minimal metrics export payload for the selected window and granularity.
+ * If granularity === 'monthly', only full months are included (drops partial first/last months).
+ */
+export async function buildCoreMetricsExport(params: {
+  dateRange: string;
+  granularity: "daily" | "weekly" | "monthly";
+  customFrom?: string;
+  customTo?: string;
+}): Promise<CoreMetricsExport> {
+  const dm = DataManager.getInstance();
+  const { dateRange, granularity, customFrom, customTo } = params;
+
+  const resolved = dm.getResolvedDateRange(dateRange, customFrom, customTo);
+  const last = dm.getLastEmailDate();
+  const startDate = resolved?.startDate ?? new Date(last);
+  const endDate = resolved?.endDate ?? new Date(last);
+
+  const campaignsAll = dm.getCampaigns();
+  const flowsAll = dm.getFlowEmails();
+
+  const metricKeys: CoreMetricKey[] = [
+    "revenue",
+    "avgOrderValue",
+    "totalOrders",
+    "conversionRate",
+    "openRate",
+    "clickRate",
+    "clickToOpenRate",
+    "revenuePerEmail",
+    "emailsSent",
+    "unsubscribeRate",
+    "spamRate",
+    "bounceRate",
+  ];
+
+  // Helper: trim first/last buckets if monthly and partial
+  const trimMonthlyToFullMonths = <T extends { date: string }>(arr: T[]): T[] => {
+    if (granularity !== "monthly" || arr.length === 0) return arr;
+    const yyyymm = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const startMM = yyyymm(startDate);
+    const endMM = yyyymm(endDate);
+    const endMonthLastDay = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate();
+    const startIsFull = startDate.getDate() === 1 && startDate.getHours() === 0 && startDate.getMinutes() === 0;
+    const endIsFull = endDate.getDate() === endMonthLastDay && endDate.getHours() >= 23; // generous check
+    let res = arr.slice();
+    // Drop first if partial
+    if (!startIsFull) {
+      res = res.filter((p) => !p.date.startsWith(startMM));
+    }
+    // Drop last if partial
+    if (!endIsFull) {
+      res = res.filter((p) => !p.date.startsWith(endMM));
+    }
+    return res;
+  };
+
+  const series: CoreMetricsExport["series"] = {} as any;
+  for (const mk of metricKeys) {
+    // Time series for all, campaigns-only, flows-only
+    const allTS = dm.getMetricTimeSeries(campaignsAll, flowsAll, mk, dateRange, granularity, customFrom, customTo);
+    const campTS = dm.getMetricTimeSeries(campaignsAll, [], mk, dateRange, granularity, customFrom, customTo);
+    const flowTS = dm.getMetricTimeSeries([], flowsAll, mk, dateRange, granularity, customFrom, customTo);
+
+    // Assume aligned dates across the three series
+    let points: Array<{ date: string; all: number; campaigns: number; flows: number }> = allTS.map((p: any, i: number) => ({
+      date: p.date,
+      all: Number(p.value || 0),
+      campaigns: Number(campTS[i]?.value || 0),
+      flows: Number(flowTS[i]?.value || 0),
+    }));
+
+    if (granularity === "monthly") {
+      points = trimMonthlyToFullMonths(points);
+    }
+
+    series[mk] = points;
+  }
+
+  return {
+    meta: { version: "0.1.0", generatedAt: new Date().toISOString() },
+    selection: {
+      dateRange,
+      granularity,
+      fromISO: startDate.toISOString(),
+      toISO: endDate.toISOString(),
+    },
+    series,
+  };
+}
+
 export async function buildLlmExportJson(params: {
   dateRange: string;
   granularity: "daily" | "weekly" | "monthly";

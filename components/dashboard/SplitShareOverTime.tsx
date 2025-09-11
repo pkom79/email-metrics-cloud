@@ -33,10 +33,13 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
         const primaryLen = Math.min(camp.primary.length, flo.primary.length);
         const items = [] as {
             label: string;
+            // Anchor ISO date for accurate tooltip formatting (provided by DataManager)
+            iso?: string | null;
             campVal: number; flowVal: number; total: number;
             campPct: number; flowPct: number;
             cmpCampVal?: number; cmpFlowVal?: number; cmpTotal?: number;
             cmpCampPct?: number; cmpFlowPct?: number;
+            cmpLabel?: string; cmpIso?: string | null;
         }[];
         for (let i = 0; i < primaryLen; i++) {
             const c = camp.primary[i]?.value ?? 0;
@@ -45,7 +48,9 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
             const campPct = total > 0 ? (c / total) * 100 : 0;
             const flowPct = total > 0 ? (f / total) * 100 : 0;
             const label = camp.primary[i]?.date || flo.primary[i]?.date || '';
-            const row: any = { label, campVal: c, flowVal: f, total, campPct, flowPct };
+            // Prefer ISO from either series (exists in DataManager output even if not typed)
+            const iso = (camp.primary[i] as any)?.iso || (flo.primary[i] as any)?.iso || null;
+            const row: any = { label, iso, campVal: c, flowVal: f, total, campPct, flowPct };
             if (camp.compare && flo.compare) {
                 const cc = camp.compare[i]?.value ?? 0;
                 const ff = flo.compare[i]?.value ?? 0;
@@ -54,6 +59,7 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
                 row.cmpCampPct = t > 0 ? (cc / t) * 100 : 0;
                 row.cmpFlowPct = t > 0 ? (ff / t) * 100 : 0;
                 row.cmpLabel = camp.compare[i]?.date || flo.compare[i]?.date || undefined;
+                row.cmpIso = (camp.compare[i] as any)?.iso || (flo.compare[i] as any)?.iso || null;
             }
             items.push(row);
         }
@@ -125,7 +131,7 @@ function BarShareChart({
     metric,
     granularity,
 }: {
-    data: { label: string; campVal: number; flowVal: number; total: number; campPct: number; flowPct: number; cmpCampVal?: number; cmpFlowVal?: number; cmpTotal?: number; cmpCampPct?: number; cmpFlowPct?: number; cmpLabel?: string; }[];
+    data: { label: string; iso?: string | null; campVal: number; flowVal: number; total: number; campPct: number; flowPct: number; cmpCampVal?: number; cmpFlowVal?: number; cmpTotal?: number; cmpCampPct?: number; cmpFlowPct?: number; cmpLabel?: string; cmpIso?: string | null; }[];
     barW: number; barGap: number; viewW: number; viewH: number; paddingL: number; paddingR: number;
     valueFormatter: (v: number) => string; showCompare: boolean; metric: Metric; granularity: Gran;
 }) {
@@ -180,33 +186,38 @@ function BarShareChart({
                     transform: 'translate(-50%, 0)'
                 }}>
                     <div className="font-medium mb-1 text-gray-900 dark:text-gray-100">{(() => {
-                        // Format label like the big charts
-                        const formatDaily = (s: string) => {
-                            const d = new Date(s);
-                            return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                        };
-                        const formatMonthly = (s: string) => {
-                            const d = new Date(s);
-                            return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-                        };
-                        const formatWeekly = (s: string) => {
-                            // Treat label as start-of-week (Mon). Show Mon–Sun range.
-                            const d = new Date(s);
-                            if (isNaN(d.getTime())) return s;
-                            // Ensure Monday start
-                            const day = d.getDay();
-                            const diffToMon = day === 0 ? -6 : (1 - day);
-                            const mon = new Date(d); mon.setDate(mon.getDate() + diffToMon);
-                            const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
-                            const start = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                            const endMonth = sun.toLocaleDateString('en-US', { month: 'short' });
-                            const sameMonth = mon.getMonth() === sun.getMonth();
-                            const end = sun.toLocaleDateString('en-US', { day: 'numeric', year: 'numeric' });
-                            return sameMonth ? `${start}–${sun.getDate()}, ${sun.getFullYear()}` : `${start}–${endMonth} ${sun.getDate()}, ${sun.getFullYear()}`;
-                        };
-                        if (granularity === 'daily') return formatDaily(active.label);
-                        if (granularity === 'monthly') return formatMonthly(active.label);
-                        return formatWeekly(active.label);
+                        // Use ISO anchor from DataManager when available to avoid parsing short labels (e.g., "Oct 01" -> year 2001)
+                        const baseIso = active.iso;
+                        if (baseIso) {
+                            const d = new Date(baseIso);
+                            if (!isNaN(d.getTime())) {
+                                if (granularity === 'daily') return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                if (granularity === 'monthly') return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                                // weekly: iso represents week end; compute Monday start
+                                const day = d.getDay();
+                                const diffToMon = day === 0 ? -6 : (1 - day);
+                                const mon = new Date(d); mon.setDate(mon.getDate() + diffToMon);
+                                const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
+                                const start = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                const sameMonth = mon.getMonth() === sun.getMonth();
+                                return sameMonth
+                                    ? `${start}–${sun.getDate()}, ${sun.getFullYear()}`
+                                    : `${start}–${sun.toLocaleDateString('en-US', { month: 'short' })} ${sun.getDate()}, ${sun.getFullYear()}`;
+                            }
+                        }
+                        // Fallback to parsing label (legacy) if iso not available
+                        const s = active.label;
+                        const d = new Date(s);
+                        if (granularity === 'daily') return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                        if (granularity === 'monthly') return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                        if (isNaN(d.getTime())) return s;
+                        const day = d.getDay();
+                        const diffToMon = day === 0 ? -6 : (1 - day);
+                        const mon = new Date(d); mon.setDate(mon.getDate() + diffToMon);
+                        const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
+                        const start = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        const sameMonth = mon.getMonth() === sun.getMonth();
+                        return sameMonth ? `${start}–${sun.getDate()}, ${sun.getFullYear()}` : `${start}–${sun.toLocaleDateString('en-US', { month: 'short' })} ${sun.getDate()}, ${sun.getFullYear()}`;
                     })()}</div>
                     <div className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5 items-center">
                         <div className="flex items-center gap-2"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: '#6366F1' }} /> Campaigns</div>
@@ -218,21 +229,37 @@ function BarShareChart({
                     {showCompare && typeof active.cmpCampPct === 'number' && typeof active.cmpFlowPct === 'number' && (
                         <div className="mt-1 pt-1 border-t border-gray-200 dark:border-gray-700">
                             <div className="font-semibold mb-0.5 text-gray-900 dark:text-gray-100">{(() => {
+                                // Prefer compare ISO when available
+                                const cmpIso = active.cmpIso;
+                                if (cmpIso) {
+                                    const d = new Date(cmpIso);
+                                    if (!isNaN(d.getTime())) {
+                                        if (granularity === 'daily') return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                        if (granularity === 'monthly') return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                                        const day = d.getDay();
+                                        const diffToMon = day === 0 ? -6 : (1 - day);
+                                        const mon = new Date(d); mon.setDate(mon.getDate() + diffToMon);
+                                        const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
+                                        const start = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                        const sameMonth = mon.getMonth() === sun.getMonth();
+                                        return sameMonth
+                                            ? `${start}–${sun.getDate()}, ${sun.getFullYear()}`
+                                            : `${start}–${sun.toLocaleDateString('en-US', { month: 'short' })} ${sun.getDate()}, ${sun.getFullYear()}`;
+                                    }
+                                }
+                                // Fallback to label if no iso
                                 const s = active.cmpLabel || active.label;
                                 const d = new Date(s);
                                 if (granularity === 'daily') return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                                 if (granularity === 'monthly') return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-                                // weekly
                                 if (isNaN(d.getTime())) return s;
                                 const day = d.getDay();
                                 const diffToMon = day === 0 ? -6 : (1 - day);
                                 const mon = new Date(d); mon.setDate(mon.getDate() + diffToMon);
                                 const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
                                 const start = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                                const endMonth = sun.toLocaleDateString('en-US', { month: 'short' });
                                 const sameMonth = mon.getMonth() === sun.getMonth();
-                                const end = sun.toLocaleDateString('en-US', { day: 'numeric', year: 'numeric' });
-                                return sameMonth ? `${start}–${sun.getDate()}, ${sun.getFullYear()}` : `${start}–${endMonth} ${sun.getDate()}, ${sun.getFullYear()}`;
+                                return sameMonth ? `${start}–${sun.getDate()}, ${sun.getFullYear()}` : `${start}–${sun.toLocaleDateString('en-US', { month: 'short' })} ${sun.getDate()}, ${sun.getFullYear()}`;
                             })()}</div>
                             <div className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5 items-center">
                                 <div className="flex items-center gap-2"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: '#6366F1' }} /> Campaigns</div>
