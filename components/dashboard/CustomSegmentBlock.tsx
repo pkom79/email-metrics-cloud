@@ -5,7 +5,14 @@ import Papa from 'papaparse';
 import { ProcessedSubscriber } from '../../lib/data/dataTypes';
 import { SubscriberTransformer } from '../../lib/data/transformers/subscriberTransformer';
 
-const CustomSegmentBlock: React.FC = () => {
+type Props = {
+    dateRange?: '30d' | '60d' | '90d' | '120d' | '180d' | '365d' | 'all' | 'custom';
+    customFrom?: string; // YYYY-MM-DD
+    customTo?: string;   // YYYY-MM-DD
+    referenceDate?: Date; // anchor for presets; falls back to now
+};
+
+const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, customTo, referenceDate }) => {
     // Segment A
     const [segmentASubscribers, setSegmentASubscribers] = useState<ProcessedSubscriber[]>([]);
     const [segmentAName, setSegmentAName] = useState<string>('');
@@ -155,24 +162,31 @@ const CustomSegmentBlock: React.FC = () => {
         };
     };
 
-    // Created absolute date range filter (account timezone - using local browser timezone here)
-    const [createdFrom, setCreatedFrom] = useState<string>(''); // YYYY-MM-DD
-    const [createdTo, setCreatedTo] = useState<string>('');     // YYYY-MM-DD
-
+    // Created date filter derived from main date selector (props)
     const parseBoundary = (d: string | undefined | null, endOfDay = false): Date | null => {
         if (!d) return null;
-        // Interpret the date as local timezone midnight/start or end of day
         const [y, m, day] = d.split('-').map(Number);
         if (!y || !m || !day) return null;
-        if (endOfDay) {
-            return new Date(y, m - 1, day, 23, 59, 59, 999);
-        }
-        return new Date(y, m - 1, day, 0, 0, 0, 0);
+        return new Date(y, m - 1, day, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
     };
+    const computeFromToForPreset = useMemo(() => {
+        if (dateRange === 'custom' && customFrom && customTo) {
+            return { from: parseBoundary(customFrom, false), to: parseBoundary(customTo, true) };
+        }
+        if (dateRange === 'all') return { from: null as Date | null, to: null as Date | null };
+        const days = typeof dateRange === 'string' && /\d+d/.test(dateRange) ? parseInt(dateRange.replace('d', '')) : 0;
+        if (!days) return { from: null as Date | null, to: null as Date | null };
+        const anchor = referenceDate ? new Date(referenceDate) : new Date();
+        const to = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate(), 23, 59, 59, 999);
+        const from = new Date(to);
+        from.setDate(from.getDate() - days + 1);
+        from.setHours(0, 0, 0, 0);
+        return { from, to };
+    }, [dateRange, customFrom, customTo, referenceDate]);
 
     const filterByCreatedRange = (subs: ProcessedSubscriber[]): ProcessedSubscriber[] => {
-        const fromDate = parseBoundary(createdFrom, false);
-        const toDate = parseBoundary(createdTo, true);
+        const fromDate = computeFromToForPreset.from;
+        const toDate = computeFromToForPreset.to;
         if (!fromDate && !toDate) return subs;
         return subs.filter(s => {
             const created = s.profileCreated instanceof Date ? s.profileCreated : null;
@@ -183,8 +197,8 @@ const CustomSegmentBlock: React.FC = () => {
         });
     };
 
-    const filteredA = useMemo(() => filterByCreatedRange(segmentASubscribers), [segmentASubscribers, createdFrom, createdTo]);
-    const filteredB = useMemo(() => filterByCreatedRange(segmentBSubscribers), [segmentBSubscribers, createdFrom, createdTo]);
+    const filteredA = useMemo(() => filterByCreatedRange(segmentASubscribers), [segmentASubscribers, computeFromToForPreset]);
+    const filteredB = useMemo(() => filterByCreatedRange(segmentBSubscribers), [segmentBSubscribers, computeFromToForPreset]);
 
     const statsA = useMemo(() => (filteredA.length ? computeStats(filteredA) : null), [filteredA]);
     const statsB = useMemo(() => (filteredB.length ? computeStats(filteredB) : null), [filteredB]);
@@ -208,6 +222,7 @@ const CustomSegmentBlock: React.FC = () => {
     const cardBase = `bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6`;
     const labelClass = `text-sm font-medium text-gray-500 dark:text-gray-400`;
     const valueClass = `text-2xl font-bold text-gray-900 dark:text-gray-100 tabular-nums`;
+    const compareValueClass = `text-xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums`;
     const deltaClass = `text-sm font-semibold tabular-nums`;
 
     const renderSingleCards = (s: SegmentStats) => (
@@ -307,14 +322,14 @@ const CustomSegmentBlock: React.FC = () => {
 
     const renderCompareRow = (label: string, title: string, aText: string, bText: string, delta: { text: string; value?: number; isNA: boolean }, favorableWhenHigher: boolean) => {
         const bTintClass = !delta.isNA && delta.value !== undefined && Math.abs(delta.value) > 1e-12
-            ? deltaColor(delta.value, favorableWhenHigher)
+            ? `${deltaColor(delta.value, favorableWhenHigher)}`
             : '';
         const deltaTintClass = delta.isNA ? 'text-gray-500 dark:text-gray-400' : deltaColor(delta.value, favorableWhenHigher);
         return (
             <div className={cardBase} title={title}>
                 <div className="flex items-center gap-3 mb-2"><p className={labelClass}>{label}</p></div>
-                <div className={`${valueClass}`}><span className="text-xs font-medium text-gray-500 mr-2">A:</span>{aText}</div>
-                <div className={`flex items-baseline justify-between ${valueClass} ${bTintClass}`}>
+                <div className={`${compareValueClass}`}><span className="text-xs font-medium text-gray-500 mr-2">A:</span>{aText}</div>
+                <div className={`flex items-baseline justify-between ${compareValueClass} ${bTintClass}`}>
                     <div><span className="text-xs font-medium text-gray-500 mr-2">B:</span>{bText}</div>
                     <div className={`${deltaClass} ${deltaTintClass}`}>{delta.text}</div>
                 </div>
@@ -499,28 +514,7 @@ const CustomSegmentBlock: React.FC = () => {
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
                     Upload one or two subscriber CSVs to analyze growth, engagement recency, deliverability, opt‑in rate, and revenue indicators such as Predicted LTV and AOV. With two uploads, Segment B is compared to Segment A.
                 </p>
-                <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Filter by Created date</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">Timezone: {timezone}</span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                        <div className="flex flex-col gap-1">
-                            <label className="text-sm font-medium text-gray-700 dark:text-gray-200">From</label>
-                            <input type="date" value={createdFrom} onChange={e => setCreatedFrom(e.target.value)} className="h-9 px-3 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500" />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                            <label className="text-sm font-medium text-gray-700 dark:text-gray-200">To</label>
-                            <input type="date" value={createdTo} onChange={e => setCreatedTo(e.target.value)} className="h-9 px-3 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500" />
-                        </div>
-                        <div className="flex gap-2">
-                            <button type="button" onClick={() => { setCreatedFrom(''); setCreatedTo(''); }} className="h-9 px-3 rounded-lg text-sm font-medium border bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-700">
-                                Clear
-                            </button>
-                            <div className="text-xs text-gray-500 dark:text-gray-400 self-center">Applies to both segments and all metrics</div>
-                        </div>
-                    </div>
-                </div>
+                {/* Created date filter is now driven by main dashboard selector; no local controls here. */}
                 <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex flex-col gap-2">
                         <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Segment A</label>

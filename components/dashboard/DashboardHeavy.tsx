@@ -1277,7 +1277,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 <AudienceCharts dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} />
                 {/* Sticky end sentinel (1px spacer) */}
                 <div ref={el => setStickyEndRef(el)} style={{ height: 1 }} />
-                <section><CustomSegmentBlock /></section>
+                <section><CustomSegmentBlock dateRange={dateRange} customFrom={customFrom} customTo={customTo} referenceDate={REFERENCE_DATE} /></section>
             </div></div>
 
             {/* Sharing feature removed */}
