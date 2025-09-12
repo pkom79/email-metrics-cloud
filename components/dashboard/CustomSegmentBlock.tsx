@@ -56,7 +56,8 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
     };
 
     // Helpers and formatting
-    const now = useMemo(() => new Date(), []);
+    // Anchor "now" to the provided referenceDate (from main dashboard) when available
+    const now = useMemo(() => (referenceDate ? new Date(referenceDate) : new Date()), [referenceDate]);
     const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local time', []);
     const formatCurrency2 = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const formatPercent1 = (value: number) => `${value.toFixed(1)}%`;
@@ -69,18 +70,22 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
         revenuePerMember: number; // totalRevenue / members
         ordersPerMember: number; // totalOrders / members
         buyers: number;
+        buyersPct: number;
+        repeatBuyers: number;
+        repeatBuyersPct: number;
         totalOrders: number;
         predictedLtvIncrease: number;
         averageDaysBetweenOrders: number;
+        ltvRepeatBuyerAvg: number;
         created: Record<number, WindowStat>; // days -> {count,pct}
         engaged: Record<number, WindowStat>; // days -> {count,pct}
         nonSuppressed: WindowStat; // pct uses members
         neverActive: WindowStat; // pct uses members
         emailStatus: {
-            unsubscribedPct: number;
+            optInPct: number; // SUBSCRIBED
+            notSubscribedPct: number; // consent != SUBSCRIBED
             spamPct: number;
             userSuppressedPct: number;
-            optInPct: number;
         };
     };
 
@@ -90,10 +95,19 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
         const totalRevenue = sum(subs, s => (s.historicClv ?? s.totalClv) || 0);
         const totalOrders = sum(subs, s => s.totalOrders || 0);
         const buyers = subs.filter(s => s.isBuyer).length;
+        const repeatBuyers = subs.filter(s => (s.totalOrders || 0) >= 2).length;
         const aov = totalOrders > 0 ? totalRevenue / totalOrders : 0;
         const revenuePerMember = members > 0 ? totalRevenue / members : 0;
         const ordersPerMember = members > 0 ? totalOrders / members : 0;
         const predictedLtvIncrease = sum(subs, s => s.predictedClv || 0);
+        const buyersPct = members > 0 ? (buyers / members) * 100 : 0;
+        const repeatBuyersPct = members > 0 ? (repeatBuyers / members) * 100 : 0;
+        const ltvRepeatBuyerAvg = (() => {
+            const repeats = subs.filter(s => (s.totalOrders || 0) >= 2);
+            if (!repeats.length) return 0;
+            const total = sum(repeats, s => (s.historicClv ?? s.totalClv) || 0);
+            return total / repeats.length;
+        })();
 
         const avgDaysValues = subs.map(s => (s.avgDaysBetweenOrders ?? null)).filter((v): v is number => v !== null && !isNaN(v));
         const averageDaysBetweenOrders = avgDaysValues.length > 0 ? avgDaysValues.reduce((a, b) => a + b, 0) / avgDaysValues.length : 0;
@@ -116,8 +130,8 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                 return activity.getTime() >= start.getTime() && activity.getTime() <= now.getTime();
             }).length;
 
-        const createdDays = [30, 60, 90, 180] as const;
-        const engagedDays = [30, 90, 120, 180] as const;
+        const createdDays = [30, 60, 90, 120] as const;
+        const engagedDays = [30, 60, 90, 120] as const;
 
         const created: Record<number, WindowStat> = {};
         createdDays.forEach(d => { const c = withinDaysCreated(d); created[d] = { count: c, pct: percentage(c, members) }; });
@@ -134,10 +148,12 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
         const unsubTokens = ['UNSUBSCRIBE', 'UNSUBSCRIBED', 'GLOBAL_UNSUBSCRIBE'];
         const spamTokens = ['SPAM_COMPLAINT', 'MARKED_AS_SPAM', 'SPAM'];
         const userSuppTokens = ['USER_SUPPRESSED', 'SUPPRESSED', 'MANUAL_SUPPRESSION'];
-        const unsubCount = subs.filter(s => hasAnySuppression(s, unsubTokens)).length;
         const spamCount = subs.filter(s => hasAnySuppression(s, spamTokens)).length;
         const userSuppCount = subs.filter(s => hasAnySuppression(s, userSuppTokens)).length;
-        const optInCount = subs.filter(s => (s.emailConsentRaw || '').toUpperCase().trim() !== 'NEVER_SUBSCRIBED').length;
+        // Consent metrics
+        const consent = (s: ProcessedSubscriber) => (s.emailConsentRaw || '').toUpperCase().trim();
+        const optInCount = subs.filter(s => consent(s) === 'SUBSCRIBED').length;
+        const notSubscribedCount = members - optInCount;
 
         return {
             totalRevenue,
@@ -146,18 +162,22 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
             revenuePerMember,
             ordersPerMember,
             buyers,
+            buyersPct,
+            repeatBuyers,
+            repeatBuyersPct,
             totalOrders,
             predictedLtvIncrease,
             averageDaysBetweenOrders,
+            ltvRepeatBuyerAvg,
             created,
             engaged,
             nonSuppressed: { count: nonSuppressedCount, pct: percentage(nonSuppressedCount, members) },
             neverActive: { count: neverActiveCount, pct: percentage(neverActiveCount, members) },
             emailStatus: {
-                unsubscribedPct: percentage(unsubCount, members),
+                optInPct: percentage(optInCount, members),
+                notSubscribedPct: percentage(notSubscribedCount, members),
                 spamPct: percentage(spamCount, members),
                 userSuppressedPct: percentage(userSuppCount, members),
-                optInPct: percentage(optInCount, members),
             },
         };
     };
@@ -216,13 +236,14 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
         if (value === undefined || Math.abs(value) < 1e-12) return 'text-gray-500 dark:text-gray-400';
         const positive = value > 0;
         const favorable = favorableWhenHigher ? positive : !positive;
-        return favorable ? 'text-emerald-600' : 'text-rose-600';
+        // Improve dark-mode contrast for positive/negative tints
+        return favorable ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
     };
 
     const cardBase = `bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6`;
     const labelClass = `text-sm font-medium text-gray-500 dark:text-gray-400`;
     const valueClass = `text-2xl font-bold text-gray-900 dark:text-gray-100 tabular-nums`;
-    const compareValueClass = `text-xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums`;
+    const compareValueClass = `text-base md:text-lg font-semibold text-gray-900 dark:text-gray-100 tabular-nums`;
     const deltaClass = `text-sm font-semibold tabular-nums`;
 
     const renderSingleCards = (s: SegmentStats) => (
@@ -232,10 +253,6 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                     <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Total Revenue</p></div>
                     <p className={valueClass}>{formatCurrency2(s.totalRevenue)}</p>
                 </div>
-                <div className={cardBase} title="Total number of profiles in the uploaded segment">
-                    <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Members</p></div>
-                    <p className={valueClass}>{s.members.toLocaleString()}</p>
-                </div>
                 <div className={cardBase} title="Average Order Value across all orders in this segment (Total Revenue / Total Orders)">
                     <div className="flex items-center gap-3 mb-2"><p className={labelClass}>AOV</p></div>
                     <p className={valueClass}>{formatCurrency2(s.aov)}</p>
@@ -244,50 +261,34 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                     <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Revenue per Member</p></div>
                     <p className={valueClass}>{formatCurrency2(s.revenuePerMember)}</p>
                 </div>
-            </div>
-
-            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Created</span></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                {[30, 60, 90, 180].map(days => (
-                    <div key={`created-${days}`} className={cardBase} title={`Profiles created in the last ${days} days (anchored to today)`}>
-                        <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Created in last {days} days</p></div>
-                        <p className={valueClass}>{s.created[days].count.toLocaleString()} ({formatPercent1(s.created[days].pct)})</p>
-                    </div>
-                ))}
-            </div>
-
-            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Engaged</span></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                {[30, 90, 120, 180].map(days => (
-                    <div key={`engaged-${days}`} className={cardBase} title={`Profiles with an email open or click in the last ${days} days (anchored to today)`}>
-                        <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Engaged in last {days} days</p></div>
-                        <p className={valueClass}>{s.engaged[days].count.toLocaleString()} ({formatPercent1(s.engaged[days].pct)})</p>
-                    </div>
-                ))}
-            </div>
-
-            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Additional Metrics</span></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 <div className={cardBase} title="Sum of Predicted Customer Lifetime Value for all profiles in this segment">
                     <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Predicted LTV Increase</p></div>
                     <p className={valueClass}>{formatCurrency2(s.predictedLtvIncrease)}</p>
                 </div>
-                <div className={cardBase} title="Average of the CSV column 'Average Days Between Orders' across profiles that have a value">
-                    <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Average Days Between Orders</p></div>
-                    <p className={valueClass}>{s.averageDaysBetweenOrders.toFixed(1)}</p>
-                </div>
-                <div className={cardBase} title="Email Suppressions equal to [] (consent ignored)">
-                    <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Non‑Suppressed</p></div>
-                    <p className={valueClass}>{s.nonSuppressed.count.toLocaleString()} ({formatPercent1(s.nonSuppressed.pct)})</p>
-                </div>
-                <div className={cardBase} title="Profiles with no First Active and no Last Active dates">
-                    <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Never Active</p></div>
-                    <p className={valueClass}>{s.neverActive.count.toLocaleString()} ({formatPercent1(s.neverActive.pct)})</p>
+            </div>
+
+            {/* Row 2: Customer Base */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div className={cardBase} title="Total number of profiles in the uploaded segment">
+                    <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Members</p></div>
+                    <p className={valueClass}>{s.members.toLocaleString()}</p>
                 </div>
                 <div className={cardBase} title="Profiles that have placed at least one order (from CSV isBuyer flag)">
                     <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Buyer Count</p></div>
                     <p className={valueClass}>{s.buyers.toLocaleString()}</p>
                 </div>
+                <div className={cardBase} title="Buyers / Members">
+                    <div className="flex items-center gap-3 mb-2"><p className={labelClass}>% Buyers</p></div>
+                    <p className={valueClass}>{formatPercent1(s.buyersPct)}</p>
+                </div>
+                <div className={cardBase} title="Members with 2+ orders / Members">
+                    <div className="flex items-center gap-3 mb-2"><p className={labelClass}>% Repeat Buyers</p></div>
+                    <p className={valueClass}>{formatPercent1(s.repeatBuyersPct)}</p>
+                </div>
+            </div>
+
+            {/* Row 3: Order Behavior */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 <div className={cardBase} title="Sum of total orders across profiles in this segment">
                     <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Total Orders</p></div>
                     <p className={valueClass}>{s.totalOrders.toLocaleString()}</p>
@@ -296,13 +297,48 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                     <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Avg Orders per Member</p></div>
                     <p className={valueClass}>{s.ordersPerMember.toFixed(2)}</p>
                 </div>
+                <div className={cardBase} title="Average of the CSV column 'Average Days Between Orders' across profiles that have a value">
+                    <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Average Days Between Orders</p></div>
+                    <p className={valueClass}>{s.averageDaysBetweenOrders.toFixed(1)}</p>
+                </div>
+                <div className={cardBase} title="Average lifetime revenue among repeat buyers (2+ orders)">
+                    <div className="flex items-center gap-3 mb-2"><p className={labelClass}>LTV (Repeat Buyers)</p></div>
+                    <p className={valueClass}>{formatCurrency2(s.ltvRepeatBuyerAvg)}</p>
+                </div>
             </div>
 
-            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Email Status</span></div>
+            {/* Row 4: Acquisition – New Profiles Created */}
+            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Acquisition – New Profiles Created</span></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                {[30, 60, 90, 120].map(days => (
+                    <div key={`created-${days}`} className={cardBase} title={`Profiles created in the last ${days} days (anchored to selected date)`}>
+                        <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Created in last {days} days</p></div>
+                        <p className={valueClass}>{s.created[days].count.toLocaleString()} ({formatPercent1(s.created[days].pct)})</p>
+                    </div>
+                ))}
+            </div>
+
+            {/* Row 5: Engagement – Recency Buckets */}
+            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Engagement – Recency Buckets</span></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                {[30, 60, 90, 120].map(days => (
+                    <div key={`engaged-${days}`} className={cardBase} title={`Profiles with an email open or click in the last ${days} days (anchored to selected date)`}>
+                        <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Engaged in last {days} days</p></div>
+                        <p className={valueClass}>{s.engaged[days].count.toLocaleString()} ({formatPercent1(s.engaged[days].pct)})</p>
+                    </div>
+                ))}
+            </div>
+
+            {/* Row 6: Deliverability & List Health */}
+            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Deliverability & List Health</span></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className={cardBase} title="Email Suppressions contains UNSUBSCRIBE/UNSUBSCRIBED/GLOBAL_UNSUBSCRIBE">
-                    <div className="flex items-center gap-3 mb-2"><p className={labelClass}>% Unsubscribed</p></div>
-                    <p className={valueClass}>{formatPercent1(s.emailStatus.unsubscribedPct)}</p>
+                <div className={cardBase} title="Percentage of profiles with Email Marketing Consent = SUBSCRIBED">
+                    <div className="flex items-center gap-3 mb-2"><p className={labelClass}>% Opt‑in Rate</p></div>
+                    <p className={valueClass}>{formatPercent1(s.emailStatus.optInPct)}</p>
+                </div>
+                <div className={cardBase} title="Profiles that have Email Marketing Consent other than SUBSCRIBED">
+                    <div className="flex items-center gap-3 mb-2"><p className={labelClass}>% Not Subscribed</p></div>
+                    <p className={valueClass}>{formatPercent1(s.emailStatus.notSubscribedPct)}</p>
                 </div>
                 <div className={cardBase} title="Email Suppressions contains SPAM_COMPLAINT/MARKED_AS_SPAM/SPAM">
                     <div className="flex items-center gap-3 mb-2"><p className={labelClass}>% Spam Complaint</p></div>
@@ -311,10 +347,6 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                 <div className={cardBase} title="Email Suppressions contains USER_SUPPRESSED/SUPPRESSED/MANUAL_SUPPRESSION">
                     <div className="flex items-center gap-3 mb-2"><p className={labelClass}>% User Suppressed</p></div>
                     <p className={valueClass}>{formatPercent1(s.emailStatus.userSuppressedPct)}</p>
-                </div>
-                <div className={cardBase} title="Percentage with Email Marketing Consent not equal to 'NEVER_SUBSCRIBED'">
-                    <div className="flex items-center gap-3 mb-2"><p className={labelClass}>% Opt‑in Rate</p></div>
-                    <p className={valueClass}>{formatPercent1(s.emailStatus.optInPct)}</p>
                 </div>
             </div>
         </>
@@ -329,8 +361,8 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
             <div className={cardBase} title={title}>
                 <div className="flex items-center gap-3 mb-2"><p className={labelClass}>{label}</p></div>
                 <div className={`${compareValueClass}`}><span className="text-xs font-medium text-gray-500 mr-2">A:</span>{aText}</div>
-                <div className={`flex items-baseline justify-between ${compareValueClass} ${bTintClass}`}>
-                    <div><span className="text-xs font-medium text-gray-500 mr-2">B:</span>{bText}</div>
+                <div className={`flex items-baseline justify-between ${compareValueClass}`}>
+                    <div><span className="text-xs font-medium text-gray-500 mr-2">B:</span><span className={bTintClass}>{bText}</span></div>
                     <div className={`${deltaClass} ${deltaTintClass}`}>{delta.text}</div>
                 </div>
             </div>
@@ -339,6 +371,7 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
 
     const renderCompare = (a: SegmentStats, b: SegmentStats) => (
         <>
+            {/* Row 1: Revenue & Value */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 {renderCompareRow(
                     'Total Revenue',
@@ -346,14 +379,6 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                     formatCurrency2(a.totalRevenue),
                     formatCurrency2(b.totalRevenue),
                     relativeDeltaText(a.totalRevenue, b.totalRevenue),
-                    true
-                )}
-                {renderCompareRow(
-                    'Members',
-                    'Total number of profiles in the uploaded segment',
-                    a.members.toLocaleString(),
-                    b.members.toLocaleString(),
-                    relativeDeltaText(a.members, b.members),
                     true
                 )}
                 {renderCompareRow(
@@ -373,46 +398,6 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                     true
                 )}
                 {renderCompareRow(
-                    'Avg Orders per Member',
-                    'Average number of orders per member (Total Orders / Members)',
-                    a.ordersPerMember.toFixed(2),
-                    b.ordersPerMember.toFixed(2),
-                    relativeDeltaText(a.ordersPerMember, b.ordersPerMember),
-                    true
-                )}
-            </div>
-
-            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Created</span></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                {[30, 60, 90, 180].map(days => (
-                    renderCompareRow(
-                        `Created in last ${days} days`,
-                        `Profiles created in the last ${days} days (anchored to today)`,
-                        `${a.created[days].count.toLocaleString()} (${formatPercent1(a.created[days].pct)})`,
-                        `${b.created[days].count.toLocaleString()} (${formatPercent1(b.created[days].pct)})`,
-                        relativeDeltaText(a.created[days].pct, b.created[days].pct),
-                        true
-                    )
-                ))}
-            </div>
-
-            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Engaged</span></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                {[30, 90, 120, 180].map(days => (
-                    renderCompareRow(
-                        `Engaged in last ${days} days`,
-                        `Profiles with an email open or click in the last ${days} days (anchored to today)`,
-                        `${a.engaged[days].count.toLocaleString()} (${formatPercent1(a.engaged[days].pct)})`,
-                        `${b.engaged[days].count.toLocaleString()} (${formatPercent1(b.engaged[days].pct)})`,
-                        relativeDeltaText(a.engaged[days].pct, b.engaged[days].pct),
-                        true
-                    )
-                ))}
-            </div>
-
-            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Additional Metrics</span></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                {renderCompareRow(
                     'Predicted LTV Increase',
                     'Sum of Predicted Customer Lifetime Value for all profiles in this segment',
                     formatCurrency2(a.predictedLtvIncrease),
@@ -420,28 +405,15 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                     relativeDeltaText(a.predictedLtvIncrease, b.predictedLtvIncrease),
                     true
                 )}
+            </div>
+            {/* Row 2: Customer Base */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 {renderCompareRow(
-                    'Average Days Between Orders',
-                    "Average of the CSV column 'Average Days Between Orders' across profiles that have a value",
-                    a.averageDaysBetweenOrders.toFixed(1),
-                    b.averageDaysBetweenOrders.toFixed(1),
-                    relativeDeltaText(a.averageDaysBetweenOrders, b.averageDaysBetweenOrders),
-                    false // lower is better
-                )}
-                {renderCompareRow(
-                    'Non‑Suppressed',
-                    'Email Suppressions equal to [] (consent ignored)',
-                    `${a.nonSuppressed.count.toLocaleString()} (${formatPercent1(a.nonSuppressed.pct)})`,
-                    `${b.nonSuppressed.count.toLocaleString()} (${formatPercent1(b.nonSuppressed.pct)})`,
-                    relativeDeltaText(a.nonSuppressed.pct, b.nonSuppressed.pct),
-                    true
-                )}
-                {renderCompareRow(
-                    'Never Active',
-                    'Profiles with no First Active and no Last Active dates',
-                    `${a.neverActive.count.toLocaleString()} (${formatPercent1(a.neverActive.pct)})`,
-                    `${b.neverActive.count.toLocaleString()} (${formatPercent1(b.neverActive.pct)})`,
-                    relativeDeltaText(a.neverActive.pct, b.neverActive.pct),
+                    'Members',
+                    'Total number of profiles in the uploaded segment',
+                    a.members.toLocaleString(),
+                    b.members.toLocaleString(),
+                    relativeDeltaText(a.members, b.members),
                     true
                 )}
                 {renderCompareRow(
@@ -453,6 +425,26 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                     true
                 )}
                 {renderCompareRow(
+                    '% Buyers',
+                    'Buyers / Members',
+                    formatPercent1(a.buyersPct),
+                    formatPercent1(b.buyersPct),
+                    relativeDeltaText(a.buyersPct, b.buyersPct),
+                    true
+                )}
+                {renderCompareRow(
+                    '% Repeat Buyers',
+                    'Members with 2+ orders / Members',
+                    formatPercent1(a.repeatBuyersPct),
+                    formatPercent1(b.repeatBuyersPct),
+                    relativeDeltaText(a.repeatBuyersPct, b.repeatBuyersPct),
+                    true
+                )}
+            </div>
+
+            {/* Row 3: Order Behavior */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                {renderCompareRow(
                     'Total Orders',
                     'Sum of total orders across profiles in this segment',
                     a.totalOrders.toLocaleString(),
@@ -460,16 +452,78 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                     relativeDeltaText(a.totalOrders, b.totalOrders),
                     true
                 )}
+                {renderCompareRow(
+                    'Avg Orders per Member',
+                    'Average number of orders per member (Total Orders / Members)',
+                    a.ordersPerMember.toFixed(2),
+                    b.ordersPerMember.toFixed(2),
+                    relativeDeltaText(a.ordersPerMember, b.ordersPerMember),
+                    true
+                )}
+                {renderCompareRow(
+                    'Average Days Between Orders',
+                    "Average of the CSV column 'Average Days Between Orders' across profiles that have a value",
+                    a.averageDaysBetweenOrders.toFixed(1),
+                    b.averageDaysBetweenOrders.toFixed(1),
+                    relativeDeltaText(a.averageDaysBetweenOrders, b.averageDaysBetweenOrders),
+                    false // lower is better
+                )}
+                {renderCompareRow(
+                    'LTV (Repeat Buyers)',
+                    'Average lifetime revenue among repeat buyers (2+ orders)',
+                    formatCurrency2(a.ltvRepeatBuyerAvg),
+                    formatCurrency2(b.ltvRepeatBuyerAvg),
+                    relativeDeltaText(a.ltvRepeatBuyerAvg, b.ltvRepeatBuyerAvg),
+                    true
+                )}
             </div>
 
-            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Email Status</span></div>
+            {/* Row 4: Acquisition – New Profiles Created */}
+            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Acquisition – New Profiles Created</span></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                {[30, 60, 90, 120].map(days => (
+                    renderCompareRow(
+                        `Created in last ${days} days`,
+                        `Profiles created in the last ${days} days (anchored to selected date)`,
+                        `${a.created[days].count.toLocaleString()} (${formatPercent1(a.created[days].pct)})`,
+                        `${b.created[days].count.toLocaleString()} (${formatPercent1(b.created[days].pct)})`,
+                        relativeDeltaText(a.created[days].pct, b.created[days].pct),
+                        true
+                    )
+                ))}
+            </div>
+
+            {/* Row 5: Engagement – Recency Buckets */}
+            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Engagement – Recency Buckets</span></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                {[30, 60, 90, 120].map(days => (
+                    renderCompareRow(
+                        `Engaged in last ${days} days`,
+                        `Profiles with an email open or click in the last ${days} days (anchored to selected date)`,
+                        `${a.engaged[days].count.toLocaleString()} (${formatPercent1(a.engaged[days].pct)})`,
+                        `${b.engaged[days].count.toLocaleString()} (${formatPercent1(b.engaged[days].pct)})`,
+                        relativeDeltaText(a.engaged[days].pct, b.engaged[days].pct),
+                        true
+                    )
+                ))}
+            </div>
+
+            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Deliverability & List Health</span></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {renderCompareRow(
-                    '% Unsubscribed',
-                    'Email Suppressions contains UNSUBSCRIBE/UNSUBSCRIBED/GLOBAL_UNSUBSCRIBE',
-                    formatPercent1(a.emailStatus.unsubscribedPct),
-                    formatPercent1(b.emailStatus.unsubscribedPct),
-                    relativeDeltaText(a.emailStatus.unsubscribedPct, b.emailStatus.unsubscribedPct),
+                    '% Opt‑in Rate',
+                    'Percentage of profiles with Email Marketing Consent = SUBSCRIBED',
+                    formatPercent1(a.emailStatus.optInPct),
+                    formatPercent1(b.emailStatus.optInPct),
+                    relativeDeltaText(a.emailStatus.optInPct, b.emailStatus.optInPct),
+                    true
+                )}
+                {renderCompareRow(
+                    '% Not Subscribed',
+                    'Profiles that have Email Marketing Consent other than SUBSCRIBED',
+                    formatPercent1(a.emailStatus.notSubscribedPct),
+                    formatPercent1(b.emailStatus.notSubscribedPct),
+                    relativeDeltaText(a.emailStatus.notSubscribedPct, b.emailStatus.notSubscribedPct),
                     false // lower is better
                 )}
                 {renderCompareRow(
@@ -487,14 +541,6 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                     formatPercent1(b.emailStatus.userSuppressedPct),
                     relativeDeltaText(a.emailStatus.userSuppressedPct, b.emailStatus.userSuppressedPct),
                     false // lower is better
-                )}
-                {renderCompareRow(
-                    '% Opt‑in Rate',
-                    "Percentage with Email Marketing Consent not equal to 'NEVER_SUBSCRIBED'",
-                    formatPercent1(a.emailStatus.optInPct),
-                    formatPercent1(b.emailStatus.optInPct),
-                    relativeDeltaText(a.emailStatus.optInPct, b.emailStatus.optInPct),
-                    true
                 )}
             </div>
         </>
