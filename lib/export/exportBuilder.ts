@@ -147,6 +147,12 @@ export interface LlmExportJson {
       }>;
     }>;
   };
+  // Audience Growth series over selected lookback and granularity
+  audienceGrowth?: {
+    granularity: 'daily' | 'weekly' | 'monthly';
+    series: Array<{ date: string; created: number; firstActive: number; subscribed: number }>;
+    totals: { created: number; firstActive: number; subscribed: number };
+  };
 }
 
 type CorrelationValue = { r: number | null; n: number };
@@ -331,6 +337,7 @@ export async function buildLlmExportJson(params: {
         period: 'Full-month window used for full-period metrics and monthly splits (fromMonth–toMonth inclusive).',
         metrics: 'Full-month aggregated KPIs for the window; split into overall, campaigns-only, and flows-only.',
         audienceOverview: 'Snapshot from Audience Overview at export time: only profiles that can receive email (not suppressed). Includes Total Active Audience, Buyers, % of audience, Avg CLV (All), Avg CLV (Buyers).',
+        audienceGrowth: 'Daily/Weekly/Monthly counts for Created, First Active, and Subscribed over the selected lookback period; includes period totals.',
         campaignFlowSplit: 'Monthly split of revenue and emails between Campaigns vs Flows over the full-month window, plus period totals.',
         sendVolumeImpact: 'Correlation between emails sent and performance metrics across the selected lookback buckets, by segment (Campaigns/Flows).',
         campaignSendFrequency: 'KPIs by weekly send frequency buckets (1, 2, 3, 4+) over the selected lookback period; includes campaign counts.',
@@ -785,6 +792,72 @@ export async function buildLlmExportJson(params: {
         }).filter(f => (f.steps?.length || 0) > 0);
         if (flowObjs.length) {
           json.flowStepAnalysis = { granularity, disclaimer, flows: flowObjs };
+        }
+      } catch {}
+
+      // Audience Growth — series by granularity for created, firstActive, subscribed
+      try {
+        const subs = dm.getSubscribers() as any[];
+        // Filter to active audience, mirroring component logic
+        const activeSubs = subs.filter(s => (s?.emailConsent === true || s?.canReceiveEmail === true));
+
+        // Resolve range per component rules
+        let rangeStart: Date | null = null;
+        let rangeEnd: Date | null = null;
+        if (dateRange === 'custom' && customFrom && customTo) {
+          rangeStart = new Date(customFrom + 'T00:00:00');
+          rangeEnd = new Date(customTo + 'T23:59:59');
+        } else if (dateRange === 'all') {
+          const times = activeSubs.map(s => (s?.profileCreated instanceof Date ? s.profileCreated.getTime() : NaN)).filter((t: number) => Number.isFinite(t));
+          if (times.length) {
+            rangeStart = new Date(Math.min(...times));
+            rangeEnd = new Date(Math.max(...times));
+            rangeStart.setHours(0,0,0,0);
+            rangeEnd.setHours(23,59,59,999);
+          }
+        } else {
+          const days = parseInt(String(dateRange).replace('d','')) || 30;
+          const end = dm.getLastEmailDate() || new Date(); end.setHours(23,59,59,999);
+          const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0,0,0,0);
+          rangeStart = start; rangeEnd = end;
+        }
+        if (rangeStart && rangeEnd) {
+          const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          const buckets: Array<{ start: Date; created: number; firstActive: number; subscribed: number }> = [];
+          const cursor = new Date(rangeStart);
+          const push = (d: Date) => buckets.push({ start: new Date(d), created: 0, firstActive: 0, subscribed: 0 });
+          if (granularity === 'daily') {
+            while (cursor <= rangeEnd) { push(cursor); cursor.setDate(cursor.getDate()+1); }
+          } else if (granularity === 'weekly') {
+            while (cursor <= rangeEnd) { push(cursor); cursor.setDate(cursor.getDate()+7); }
+          } else {
+            while (cursor <= rangeEnd) { push(cursor); cursor.setMonth(cursor.getMonth()+1); }
+          }
+          const idxFor = (d: Date) => {
+            if (granularity === 'daily') return Math.floor((d.getTime() - rangeStart!.getTime()) / 86400000);
+            if (granularity === 'weekly') return Math.floor((d.getTime() - rangeStart!.getTime()) / (86400000*7));
+            return (d.getFullYear() - rangeStart!.getFullYear())*12 + (d.getMonth() - rangeStart!.getMonth());
+          };
+          const parseConsentDate = (raw: any): Date | null => {
+            if (!raw) return null; if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
+            const s = String(raw).trim(); if (!s || ['TRUE','FALSE','NEVER_SUBSCRIBED'].includes(s.toUpperCase())) return null;
+            const d = new Date(s); return isNaN(d.getTime()) ? null : d;
+          };
+          for (const s of activeSubs) {
+            const created: Date | null = s?.profileCreated instanceof Date ? s.profileCreated : null;
+            if (created && created >= rangeStart && created <= rangeEnd) { const i = idxFor(created); if (buckets[i]) buckets[i].created++; }
+            const first: Date | null = (s?.firstActiveRaw instanceof Date ? s.firstActiveRaw : (s?.firstActive instanceof Date ? s.firstActive : null));
+            if (first && first >= rangeStart && first <= rangeEnd) { const i = idxFor(first); if (buckets[i]) buckets[i].firstActive++; }
+            const consentDate: Date | null = (s?.emailConsentTimestamp instanceof Date ? s.emailConsentTimestamp : parseConsentDate(s?.emailConsentRaw));
+            if (consentDate && consentDate >= rangeStart && consentDate <= rangeEnd) {
+              const i = idxFor(consentDate); if (buckets[i]) buckets[i].subscribed++;
+            } else if (s?.emailConsent === true && created && created >= rangeStart && created <= rangeEnd) {
+              const i = idxFor(created); if (buckets[i]) buckets[i].subscribed++;
+            }
+          }
+          const series = buckets.map(b => ({ date: fmt(b.start), created: b.created, firstActive: b.firstActive, subscribed: b.subscribed }));
+          const totals = series.reduce((acc, p) => { acc.created += p.created; acc.firstActive += p.firstActive; acc.subscribed += p.subscribed; return acc; }, { created: 0, firstActive: 0, subscribed: 0 });
+          json.audienceGrowth = { granularity, series, totals };
         }
       } catch {}
     }
