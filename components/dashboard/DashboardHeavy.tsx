@@ -122,31 +122,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [showCustomDateModal, setShowCustomDateModal] = useState(false);
     const [exportBusy, setExportBusy] = useState(false);
 
-    const handleExportJson = useCallback(async () => {
-        try {
-            setExportBusy(true);
-            const payload = await buildLlmExportJson({
-                dateRange,
-                granularity,
-                compareMode,
-                customFrom,
-                customTo
-            });
-            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-            const ts = new Date();
-            const pad = (n: number) => String(n).padStart(2, '0');
-            const fname = `email-metrics-export-${ts.getFullYear()}${pad(ts.getMonth() + 1)}${pad(ts.getDate())}-${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}.json`;
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-        } catch (err) {
-            console.error('JSON export failed', err);
-            alert('Sorry, the JSON export failed. Please try again.');
-        } finally {
-            setExportBusy(false);
-        }
-    }, [dateRange, granularity, compareMode, customFrom, customTo]);
-
     // Granularity validation logic
     const totalDays = useMemo(() => {
         if (dateRange === 'custom' && customActive) {
@@ -204,6 +179,45 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [selectedAccountId, setSelectedAccountId] = useState<string>('');
     // Human readable label for currently selected admin account
     const [selectedAccountLabel, setSelectedAccountLabel] = useState<string>('');
+    const handleExportJson = useCallback(async () => {
+        try {
+            setExportBusy(true);
+            // Determine account name/url based on context
+            let accountName: string | undefined = businessName;
+            let accountUrl: string | undefined;
+            if (isAdmin) {
+                const a = (allAccounts || []).find(x => x.id === selectedAccountId);
+                accountName = a?.businessName || a?.label || accountName;
+                accountUrl = a?.storeUrl || undefined;
+            } else {
+                try {
+                    const session = (await supabase.auth.getSession()).data.session;
+                    const rawUrl = (session?.user?.user_metadata as any)?.storeUrl as string | undefined;
+                    accountUrl = rawUrl || undefined;
+                } catch { /* ignore */ }
+            }
+            const payload = await buildLlmExportJson({
+                dateRange,
+                granularity,
+                compareMode,
+                customFrom,
+                customTo,
+                account: { name: accountName || undefined, url: accountUrl || undefined }
+            });
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const ts = new Date();
+            const pad = (n: number) => String(n).padStart(2, '0');
+            const fname = `email-metrics-export-${ts.getFullYear()}${pad(ts.getMonth() + 1)}${pad(ts.getDate())}-${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}.json`;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('JSON export failed', err);
+            alert('Sorry, the JSON export failed. Please try again.');
+        } finally {
+            setExportBusy(false);
+        }
+    }, [dateRange, granularity, compareMode, customFrom, customTo, businessName, isAdmin, allAccounts, selectedAccountId]);
     // Debug state for link errors
     const [linkDebugInfo, setLinkDebugInfo] = useState<string | null>(null);
 
@@ -245,6 +259,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 const list = (j.accounts || []).map((a: any) => ({
                                     id: a.id,
                                     businessName: a.businessName || null,
+                                    storeUrl: a.storeUrl || null,
                                     label: a.label || a.businessName || a.id?.slice(0, 8) || 'Account'
                                 }));
                                 setAllAccounts(list);

@@ -11,7 +11,7 @@ import { computeDeadWeightSavings } from "../analytics/deadWeightSavings";
 export interface LlmExportJson {
   // Metadata about this export and helpful descriptions
   meta?: {
-    account?: { name: string; url?: string };
+    account?: { name?: string; url?: string };
     moduleDescriptions?: Record<string, string>;
     kpiDescriptions?: Record<string, string>;
     conversionRateDefinition?: string; // placed orders divided by clicks
@@ -277,9 +277,21 @@ export async function buildLlmExportJson(params: {
   compareMode: "prev-period" | "prev-year";
   customFrom?: string;
   customTo?: string;
+  account?: { name?: string | null; url?: string | null };
 }): Promise<LlmExportJson> {
   const dm = DataManager.getInstance();
   const { dateRange, customFrom, customTo, granularity } = params as any;
+  const acct = (params as any).account as { name?: string | null; url?: string | null } | undefined;
+  const normalizeUrl = (u?: string | null): string | undefined => {
+    if (!u) return undefined;
+    let v = String(u).trim();
+    if (!v) return undefined;
+    // If user stored just the domain (recommended), add https://
+    if (!/^https?:\/\//i.test(v)) v = `https://${v}`;
+    // Strip trailing slashes for cleanliness
+    v = v.replace(/\/$/, '');
+    return v;
+  };
 
   // Resolve window then trim to full months
   const resolved = dm.getResolvedDateRange(dateRange, customFrom, customTo);
@@ -372,7 +384,7 @@ export async function buildLlmExportJson(params: {
   // Build base JSON
   const json: LlmExportJson = {
     meta: {
-      account: { name: 'Trail Grid Pro', url: 'https://www.trailgridpro.com' },
+      account: { name: acct?.name ?? undefined, url: normalizeUrl(acct?.url) },
       conversionRateDefinition: 'Conversion Rate (%) = placed orders divided by clicks',
       generatedAt: new Date().toISOString(),
       moduleDescriptions: {
