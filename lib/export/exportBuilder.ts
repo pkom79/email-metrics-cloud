@@ -16,6 +16,14 @@ export interface LlmExportJson {
     conversionRateDefinition?: string; // placed orders divided by clicks
     generatedAt?: string; // ISO timestamp
   };
+  // Audience Overview snapshot at export time (only profiles that can receive emails, i.e., not suppressed)
+  audienceOverview?: {
+    totalActiveAudience: number;
+    buyers: number;
+    buyersPctOfAudience: number; // 0-100
+    avgClvAll: number;
+    avgClvBuyers: number;
+  };
   // ISO YYYY-MM range of full months included
   period: { fromMonth: string | null; toMonth: string | null; months: number };
   // Aggregated values for the full-month window
@@ -322,6 +330,7 @@ export async function buildLlmExportJson(params: {
       moduleDescriptions: {
         period: 'Full-month window used for full-period metrics and monthly splits (fromMonth–toMonth inclusive).',
         metrics: 'Full-month aggregated KPIs for the window; split into overall, campaigns-only, and flows-only.',
+        audienceOverview: 'Snapshot from Audience Overview at export time: only profiles that can receive email (not suppressed). Includes Total Active Audience, Buyers, % of audience, Avg CLV (All), Avg CLV (Buyers).',
         campaignFlowSplit: 'Monthly split of revenue and emails between Campaigns vs Flows over the full-month window, plus period totals.',
         sendVolumeImpact: 'Correlation between emails sent and performance metrics across the selected lookback buckets, by segment (Campaigns/Flows).',
         campaignSendFrequency: 'KPIs by weekly send frequency buckets (1, 2, 3, 4+) over the selected lookback period; includes campaign counts.',
@@ -351,6 +360,21 @@ export async function buildLlmExportJson(params: {
       emailsSent: mkSplit('emailsSent'),
     },
   };
+
+  // Audience Overview snapshot (unsuppressed profiles only)
+  try {
+    const subs = dm.getSubscribers() as any[];
+    const active = subs.filter(s => (s?.canReceiveEmail === true));
+    const totalActiveAudience = active.length;
+    const buyersArr = active.filter(s => s?.isBuyer);
+    const buyers = buyersArr.length;
+    const buyersPctOfAudience = totalActiveAudience > 0 ? (buyers / totalActiveAudience) * 100 : 0;
+    const sumClvAll = active.reduce((sum, s) => sum + (s?.totalClv || 0), 0);
+    const avgClvAll = totalActiveAudience > 0 ? (sumClvAll / totalActiveAudience) : 0;
+    const sumClvBuyers = buyersArr.reduce((sum, s) => sum + (s?.totalClv || 0), 0);
+    const avgClvBuyers = buyers > 0 ? (sumClvBuyers / buyers) : 0;
+    json.audienceOverview = { totalActiveAudience, buyers, buyersPctOfAudience, avgClvAll, avgClvBuyers };
+  } catch {}
 
   // Send Volume Impact: correlations across selected period buckets by segment
   try {
