@@ -50,6 +50,7 @@ const CustomSegmentBlock: React.FC = () => {
 
     // Helpers and formatting
     const now = useMemo(() => new Date(), []);
+    const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local time', []);
     const formatCurrency2 = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const formatPercent1 = (value: number) => `${value.toFixed(1)}%`;
 
@@ -59,6 +60,7 @@ const CustomSegmentBlock: React.FC = () => {
         members: number;
         aov: number; // totalRevenue / totalOrders
         revenuePerMember: number; // totalRevenue / members
+        ordersPerMember: number; // totalOrders / members
         buyers: number;
         totalOrders: number;
         predictedLtvIncrease: number;
@@ -83,6 +85,7 @@ const CustomSegmentBlock: React.FC = () => {
         const buyers = subs.filter(s => s.isBuyer).length;
         const aov = totalOrders > 0 ? totalRevenue / totalOrders : 0;
         const revenuePerMember = members > 0 ? totalRevenue / members : 0;
+        const ordersPerMember = members > 0 ? totalOrders / members : 0;
         const predictedLtvIncrease = sum(subs, s => s.predictedClv || 0);
 
         const avgDaysValues = subs.map(s => (s.avgDaysBetweenOrders ?? null)).filter((v): v is number => v !== null && !isNaN(v));
@@ -134,6 +137,7 @@ const CustomSegmentBlock: React.FC = () => {
             members,
             aov,
             revenuePerMember,
+            ordersPerMember,
             buyers,
             totalOrders,
             predictedLtvIncrease,
@@ -151,8 +155,39 @@ const CustomSegmentBlock: React.FC = () => {
         };
     };
 
-    const statsA = useMemo(() => (segmentASubscribers.length ? computeStats(segmentASubscribers) : null), [segmentASubscribers]);
-    const statsB = useMemo(() => (segmentBSubscribers.length ? computeStats(segmentBSubscribers) : null), [segmentBSubscribers]);
+    // Created absolute date range filter (account timezone - using local browser timezone here)
+    const [createdFrom, setCreatedFrom] = useState<string>(''); // YYYY-MM-DD
+    const [createdTo, setCreatedTo] = useState<string>('');     // YYYY-MM-DD
+
+    const parseBoundary = (d: string | undefined | null, endOfDay = false): Date | null => {
+        if (!d) return null;
+        // Interpret the date as local timezone midnight/start or end of day
+        const [y, m, day] = d.split('-').map(Number);
+        if (!y || !m || !day) return null;
+        if (endOfDay) {
+            return new Date(y, m - 1, day, 23, 59, 59, 999);
+        }
+        return new Date(y, m - 1, day, 0, 0, 0, 0);
+    };
+
+    const filterByCreatedRange = (subs: ProcessedSubscriber[]): ProcessedSubscriber[] => {
+        const fromDate = parseBoundary(createdFrom, false);
+        const toDate = parseBoundary(createdTo, true);
+        if (!fromDate && !toDate) return subs;
+        return subs.filter(s => {
+            const created = s.profileCreated instanceof Date ? s.profileCreated : null;
+            if (!created) return false;
+            if (fromDate && created < fromDate) return false;
+            if (toDate && created > toDate) return false;
+            return true;
+        });
+    };
+
+    const filteredA = useMemo(() => filterByCreatedRange(segmentASubscribers), [segmentASubscribers, createdFrom, createdTo]);
+    const filteredB = useMemo(() => filterByCreatedRange(segmentBSubscribers), [segmentBSubscribers, createdFrom, createdTo]);
+
+    const statsA = useMemo(() => (filteredA.length ? computeStats(filteredA) : null), [filteredA]);
+    const statsB = useMemo(() => (filteredB.length ? computeStats(filteredB) : null), [filteredB]);
 
     const relativeDeltaText = (a: number, b: number): { text: string; value?: number; isNA: boolean } => {
         if (a === 0) {
@@ -242,6 +277,10 @@ const CustomSegmentBlock: React.FC = () => {
                     <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Total Orders</p></div>
                     <p className={valueClass}>{s.totalOrders.toLocaleString()}</p>
                 </div>
+                <div className={cardBase} title="Average number of orders per member (Total Orders / Members)">
+                    <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Avg Orders per Member</p></div>
+                    <p className={valueClass}>{s.ordersPerMember.toFixed(2)}</p>
+                </div>
             </div>
 
             <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Email Status</span></div>
@@ -275,8 +314,10 @@ const CustomSegmentBlock: React.FC = () => {
             <div className={cardBase} title={title}>
                 <div className="flex items-center gap-3 mb-2"><p className={labelClass}>{label}</p></div>
                 <div className={`${valueClass}`}><span className="text-xs font-medium text-gray-500 mr-2">A:</span>{aText}</div>
-                <div className={`${valueClass} ${bTintClass}`}><span className="text-xs font-medium text-gray-500 mr-2">B:</span>{bText}</div>
-                <div className={`${deltaClass} mt-2 ${deltaTintClass}`}>{delta.text}</div>
+                <div className={`flex items-baseline justify-between ${valueClass} ${bTintClass}`}>
+                    <div><span className="text-xs font-medium text-gray-500 mr-2">B:</span>{bText}</div>
+                    <div className={`${deltaClass} ${deltaTintClass}`}>{delta.text}</div>
+                </div>
             </div>
         );
     };
@@ -314,6 +355,14 @@ const CustomSegmentBlock: React.FC = () => {
                     formatCurrency2(a.revenuePerMember),
                     formatCurrency2(b.revenuePerMember),
                     relativeDeltaText(a.revenuePerMember, b.revenuePerMember),
+                    true
+                )}
+                {renderCompareRow(
+                    'Avg Orders per Member',
+                    'Average number of orders per member (Total Orders / Members)',
+                    a.ordersPerMember.toFixed(2),
+                    b.ordersPerMember.toFixed(2),
+                    relativeDeltaText(a.ordersPerMember, b.ordersPerMember),
                     true
                 )}
             </div>
@@ -450,6 +499,28 @@ const CustomSegmentBlock: React.FC = () => {
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
                     Upload one or two subscriber CSVs to analyze growth, engagement recency, deliverability, opt‑in rate, and revenue indicators such as Predicted LTV and AOV. With two uploads, Segment B is compared to Segment A.
                 </p>
+                <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-2">
+                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Filter by Created date</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Timezone: {timezone}</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                        <div className="flex flex-col gap-1">
+                            <label className="text-sm font-medium text-gray-700 dark:text-gray-200">From</label>
+                            <input type="date" value={createdFrom} onChange={e => setCreatedFrom(e.target.value)} className="h-9 px-3 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-sm font-medium text-gray-700 dark:text-gray-200">To</label>
+                            <input type="date" value={createdTo} onChange={e => setCreatedTo(e.target.value)} className="h-9 px-3 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                        </div>
+                        <div className="flex gap-2">
+                            <button type="button" onClick={() => { setCreatedFrom(''); setCreatedTo(''); }} className="h-9 px-3 rounded-lg text-sm font-medium border bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-700">
+                                Clear
+                            </button>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 self-center">Applies to both segments and all metrics</div>
+                        </div>
+                    </div>
+                </div>
                 <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex flex-col gap-2">
                         <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Segment A</label>
