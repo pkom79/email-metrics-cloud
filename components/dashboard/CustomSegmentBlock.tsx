@@ -61,6 +61,15 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
     const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local time', []);
     const formatCurrency2 = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const formatPercent1 = (value: number) => `${value.toFixed(1)}%`;
+    // Delta percent formatting: keep 1 decimal up to 99.9%; at >= 100% drop decimals and add grouping (e.g., 1,234%)
+    const formatDeltaPercent = (value: number) => {
+        const abs = Math.abs(value);
+        if (abs >= 100) {
+            const rounded = Math.round(value);
+            return `${rounded.toLocaleString()}%`;
+        }
+        return `${value.toFixed(1)}%`;
+    };
 
     type WindowStat = { count: number; pct: number };
     type SegmentStats = {
@@ -229,7 +238,7 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
             return { text: 'N/A (no baseline)', isNA: true };
         }
         const v = ((b - a) / a) * 100;
-        return { text: formatPercent1(v), value: v, isNA: false };
+        return { text: formatDeltaPercent(v), value: v, isNA: false };
     };
 
     const deltaColor = (value: number | undefined, favorableWhenHigher: boolean): string => {
