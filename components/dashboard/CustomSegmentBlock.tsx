@@ -1,10 +1,9 @@
 "use client";
 import React, { useState } from 'react';
-import { Users, DollarSign, Calendar, TrendingUp, UploadCloud, Info, Mail, AlertTriangle, ThumbsUp, Clock, CalendarPlus, MailCheck, Moon } from 'lucide-react';
+import { UploadCloud, ListChecks } from 'lucide-react';
 import Papa from 'papaparse';
 import { ProcessedSubscriber } from '../../lib/data/dataTypes';
 import { SubscriberTransformer } from '../../lib/data/transformers/subscriberTransformer';
-import InfoTooltipIcon from '../InfoTooltipIcon';
 
 const CustomSegmentBlock: React.FC = () => {
     const [segmentSubscribers, setSegmentSubscribers] = useState<ProcessedSubscriber[]>([]);
@@ -116,18 +115,7 @@ const CustomSegmentBlock: React.FC = () => {
         <div className="mt-8">
             <div className="flex items-center gap-3 mb-4">
                 <UploadCloud className="w-6 h-6 text-purple-600" />
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Analyze Custom Segment
-                    <InfoTooltipIcon placement="bottom-start" content={(
-                        <div>
-                            <p className="font-semibold mb-1">What</p>
-                            <p>Upload a CSV for a segment and get quick performance indicators.</p>
-                            <p className="font-semibold mt-2 mb-1">How</p>
-                            <p>We parse the file and compute counts, revenue, engagement recency, and risk markers just for this audience.</p>
-                            <p className="font-semibold mt-2 mb-1">Why</p>
-                            <p>Validate a list before you mail it or decide who to target with flows and campaigns.</p>
-                        </div>
-                    )} />
-                </h2>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Analyze Custom Segment</h2>
             </div>
 
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-8 mb-8 hover:shadow-xl transition-all duration-200">
@@ -136,7 +124,6 @@ const CustomSegmentBlock: React.FC = () => {
                 </p>
                 <div className="mb-4 flex items-center gap-3 flex-wrap">
                     <label htmlFor={fileInputId} className="inline-flex items-center px-3 py-2 rounded-lg cursor-pointer border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:border-purple-500" title="Choose a CSV file">
-                        <UploadCloud className="w-4 h-4 mr-2" />
                         Choose File
                     </label>
                     <input id={fileInputId} type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
@@ -151,35 +138,31 @@ const CustomSegmentBlock: React.FC = () => {
                 {segmentSubscribers.length > 0 && (
                     <div>
                         <div className="flex items-center gap-2 mb-4">
-                            <Users className="w-5 h-5 text-purple-600" />
+                            <ListChecks className="w-5 h-5 text-purple-600" />
                             <span className="text-lg font-semibold break-all text-gray-900 dark:text-gray-100">{segmentName}</span>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                             <div className={cardBase} title="Sum of Historic Customer Lifetime Value for all members in the segment">
                                 <div className="flex items-center gap-3 mb-2">
-                                    <DollarSign className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>Total Revenue</p>
                                 </div>
                                 <p className={valueClass}>{totalRevenue.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}</p>
                             </div>
                             <div className={cardBase} title="Total number of profiles in the uploaded segment">
                                 <div className="flex items-center gap-3 mb-2">
-                                    <Users className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>Members</p>
                                 </div>
                                 <p className={valueClass}>{segmentSubscribers.length.toLocaleString()}</p>
                             </div>
                             <div className={cardBase} title="Average Order Value across all orders in this segment (Total Revenue / Total Orders)">
                                 <div className="flex items-center gap-3 mb-2">
-                                    <TrendingUp className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>AOV</p>
                                 </div>
                                 <p className={valueClass}>{aovPerBuyer.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}</p>
                             </div>
                             <div className={cardBase} title="Average revenue contributed by each member (Total Revenue / Members)">
                                 <div className="flex items-center gap-3 mb-2">
-                                    <DollarSign className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>Revenue per Member</p>
                                 </div>
                                 <p className={valueClass}>{revenuePerMember.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}</p>
@@ -187,7 +170,6 @@ const CustomSegmentBlock: React.FC = () => {
                         </div>
 
                         <div className="mb-2 flex items-center gap-2">
-                            <CalendarPlus className="w-4 h-4 text-purple-600" />
                             <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Created</span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -197,7 +179,6 @@ const CustomSegmentBlock: React.FC = () => {
                                 return (
                                     <div key={`created-${days}`} className={cardBase} title={title}>
                                         <div className="flex items-center gap-3 mb-2">
-                                            <CalendarPlus className="w-5 h-5 text-purple-600" />
                                             <p className={labelClass}>Created in last {days} days</p>
                                         </div>
                                         <p className={valueClass}>{count.toLocaleString()} ({formatPercent(percent(count))})</p>
@@ -207,7 +188,6 @@ const CustomSegmentBlock: React.FC = () => {
                         </div>
 
                         <div className="mb-2 flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-purple-600" />
                             <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Engaged</span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -216,7 +196,6 @@ const CustomSegmentBlock: React.FC = () => {
                                 return (
                                     <div key={`engaged-${days}`} className={cardBase} title={`Profiles with an email open or click in the last ${days} days (anchored to most recent email activity on ${anchorActivityDate.toLocaleDateString()})`}>
                                         <div className="flex items-center gap-3 mb-2">
-                                            <Calendar className="w-5 h-5 text-purple-600" />
                                             <p className={labelClass}>Engaged in last {days} days</p>
                                         </div>
                                         <p className={valueClass}>{count.toLocaleString()} ({formatPercent(percent(count))})</p>
@@ -226,34 +205,29 @@ const CustomSegmentBlock: React.FC = () => {
                         </div>
 
                         <div className="mb-2 flex items-center gap-2">
-                            <span className="text-gray-400 dark:text-gray-400"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block align-middle"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg></span>
                             <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Additional Metrics</span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                             <div className={cardBase} title="Sum of Predicted Customer Lifetime Value for all profiles in this segment">
                                 <div className="flex items-center gap-3 mb-2">
-                                    <DollarSign className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>Predicted LTV Increase</p>
                                 </div>
                                 <p className={valueClass}>{predictedLtvIncrease.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 })}</p>
                             </div>
                             <div className={cardBase} title="Average of the CSV column 'Average Days Between Orders' across profiles that have a value">
                                 <div className="flex items-center gap-3 mb-2">
-                                    <Clock className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>Average Days Between Orders</p>
                                 </div>
                                 <p className={valueClass}>{averageDaysBetweenOrders.toFixed(2)}</p>
                             </div>
                             <div className={cardBase} title="Email Suppressions equal to [] (consent ignored)">
                                 <div className="flex items-center gap-3 mb-2">
-                                    <MailCheck className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>Non‑Suppressed</p>
                                 </div>
                                 <p className={valueClass}>{nonSuppressedCount.toLocaleString()} ({formatPercent(percent(nonSuppressedCount))})</p>
                             </div>
                             <div className={cardBase} title="Profiles with no First Active and no Last Active dates">
                                 <div className="flex items-center gap-3 mb-2">
-                                    <Moon className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>Never Active</p>
                                 </div>
                                 <p className={valueClass}>{neverActiveCount.toLocaleString()} ({formatPercent(percent(neverActiveCount))})</p>
@@ -261,34 +235,29 @@ const CustomSegmentBlock: React.FC = () => {
                         </div>
 
                         <div className="mb-2 flex items-center gap-2">
-                            <Mail className="w-4 h-4 text-purple-600" />
                             <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Email Status</span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div className={cardBase} title="Email Suppressions contains UNSUBSCRIBE/UNSUBSCRIBED/GLOBAL_UNSUBSCRIBE">
                                 <div className="flex items-center gap-3 mb-2">
-                                    <AlertTriangle className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>% Unsubscribed</p>
                                 </div>
                                 <p className={valueClass}>{formatPercent(percent(unsubscribedCount))}</p>
                             </div>
                             <div className={cardBase} title="Email Suppressions contains SPAM_COMPLAINT/MARKED_AS_SPAM/SPAM">
                                 <div className="flex items-center gap-3 mb-2">
-                                    <AlertTriangle className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>% Spam Complaint</p>
                                 </div>
                                 <p className={valueClass}>{formatPercent(percent(spamComplaintCount))}</p>
                             </div>
                             <div className={cardBase} title="Email Suppressions contains USER_SUPPRESSED/SUPPRESSED/MANUAL_SUPPRESSION">
                                 <div className="flex items-center gap-3 mb-2">
-                                    <AlertTriangle className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>% User Suppressed</p>
                                 </div>
                                 <p className={valueClass}>{formatPercent(percent(userSuppressedCount))}</p>
                             </div>
                             <div className={cardBase} title="Percentage with Email Marketing Consent not equal to 'NEVER_SUBSCRIBED'">
                                 <div className="flex items-center gap-3 mb-2">
-                                    <ThumbsUp className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>% Opt‑in Rate</p>
                                 </div>
                                 <p className={valueClass}>{formatPercent(percent(optInCount))}</p>
