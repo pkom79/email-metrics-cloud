@@ -257,6 +257,7 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
 
     const renderSingleCards = (s: SegmentStats) => (
         <>
+            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Revenue & Value</span></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 <div className={cardBase} title="Sum of Historic Customer Lifetime Value for all members in the segment">
                     <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Total Revenue</p></div>
@@ -277,6 +278,7 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
             </div>
 
             {/* Row 2: Customer Base */}
+            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Customer Base</span></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 <div className={cardBase} title="Total number of profiles in the uploaded segment">
                     <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Members</p></div>
@@ -297,6 +299,7 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
             </div>
 
             {/* Row 3: Order Behavior */}
+            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Order Behavior</span></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 <div className={cardBase} title="Sum of total orders across profiles in this segment">
                     <div className="flex items-center gap-3 mb-2"><p className={labelClass}>Total Orders</p></div>
@@ -317,7 +320,7 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
             </div>
 
             {/* Row 4: Acquisition – New Profiles Created */}
-            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Acquisition – New Profiles Created</span></div>
+            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Acquisition</span></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 {[30, 60, 90, 120].map(days => (
                     <div key={`created-${days}`} className={cardBase} title={`Profiles created in the last ${days} days (anchored to selected date)`}>
@@ -328,7 +331,7 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
             </div>
 
             {/* Row 5: Engagement – Recency Buckets */}
-            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Engagement – Recency Buckets</span></div>
+            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Engagement</span></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 {[30, 60, 90, 120].map(days => (
                     <div key={`engaged-${days}`} className={cardBase} title={`Profiles with an email open or click in the last ${days} days (anchored to selected date)`}>
@@ -381,6 +384,7 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
     const renderCompare = (a: SegmentStats, b: SegmentStats) => (
         <>
             {/* Row 1: Revenue & Value */}
+            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Revenue & Value</span></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 {renderCompareRow(
                     'Total Revenue',
@@ -416,6 +420,7 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                 )}
             </div>
             {/* Row 2: Customer Base */}
+            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Customer Base</span></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 {renderCompareRow(
                     'Members',
@@ -452,6 +457,7 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
             </div>
 
             {/* Row 3: Order Behavior */}
+            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Order Behavior</span></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 {renderCompareRow(
                     'Total Orders',
@@ -487,8 +493,8 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                 )}
             </div>
 
-            {/* Row 4: Acquisition – New Profiles Created */}
-            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Acquisition – New Profiles Created</span></div>
+            {/* Row 4: Acquisition */}
+            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Acquisition</span></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 {[30, 60, 90, 120].map(days => (
                     renderCompareRow(
@@ -502,8 +508,8 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                 ))}
             </div>
 
-            {/* Row 5: Engagement – Recency Buckets */}
-            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Engagement – Recency Buckets</span></div>
+            {/* Row 5: Engagement */}
+            <div className="mb-2 flex items-center gap-2"><span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Engagement</span></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                 {[30, 60, 90, 120].map(days => (
                     renderCompareRow(
