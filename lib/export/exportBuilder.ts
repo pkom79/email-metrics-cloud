@@ -6,6 +6,7 @@ import { computeCampaignSendFrequency } from "../analytics/campaignSendFrequency
 import { computeSubjectAnalysis } from "../analytics/subjectAnalysis";
 import { computeCampaignGapsAndLosses } from "../analytics/campaignGapsLosses";
 import type { AggregatedMetrics } from "../data/dataTypes";
+import { computeDeadWeightSavings } from "../analytics/deadWeightSavings";
 
 export interface LlmExportJson {
   // Metadata about this export and helpful descriptions
@@ -180,6 +181,19 @@ export interface LlmExportJson {
   inactivityRevenueDrain?: {
     buckets: Array<{ label: '30-59 days' | '60-89 days' | '90-119 days' | '120+ days'; percentage: number; revenue: number }>;
     totals: { totalClv: number; dormantClv: number; dormantPct: number };
+  };
+  // Dead Weight Audience: size, percent of audience, projected size after purge, and Klaviyo pricing savings
+  deadWeightAudience?: {
+    audienceSize: number;
+    deadWeightCount: number;
+    deadWeightPct: number; // 0-100
+    projectedAudienceSize: number;
+    currentMonthlyPrice: number | null;
+    projectedMonthlyPrice: number | null;
+    monthlySavings: number | null;
+    annualSavings: number | null;
+    usedCustomPricingEstimate?: boolean;
+    note?: string;
   };
 }
 
@@ -381,6 +395,8 @@ export async function buildLlmExportJson(params: {
         ,
         engagementByProfileAge: 'For profile age segments (0–6m, 6–12m, 1–2y, 2+y), shows the segment size and the row-normalized percentage split across last engagement windows (0–30, 31–60, 61–90, 91–120, 120+ days, Never engaged).',
         inactivityRevenueDrain: 'Share of total CLV sitting in inactive subscribers by last engagement recency buckets (30–59, 60–89, 90–119, 120+ days). Includes Total CLV and Dormant CLV totals with percentage.'
+        ,
+        deadWeightAudience: 'Dead‑weight audience (never engaged or long inactive) and the estimated monthly Klaviyo plan savings if suppressed. Includes current list size, projected size after purge, and note when no savings apply.'
       },
       kpiDescriptions: {
         zeroCampaignSendWeeks: 'Number of complete weeks in the selected range with no campaign sends.',
@@ -657,6 +673,47 @@ export async function buildLlmExportJson(params: {
       json.inactivityRevenueDrain = {
         buckets: defs.map(b => ({ label: b.label as any, percentage: totalClv > 0 ? (b.clv / totalClv) * 100 : 0, revenue: b.clv })),
         totals: { totalClv, dormantClv, dormantPct: totalClv > 0 ? (dormantClv / totalClv) * 100 : 0 }
+      };
+    }
+  } catch {}
+
+  // Dead Weight Audience: audience size, percent of list, projected size after purge, and monthly Klaviyo savings
+  try {
+    const summary = computeDeadWeightSavings();
+    if (summary) {
+      const {
+        currentSubscribers,
+        deadWeightCount,
+        projectedSubscribers,
+        currentMonthlyPrice,
+        projectedMonthlyPrice,
+        monthlySavings,
+        annualSavings,
+        usedCustomPricingEstimate
+      } = summary;
+      const deadWeightPct = currentSubscribers > 0 ? (deadWeightCount / currentSubscribers) * 100 : 0;
+      let note: string | undefined;
+      let monthlySavingsOut: number | null | undefined = monthlySavings;
+      let annualSavingsOut: number | null | undefined = annualSavings;
+      if (usedCustomPricingEstimate) {
+        // Mirror dashboard: on custom tiers (>250k), we do not show estimated savings
+        note = 'Custom pricing tier (>250k). Savings not calculated.';
+        monthlySavingsOut = null;
+        annualSavingsOut = null;
+      } else if (!monthlySavings || monthlySavings <= 0) {
+        note = 'No savings detected — you are not overpaying for your Klaviyo plan. It can still be a good idea to suppress long‑inactive profiles for list hygiene.';
+      }
+      json.deadWeightAudience = {
+        audienceSize: currentSubscribers,
+        deadWeightCount,
+        deadWeightPct,
+        projectedAudienceSize: projectedSubscribers,
+        currentMonthlyPrice,
+        projectedMonthlyPrice,
+        monthlySavings: monthlySavingsOut ?? monthlySavings ?? null,
+        annualSavings: annualSavingsOut ?? annualSavings ?? null,
+        usedCustomPricingEstimate,
+        note,
       };
     }
   } catch {}
