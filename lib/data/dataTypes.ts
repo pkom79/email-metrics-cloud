@@ -75,6 +75,7 @@ export interface ProcessedSubscriber {
     // Parsed consent timestamp (if provided) to distinguish organic subscription timing
     emailConsentTimestamp?: Date | null;
     totalClv: number;
+    historicClv?: number;
     predictedClv: number;
     avgOrderValue: number;
     totalOrders: number;
@@ -171,6 +172,7 @@ export interface RawSubscriberCSV {
     'IP Address'?: string;
     'Email Marketing Consent': string;
     'Email Marketing Consent Timestamp'?: string;
+    'Historic Customer Lifetime Value'?: string | number;
     'Total Customer Lifetime Value'?: string | number;
     'Predicted Customer Lifetime Value'?: string | number;
     'Average Order Value'?: string | number;

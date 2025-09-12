@@ -411,9 +411,9 @@ export async function buildLlmExportJson(params: {
     const buyersArr = active.filter(s => s?.isBuyer);
     const buyers = buyersArr.length;
     const buyersPctOfAudience = totalActiveAudience > 0 ? (buyers / totalActiveAudience) * 100 : 0;
-    const sumClvAll = active.reduce((sum, s) => sum + (s?.totalClv || 0), 0);
+  const sumClvAll = active.reduce((sum, s) => sum + ((s?.historicClv ?? s?.totalClv) || 0), 0);
     const avgClvAll = totalActiveAudience > 0 ? (sumClvAll / totalActiveAudience) : 0;
-    const sumClvBuyers = buyersArr.reduce((sum, s) => sum + (s?.totalClv || 0), 0);
+  const sumClvBuyers = buyersArr.reduce((sum, s) => sum + ((s?.historicClv ?? s?.totalClv) || 0), 0);
     const avgClvBuyers = buyers > 0 ? (sumClvBuyers / buyers) : 0;
     json.audienceOverview = { totalActiveAudience, buyers, buyersPctOfAudience, avgClvAll, avgClvBuyers };
   } catch {}
@@ -459,7 +459,7 @@ export async function buildLlmExportJson(params: {
   try {
     const subs = dm.getSubscribers() as any[];
     const ai = dm.getAudienceInsights() as any;
-    const aov = Number(ai?.avgClvBuyers) || 0;
+  const aov = Number(ai?.avgClvBuyers) || 0;
     if (aov > 0 && subs.length > 0) {
       const segments = [
         { label: '2x AOV' as const, multiplier: 2 as const, customers: 0, revenue: 0 },
@@ -467,9 +467,10 @@ export async function buildLlmExportJson(params: {
         { label: '6x AOV' as const, multiplier: 6 as const, customers: 0, revenue: 0 },
       ];
       subs.forEach(s => {
-        if (s?.isBuyer && (s?.totalClv || 0) > 0) {
+        const h = (s?.historicClv ?? s?.totalClv) || 0;
+        if (s?.isBuyer && h > 0) {
           segments.forEach(seg => {
-            if ((s.totalClv || 0) >= seg.multiplier * aov) { seg.customers++; seg.revenue += s.totalClv; }
+            if (h >= seg.multiplier * aov) { seg.customers++; seg.revenue += h; }
           });
         }
       });
@@ -642,9 +643,9 @@ export async function buildLlmExportJson(params: {
         { key: '90_119', label: '90-119 days', min: 90, max: 119, clv: 0, count: 0 },
         { key: '120_plus', label: '120+ days', min: 120, max: Infinity, clv: 0, count: 0 },
       ];
-      let totalClv = 0;
+  let totalClv = 0;
       for (const s of subs) {
-        const clv = Number(s?.totalClv) || 0; if (clv <= 0) continue; totalClv += clv;
+  const clv = Number((s?.historicClv ?? s?.totalClv) || 0); if (clv <= 0) continue; totalClv += clv;
         const lastOpen: Date | null = s?.lastOpen instanceof Date ? s.lastOpen : null;
         const lastClick: Date | null = s?.lastClick instanceof Date ? s.lastClick : null;
         const last: Date | null = (lastOpen && lastClick) ? (lastOpen > lastClick ? lastOpen : lastClick) : (lastOpen || lastClick);

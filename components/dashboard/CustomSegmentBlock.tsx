@@ -33,7 +33,7 @@ const CustomSegmentBlock: React.FC = () => {
         });
     };
 
-    const totalRevenue = segmentSubscribers.reduce((sum, sub) => sum + (sub.totalClv || 0), 0);
+    const totalRevenue = segmentSubscribers.reduce((sum, sub) => sum + ((sub.historicClv ?? sub.totalClv) || 0), 0);
     const buyerCount = segmentSubscribers.filter(sub => sub.isBuyer).length;
     const totalOrders = segmentSubscribers.reduce((sum, sub) => sum + (sub.totalOrders || 0), 0);
     const revenuePerMember = segmentSubscribers.length > 0 ? totalRevenue / segmentSubscribers.length : 0;
@@ -156,7 +156,7 @@ const CustomSegmentBlock: React.FC = () => {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                            <div className={cardBase} title="Sum of Total Customer Lifetime Value for all members in the segment">
+                            <div className={cardBase} title="Sum of Historic Customer Lifetime Value for all members in the segment">
                                 <div className="flex items-center gap-3 mb-2">
                                     <DollarSign className="w-5 h-5 text-purple-600" />
                                     <p className={labelClass}>Total Revenue</p>

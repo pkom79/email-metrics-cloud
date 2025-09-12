@@ -46,10 +46,11 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             { label: `6x AOV (${formatCurrency(aov * 6)}+)`, threshold: aov * 6, customers: 0, revenue: 0, revenuePercentage: 0 },
         ];
         let totalBuyerRevenue = 0;
-        subscribers.forEach(s => { if (s.isBuyer && s.totalClv > 0) totalBuyerRevenue += s.totalClv; });
+        subscribers.forEach(s => { const h = (s.historicClv ?? s.totalClv) || 0; if (s.isBuyer && h > 0) totalBuyerRevenue += h; });
         subscribers.forEach(s => {
-            if (s.isBuyer && s.totalClv > 0) {
-                segments.forEach(seg => { if (s.totalClv >= seg.threshold) { seg.customers++; seg.revenue += s.totalClv; } });
+            if (s.isBuyer) {
+                const h = (s.historicClv ?? s.totalClv) || 0;
+                if (h > 0) segments.forEach(seg => { if (h >= seg.threshold) { seg.customers++; seg.revenue += h; } });
             }
         });
         segments.forEach(seg => { seg.revenuePercentage = totalBuyerRevenue > 0 ? (seg.revenue / totalBuyerRevenue) * 100 : 0; });

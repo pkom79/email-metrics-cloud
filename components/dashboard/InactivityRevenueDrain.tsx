@@ -24,7 +24,7 @@ export default function InactivityRevenueDrain({ subscribers }: Props) {
         ];
         let totalClv = 0;
         subscribers.forEach(s => {
-            const clv = s.totalClv || 0; if (clv <= 0) return; totalClv += clv;
+            const clv = (s.historicClv ?? s.totalClv) || 0; if (clv <= 0) return; totalClv += clv;
             const last = (s.lastClick && s.lastOpen) ? (s.lastClick > s.lastOpen ? s.lastClick : s.lastOpen) : (s.lastClick || s.lastOpen);
             if (!last) return; // no engagement ever -> treat as 120+? We'll leave for future explicit bucket if needed.
             const days = Math.floor((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
@@ -92,8 +92,8 @@ export default function InactivityRevenueDrain({ subscribers }: Props) {
                 })}
             </div>
             <div className="mt-4 text-xs md:text-sm text-gray-500 dark:text-gray-400 flex flex-wrap gap-4">
-                <div><span className="font-medium text-gray-600 dark:text-gray-300">Total CLV:</span> {formatCurrency(totalClv)}</div>
-                <div><span className="font-medium text-gray-600 dark:text-gray-300">Dormant CLV:</span> {formatCurrency(totalDormantClv)} ({((totalDormantClv / totalClv) * 100).toFixed(1)}%)</div>
+                <div><span className="font-medium text-gray-600 dark:text-gray-300">Total Historic CLV:</span> {formatCurrency(totalClv)}</div>
+                <div><span className="font-medium text-gray-600 dark:text-gray-300">Dormant Historic CLV:</span> {formatCurrency(totalDormantClv)} ({((totalDormantClv / totalClv) * 100).toFixed(1)}%)</div>
             </div>
         </div>
     );

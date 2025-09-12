@@ -17,8 +17,14 @@ export class SubscriberTransformer {
 
         const lifetimeInDays = Math.floor((this.REFERENCE_DATE.getTime() - profileCreated.getTime()) / (1000 * 60 * 60 * 24));
 
-        const totalClv = this.parseNumber((raw as any)['Total Customer Lifetime Value']);
-        const predictedClv = this.parseNumber((raw as any)['Predicted Customer Lifetime Value']);
+        const totalClvCsv = this.parseNumber((raw as any)['Total Customer Lifetime Value']);
+        const predictedClvCsv = this.parseNumber((raw as any)['Predicted Customer Lifetime Value']);
+        const historicClvCsv = this.parseNumber((raw as any)['Historic Customer Lifetime Value']);
+        const predictedClv = predictedClvCsv || 0;
+        const totalClv = totalClvCsv || 0;
+        const historicClv = Number.isFinite(historicClvCsv) && historicClvCsv > 0
+            ? historicClvCsv
+            : Math.max(totalClv - predictedClv, 0);
         const avgOrderValue = this.parseNumber((raw as any)['Average Order Value']);
         const totalOrders = Math.floor(this.parseNumber((raw as any)['Historic Number Of Orders']));
         const avgDaysBetweenOrders = this.parseOptionalNumber((raw as any)['Average Days Between Orders']);
@@ -30,7 +36,7 @@ export class SubscriberTransformer {
         const emailSuppressionsRaw = typeof (raw as any)['Email Suppressions'] === 'string' ? (raw as any)['Email Suppressions'] as string : String((raw as any)['Email Suppressions'] ?? '');
         const { suppressions, canReceiveEmail } = this.parseEmailSuppressions(emailSuppressionsRaw);
 
-        const isBuyer = totalOrders > 0 || totalClv > 0;
+    const isBuyer = totalOrders > 0 || historicClv > 0;
 
         return {
             id: (raw as any)['Klaviyo ID'] || '',
@@ -46,6 +52,7 @@ export class SubscriberTransformer {
             emailConsentRaw,
             emailConsentTimestamp,
             totalClv,
+            historicClv,
             predictedClv,
             avgOrderValue,
             totalOrders,
@@ -136,8 +143,8 @@ export class SubscriberTransformer {
         }
         const buyers = subscribers.filter((s) => s.isBuyer);
         const nonBuyers = subscribers.filter((s) => !s.isBuyer);
-        const avgClvAll = subscribers.reduce((sum, s) => sum + s.totalClv, 0) / totalSubscribers;
-        const avgClvBuyers = buyers.length > 0 ? buyers.reduce((sum, s) => sum + s.totalClv, 0) / buyers.length : 0;
+    const avgClvAll = subscribers.reduce((sum, s) => sum + (s.historicClv ?? s.totalClv), 0) / totalSubscribers;
+    const avgClvBuyers = buyers.length > 0 ? buyers.reduce((sum, s) => sum + (s.historicClv ?? s.totalClv), 0) / buyers.length : 0;
         const purchaseFrequency = {
             never: nonBuyers.length,
             oneOrder: buyers.filter((s) => s.totalOrders === 1).length,

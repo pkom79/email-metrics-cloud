@@ -968,7 +968,7 @@ export class DataManager {
 
     private subscriberSummary(subscribers: ProcessedSubscriber[]) {
         const buyers = subscribers.filter(s => s.isBuyer);
-        const totalRevenue = subscribers.reduce((s, su) => s + su.totalClv, 0);
+    const totalRevenue = subscribers.reduce((s, su) => s + ((su as any).historicClv ?? su.totalClv), 0);
         const avgLifetimeDays = subscribers.reduce((s, su) => s + su.lifetimeInDays, 0) / subscribers.length;
         const consentCount = subscribers.filter(su => su.emailConsent).length;
         return { totalSubscribers: subscribers.length, totalBuyers: buyers.length, buyerPercentage: (buyers.length / subscribers.length) * 100, avgLifetimeDays, totalRevenue, avgRevenuePerSubscriber: totalRevenue / subscribers.length, avgRevenuePerBuyer: buyers.length > 0 ? totalRevenue / buyers.length : 0, consentRate: (consentCount / subscribers.length) * 100 };

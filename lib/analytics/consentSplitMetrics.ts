@@ -81,15 +81,15 @@ export function getConsentSplitMetrics(
       case "ltvBuyers": {
         const buyers = arr.filter(s => s.isBuyer);
         const n = buyers.length;
-        const avg = n > 0 ? buyers.reduce((sum, s) => sum + (s.totalClv || 0), 0) / n : 0;
+  const avg = n > 0 ? buyers.reduce((sum, s) => sum + ((s.historicClv ?? s.totalClv) || 0), 0) / n : 0;
         return { value: avg, sample };
       }
       case "ltvAll": {
-        const avg = sample > 0 ? arr.reduce((sum, s) => sum + (s.totalClv || 0), 0) / sample : 0;
+  const avg = sample > 0 ? arr.reduce((sum, s) => sum + ((s.historicClv ?? s.totalClv) || 0), 0) / sample : 0;
         return { value: avg, sample };
       }
       case "totalRevenue": {
-        const sum = arr.reduce((acc, s) => acc + (s.totalClv || 0), 0);
+  const sum = arr.reduce((acc, s) => acc + ((s.historicClv ?? s.totalClv) || 0), 0);
         return { value: sum, sample };
       }
       case "engaged30":
