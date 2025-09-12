@@ -132,19 +132,16 @@ export interface LlmExportJson {
     clickRate: SubjectMetricLiftSet;
     revenuePerEmail: SubjectMetricLiftSet;
   };
-  // Flow Step Analysis (lookback totals + time series per selected granularity)
+  // Flow Step Analysis (lookback totals only — per flow and per step; no time series)
   flowStepAnalysis?: {
-    granularity: 'daily' | 'weekly' | 'monthly';
     disclaimer: string;
     flows: Array<{
       flowName: string;
       total: FlowMetricTotals;
-      series: FlowMetricSeries;
       steps: Array<{
         stepNumber: number;
         emailName?: string;
         total: FlowMetricTotals;
-        series: FlowMetricSeries;
       }>;
     }>;
   };
@@ -256,20 +253,7 @@ type FlowMetricTotals = {
   bounceRate: number;
 };
 
-type FlowMetricSeries = {
-  revenue: Array<{ date: string; value: number }>;
-  avgOrderValue: Array<{ date: string; value: number }>;
-  totalOrders: Array<{ date: string; value: number }>;
-  conversionRate: Array<{ date: string; value: number }>;
-  openRate: Array<{ date: string; value: number }>;
-  clickRate: Array<{ date: string; value: number }>;
-  clickToOpenRate: Array<{ date: string; value: number }>;
-  revenuePerEmail: Array<{ date: string; value: number }>;
-  emailsSent: Array<{ date: string; value: number }>;
-  unsubscribeRate: Array<{ date: string; value: number }>;
-  spamRate: Array<{ date: string; value: number }>;
-  bounceRate: Array<{ date: string; value: number }>;
-};
+// (FlowMetricSeries removed — flowStepAnalysis is totals-only)
 
 export async function buildLlmExportJson(params: {
   dateRange: string;
@@ -402,8 +386,8 @@ export async function buildLlmExportJson(params: {
         subjectLineAnalysis: 'Lifts vs account average for subject features (All Segments) over the selected lookback period; includes counts where available.',
         audienceSizePerformance: 'KPIs by audience size (emails sent) buckets over the selected lookback period; includes campaign counts and audience size totals.',
         campaignGapsAndLosses: 'Weekly-only analysis identifying zero-send weeks, longest gaps, coverage, estimated lost revenue, and zero-revenue campaigns over the lookback period.',
-        campaignPerformanceByDayOfWeek: 'KPIs by weekday over the selected lookback period; includes how many campaigns were sent on each day.',
-        flowStepAnalysis: 'KPIs for every step in every active flow and roll-ups per flow over the selected lookback period, including time series by selected granularity. Disclaimer: step order may be imperfect due to inconsistent flow email naming.'
+  campaignPerformanceByDayOfWeek: 'KPIs by weekday over the selected lookback period; includes how many campaigns were sent on each day.',
+  flowStepAnalysis: 'Totals for every step in every active flow and roll-ups per flow over the selected lookback period (no time‑series). Disclaimer: step order may be imperfect due to inconsistent flow email naming.'
         ,
         engagementByProfileAge: 'For profile age segments (0–6m, 6–12m, 1–2y, 2+y), shows the segment size and the row-normalized percentage split across last engagement windows (0–30, 31–60, 61–90, 91–120, 120+ days, Never engaged).',
         inactivityRevenueDrain: 'Share of total CLV sitting in inactive subscribers by last engagement recency buckets (30–59, 60–89, 90–119, 120+ days). Includes Total CLV and Dormant CLV totals with percentage.'
@@ -1001,7 +985,7 @@ export async function buildLlmExportJson(params: {
         }));
       } catch {}
 
-      // Flow Step Analysis — totals for lookback and series by selected granularity
+  // Flow Step Analysis — totals for lookback (no time series)
       try {
         // Only include LIVE flows (exclude draft/manual) per requirement
         const flowsAll = dm.getFlowEmails().filter(f => {
@@ -1014,7 +998,6 @@ export async function buildLlmExportJson(params: {
         });
         const uniqueFlowNames = Array.from(new Set(flowsInRange.map(f => f.flowName))).sort((a, b) => a.localeCompare(b));
         const disclaimer = 'Step order might not be perfectly accurate due to inconsistent naming of flow emails.';
-        const metricKeys = ['revenue','avgOrderValue','totalOrders','conversionRate','openRate','clickRate','clickToOpenRate','revenuePerEmail','emailsSent','unsubscribeRate','spamRate','bounceRate'] as const;
         const toTotals = (list: any[]): FlowMetricTotals => {
           const sums = {
             revenue: 0, emailsSent: 0, totalOrders: 0, opens: 0, clicks: 0, unsubs: 0, spam: 0, bounces: 0
@@ -1053,23 +1036,6 @@ export async function buildLlmExportJson(params: {
             bounceRate,
           };
         };
-        const buildSeries = (c: any[], f: any[], g: 'daily'|'weekly'|'monthly'): FlowMetricSeries => {
-          const get = (key: string) => dm.getMetricTimeSeries(c, f, key, dateRange, g, customFrom, customTo).map(p => ({ date: (p as any).iso || p.date, value: p.value || 0 }));
-          return {
-            revenue: get('revenue'),
-            avgOrderValue: get('avgOrderValue'),
-            totalOrders: get('totalOrders'),
-            conversionRate: get('conversionRate'),
-            openRate: get('openRate'),
-            clickRate: get('clickRate'),
-            clickToOpenRate: get('clickToOpenRate'),
-            revenuePerEmail: get('revenuePerEmail'),
-            emailsSent: get('emailsSent'),
-            unsubscribeRate: get('unsubscribeRate'),
-            spamRate: get('spamRate'),
-            bounceRate: get('bounceRate'),
-          };
-        };
         const flowObjs = uniqueFlowNames.map(flowName => {
           const flowItems = flowsInRange.filter(f => f.flowName === flowName);
           const stepMap = new Map<number, any[]>();
@@ -1081,17 +1047,15 @@ export async function buildLlmExportJson(params: {
             stepNumber: seq,
             emailName: list[0]?.emailName,
             total: toTotals(list),
-            series: buildSeries([], list as any[], granularity),
           }));
           return {
             flowName,
             total: toTotals(flowItems),
-            series: buildSeries([], flowItems as any[], granularity),
             steps,
           };
         }).filter(f => (f.steps?.length || 0) > 0);
         if (flowObjs.length) {
-          json.flowStepAnalysis = { granularity, disclaimer, flows: flowObjs };
+          json.flowStepAnalysis = { disclaimer, flows: flowObjs };
         }
       } catch {}
 
