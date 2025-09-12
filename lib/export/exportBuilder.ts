@@ -153,6 +153,14 @@ export interface LlmExportJson {
     series: Array<{ date: string; created: number; firstActive: number; subscribed: number }>;
     totals: { created: number; firstActive: number; subscribed: number };
   };
+  // Snapshots: Purchase Frequency Distribution (count + percentage of total audience)
+  purchaseFrequencyDistribution?: Array<{ label: 'Never' | '1 Order' | '2 Orders' | '3-5 Orders' | '6+ Orders'; count: number; percentage: number }>;
+  // Snapshots: Audience Lifetime (count + percentage of total audience)
+  audienceLifetime?: Array<{ label: '0-3 months' | '3-6 months' | '6-12 months' | '1-2 years' | '2+ years'; count: number; percentage: number }>;
+  // Snapshots: High-Value Customer Segments (AOV multipliers)
+  highValueCustomerSegments?: Array<{ label: '2x AOV' | '3x AOV' | '6x AOV'; multiplier: 2 | 3 | 6; customers: number; revenue: number }>;
+  // Snapshots: Last Active Segments (count + percentage of total audience)
+  lastActiveSegments?: Array<{ label: 'Never Active' | 'Inactive for 90+ days' | 'Inactive for 120+ days' | 'Inactive for 180+ days' | 'Inactive for 365+ days'; count: number; percentage: number }>;
 }
 
 type CorrelationValue = { r: number | null; n: number };
@@ -338,6 +346,10 @@ export async function buildLlmExportJson(params: {
         metrics: 'Full-month aggregated KPIs for the window; split into overall, campaigns-only, and flows-only.',
         audienceOverview: 'Snapshot from Audience Overview at export time: only profiles that can receive email (not suppressed). Includes Total Active Audience, Buyers, % of audience, Avg CLV (All), Avg CLV (Buyers).',
         audienceGrowth: 'Daily/Weekly/Monthly counts for Created, First Active, and Subscribed over the selected lookback period; includes period totals.',
+        purchaseFrequencyDistribution: 'How many profiles have never purchased, purchased once, twice, 3–5 times, or 6+ times; includes counts and percent of audience.',
+        audienceLifetime: 'How long profiles have been on your list (0–3m, 3–6m, 6–12m, 1–2y, 2+y); includes counts and percent of audience.',
+        highValueCustomerSegments: 'Buyer cohorts whose lifetime value is at least 2x, 3x, or 6x the buyer AOV; includes customer counts and their cumulative revenue.',
+        lastActiveSegments: 'Recency of engagement: Never Active, and inactive for 90+/120+/180+/365+ days based on Last Active; includes counts and percent of audience.',
         campaignFlowSplit: 'Monthly split of revenue and emails between Campaigns vs Flows over the full-month window, plus period totals.',
         sendVolumeImpact: 'Correlation between emails sent and performance metrics across the selected lookback buckets, by segment (Campaigns/Flows).',
         campaignSendFrequency: 'KPIs by weekly send frequency buckets (1, 2, 3, 4+) over the selected lookback period; includes campaign counts.',
@@ -381,6 +393,107 @@ export async function buildLlmExportJson(params: {
     const sumClvBuyers = buyersArr.reduce((sum, s) => sum + (s?.totalClv || 0), 0);
     const avgClvBuyers = buyers > 0 ? (sumClvBuyers / buyers) : 0;
     json.audienceOverview = { totalActiveAudience, buyers, buyersPctOfAudience, avgClvAll, avgClvBuyers };
+  } catch {}
+
+  // Purchase Frequency Distribution and Audience Lifetime (based on AudienceInsights from all subscribers)
+  try {
+    const ai = dm.getAudienceInsights() as any;
+    const total = typeof ai?.totalSubscribers === 'number' ? ai.totalSubscribers : 0;
+    if (total > 0) {
+      json.purchaseFrequencyDistribution = [
+        { label: 'Never', count: ai.purchaseFrequency?.never || 0, percentage: total > 0 ? (ai.purchaseFrequency?.never || 0) / total * 100 : 0 },
+        { label: '1 Order', count: ai.purchaseFrequency?.oneOrder || 0, percentage: total > 0 ? (ai.purchaseFrequency?.oneOrder || 0) / total * 100 : 0 },
+        { label: '2 Orders', count: ai.purchaseFrequency?.twoOrders || 0, percentage: total > 0 ? (ai.purchaseFrequency?.twoOrders || 0) / total * 100 : 0 },
+        { label: '3-5 Orders', count: ai.purchaseFrequency?.threeTo5 || 0, percentage: total > 0 ? (ai.purchaseFrequency?.threeTo5 || 0) / total * 100 : 0 },
+        { label: '6+ Orders', count: ai.purchaseFrequency?.sixPlus || 0, percentage: total > 0 ? (ai.purchaseFrequency?.sixPlus || 0) / total * 100 : 0 },
+      ];
+      json.audienceLifetime = [
+        { label: '0-3 months', count: ai.lifetimeDistribution?.zeroTo3Months || 0, percentage: total > 0 ? (ai.lifetimeDistribution?.zeroTo3Months || 0) / total * 100 : 0 },
+        { label: '3-6 months', count: ai.lifetimeDistribution?.threeTo6Months || 0, percentage: total > 0 ? (ai.lifetimeDistribution?.threeTo6Months || 0) / total * 100 : 0 },
+        { label: '6-12 months', count: ai.lifetimeDistribution?.sixTo12Months || 0, percentage: total > 0 ? (ai.lifetimeDistribution?.sixTo12Months || 0) / total * 100 : 0 },
+        { label: '1-2 years', count: ai.lifetimeDistribution?.oneToTwoYears || 0, percentage: total > 0 ? (ai.lifetimeDistribution?.oneToTwoYears || 0) / total * 100 : 0 },
+        { label: '2+ years', count: ai.lifetimeDistribution?.twoYearsPlus || 0, percentage: total > 0 ? (ai.lifetimeDistribution?.twoYearsPlus || 0) / total * 100 : 0 },
+      ];
+    } else {
+      json.purchaseFrequencyDistribution = [
+        { label: 'Never', count: 0, percentage: 0 },
+        { label: '1 Order', count: 0, percentage: 0 },
+        { label: '2 Orders', count: 0, percentage: 0 },
+        { label: '3-5 Orders', count: 0, percentage: 0 },
+        { label: '6+ Orders', count: 0, percentage: 0 },
+      ];
+      json.audienceLifetime = [
+        { label: '0-3 months', count: 0, percentage: 0 },
+        { label: '3-6 months', count: 0, percentage: 0 },
+        { label: '6-12 months', count: 0, percentage: 0 },
+        { label: '1-2 years', count: 0, percentage: 0 },
+        { label: '2+ years', count: 0, percentage: 0 },
+      ];
+    }
+  } catch {}
+
+  // High-Value Customer Segments (2x/3x/6x AOV of buyers)
+  try {
+    const subs = dm.getSubscribers() as any[];
+    const ai = dm.getAudienceInsights() as any;
+    const aov = Number(ai?.avgClvBuyers) || 0;
+    if (aov > 0 && subs.length > 0) {
+      const segments = [
+        { label: '2x AOV' as const, multiplier: 2 as const, customers: 0, revenue: 0 },
+        { label: '3x AOV' as const, multiplier: 3 as const, customers: 0, revenue: 0 },
+        { label: '6x AOV' as const, multiplier: 6 as const, customers: 0, revenue: 0 },
+      ];
+      subs.forEach(s => {
+        if (s?.isBuyer && (s?.totalClv || 0) > 0) {
+          segments.forEach(seg => {
+            if ((s.totalClv || 0) >= seg.multiplier * aov) { seg.customers++; seg.revenue += s.totalClv; }
+          });
+        }
+      });
+      json.highValueCustomerSegments = segments;
+    } else {
+      json.highValueCustomerSegments = [
+        { label: '2x AOV', multiplier: 2, customers: 0, revenue: 0 },
+        { label: '3x AOV', multiplier: 3, customers: 0, revenue: 0 },
+        { label: '6x AOV', multiplier: 6, customers: 0, revenue: 0 },
+      ];
+    }
+  } catch {}
+
+  // Last Active Segments (Never Active; Inactive 90+/120+/180+/365+ days)
+  try {
+    const subs = dm.getSubscribers() as any[];
+    const lastEmailDate = dm.getLastEmailDate();
+    const total = subs.length;
+    const neverActive = subs.filter(sub => {
+      const la = sub?.lastActive;
+      if (!la) return true;
+      if (la instanceof Date) {
+        const t = la.getTime();
+        return isNaN(t) || t === 0;
+      }
+      return true;
+    }).length;
+    const counters = [
+      { label: 'Never Active' as const, count: neverActive },
+      { label: 'Inactive for 90+ days' as const, days: 90, count: 0 },
+      { label: 'Inactive for 120+ days' as const, days: 120, count: 0 },
+      { label: 'Inactive for 180+ days' as const, days: 180, count: 0 },
+      { label: 'Inactive for 365+ days' as const, days: 365, count: 0 },
+    ] as Array<any>;
+    if (lastEmailDate) {
+      subs.forEach(sub => {
+        const la: Date | null = sub?.lastActive instanceof Date ? sub.lastActive : null;
+        if (la) {
+          const diffDays = Math.floor((lastEmailDate.getTime() - la.getTime()) / (1000 * 60 * 60 * 24));
+          if (diffDays >= 90) counters[1].count++;
+          if (diffDays >= 120) counters[2].count++;
+          if (diffDays >= 180) counters[3].count++;
+          if (diffDays >= 365) counters[4].count++;
+        }
+      });
+    }
+    json.lastActiveSegments = counters.map(c => ({ label: c.label, count: c.count, percentage: total > 0 ? (c.count / total) * 100 : 0 }));
   } catch {}
 
   // Send Volume Impact: correlations across selected period buckets by segment
