@@ -161,6 +161,26 @@ export interface LlmExportJson {
   highValueCustomerSegments?: Array<{ label: '2x AOV' | '3x AOV' | '6x AOV'; multiplier: 2 | 3 | 6; customers: number; revenue: number }>;
   // Snapshots: Last Active Segments (count + percentage of total audience)
   lastActiveSegments?: Array<{ label: 'Never Active' | 'Inactive for 90+ days' | 'Inactive for 120+ days' | 'Inactive for 180+ days' | 'Inactive for 365+ days'; count: number; percentage: number }>;
+  // Engagement by Profile Age: for each age segment, profile count and percentages across engagement windows
+  engagementByProfileAge?: {
+    buckets: Array<{
+      label: '0-6 months' | '6-12 months' | '1-2 years' | '2+ years';
+      profiles: number;
+      percentages: {
+        '0-30 days': number;
+        '31-60 days': number;
+        '61-90 days': number;
+        '91-120 days': number;
+        '120+ days': number;
+        'Never engaged': number;
+      };
+    }>;
+  };
+  // Inactivity Revenue Drain: dormant CLV share by inactivity buckets with totals
+  inactivityRevenueDrain?: {
+    buckets: Array<{ label: '30-59 days' | '60-89 days' | '90-119 days' | '120+ days'; percentage: number; revenue: number }>;
+    totals: { totalClv: number; dormantClv: number; dormantPct: number };
+  };
 }
 
 type CorrelationValue = { r: number | null; n: number };
@@ -358,6 +378,9 @@ export async function buildLlmExportJson(params: {
         campaignGapsAndLosses: 'Weekly-only analysis identifying zero-send weeks, longest gaps, coverage, estimated lost revenue, and zero-revenue campaigns over the lookback period.',
         campaignPerformanceByDayOfWeek: 'KPIs by weekday over the selected lookback period; includes how many campaigns were sent on each day.',
         flowStepAnalysis: 'KPIs for every step in every active flow and roll-ups per flow over the selected lookback period, including time series by selected granularity. Disclaimer: step order may be imperfect due to inconsistent flow email naming.'
+        ,
+        engagementByProfileAge: 'For profile age segments (0–6m, 6–12m, 1–2y, 2+y), shows the segment size and the row-normalized percentage split across last engagement windows (0–30, 31–60, 61–90, 91–120, 120+ days, Never engaged).',
+        inactivityRevenueDrain: 'Share of total CLV sitting in inactive subscribers by last engagement recency buckets (30–59, 60–89, 90–119, 120+ days). Includes Total CLV and Dormant CLV totals with percentage.'
       },
       kpiDescriptions: {
         zeroCampaignSendWeeks: 'Number of complete weeks in the selected range with no campaign sends.',
@@ -496,6 +519,71 @@ export async function buildLlmExportJson(params: {
     json.lastActiveSegments = counters.map(c => ({ label: c.label, count: c.count, percentage: total > 0 ? (c.count / total) * 100 : 0 }));
   } catch {}
 
+  // Engagement by Profile Age (0–6m, 6–12m, 1–2y, 2+y) with percentages across engagement windows
+  try {
+    const subs = dm.getSubscribers() as any[];
+    if (subs?.length) {
+      const anchor = dm.getLastEmailDate();
+      const diffInFullMonths = (anchorDate: Date, start: Date) => {
+        let months = (anchorDate.getFullYear() - start.getFullYear()) * 12 + (anchorDate.getMonth() - start.getMonth());
+        if (anchorDate.getDate() < start.getDate()) months -= 1;
+        return Math.max(0, months);
+      };
+      const daysBetween = (a: Date, b: Date) => {
+        const MS = 1000 * 60 * 60 * 24;
+        const da = new Date(a); da.setHours(0,0,0,0);
+        const db = new Date(b); db.setHours(0,0,0,0);
+        return Math.floor((da.getTime() - db.getTime()) / MS);
+      };
+      const ageDefs = [
+        { key: '0_6m', label: '0-6 months', minM: 0, maxM: 5 },
+        { key: '6_12m', label: '6-12 months', minM: 6, maxM: 11 },
+        { key: '1_2y', label: '1-2 years', minM: 12, maxM: 23 },
+        { key: '2y_plus', label: '2+ years', minM: 24, maxM: Infinity },
+      ];
+      const engDefs = [
+        { key: '0_30', label: '0-30 days', minD: 0, maxD: 30 },
+        { key: '31_60', label: '31-60 days', minD: 31, maxD: 60 },
+        { key: '61_90', label: '61-90 days', minD: 61, maxD: 90 },
+        { key: '91_120', label: '91-120 days', minD: 91, maxD: 120 },
+        { key: '121_plus', label: '120+ days', minD: 121, maxD: Infinity },
+        { key: 'never', label: 'Never engaged', minD: null as any, maxD: null as any },
+      ];
+      const rows = ageDefs.map(a => ({ key: a.key, label: a.label, denom: 0, cells: engDefs.map(e => ({ key: e.key, count: 0 })) }));
+      for (const s of subs) {
+        const created: Date | null = s?.profileCreated instanceof Date ? s.profileCreated : null;
+        if (!created) continue;
+        const ageMonths = diffInFullMonths(anchor, created);
+        const ageIdx = ageDefs.findIndex(a => ageMonths >= a.minM && ageMonths <= a.maxM);
+        if (ageIdx === -1) continue;
+        rows[ageIdx].denom += 1;
+        const lastOpen: Date | null = s?.lastOpen instanceof Date ? s.lastOpen : null;
+        const lastClick: Date | null = s?.lastClick instanceof Date ? s.lastClick : null;
+        const last: Date | null = (lastOpen && lastClick) ? (lastOpen > lastClick ? lastOpen : lastClick) : (lastOpen || lastClick);
+        if (!last) {
+          const cell = rows[ageIdx].cells.find(c => c.key === 'never');
+          if (cell) cell.count += 1;
+          continue;
+        }
+        const d = daysBetween(anchor, last);
+        for (const e of engDefs) {
+          if (e.key === 'never') continue;
+          const minD = e.minD as number; const maxD = e.maxD as number;
+          if (d >= minD && d <= maxD) { const cell = rows[ageIdx].cells.find(c => c.key === e.key); if (cell) cell.count += 1; break; }
+        }
+      }
+      json.engagementByProfileAge = {
+        buckets: rows.map(r => {
+          const mapLabel = (k: string) => engDefs.find(e => e.key === k)!.label as any;
+          const pct = (n: number) => r.denom > 0 ? (n / r.denom) * 100 : 0;
+          const asRecord: any = {};
+          for (const c of r.cells) { asRecord[mapLabel(c.key)] = pct(c.count); }
+          return { label: r.label as any, profiles: r.denom, percentages: asRecord };
+        })
+      };
+    }
+  } catch {}
+
   // Send Volume Impact: correlations across selected period buckets by segment
   try {
     const buildCorr = (seg: 'campaigns' | 'flows'): CorrelationSet => {
@@ -542,6 +630,35 @@ export async function buildLlmExportJson(params: {
   } catch (e) {
     // Non-fatal
   }
+
+  // Inactivity Revenue Drain: dormant CLV share by inactivity buckets (30/60/90/120+ days)
+  try {
+    const subs = dm.getSubscribers() as any[];
+    if (subs?.length) {
+      const now = new Date();
+      const defs = [
+        { key: '30_59', label: '30-59 days', min: 30, max: 59, clv: 0, count: 0 },
+        { key: '60_89', label: '60-89 days', min: 60, max: 89, clv: 0, count: 0 },
+        { key: '90_119', label: '90-119 days', min: 90, max: 119, clv: 0, count: 0 },
+        { key: '120_plus', label: '120+ days', min: 120, max: Infinity, clv: 0, count: 0 },
+      ];
+      let totalClv = 0;
+      for (const s of subs) {
+        const clv = Number(s?.totalClv) || 0; if (clv <= 0) continue; totalClv += clv;
+        const lastOpen: Date | null = s?.lastOpen instanceof Date ? s.lastOpen : null;
+        const lastClick: Date | null = s?.lastClick instanceof Date ? s.lastClick : null;
+        const last: Date | null = (lastOpen && lastClick) ? (lastOpen > lastClick ? lastOpen : lastClick) : (lastOpen || lastClick);
+        if (!last) continue; // no engagement ever -> excluded, mirrors current dashboard logic
+        const days = Math.floor((now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
+        for (const b of defs) { if (days >= b.min && days <= b.max) { b.clv += clv; b.count += 1; break; } }
+      }
+      const dormantClv = defs.reduce((s, b) => s + b.clv, 0);
+      json.inactivityRevenueDrain = {
+        buckets: defs.map(b => ({ label: b.label as any, percentage: totalClv > 0 ? (b.clv / totalClv) * 100 : 0, revenue: b.clv })),
+        totals: { totalClv, dormantClv, dormantPct: totalClv > 0 ? (dormantClv / totalClv) * 100 : 0 }
+      };
+    }
+  } catch {}
 
   // Campaign Performance by Send Frequency (lookback period as selected, not full-month trimmed)
   try {
