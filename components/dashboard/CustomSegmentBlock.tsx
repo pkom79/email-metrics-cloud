@@ -266,14 +266,20 @@ const CustomSegmentBlock: React.FC = () => {
         </>
     );
 
-    const renderCompareRow = (label: string, title: string, aText: string, bText: string, delta: { text: string; value?: number; isNA: boolean }, favorableWhenHigher: boolean) => (
-        <div className={cardBase} title={title}>
-            <div className="flex items-center gap-3 mb-2"><p className={labelClass}>{label}</p></div>
-            <div className={`${valueClass}`}>{aText}</div>
-            <div className={`${valueClass}`}>{bText}</div>
-            <div className={`${deltaClass} mt-2 ${delta.isNA ? 'text-gray-500 dark:text-gray-400' : deltaColor(delta.value, favorableWhenHigher)}`}>Δ vs A: {delta.text}</div>
-        </div>
-    );
+    const renderCompareRow = (label: string, title: string, aText: string, bText: string, delta: { text: string; value?: number; isNA: boolean }, favorableWhenHigher: boolean) => {
+        const bTintClass = !delta.isNA && delta.value !== undefined && Math.abs(delta.value) > 1e-12
+            ? deltaColor(delta.value, favorableWhenHigher)
+            : '';
+        const deltaTintClass = delta.isNA ? 'text-gray-500 dark:text-gray-400' : deltaColor(delta.value, favorableWhenHigher);
+        return (
+            <div className={cardBase} title={title}>
+                <div className="flex items-center gap-3 mb-2"><p className={labelClass}>{label}</p></div>
+                <div className={`${valueClass}`}><span className="text-xs font-medium text-gray-500 mr-2">A:</span>{aText}</div>
+                <div className={`${valueClass} ${bTintClass}`}><span className="text-xs font-medium text-gray-500 mr-2">B:</span>{bText}</div>
+                <div className={`${deltaClass} mt-2 ${deltaTintClass}`}>{delta.text}</div>
+            </div>
+        );
+    };
 
     const renderCompare = (a: SegmentStats, b: SegmentStats) => (
         <>
