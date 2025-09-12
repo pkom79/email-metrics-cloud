@@ -70,6 +70,24 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Example:
   - Time/Volume, Asc/Desc, Revenue/Emails Sent
 
+### Segment Comparison (A/B) — Custom Segment
+- Uploads: Two optional CSV inputs, labeled "Segment A" and "Segment B". A is the baseline.
+- Labels: After upload, show an editable text field to rename each segment (defaults to file name).
+- Layout inside each stat card when both segments are present:
+  - Top row: Segment A value (use `tabular-nums`).
+  - Middle row: Segment B value (use `tabular-nums`).
+  - Bottom row: Delta chip "Δ vs A" showing relative percent change; text `text-emerald-600` when favorable, `text-rose-600` when unfavorable, gray when 0.0% or N/A.
+- Favorability:
+  - Higher is better: revenue, members, AOV, revenue/member, created%, engaged%, non‑suppressed%, opt‑in%.
+  - Lower is better: average days between orders, unsubscribed%, spam complaint%, user suppressed%.
+- Rounding:
+  - Currency: 2 decimals.
+  - Rates and deltas: 1 decimal as a percent (e.g., 12.3%).
+  - Counts: integers using `toLocaleString()`.
+- Anchoring for N‑day windows: use Today for both A and B.
+- Baseline zero: show "N/A (no baseline)" when A = 0 and B > 0; show "—" when both are zero.
+- Single-file behavior: When only Segment A is present, render the original single-segment cards without delta rows.
+
 ### Selects
 - Use `SelectBase` for dropdowns; has consistent padding, border, focus ring:
   - Class: `.select-base`
