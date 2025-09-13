@@ -36,14 +36,12 @@ export default function AutoFitText({
             el.style.fontSize = `${size}px`;
             el.style.whiteSpace = 'nowrap';
             el.style.lineHeight = '1';
-            // Give the browser a tick to layout
-            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-            el.offsetWidth;
+            // Give the browser a tick to layout (void to avoid unused-expression lint)
+            void el.offsetWidth;
             while (size > minPx && el.scrollWidth > container.clientWidth) {
                 size -= stepPx;
                 el.style.fontSize = `${size}px`;
-                // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-                el.offsetWidth;
+                void el.offsetWidth;
             }
             setFontSize(size);
         };
