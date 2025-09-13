@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState } from 'react';
-import { UploadCloud, ListChecks } from 'lucide-react';
+import { UploadCloud, ListChecks, Info } from 'lucide-react';
 import Papa from 'papaparse';
 import { ProcessedSubscriber } from '../../lib/data/dataTypes';
 import { SubscriberTransformer } from '../../lib/data/transformers/subscriberTransformer';
@@ -231,6 +231,29 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
 
     const statsA = useMemo(() => (filteredA.length ? computeStats(filteredA) : null), [filteredA]);
     const statsB = useMemo(() => (filteredB.length ? computeStats(filteredB) : null), [filteredB]);
+
+    // Compute created_at coverage for uploaded segments and detect if selected filter window is entirely outside
+    const dateFmt = (d: Date | null) => d ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' }) : 'N/A';
+    const createdSpan = (subs: ProcessedSubscriber[]) => {
+        const dates = subs.map(s => (s.profileCreated instanceof Date ? s.profileCreated : null)).filter((d): d is Date => !!d);
+        if (dates.length === 0) return { min: null as Date | null, max: null as Date | null };
+        const min = new Date(Math.min(...dates.map(d => d.getTime())));
+        const max = new Date(Math.max(...dates.map(d => d.getTime())));
+        return { min, max };
+    };
+    const spanA = useMemo(() => createdSpan(segmentASubscribers), [segmentASubscribers]);
+    const spanB = useMemo(() => createdSpan(segmentBSubscribers), [segmentBSubscribers]);
+    const winFrom = computeFromToForPreset.from;
+    const winTo = computeFromToForPreset.to;
+    // "Outside" when both bounds exist and the entire selected window doesn't intersect the created range at all
+    const outsideA = useMemo(() => {
+        if (!spanA.min || !spanA.max || !winFrom || !winTo) return false;
+        return (winTo < spanA.min) || (winFrom > spanA.max);
+    }, [spanA, winFrom, winTo]);
+    const outsideB = useMemo(() => {
+        if (!spanB.min || !spanB.max || !winFrom || !winTo) return false;
+        return (winTo < spanB.min) || (winFrom > spanB.max);
+    }, [spanB, winFrom, winTo]);
 
     const relativeDeltaText = (a: number, b: number): { text: string; value?: number; isNA: boolean } => {
         if (a === 0) {
@@ -569,6 +592,27 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
             <div className="flex items-center gap-3 mb-4">
                 <UploadCloud className="w-6 h-6 text-purple-600" />
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Analyze Custom Segment</h2>
+                {/* Outside-of-range notices */}
+                {(outsideA || outsideB) && (
+                    <div className="mt-3 mb-2 flex flex-col gap-2">
+                        {outsideA && (
+                            <div className="flex items-start gap-2 text-gray-600 dark:text-gray-400 text-sm">
+                                <Info className="w-4 h-4 text-gray-400 mt-0.5" />
+                                <span>
+                                    Selected date filter is outside the created-at window for Segment A. Profiles were created between {dateFmt(spanA.min)} and {dateFmt(spanA.max)}.
+                                </span>
+                            </div>
+                        )}
+                        {outsideB && (
+                            <div className="flex items-start gap-2 text-gray-600 dark:text-gray-400 text-sm">
+                                <Info className="w-4 h-4 text-gray-400 mt-0.5" />
+                                <span>
+                                    Selected date filter is outside the created-at window for Segment B. Profiles were created between {dateFmt(spanB.min)} and {dateFmt(spanB.max)}.
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-8 mb-8 hover:shadow-xl transition-all duration-200">
