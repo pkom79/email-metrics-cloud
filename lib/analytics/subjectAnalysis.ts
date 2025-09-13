@@ -17,6 +17,8 @@ export interface FeatureStat extends MetricAggregate {
   label: string;
   liftVsBaseline: number; // relative % change vs baseline: (value - baseline) / baseline * 100
   examples?: string[]; // sample subjects included in this feature
+  // Top matched phrases for this category in the selected window (campaign-level presence counts)
+  usedTerms?: Array<{ term: string; count: number }>;
   // Reliability fields (optional; when significance gating is applied)
   reliable?: boolean;
   method?: 'z' | 'fisher' | 'bootstrap' | 'none';
@@ -225,164 +227,45 @@ export function computeSubjectAnalysis(
   return { key, label: info.label, range: info.range, countCampaigns: agg.countCampaigns, totalEmails: agg.totalEmails, totalOpens: agg.totalOpens, totalClicks: agg.totalClicks, totalRevenue: agg.totalRevenue, value: agg.value, liftVsBaseline: lift, examples };
   }).sort((a, b) => a.label.localeCompare(b.label));
 
-  // Build category predicates (multi-category allowed)
-  const CATEGORY_DEFS: Array<{ key: string; label: string; match: (s: string) => boolean }> = [
-    { key: 'emoji', label: 'Emojis', match: (s) => EMOJI_RE.test(s) },
-    { key: 'deadline', label: 'Deadline & Urgency', match: (s) => {
-      const terms = ['today','tonight','now','hurry','last chance','ends','ending','final','final hours','final call','deadline','expires','expiring','closing','countdown','one day only','24 hours','48 hours','through friday','ends sunday','by midnight','by eod','time is running out','act now','don’t wait','dont wait','window closes','last window','almost over','today only','this weekend only','ends tonight','last day','last chance to shop','offer ends','closing soon','limited hours','hours left','minutes left','going fast','ends in','final countdown','cut-off tonight','wraps up soon'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'scarcity', label: 'Scarcity & Low Stock', match: (s) => {
-      const terms = ['limited','limited time','limited supply','few left','almost gone','only','while supplies last','going fast','selling fast','low stock','final units','final drop','last sizes','last colors','final run','short supply','small batch','scarce','rare find','hard to get','back soon','won’t be restocked','wont be restocked','once it’s gone','once its gone','tiny batch','micro drop','limited batch','capped quantity','allocation','reserved stock','low inventory','only a handful','last call on sizes'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'savings', label: 'Savings & Offers', match: (s) => {
-      const terms = ['sale','save','savings','discount','deal','offer','promo','promo code','coupon','voucher','markdown','price drop','reduced','clearance','outlet','flash sale','bogo','buy one get one','bundle','kit deal','multi-buy','lowest price','under $','from $','spend and save','gift with purchase','rebate','price match','doorbuster','sitewide','storewide','extra','% off','off','limited time offer','weekend sale','payday sale','semi-annual sale','mid-season sale','warehouse sale','private sale','friends and family','hot buys','red tag','final markdowns'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'free', label: 'Free & Perks', match: (s) => {
-      const terms = ['free','freebie','complimentary','on us','gift','bonus','perk','free shipping','ships free','free returns','free exchanges','free upgrade','free sample','free trial','no fees','no minimum','extended trial','on the house','free gift inside','free gift at checkout','complimentary gift wrap','free personalization','no restocking fee','no commitment','no credit card required'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'shipping', label: 'Shipping & Delivery Incentives', match: (s) => {
-      const terms = ['free shipping','fast shipping','express','priority','2 day','next day','same day','arrives by','delivery by','guaranteed delivery','rush','holiday delivery','order by','cut-off','hassle-free returns','easy exchanges','free expedited','ship now','upgraded shipping','extended returns','curbside pickup','in-store pickup','buy online pick up in store','local delivery','ship to store','delivery date promise'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'newness', label: 'Newness & Launch', match: (s) => {
-      const terms = ['new','just dropped','just in','now live','introducing','meet','now available','launch','release','first look','latest','new arrivals','new collection','fresh','just landed','new flavors','new colors','new sizes','updated','version','reissue','debut','premiere','first drop','new drop','refreshed','rebooted','reimagined','sneak release','early drop','soft launch'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'exclusive', label: 'Exclusivity & Access', match: (s) => {
-      const terms = ['exclusive','members only','vip','insider','early access','access granted','invite only','private','reserved','whitelist','waitlist access','first dibs','priority access','secret sale','unlocked for you','founders club','inner circle','limited access','passholder','premium access','by invitation','whitelist open','access code inside'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'personalization', label: 'Personalization & Identity', match: (s) => {
-      const terms = ['you','your','just for you','picked for you','your picks','your size','your style','your shade','your order history','recommended','tailored','made for you','because you viewed','based on your favorites','your wishlist','your past purchases','curated for you','handpicked','your fit','your routine','your essentials','your room','your bundle','we thought of you'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'social', label: 'Social Proof & Community', match: (s) => {
-      const terms = ['best seller','top rated','customer favorite','fan favorite','trending','most loved','cult favorite','internet famous','as seen on','featured in','thousands of reviews','5 star','back by demand','staff picks','community picks','most wished for','most gifted','top pick','editor’s pick','editors pick','viral','hot right now','tiktok favorite','instagram famous','press favorite','award winning','people are raving'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'benefits', label: 'Benefits & Outcomes', match: (s) => {
-      const terms = ['results','instant','long-lasting','proven','visible','fast acting','lightweight','durable','waterproof','stain resistant','wrinkle free','breathable','non-toxic','organic','vegan','cruelty free','hypoallergenic','sustainable','eco','recyclable','fast charging','all-day comfort','better sleep','clearer skin','more energy','pain relief','saves time','saves money','clutter free','odor resistant','moisture wicking','spf','quick dry','zero-waste','ergonomic','multi-use','space saving','packable','travel ready','easy care','gentle','dermatologist tested','lab tested'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'pains', label: 'Pain Points & Objections', match: (s) => {
-      const terms = ['fix','solve','end','avoid','prevent','protect','relief','reduce','eliminate','no hassle','no mess','no guesswork','no compromises','no more waste','no more breakouts','no more frizz','no more spills','no itch','no redness','no slipping','no wires','no pinching','no plastics','no toxins','zero hassle','risk free','headache free','sweat proof','leak proof','pet safe','kid safe'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'curiosity', label: 'Curiosity & Teaser', match: (s) => {
-      const terms = ['secret','revealed','the truth','surprising','unexpected','guess what','did you know','inside','behind the scenes','story','case study','before and after','sneak peek','preview','unlock','open to see','unbox','hint','spoiler','leak','peek inside','big reveal','early peek','what’s coming','whats coming','something new is brewing','can you guess'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'content', label: 'Content & Education', match: (s) => {
-      const terms = ['guide','how to','tutorial','tips','tricks','checklist','playbook','template','workbook','cheat sheet','lookbook','style guide','buyer’s guide','buyers guide','sizing guide','recipe','routine','regimen','regimen builder','compare','versus','myths','mistakes','faqs','expert advice','behind the brand','care guide','materials 101','fit guide','starter guide','planner','inspiration','hacks','lessons','masterclass'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'seasonal', label: 'Seasonal & Calendar Moments', match: (s) => {
-      const terms = ['spring','summer','fall','winter','weekend','long weekend','sunday reset','monday start','midweek','black friday','cyber monday','holiday','gifting season','new year','valentine’s day','valentines day','mother’s day','mothers day','father’s day','fathers day','back to school','labor day','memorial day','halloween','festival season','travel season','wedding season','spring cleaning','summer fridays','beach season','ski season','pride','earth day','small business saturday','singles’ day','singles day','boxing day','lunar new year','diwali','eid','hanukkah'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'bundles', label: 'Bundles & Kits', match: (s) => {
-      const terms = ['bundle','kit','set','starter kit','deluxe kit','discovery set','value set','build your own','curated set','try-me set','family pack','duo','trio','multi-pack','refill bundle','routine set','gift set','starter bundle','complete kit','essentials set'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'loyalty', label: 'Loyalty & Referrals', match: (s) => {
-      const terms = ['points','rewards','redeem','double points','bonus points','tier','status','silver','gold','platinum','anniversary','milestone','streak','early unlock','refer','referral','give','get','ambassador','store credit','birthday gift','member pricing','vip tier','unlock benefits','insider rewards','referral credit','perk unlocked'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'winback', label: 'Re‑engagement & Win‑back', match: (s) => {
-      const terms = ['we miss you','it’s been a while','its been a while','come back','return','welcome back','take another look','try again','still interested','still want these','open your gift','your coupon is waiting','your picks are back','we saved these for you','let’s reconnect','lets reconnect','your favorites await','your offer is back','see what’s new since you left'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'quiz', label: 'Preference & Quiz Invites', match: (s) => {
-      const terms = ['take the quiz','find your fit','find your shade','match me','personalize','build your routine','tell us your size','help us tailor','style quiz','fit finder','pick your plan','choose your scent','choose your roast','dial in your routine','map your size'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'ugc', label: 'UGC, Reviews & Feedback', match: (s) => {
-      const terms = ['feedback','survey','tell us','rate us','review','vote','quick question','help us improve','poll','share your look','tag us','show us','upload your photo','photo review','video review','customer stories','testimonial','before and after','featured review','community gallery'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'sweepstakes', label: 'Sweepstakes & Contests', match: (s) => {
-      const terms = ['giveaway','enter to win','sweepstakes','contest','challenge','win','prize','grand prize','winners announced','finalist','runner-up','bonus entries','instant win','limited entries','countdown to close','prize pack','entry closes soon'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'sustainability', label: 'Sustainability & Cause', match: (s) => {
-      const terms = ['sustainable','eco','recycled','circular','repair','refill','reusable','carbon neutral','plastic free','cruelty free','ethical','fair trade','b corp','give back','donate','proceeds go to','support the cause','responsible','compostable','biodegradable','ocean-bound plastic','climate neutral','made to last','buy less choose well','trade-in','take-back','offset included'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'brandstory', label: 'Brand Story & BTS', match: (s) => {
-      const terms = ['founder note','our story','why we made this','handcrafted','small batch','made in','design notes','materials','sourcing','atelier','studio','limited run','meet the maker','workshop','craft','heritage','archive','from sketch to shelf','blueprint','process','behind the craft'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'collab', label: 'Collaborations & Limited Editions', match: (s) => {
-      const terms = ['collab','collaboration','capsule','drop','limited edition','special edition','co-create','partner','guest designer','artist series','crossover','co-branded','joint drop','pop-up collab','collector’s edition','collectors edition'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'crosssell', label: 'Cross‑sell & Complements', match: (s) => {
-      const terms = ['complete the set','pairs with','goes with','wear it with','layer it with','recommended with','works with','customers also bought','upgrade your setup','finish the look','outfit builder','shop the set','add the matching piece','perfect pairing'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'pricing', label: 'Price Positioning & Financing', match: (s) => {
-      const terms = ['price drop','new price','now $','from $','under $','best value','value pick','subscribe and save','subscribe','cancel anytime','pay over time','pay later','klarna','afterpay','0% apr','lock in savings','price freeze','member price','value bundle','auto-delivery','subscription pricing'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'earlybird', label: 'Early‑bird & Waitlist', match: (s) => {
-      const terms = ['early-bird','first access','first 100','join the waitlist','waitlist now open','reserve your spot','claim your spot','secure yours','be first in line','get on the list','pre-reserve','priority line','queue jump','early rsvp'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'gifting', label: 'Gifting & Gift Guides', match: (s) => {
-      const terms = ['gift','gifting made easy','gift ideas','gift guide','for her','for him','for them','gifts under','last-minute gifts','gift cards','wrap it up','stocking stuffers','secret santa','white elephant','hostess gifts','housewarming','for mom','for dad','for kids','for best friend','for the bride','for the groom'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'trybefore', label: 'Try‑before‑you‑buy & Samples', match: (s) => {
-      const terms = ['try at home','try before you buy','sample','mini','travel size','starter size','trial size','home try-on','risk free','fit guarantee','30-day trial','100-night trial','satisfaction guaranteed','swatches','test drive','shade match kit'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'care', label: 'Care, Maintenance & Refills', match: (s) => {
-      const terms = ['care guide','cleaning tips','how to wash','how to store','extend the life','refill','restock','reorder','top up','re-ink','replace filters','replenish','autoship refills','maintenance tips','protect','refresh','revive','renew'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'geo', label: 'Localization & Geo Cues', match: (s) => {
-      const terms = ['near you','in your area','local','now in','now shipping to','us only','canada only','international','worldwide','regional favorites','ships from usa','ships from eu','duty free','no customs','local pickup','same-day pickup','now in stores'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
-    { key: 'timewindows', label: 'Time Windows & Countdowns', match: (s) => {
-      const terms = ['24 hours','48 hours','weekend only','ends sunday','midnight tonight','through friday','today only','this week','this weekend','by eod','72 hours','happy hour','limited window','early access ends','flash window','countdown sale','weekend drop'];
-      const l = s.toLowerCase();
-      return terms.some(t => l.includes(t));
-    } },
+  // Build category predicates with explicit term lists (multi-category allowed)
+  type CategoryDef = { key: string; label: string; terms?: string[]; match: (s: string) => boolean };
+  const mkMatcher = (terms: string[]) => (s: string) => {
+    const l = s.toLowerCase();
+    return terms.some(t => l.includes(t));
+  };
+  const CATEGORY_DEFS: Array<CategoryDef> = [
+    { key: 'emoji', label: 'Emojis', terms: [], match: (s) => EMOJI_RE.test(s) },
+    { key: 'deadline', label: 'Deadline & Urgency', terms: ['today','tonight','now','hurry','last chance','ends','ending','final','final hours','final call','deadline','expires','expiring','closing','countdown','one day only','24 hours','48 hours','through friday','ends sunday','by midnight','by eod','time is running out','act now','don’t wait','dont wait','window closes','last window','almost over','today only','this weekend only','ends tonight','last day','last chance to shop','offer ends','closing soon','limited hours','hours left','minutes left','going fast','ends in','final countdown','cut-off tonight','wraps up soon'], match: mkMatcher(['today','tonight','now','hurry','last chance','ends','ending','final','final hours','final call','deadline','expires','expiring','closing','countdown','one day only','24 hours','48 hours','through friday','ends sunday','by midnight','by eod','time is running out','act now','don’t wait','dont wait','window closes','last window','almost over','today only','this weekend only','ends tonight','last day','last chance to shop','offer ends','closing soon','limited hours','hours left','minutes left','going fast','ends in','final countdown','cut-off tonight','wraps up soon']) },
+    { key: 'scarcity', label: 'Scarcity & Low Stock', terms: ['limited','limited time','limited supply','few left','almost gone','only','while supplies last','going fast','selling fast','low stock','final units','final drop','last sizes','last colors','final run','short supply','small batch','scarce','rare find','hard to get','back soon','won’t be restocked','wont be restocked','once it’s gone','once its gone','tiny batch','micro drop','limited batch','capped quantity','allocation','reserved stock','low inventory','only a handful','last call on sizes'], match: mkMatcher(['limited','limited time','limited supply','few left','almost gone','only','while supplies last','going fast','selling fast','low stock','final units','final drop','last sizes','last colors','final run','short supply','small batch','scarce','rare find','hard to get','back soon','won’t be restocked','wont be restocked','once it’s gone','once its gone','tiny batch','micro drop','limited batch','capped quantity','allocation','reserved stock','low inventory','only a handful','last call on sizes']) },
+    { key: 'savings', label: 'Savings & Offers', terms: ['sale','save','savings','discount','deal','offer','promo','promo code','coupon','voucher','markdown','price drop','reduced','clearance','outlet','flash sale','bogo','buy one get one','bundle','kit deal','multi-buy','lowest price','under $','from $','spend and save','gift with purchase','rebate','price match','doorbuster','sitewide','storewide','extra','% off','off','limited time offer','weekend sale','payday sale','semi-annual sale','mid-season sale','warehouse sale','private sale','friends and family','hot buys','red tag','final markdowns'], match: mkMatcher(['sale','save','savings','discount','deal','offer','promo','promo code','coupon','voucher','markdown','price drop','reduced','clearance','outlet','flash sale','bogo','buy one get one','bundle','kit deal','multi-buy','lowest price','under $','from $','spend and save','gift with purchase','rebate','price match','doorbuster','sitewide','storewide','extra','% off','off','limited time offer','weekend sale','payday sale','semi-annual sale','mid-season sale','warehouse sale','private sale','friends and family','hot buys','red tag','final markdowns']) },
+    { key: 'free', label: 'Free & Perks', terms: ['free','freebie','complimentary','on us','gift','bonus','perk','free shipping','ships free','free returns','free exchanges','free upgrade','free sample','free trial','no fees','no minimum','extended trial','on the house','free gift inside','free gift at checkout','complimentary gift wrap','free personalization','no restocking fee','no commitment','no credit card required'], match: mkMatcher(['free','freebie','complimentary','on us','gift','bonus','perk','free shipping','ships free','free returns','free exchanges','free upgrade','free sample','free trial','no fees','no minimum','extended trial','on the house','free gift inside','free gift at checkout','complimentary gift wrap','free personalization','no restocking fee','no commitment','no credit card required']) },
+    { key: 'shipping', label: 'Shipping & Delivery Incentives', terms: ['free shipping','fast shipping','express','priority','2 day','next day','same day','arrives by','delivery by','guaranteed delivery','rush','holiday delivery','order by','cut-off','hassle-free returns','easy exchanges','free expedited','ship now','upgraded shipping','extended returns','curbside pickup','in-store pickup','buy online pick up in store','local delivery','ship to store','delivery date promise'], match: mkMatcher(['free shipping','fast shipping','express','priority','2 day','next day','same day','arrives by','delivery by','guaranteed delivery','rush','holiday delivery','order by','cut-off','hassle-free returns','easy exchanges','free expedited','ship now','upgraded shipping','extended returns','curbside pickup','in-store pickup','buy online pick up in store','local delivery','ship to store','delivery date promise']) },
+    { key: 'newness', label: 'Newness & Launch', terms: ['new','just dropped','just in','now live','introducing','meet','now available','launch','release','first look','latest','new arrivals','new collection','fresh','just landed','new flavors','new colors','new sizes','updated','version','reissue','debut','premiere','first drop','new drop','refreshed','rebooted','reimagined','sneak release','early drop','soft launch'], match: mkMatcher(['new','just dropped','just in','now live','introducing','meet','now available','launch','release','first look','latest','new arrivals','new collection','fresh','just landed','new flavors','new colors','new sizes','updated','version','reissue','debut','premiere','first drop','new drop','refreshed','rebooted','reimagined','sneak release','early drop','soft launch']) },
+    { key: 'exclusive', label: 'Exclusivity & Access', terms: ['exclusive','members only','vip','insider','early access','access granted','invite only','private','reserved','whitelist','waitlist access','first dibs','priority access','secret sale','unlocked for you','founders club','inner circle','limited access','passholder','premium access','by invitation','whitelist open','access code inside'], match: mkMatcher(['exclusive','members only','vip','insider','early access','access granted','invite only','private','reserved','whitelist','waitlist access','first dibs','priority access','secret sale','unlocked for you','founders club','inner circle','limited access','passholder','premium access','by invitation','whitelist open','access code inside']) },
+    { key: 'personalization', label: 'Personalization & Identity', terms: ['you','your','just for you','picked for you','your picks','your size','your style','your shade','your order history','recommended','tailored','made for you','because you viewed','based on your favorites','your wishlist','your past purchases','curated for you','handpicked','your fit','your routine','your essentials','your room','your bundle','we thought of you'], match: mkMatcher(['you','your','just for you','picked for you','your picks','your size','your style','your shade','your order history','recommended','tailored','made for you','because you viewed','based on your favorites','your wishlist','your past purchases','curated for you','handpicked','your fit','your routine','your essentials','your room','your bundle','we thought of you']) },
+    { key: 'social', label: 'Social Proof & Community', terms: ['best seller','top rated','customer favorite','fan favorite','trending','most loved','cult favorite','internet famous','as seen on','featured in','thousands of reviews','5 star','back by demand','staff picks','community picks','most wished for','most gifted','top pick','editor’s pick','editors pick','viral','hot right now','tiktok favorite','instagram famous','press favorite','award winning','people are raving'], match: mkMatcher(['best seller','top rated','customer favorite','fan favorite','trending','most loved','cult favorite','internet famous','as seen on','featured in','thousands of reviews','5 star','back by demand','staff picks','community picks','most wished for','most gifted','top pick','editor’s pick','editors pick','viral','hot right now','tiktok favorite','instagram famous','press favorite','award winning','people are raving']) },
+    { key: 'benefits', label: 'Benefits & Outcomes', terms: ['results','instant','long-lasting','proven','visible','fast acting','lightweight','durable','waterproof','stain resistant','wrinkle free','breathable','non-toxic','organic','vegan','cruelty free','hypoallergenic','sustainable','eco','recyclable','fast charging','all-day comfort','better sleep','clearer skin','more energy','pain relief','saves time','saves money','clutter free','odor resistant','moisture wicking','spf','quick dry','zero-waste','ergonomic','multi-use','space saving','packable','travel ready','easy care','gentle','dermatologist tested','lab tested'], match: mkMatcher(['results','instant','long-lasting','proven','visible','fast acting','lightweight','durable','waterproof','stain resistant','wrinkle free','breathable','non-toxic','organic','vegan','cruelty free','hypoallergenic','sustainable','eco','recyclable','fast charging','all-day comfort','better sleep','clearer skin','more energy','pain relief','saves time','saves money','clutter free','odor resistant','moisture wicking','spf','quick dry','zero-waste','ergonomic','multi-use','space saving','packable','travel ready','easy care','gentle','dermatologist tested','lab tested']) },
+    { key: 'pains', label: 'Pain Points & Objections', terms: ['fix','solve','end','avoid','prevent','protect','relief','reduce','eliminate','no hassle','no mess','no guesswork','no compromises','no more waste','no more breakouts','no more frizz','no more spills','no itch','no redness','no slipping','no wires','no pinching','no plastics','no toxins','zero hassle','risk free','headache free','sweat proof','leak proof','pet safe','kid safe'], match: mkMatcher(['fix','solve','end','avoid','prevent','protect','relief','reduce','eliminate','no hassle','no mess','no guesswork','no compromises','no more waste','no more breakouts','no more frizz','no more spills','no itch','no redness','no slipping','no wires','no pinching','no plastics','no toxins','zero hassle','risk free','headache free','sweat proof','leak proof','pet safe','kid safe']) },
+    { key: 'curiosity', label: 'Curiosity & Teaser', terms: ['secret','revealed','the truth','surprising','unexpected','guess what','did you know','inside','behind the scenes','story','case study','before and after','sneak peek','preview','unlock','open to see','unbox','hint','spoiler','leak','peek inside','big reveal','early peek','what’s coming','whats coming','something new is brewing','can you guess'], match: mkMatcher(['secret','revealed','the truth','surprising','unexpected','guess what','did you know','inside','behind the scenes','story','case study','before and after','sneak peek','preview','unlock','open to see','unbox','hint','spoiler','leak','peek inside','big reveal','early peek','what’s coming','whats coming','something new is brewing','can you guess']) },
+    { key: 'content', label: 'Content & Education', terms: ['guide','how to','tutorial','tips','tricks','checklist','playbook','template','workbook','cheat sheet','lookbook','style guide','buyer’s guide','buyers guide','sizing guide','recipe','routine','regimen','regimen builder','compare','versus','myths','mistakes','faqs','expert advice','behind the brand','care guide','materials 101','fit guide','starter guide','planner','inspiration','hacks','lessons','masterclass'], match: mkMatcher(['guide','how to','tutorial','tips','tricks','checklist','playbook','template','workbook','cheat sheet','lookbook','style guide','buyer’s guide','buyers guide','sizing guide','recipe','routine','regimen','regimen builder','compare','versus','myths','mistakes','faqs','expert advice','behind the brand','care guide','materials 101','fit guide','starter guide','planner','inspiration','hacks','lessons','masterclass']) },
+    { key: 'seasonal', label: 'Seasonal & Calendar Moments', terms: ['spring','summer','fall','winter','weekend','long weekend','sunday reset','monday start','midweek','black friday','cyber monday','holiday','gifting season','new year','valentine’s day','valentines day','mother’s day','mothers day','father’s day','fathers day','back to school','labor day','memorial day','halloween','festival season','travel season','wedding season','spring cleaning','summer fridays','beach season','ski season','pride','earth day','small business saturday','singles’ day','singles day','boxing day','lunar new year','diwali','eid','hanukkah'], match: mkMatcher(['spring','summer','fall','winter','weekend','long weekend','sunday reset','monday start','midweek','black friday','cyber monday','holiday','gifting season','new year','valentine’s day','valentines day','mother’s day','mothers day','father’s day','fathers day','back to school','labor day','memorial day','halloween','festival season','travel season','wedding season','spring cleaning','summer fridays','beach season','ski season','pride','earth day','small business saturday','singles’ day','singles day','boxing day','lunar new year','diwali','eid','hanukkah']) },
+    { key: 'bundles', label: 'Bundles & Kits', terms: ['bundle','kit','set','starter kit','deluxe kit','discovery set','value set','build your own','curated set','try-me set','family pack','duo','trio','multi-pack','refill bundle','routine set','gift set','starter bundle','complete kit','essentials set'], match: mkMatcher(['bundle','kit','set','starter kit','deluxe kit','discovery set','value set','build your own','curated set','try-me set','family pack','duo','trio','multi-pack','refill bundle','routine set','gift set','starter bundle','complete kit','essentials set']) },
+    { key: 'loyalty', label: 'Loyalty & Referrals', terms: ['points','rewards','redeem','double points','bonus points','tier','status','silver','gold','platinum','anniversary','milestone','streak','early unlock','refer','referral','give','get','ambassador','store credit','birthday gift','member pricing','vip tier','unlock benefits','insider rewards','referral credit','perk unlocked'], match: mkMatcher(['points','rewards','redeem','double points','bonus points','tier','status','silver','gold','platinum','anniversary','milestone','streak','early unlock','refer','referral','give','get','ambassador','store credit','birthday gift','member pricing','vip tier','unlock benefits','insider rewards','referral credit','perk unlocked']) },
+    { key: 'winback', label: 'Re‑engagement & Win‑back', terms: ['we miss you','it’s been a while','its been a while','come back','return','welcome back','take another look','try again','still interested','still want these','open your gift','your coupon is waiting','your picks are back','we saved these for you','let’s reconnect','lets reconnect','your favorites await','your offer is back','see what’s new since you left'], match: mkMatcher(['we miss you','it’s been a while','its been a while','come back','return','welcome back','take another look','try again','still interested','still want these','open your gift','your coupon is waiting','your picks are back','we saved these for you','let’s reconnect','lets reconnect','your favorites await','your offer is back','see what’s new since you left']) },
+    { key: 'quiz', label: 'Preference & Quiz Invites', terms: ['take the quiz','find your fit','find your shade','match me','personalize','build your routine','tell us your size','help us tailor','style quiz','fit finder','pick your plan','choose your scent','choose your roast','dial in your routine','map your size'], match: mkMatcher(['take the quiz','find your fit','find your shade','match me','personalize','build your routine','tell us your size','help us tailor','style quiz','fit finder','pick your plan','choose your scent','choose your roast','dial in your routine','map your size']) },
+    { key: 'ugc', label: 'UGC, Reviews & Feedback', terms: ['feedback','survey','tell us','rate us','review','vote','quick question','help us improve','poll','share your look','tag us','show us','upload your photo','photo review','video review','customer stories','testimonial','before and after','featured review','community gallery'], match: mkMatcher(['feedback','survey','tell us','rate us','review','vote','quick question','help us improve','poll','share your look','tag us','show us','upload your photo','photo review','video review','customer stories','testimonial','before and after','featured review','community gallery']) },
+    { key: 'sweepstakes', label: 'Sweepstakes & Contests', terms: ['giveaway','enter to win','sweepstakes','contest','challenge','win','prize','grand prize','winners announced','finalist','runner-up','bonus entries','instant win','limited entries','countdown to close','prize pack','entry closes soon'], match: mkMatcher(['giveaway','enter to win','sweepstakes','contest','challenge','win','prize','grand prize','winners announced','finalist','runner-up','bonus entries','instant win','limited entries','countdown to close','prize pack','entry closes soon']) },
+    { key: 'sustainability', label: 'Sustainability & Cause', terms: ['sustainable','eco','recycled','circular','repair','refill','reusable','carbon neutral','plastic free','cruelty free','ethical','fair trade','b corp','give back','donate','proceeds go to','support the cause','responsible','compostable','biodegradable','ocean-bound plastic','climate neutral','made to last','buy less choose well','trade-in','take-back','offset included'], match: mkMatcher(['sustainable','eco','recycled','circular','repair','refill','reusable','carbon neutral','plastic free','cruelty free','ethical','fair trade','b corp','give back','donate','proceeds go to','support the cause','responsible','compostable','biodegradable','ocean-bound plastic','climate neutral','made to last','buy less choose well','trade-in','take-back','offset included']) },
+    { key: 'brandstory', label: 'Brand Story & BTS', terms: ['founder note','our story','why we made this','handcrafted','small batch','made in','design notes','materials','sourcing','atelier','studio','limited run','meet the maker','workshop','craft','heritage','archive','from sketch to shelf','blueprint','process','behind the craft'], match: mkMatcher(['founder note','our story','why we made this','handcrafted','small batch','made in','design notes','materials','sourcing','atelier','studio','limited run','meet the maker','workshop','craft','heritage','archive','from sketch to shelf','blueprint','process','behind the craft']) },
+    { key: 'collab', label: 'Collaborations & Limited Editions', terms: ['collab','collaboration','capsule','drop','limited edition','special edition','co-create','partner','guest designer','artist series','crossover','co-branded','joint drop','pop-up collab','collector’s edition','collectors edition'], match: mkMatcher(['collab','collaboration','capsule','drop','limited edition','special edition','co-create','partner','guest designer','artist series','crossover','co-branded','joint drop','pop-up collab','collector’s edition','collectors edition']) },
+    { key: 'crosssell', label: 'Cross‑sell & Complements', terms: ['complete the set','pairs with','goes with','wear it with','layer it with','recommended with','works with','customers also bought','upgrade your setup','finish the look','outfit builder','shop the set','add the matching piece','perfect pairing'], match: mkMatcher(['complete the set','pairs with','goes with','wear it with','layer it with','recommended with','works with','customers also bought','upgrade your setup','finish the look','outfit builder','shop the set','add the matching piece','perfect pairing']) },
+    { key: 'pricing', label: 'Price Positioning & Financing', terms: ['price drop','new price','now $','from $','under $','best value','value pick','subscribe and save','subscribe','cancel anytime','pay over time','pay later','klarna','afterpay','0% apr','lock in savings','price freeze','member price','value bundle','auto-delivery','subscription pricing'], match: mkMatcher(['price drop','new price','now $','from $','under $','best value','value pick','subscribe and save','subscribe','cancel anytime','pay over time','pay later','klarna','afterpay','0% apr','lock in savings','price freeze','member price','value bundle','auto-delivery','subscription pricing']) },
+    { key: 'earlybird', label: 'Early‑bird & Waitlist', terms: ['early-bird','first access','first 100','join the waitlist','waitlist now open','reserve your spot','claim your spot','secure yours','be first in line','get on the list','pre-reserve','priority line','queue jump','early rsvp'], match: mkMatcher(['early-bird','first access','first 100','join the waitlist','waitlist now open','reserve your spot','claim your spot','secure yours','be first in line','get on the list','pre-reserve','priority line','queue jump','early rsvp']) },
+    { key: 'gifting', label: 'Gifting & Gift Guides', terms: ['gift','gifting made easy','gift ideas','gift guide','for her','for him','for them','gifts under','last-minute gifts','gift cards','wrap it up','stocking stuffers','secret santa','white elephant','hostess gifts','housewarming','for mom','for dad','for kids','for best friend','for the bride','for the groom'], match: mkMatcher(['gift','gifting made easy','gift ideas','gift guide','for her','for him','for them','gifts under','last-minute gifts','gift cards','wrap it up','stocking stuffers','secret santa','white elephant','hostess gifts','housewarming','for mom','for dad','for kids','for best friend','for the bride','for the groom']) },
+    { key: 'trybefore', label: 'Try‑before‑you‑buy & Samples', terms: ['try at home','try before you buy','sample','mini','travel size','starter size','trial size','home try-on','risk free','fit guarantee','30-day trial','100-night trial','satisfaction guaranteed','swatches','test drive','shade match kit'], match: mkMatcher(['try at home','try before you buy','sample','mini','travel size','starter size','trial size','home try-on','risk free','fit guarantee','30-day trial','100-night trial','satisfaction guaranteed','swatches','test drive','shade match kit']) },
+    { key: 'care', label: 'Care, Maintenance & Refills', terms: ['care guide','cleaning tips','how to wash','how to store','extend the life','refill','restock','reorder','top up','re-ink','replace filters','replenish','autoship refills','maintenance tips','protect','refresh','revive','renew'], match: mkMatcher(['care guide','cleaning tips','how to wash','how to store','extend the life','refill','restock','reorder','top up','re-ink','replace filters','replenish','autoship refills','maintenance tips','protect','refresh','revive','renew']) },
+    { key: 'geo', label: 'Localization & Geo Cues', terms: ['near you','in your area','local','now in','now shipping to','us only','canada only','international','worldwide','regional favorites','ships from usa','ships from eu','duty free','no customs','local pickup','same-day pickup','now in stores'], match: mkMatcher(['near you','in your area','local','now in','now shipping to','us only','canada only','international','worldwide','regional favorites','ships from usa','ships from eu','duty free','no customs','local pickup','same-day pickup','now in stores']) },
+    { key: 'timewindows', label: 'Time Windows & Countdowns', terms: ['24 hours','48 hours','weekend only','ends sunday','midnight tonight','through friday','today only','this week','this weekend','by eod','72 hours','happy hour','limited window','early access ends','flash window','countdown sale','weekend drop'], match: mkMatcher(['24 hours','48 hours','weekend only','ends sunday','midnight tonight','through friday','today only','this week','this weekend','by eod','72 hours','happy hour','limited window','early access ends','flash window','countdown sale','weekend drop']) },
   ];
 
   // Compute categories
@@ -390,48 +273,89 @@ export function computeSubjectAnalysis(
     .filter(f => f.countCampaigns > 0)
     .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline) || (b.totalEmails - a.totalEmails));
 
+  // Compute top used terms (campaign-level presence) per category
+  const defByKey = new Map(CATEGORY_DEFS.map(d => [d.key, d] as const));
+  for (const cat of categoriesRaw) {
+    const def = defByKey.get(cat.key);
+    const terms = def?.terms || [];
+    if (terms.length === 0) {
+      // For categories without explicit terms (e.g., Emojis), we skip usedTerms
+      cat.usedTerms = [];
+      continue;
+    }
+    const counts = new Map<string, number>();
+    for (const t of terms) counts.set(t, 0);
+    for (const c of campaigns) {
+      const s = (c.subject || c.campaignName || '').toLowerCase();
+      for (const t of terms) {
+        if (s.includes(t)) {
+          counts.set(t, (counts.get(t) || 0) + 1);
+        }
+      }
+    }
+    const list = Array.from(counts.entries())
+      .filter(([, n]) => (n || 0) > 0)
+      .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))
+      .map(([term, count]) => ({ term, count }));
+    cat.usedTerms = list;
+  }
+
   // Apply reliability gating per selected metric
   const totalEmailsAll = campaigns.reduce((s, c) => s + (c.emailsSent || 0), 0);
   const minCampaigns = 5;
   const minEmailsPct = 0.02; // 2%
   const categories: FeatureStat[] = categoriesRaw.map(cat => ({ ...cat }));
   if (metric === 'openRate' || metric === 'clickRate' || metric === 'clickToOpenRate') {
-    // Compute raw p-values
+    // Compute raw p-values only for categories that pass volume gate; then BH-adjust
+    const testedIdx: number[] = [];
     const pVals: number[] = [];
-    const tables: Array<{ idx: number; aSucc: number; aTot: number; bSucc: number; bTot: number; useFisher: boolean; p: number }>
-      = [];
+    const tables: Array<{ idx: number; useFisher: boolean; p: number }> = [];
     for (let i = 0; i < categories.length; i++) {
-      const def = CATEGORY_DEFS.find(d => d.key === categories[i].key)!;
+      const cat = categories[i];
+      const volOk = (cat.countCampaigns >= minCampaigns) && (cat.totalEmails >= Math.ceil(totalEmailsAll * minEmailsPct));
+      if (!volOk) continue;
+      const def = CATEGORY_DEFS.find(d => d.key === cat.key)!;
       const subset = campaigns.filter(c => def.match(c.subject || c.campaignName || ''));
       const rest = campaigns.filter(c => !def.match(c.subject || c.campaignName || ''));
       const aggA = computeAggregate(subset, metric);
       const aggB = computeAggregate(rest, metric);
       // For rates, numerator/denominator based on metric
-      const aSucc = metric === 'openRate' ? aggA.totalOpens : metric === 'clickRate' ? aggA.totalClicks : aggA.totalClicks;
+      let aSucc = metric === 'openRate' ? aggA.totalOpens : metric === 'clickRate' ? aggA.totalClicks : aggA.totalClicks;
       const aTot = metric === 'clickToOpenRate' ? aggA.totalOpens : aggA.totalEmails;
-      const bSucc = metric === 'openRate' ? aggB.totalOpens : metric === 'clickRate' ? aggB.totalClicks : aggB.totalClicks;
+      let bSucc = metric === 'openRate' ? aggB.totalOpens : metric === 'clickRate' ? aggB.totalClicks : aggB.totalClicks;
       const bTot = metric === 'clickToOpenRate' ? aggB.totalOpens : aggB.totalEmails;
+      // Clamp successes to totals to avoid negative failures from noisy data
+      aSucc = Math.min(aSucc, aTot);
+      bSucc = Math.min(bSucc, bTot);
       const { p, valid } = twoProportionZTest({ success: aSucc, total: aTot }, { success: bSucc, total: bTot });
       const useFisher = !valid;
       const pUse = useFisher ? fishersExactTwoSided(aSucc, Math.max(0, aTot - aSucc), bSucc, Math.max(0, bTot - bSucc)) : p;
-      tables.push({ idx: i, aSucc, aTot, bSucc, bTot, useFisher, p: pUse });
+      testedIdx.push(i);
+      tables.push({ idx: i, useFisher, p: pUse });
       pVals.push(pUse);
     }
     const adj = benjaminiHochberg(pVals);
+    // Initialize defaults for all categories
+    for (const cat of categories) { cat.reliable = false; cat.pAdj = undefined; cat.method = 'none'; cat.ci95 = null; }
+    // Apply adjusted p-values to tested categories
     for (let j = 0; j < tables.length; j++) {
-      const t = tables[j];
-      const cat = categories[t.idx];
-      const volOk = (cat.countCampaigns >= minCampaigns) && (cat.totalEmails >= Math.ceil(totalEmailsAll * minEmailsPct));
-      const passed = volOk && (adj[j] < 0.05);
+      const { idx, useFisher } = tables[j];
+      const cat = categories[idx];
+      const passed = adj[j] < 0.05;
       cat.reliable = passed;
       cat.pAdj = adj[j];
-      cat.method = t.useFisher ? 'fisher' : 'z';
+      cat.method = useFisher ? 'fisher' : 'z';
       cat.ci95 = null;
     }
   } else if (metric === 'revenuePerEmail') {
-    // RPE bootstrap on per-campaign RPE values
+    // RPE bootstrap on per-campaign RPE values; only compute for volume-qualified categories
     for (let i = 0; i < categories.length; i++) {
-      const def = CATEGORY_DEFS.find(d => d.key === categories[i].key)!;
+      const cat = categories[i];
+      const volOk = (cat.countCampaigns >= minCampaigns) && (cat.totalEmails >= Math.ceil(totalEmailsAll * minEmailsPct));
+      cat.method = 'bootstrap';
+      cat.pAdj = undefined;
+      if (!volOk) { cat.reliable = false; cat.ci95 = null; continue; }
+      const def = CATEGORY_DEFS.find(d => d.key === cat.key)!;
       const subset = campaigns.filter(c => def.match(c.subject || c.campaignName || ''));
       const rest = campaigns.filter(c => !def.match(c.subject || c.campaignName || ''));
       const rpe = (c: ProcessedCampaign) => (c.emailsSent || 0) > 0 ? (c.revenue || 0) / (c.emailsSent || 1) : 0;
@@ -440,33 +364,18 @@ export function computeSubjectAnalysis(
       // Winsorize then log1p transform for stability in bootstrap mean difference
       const transform = (xs: number[]) => xs.length ? winsorize(xs, 0.99).map(v => Math.log1p(v)) : xs;
       const { lo, hi, passed } = bootstrapDiffCI(A, B, 1000, transform);
-      const cat = categories[i];
-      const volOk = (cat.countCampaigns >= minCampaigns) && (cat.totalEmails >= Math.ceil(totalEmailsAll * minEmailsPct));
-      cat.reliable = volOk && passed;
-      cat.method = 'bootstrap';
-      cat.pAdj = undefined;
+      cat.reliable = passed;
       cat.ci95 = { lo, hi };
     }
   }
 
-  // Legacy group derivations for compatibility (map selected categories back as needed)
-  const keywordEmojis: FeatureStat[] = categoriesRaw.filter(c => c.key === 'emoji');
-  const punctuationCasing: FeatureStat[] = [
-    computeFeatureGroup(campaigns, metric, 'Has question mark (?)', s => s.includes('?'), 'qmark'),
-    computeFeatureGroup(campaigns, metric, 'Has exclamation (!)', s => s.includes('!'), 'exclaim'),
-    computeFeatureGroup(campaigns, metric, 'Has ALL CAPS word', hasAllCapsWord, 'allcaps'),
-    computeFeatureGroup(campaigns, metric, 'Has number', hasStandaloneNumber, 'number'),
-    computeFeatureGroup(campaigns, metric, 'Has %', hasPercent, 'percent'),
-    computeFeatureGroup(campaigns, metric, 'Has brackets/parentheses', s => /[\[\](){}]/.test(s) && !/\[MULTIPLE VARIATIONS\]/i.test(s), 'brackets'),
-  ].filter(f => f.countCampaigns > 0).sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline) || (b.totalEmails - a.totalEmails));
-  const deadlines: FeatureStat[] = categoriesRaw.filter(c => c.key === 'deadline');
-  const personalization: FeatureStat[] = categoriesRaw.filter(c => c.key === 'personalization');
-  const priceAnchoring: FeatureStat[] = [
-    computeFeatureGroup(campaigns, metric, 'Has currency ($/£/€)', hasCurrency, 'cur'),
-    computeFeatureGroup(campaigns, metric, 'Has $ discount', hasDollarDiscount, 'price$'),
-    computeFeatureGroup(campaigns, metric, 'Has % discount', hasPercent, 'pct'),
-  ].filter(f => f.countCampaigns > 0).sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline) || (b.totalEmails - a.totalEmails));
-  const imperativeStart: FeatureStat[] = [computeFeatureGroup(campaigns, metric, 'Starts with a verb (Shop/Save/Get…)', isImperativeStart, 'imperative')];
+  // Legacy groups removed per new spec; keep empty arrays for compatibility where referenced
+  const keywordEmojis: FeatureStat[] = [];
+  const punctuationCasing: FeatureStat[] = [];
+  const deadlines: FeatureStat[] = [];
+  const personalization: FeatureStat[] = [];
+  const priceAnchoring: FeatureStat[] = [];
+  const imperativeStart: FeatureStat[] = [];
 
   // Reuse fatigue — exact match only
   const bySubject = new Map<string, ProcessedCampaign[]>();
