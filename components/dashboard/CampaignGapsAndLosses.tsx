@@ -82,22 +82,20 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
 
     const formatCurrency = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0);
 
-    const showInsufficientBanner = result.insufficientWeeklyData || result.hasLongGaps;
-    if (showInsufficientBanner) {
-        const msg = result.insufficientWeeklyData
-            ? 'Insufficient data to estimate weekly losses. Need ≥66% of weeks with campaigns sent in this period. Try expanding your time range.'
-            : 'Insufficient data for weekly analysis in this period. Try a different time range.';
-        const hint = result.suspectedCsvCoverageGap
-            ? `Heads up: We detected a long ${result.suspectedCsvCoverageGap.weeks} week stretch without any campaigns (${result.suspectedCsvCoverageGap.start} → ${result.suspectedCsvCoverageGap.end}). If this looks wrong, re-export your Campaigns CSV for that span to ensure all rows are included.`
-            : null;
+    // Empty state if the selected range contains zero full weeks
+    if (result.weeksInRangeFull === 0) {
         return (
-            <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
-                <div className="flex items-center gap-2 mb-2"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Gaps & Losses</h3></div>
-                <div className="text-sm text-amber-700 dark:text-amber-300">{msg}</div>
-                {hint && <div className="mt-2 text-xs text-amber-700/90 dark:text-amber-300/90">{hint}</div>}
+            <div className="mt-6">
+                <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-10 bg-white dark:bg-gray-900 flex flex-col items-center justify-center text-center">
+                    <MailX className="w-10 h-10 text-gray-300 mb-3" />
+                    <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Not enough data in this period</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">We didn’t find any complete weeks inside this range. Try a longer date range.</p>
+                </div>
             </div>
         );
     }
+
+    const showInsufficientBanner = result.insufficientWeeklyData;
 
     // Render six cards when sufficient data
     return (
@@ -105,6 +103,16 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Gaps & Losses</h3></div>
             </div>
+            {showInsufficientBanner && (
+                <div className="mb-4 rounded-md border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 p-3">
+                    <div className="text-sm text-amber-800 dark:text-amber-200">Insufficient data to estimate weekly losses. Need ≥66% of weeks with campaigns sent in this period. Try expanding your time range.</div>
+                    {result.suspectedCsvCoverageGap && (
+                        <div className="mt-1 text-xs text-amber-700/90 dark:text-amber-300/90">
+                            Heads up: We detected a long {result.suspectedCsvCoverageGap.weeks} week stretch without any campaigns ({result.suspectedCsvCoverageGap.start} → {result.suspectedCsvCoverageGap.end}). If this looks wrong, re-export your Campaigns CSV for that span.
+                        </div>
+                    )}
+                </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Row 1 — Consistency & Gaps */}
                 <div className="relative">

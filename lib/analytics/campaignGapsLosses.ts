@@ -101,7 +101,8 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
       const runLen = j - i;
       zeroSendWeeks += runLen;
       if (runLen > longestGap) { longestGap = runLen; longestGapStartIdx = i; }
-      if (runLen > 4) hasLongGaps = true;
+  // Previously: if (runLen > 4) hasLongGaps = true;
+  // We no longer gate on long gaps; keep computing longestGap for display only.
       i = j;
     } else {
       i++;
