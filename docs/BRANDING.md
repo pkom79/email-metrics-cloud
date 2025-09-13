@@ -58,6 +58,16 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Examples:
   - Weekly-only module for 90+ day ranges: Title “Weekly view and 90+ days required”, body “This module is available only in the Weekly view for ranges 90 days or longer.” Icon: `CalendarRange`.
   - Zero full weeks in range: Title “Not enough data in this period”, body “We didn’t find any complete weeks inside this range. Try a longer date range.” Icon: `MailX`.
+
+## Actionable notice cards (segments)
+
+- Use dashed bordered cards for informational notices that may include a single secondary action.
+- Icon: CalendarRange for date-range notices; size 40px; gray-300 tint on light, same on dark.
+- Title: sentence-case, concise, bold.
+- Body: one short sentence with the exact bounds or values referenced.
+- Button: purple filled, small/compact; label “Use this date range”; centered; only render when the action is valid.
+- Do not stack multiple actions; prefer one clear CTA or none.
+- Dark mode: bg-gray-900 with gray-800 border; maintain contrast for text and button.
 ### Export controls
 
 ## Inline data links + tooltip (Segments)

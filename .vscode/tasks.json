@@ -7,7 +7,9 @@
 			"command": "npm run dev",
 			"group": "build",
 			"isBackground": true,
-			"problemMatcher": ["$tsc"]
+			"problemMatcher": [
+				"$tsc"
+			]
 		},
 		{
 			"label": "Build Project Once",
@@ -15,7 +17,16 @@
 			"command": "npm run build",
 			"isBackground": false,
 			"group": "build",
-			"problemMatcher": ["$tsc"]
+			"problemMatcher": [
+				"$tsc"
+			]
+		},
+		{
+			"label": "Build Project Once",
+			"type": "shell",
+			"command": "npm run build",
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }

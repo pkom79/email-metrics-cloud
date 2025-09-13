@@ -10,9 +10,11 @@ type Props = {
     customFrom?: string; // YYYY-MM-DD
     customTo?: string;   // YYYY-MM-DD
     referenceDate?: Date; // anchor for presets; falls back to now
+    // Optional: allows this block to request the main dashboard to set its date range
+    onSetMainDateRange?: (fromISO: string, toISO: string) => void;
 };
 
-const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, customTo, referenceDate }) => {
+const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, customTo, referenceDate, onSetMainDateRange }) => {
     // Segment A
     const [segmentASubscribers, setSegmentASubscribers] = useState<ProcessedSubscriber[]>([]);
     const [segmentAName, setSegmentAName] = useState<string>('');
@@ -212,6 +214,15 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
         from.setHours(0, 0, 0, 0);
         return { from, to };
     }, [dateRange, customFrom, customTo, referenceDate]);
+
+    // Helper to format Date -> YYYY-MM-DD for parent callback
+    const toISO = (d: Date | null) => {
+        if (!d) return '';
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const da = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${da}`;
+    };
 
     const filterByCreatedRange = (subs: ProcessedSubscriber[]): ProcessedSubscriber[] => {
         const fromDate = computeFromToForPreset.from;
@@ -648,6 +659,16 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                                 <CalendarRange className="w-10 h-10 text-gray-300 mb-3" />
                                 <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Selected date filter is outside the created‑at window for Segment A</h4>
                                 <p className="text-sm text-gray-600 dark:text-gray-400">Profiles were created between {dateFmt(spanA.min)} and {dateFmt(spanA.max)}.</p>
+                                {onSetMainDateRange && spanA.min && spanA.max && (
+                                    <button
+                                        type="button"
+                                        className="mt-3 px-3 py-1.5 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700"
+                                        title="Set the main dashboard date filter to match this segment’s created-at window"
+                                        onClick={() => onSetMainDateRange(toISO(spanA.min), toISO(spanA.max))}
+                                    >
+                                        Use this date range
+                                    </button>
+                                )}
                             </div>
                         )}
                         {outsideB && (
@@ -655,6 +676,16 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                                 <CalendarRange className="w-10 h-10 text-gray-300 mb-3" />
                                 <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Selected date filter is outside the created‑at window for Segment B</h4>
                                 <p className="text-sm text-gray-600 dark:text-gray-400">Profiles were created between {dateFmt(spanB.min)} and {dateFmt(spanB.max)}.</p>
+                                {onSetMainDateRange && spanB.min && spanB.max && (
+                                    <button
+                                        type="button"
+                                        className="mt-3 px-3 py-1.5 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700"
+                                        title="Set the main dashboard date filter to match this segment’s created-at window"
+                                        onClick={() => onSetMainDateRange(toISO(spanB.min), toISO(spanB.max))}
+                                    >
+                                        Use this date range
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>

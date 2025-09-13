@@ -1379,7 +1379,28 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 <AudienceCharts dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} />
                 {/* Sticky end sentinel (1px spacer) */}
                 <div ref={el => setStickyEndRef(el)} style={{ height: 1 }} />
-                <section><CustomSegmentBlock dateRange={dateRange} customFrom={customFrom} customTo={customTo} referenceDate={REFERENCE_DATE} /></section>
+                <section>
+                    <CustomSegmentBlock
+                        dateRange={dateRange}
+                        customFrom={customFrom}
+                        customTo={customTo}
+                        referenceDate={REFERENCE_DATE}
+                        onSetMainDateRange={(fromISO, toISO) => {
+                            let from = fromISO;
+                            let to = toISO;
+                            // Clamp to allowed window
+                            if (from && from < allowedMinISO) from = allowedMinISO;
+                            if (to && to > allowedMaxISO) to = allowedMaxISO;
+                            // Ensure from <= to
+                            if (from && to && new Date(from) > new Date(to)) {
+                                to = from;
+                            }
+                            setCustomFrom(from);
+                            setCustomTo(to);
+                            setDateRange('custom');
+                        }}
+                    />
+                </section>
             </div></div>
 
             {/* Sharing feature removed */}
