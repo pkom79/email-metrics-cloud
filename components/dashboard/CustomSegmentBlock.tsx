@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState } from 'react';
-import { UploadCloud, ListChecks, Info } from 'lucide-react';
+import { UploadCloud, ListChecks, Info, CalendarRange } from 'lucide-react';
 import Papa from 'papaparse';
 import { ProcessedSubscriber } from '../../lib/data/dataTypes';
 import { SubscriberTransformer } from '../../lib/data/transformers/subscriberTransformer';
@@ -592,27 +592,6 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
             <div className="flex items-center gap-3 mb-4">
                 <UploadCloud className="w-6 h-6 text-purple-600" />
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Analyze Custom Segment</h2>
-                {/* Outside-of-range notices */}
-                {(outsideA || outsideB) && (
-                    <div className="mt-3 mb-2 flex flex-col gap-2">
-                        {outsideA && (
-                            <div className="flex items-start gap-2 text-gray-600 dark:text-gray-400 text-sm">
-                                <Info className="w-4 h-4 text-gray-400 mt-0.5" />
-                                <span>
-                                    Selected date filter is outside the created-at window for Segment A. Profiles were created between {dateFmt(spanA.min)} and {dateFmt(spanA.max)}.
-                                </span>
-                            </div>
-                        )}
-                        {outsideB && (
-                            <div className="flex items-start gap-2 text-gray-600 dark:text-gray-400 text-sm">
-                                <Info className="w-4 h-4 text-gray-400 mt-0.5" />
-                                <span>
-                                    Selected date filter is outside the created-at window for Segment B. Profiles were created between {dateFmt(spanB.min)} and {dateFmt(spanB.max)}.
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                )}
             </div>
 
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-8 mb-8 hover:shadow-xl transition-all duration-200">
@@ -660,6 +639,26 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                         {errorB && <div className="text-red-500 text-sm">{errorB}</div>}
                     </div>
                 </div>
+
+                {/* Outside-of-range notices (below upload buttons, more visible as dashed cards) */}
+                {(outsideA || outsideB) && (
+                    <div className="mb-6 flex flex-col gap-3">
+                        {outsideA && (
+                            <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-gray-900 flex flex-col items-center justify-center text-center">
+                                <CalendarRange className="w-10 h-10 text-gray-300 mb-3" />
+                                <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Selected date filter is outside the created‑at window for Segment A</h4>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">Profiles were created between {dateFmt(spanA.min)} and {dateFmt(spanA.max)}.</p>
+                            </div>
+                        )}
+                        {outsideB && (
+                            <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-6 bg-white dark:bg-gray-900 flex flex-col items-center justify-center text-center">
+                                <CalendarRange className="w-10 h-10 text-gray-300 mb-3" />
+                                <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Selected date filter is outside the created‑at window for Segment B</h4>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">Profiles were created between {dateFmt(spanB.min)} and {dateFmt(spanB.max)}.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {hasA && !hasB && statsA && (
                     <div>
