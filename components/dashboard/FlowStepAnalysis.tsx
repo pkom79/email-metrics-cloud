@@ -438,7 +438,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const s1Sends = (stepScores as any).context?.s1Sends as number;
         const rpeMedian = (stepScores as any).context?.rpeBaseline as number;
         const lastRes = (stepScores as any).results?.[lastIdx] as any | undefined;
-        const lastAction = lastRes?.action as ('scale'|'keep'|'improve'|'pause'|undefined);
+        const lastAction = lastRes?.action as ('scale' | 'keep' | 'improve' | 'pause' | undefined);
         const volumeOk = last.emailsSent >= Math.max(500, Math.round(0.05 * s1Sends));
         const deliverabilityOk = last.unsubscribeRate <= 0.30 && last.spamRate <= 0.03;
         const rpeOk = last.revenuePerEmail >= rpeMedian;
@@ -673,15 +673,15 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                         {indicatorAvailable ? (() => {
                             const res = (stepScores as any).results?.[index] as any | undefined;
                             if (!res) return null;
-                            const action = res.action as 'scale'|'keep'|'improve'|'pause';
+                            const action = res.action as 'scale' | 'keep' | 'improve' | 'pause';
                             const color = action === 'scale' ? '#10b981' // emerald
                                 : action === 'keep' ? '#7c3aed' // purple
-                                : action === 'improve' ? '#f59e0b' // amber
-                                : '#e11d48'; // red
+                                    : action === 'improve' ? '#f59e0b' // amber
+                                        : '#e11d48'; // red
                             const label = action === 'scale' ? 'Scale'
                                 : action === 'keep' ? 'Keep'
-                                : action === 'improve' ? 'Improve/Test'
-                                : 'Pause/Merge';
+                                    : action === 'improve' ? 'Improve/Test'
+                                        : 'Pause/Merge';
                             const m = res.pillars?.money?.points ?? 0;
                             const d = res.pillars?.deliverability?.points ?? 0;
                             const v = res.pillars?.volume?.points ?? 0;
