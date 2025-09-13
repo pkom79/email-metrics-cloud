@@ -1205,9 +1205,8 @@ export async function buildLlmExportJson(params: {
             if (indicatorAvailable) {
               const last = steps[steps.length - 1];
               const lastScore = stepScores[stepScores.length - 1]?.stepScore;
-              const isScale = lastScore?.action === 'scale';
+              const lastScoreVal = Number(lastScore?.score) || 0;
               const volumeOk = last.total.emailsSent >= Math.max(500, Math.round(0.05 * (steps[0]?.total.emailsSent || 0)));
-              const deliverabilityOk = (lastScore?.pillars?.deliverability?.points ?? 0) >= 12;
               const rpeOk = last.total.revenuePerEmail >= rpeBaseline;
               const prev = steps.length > 1 ? steps[steps.length - 2] : null;
               const deltaRpeOk = prev ? (last.total.revenuePerEmail - prev.total.revenuePerEmail) >= 0 : true;
@@ -1221,7 +1220,7 @@ export async function buildLlmExportJson(params: {
                   ? Math.max(1, Math.ceil((new Date(customTo).getTime() - new Date(customFrom).getTime()) / (1000*60*60*24)))
                   : ((dateRange as any) === 'all' ? 0 : parseInt(String(dateRange).replace('d','')));
               const isRecentWindow = endsAtLast && (days === 30 || days === 90);
-              const suggested = isScale && rpeOk && deltaRpeOk && deliverabilityOk && volumeOk && absoluteRevenueOk && isRecentWindow;
+              const suggested = (lastScoreVal >= 75) && rpeOk && deltaRpeOk && volumeOk && absoluteRevenueOk && isRecentWindow;
               const rpes = steps.map(s => s.total.revenuePerEmail).filter(v => isFinite(v) && v >= 0).sort((a,b)=>a-b);
               const idx = rpes.length ? Math.floor(0.25 * (rpes.length - 1)) : 0;
               let floor = rpes.length ? rpes[idx] : last.total.revenuePerEmail;
@@ -1235,7 +1234,7 @@ export async function buildLlmExportJson(params: {
                 reason,
                 horizonDays: isRecentWindow ? (days as 30 | 90) : undefined,
                 estimate: suggested ? { projectedReach, rpeFloor, estimatedRevenue, assumptions: { reachPctOfLastStep: 0.5, rpePercentile: 25, clampedToLastStepRpe: true } } : undefined,
-                gates: { lastStepRevenue, lastStepRevenuePctOfFlow: lastRevenuePct, deliverabilityOk, volumeOk, rpeOk, deltaRpeOk, isRecentWindow }
+                gates: { lastStepRevenue, lastStepRevenuePctOfFlow: lastRevenuePct, deliverabilityOk: true, volumeOk, rpeOk, deltaRpeOk, isRecentWindow }
               };
             }
           } catch {}

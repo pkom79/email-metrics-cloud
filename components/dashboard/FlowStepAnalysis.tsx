@@ -509,11 +509,10 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const s1Sends = (stepScores as any).context?.s1Sends as number;
         const rpeMedian = (stepScores as any).context?.rpeBaseline as number;
         const lastRes = (stepScores as any).results?.[lastIdx] as any | undefined;
-        const lastAction = lastRes?.action as ('scale' | 'keep' | 'improve' | 'pause' | undefined);
+        const lastScoreVal = Number(lastRes?.score) || Number(lastRes?.stepScore?.score) || 0;
         const volumeOk = last.emailsSent >= Math.max(500, Math.round(0.05 * s1Sends));
-        // Deliverability gate: require D >= 12 for last step
-        const lastD = (lastRes?.pillars?.deliverability?.points as number) ?? 0;
-        const deliverabilityOk = lastD >= 12;
+        // Deliverability gate removed — rely on overall step score instead
+        const deliverabilityOk = true;
         const rpeOk = last.revenuePerEmail >= rpeMedian;
         const prev = lastIdx > 0 ? flowStepMetrics[lastIdx - 1] : null;
         const deltaRpeOk = prev ? (last.revenuePerEmail - prev.revenuePerEmail) >= 0 : true;
@@ -531,8 +530,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             : (dateRange === 'all' ? 0 : parseInt(dateRange.replace('d', '')));
         const isRecentWindow = endsAtLast && (days === 30 || days === 90);
 
-        // Suggest add-step when last step is a Scale action and all gates pass.
-        const suggested = lastAction === 'scale' && rpeOk && deltaRpeOk && deliverabilityOk && volumeOk && absoluteRevenueOk && isRecentWindow;
+        // Suggest add-step when last step has a strong overall score (>=75) and all gates pass.
+        const suggested = (lastScoreVal >= 75) && rpeOk && deltaRpeOk && volumeOk && absoluteRevenueOk && isRecentWindow;
 
         // Estimate (Option B) when suggested or to include in JSON gates
         const rpeFloor = (() => {
@@ -1070,7 +1069,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 ) : null}
                             </span>
                         ) : (
-                            <span>Consider adding a follow-up after S{flowStepMetrics[flowStepMetrics.length - 1].sequencePosition} (solid RPE, clear deliverability).
+                            <span>Consider adding a follow-up after S{flowStepMetrics[flowStepMetrics.length - 1].sequencePosition} (strong recent performance).
                                 {(addStepSuggestion as any)?.estimate ? (
                                     <span className="ml-1 text-gray-500" title="Estimate is conservative and depends on how many emails your flow sends and may vary with audience behavior.">
                                         Est. +{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((addStepSuggestion as any).estimate.estimatedRevenue)} in next {(addStepSuggestion as any).horizonDays} days
