@@ -5,6 +5,7 @@ import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
 import { thirdTicks, formatTickLabels, computeAxisMax } from '../../lib/utils/chartTicks';
 import InfoTooltipIcon from '../InfoTooltipIcon';
+import TooltipPortal from '../TooltipPortal';
 
 interface FlowStepAnalysisProps {
     dateRange: string;
@@ -408,6 +409,13 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             else if (score >= 60) action = 'keep';
             else if (score >= 40) action = 'improve';
             else action = 'pause';
+            // Guardrail: don't flag as Pause/Merge for very high-revenue steps unless hard-stop
+            const highAbsRevenue = s.revenue >= 5000; // 30d high absolute revenue guardrail
+            const highRevenueShare = revenueShare >= 0.10; // 10%+ of flow revenue
+            if (!hardStop && action === 'pause' && (highAbsRevenue || highRevenueShare)) {
+                action = 'keep';
+                notes.push('High revenue guardrail');
+            }
 
             return {
                 score,
@@ -685,8 +693,25 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                             const m = res.pillars?.money?.points ?? 0;
                             const d = res.pillars?.deliverability?.points ?? 0;
                             const v = res.pillars?.volume?.points ?? 0;
-                            const tip = `${label} • Score ${Math.round(res.score)} (Money ${Math.round(m)}, Deliverability ${Math.round(d)}, Volume ${Math.round(v)})`;
-                            return <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} title={tip} aria-label={tip} />;
+                            const penalties = res.pillars?.deliverability?.penalties || [];
+                            const tipNode = (
+                                <div className="max-w-xs">
+                                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{label} · Score {Math.round(res.score)}</div>
+                                    <div className="mt-2 text-xs text-gray-700 dark:text-gray-300 space-y-1">
+                                        <div>Money: <span className="tabular-nums font-medium">{Math.round(m)}</span></div>
+                                        <div>Deliverability: <span className="tabular-nums font-medium">{Math.round(d)}</span>{penalties.length ? <span className="ml-1 text-[11px]">({penalties.map((p: any) => p.type).join(', ')})</span> : null}</div>
+                                        <div>Volume: <span className="tabular-nums font-medium">{Math.round(v)}</span></div>
+                                        {res.notes?.length ? (
+                                            <div className="pt-1 text-[11px] text-gray-600 dark:text-gray-400">{res.notes.join(' · ')}</div>
+                                        ) : null}
+                                    </div>
+                                </div>
+                            );
+                            return (
+                                <TooltipPortal content={tipNode}>
+                                    <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} aria-label={`${label} indicator`} />
+                                </TooltipPortal>
+                            );
                         })() : null}
                         <span className="font-semibold text-gray-900 dark:text-gray-100">{step.emailName}</span>
                         {duplicateNameCounts[step.emailName] > 1 && (
