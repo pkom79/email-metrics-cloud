@@ -323,6 +323,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const s1Sends = flowStepMetrics[0]?.emailsSent || 0;
         const volumeGate = (sends: number) => sends >= Math.max(500, Math.round(0.05 * s1Sends));
         const arr = flowStepMetrics;
+        const flowRevenueTotal = arr.reduce((sum, s) => sum + (s.revenue || 0), 0);
         const vals = {
             rpe: arr.map(s => s.revenuePerEmail),
             cvr: arr.map(s => s.conversionRate),
@@ -402,7 +403,12 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             if (prev && clamp(dRpe) < -0.6) rs.push('RPE down vs prior');
             if (s.revenuePerEmail >= rpeMedian) rs.push('Strong RPE');
 
-            const rating: typeof ratings[number] = score >= 1.0 ? 'good' : (score <= -1.0 || deliverabilityIssue ? 'consider_pausing' : 'needs_work');
+            let rating: typeof ratings[number] = score >= 1.0 ? 'good' : (score <= -1.0 || deliverabilityIssue ? 'consider_pausing' : 'needs_work');
+            // Guardrail: avoid red for high-revenue steps unless deliverability is risky
+            const revenueShare = flowRevenueTotal > 0 ? (s.revenue / flowRevenueTotal) : 0;
+            if (!deliverabilityIssue && rating === 'consider_pausing' && revenueShare >= 0.2) {
+                rating = 'needs_work';
+            }
             ratings.push(rating);
             reasons.push(rs);
         }
@@ -653,6 +659,20 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             <div key={step.sequencePosition} className="p-0">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
+                        {indicatorAvailable ? (() => {
+                            const rating = (stepScores as any).ratings?.[index] as string | undefined;
+                            const reasons = (stepScores as any).reasons?.[index] as string[] | undefined;
+                            const color = rating === 'good' ? '#059669'
+                                : rating === 'needs_work' ? '#f59e0b'
+                                : rating === 'consider_pausing' ? '#e11d48'
+                                : '#d1d5db';
+                            const label = rating === 'good' ? 'Good'
+                                : rating === 'needs_work' ? 'Needs work'
+                                : rating === 'consider_pausing' ? 'Consider pausing'
+                                : 'Low data';
+                            const tip = `${label} • ${reasons && reasons.length ? reasons.join(', ') : 'All metrics considered.'}`;
+                            return <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} title={tip} aria-label={tip} />;
+                        })() : null}
                         <span className="font-semibold text-gray-900 dark:text-gray-100">{step.emailName}</span>
                         {duplicateNameCounts[step.emailName] > 1 && (
                             <span className="inline-flex items-center" title={`Multiple emails share the name "${step.emailName}" (${duplicateNameCounts[step.emailName]}).`} aria-label="Duplicate step name warning">
@@ -932,61 +952,28 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                     </div>
                 </div>
             </div>
-            {/* Flow-level indicators row and summary */}
-            {selectedFlow && (
+            {/* Add-step suggestion (header-level dots removed; dots shown per step) */}
+            {selectedFlow && indicatorAvailable && (addStepSuggestion as any)?.suggested && (
                 <div className="mb-3">
-                    {indicatorAvailable ? (
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                {flowStepMetrics.map((s, i) => {
-                                    const rating = (stepScores as any).ratings?.[i] as string | undefined;
-                                    const color = rating === 'good' ? '#059669' /* emerald-600 */
-                                        : rating === 'needs_work' ? '#f59e0b' /* amber-500 */
-                                            : rating === 'consider_pausing' ? '#e11d48' /* rose-600 */
-                                                : '#d1d5db'; /* gray-300 */
-                                    return <span key={i} className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} title={`S${s.sequencePosition}: ${s.emailName}`} />;
-                                })}
-                            </div>
-                            <div className="text-[11px] text-gray-600 dark:text-gray-300">
-                                {(() => {
-                                    const r = (stepScores as any).ratings as string[] | undefined;
-                                    if (!r || !r.length) return null;
-                                    const good = r.map((v, i) => v === 'good' ? i + 1 : null).filter(Boolean) as number[];
-                                    const work = r.map((v, i) => v === 'needs_work' ? i + 1 : null).filter(Boolean) as number[];
-                                    const pause = r.map((v, i) => v === 'consider_pausing' ? i + 1 : null).filter(Boolean) as number[];
-                                    const parts: string[] = [];
-                                    if (good.length) parts.push(`Good: S${good.join('–S')}`.replace('S,', 'S'));
-                                    if (work.length) parts.push(`Needs work: S${work.join(', S')}`);
-                                    if (pause.length) parts.push(`Consider pausing: S${pause.join(', S')}`);
-                                    return parts.join(' • ');
-                                })()}
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="text-[11px] text-gray-600 dark:text-gray-300">Indicator unavailable (duplicate names or step order inconsistent).</div>
-                    )}
-                    {/* Add-step suggestion */}
-                    {indicatorAvailable && (addStepSuggestion as any)?.suggested && (
-                        <div className="mt-1 text-[11px] text-gray-700 dark:text-gray-200">
-                            {flowStepMetrics.length === 1 ? (
-                                <span>Consider adding a second step (strong RPE and healthy deliverability).
-                                    {(addStepSuggestion as any)?.estimate ? (
-                                        <span className="ml-1 text-gray-500" title="Estimate is conservative and depends on how many emails your flow sends and may vary with audience behavior.">
-                                            Est. +{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((addStepSuggestion as any).estimate.estimatedRevenue)} in next {(addStepSuggestion as any).horizonDays} days
-                                        </span>
-                                    ) : null}
-                                </span>
-                            ) : (
-                                <span>Consider adding a follow-up after S{flowStepMetrics[flowStepMetrics.length - 1].sequencePosition} (solid RPE, clear deliverability).
-                                    {(addStepSuggestion as any)?.estimate ? (
-                                        <span className="ml-1 text-gray-500" title="Estimate is conservative and depends on how many emails your flow sends and may vary with audience behavior.">
-                                            Est. +{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((addStepSuggestion as any).estimate.estimatedRevenue)} in next {(addStepSuggestion as any).horizonDays} days
-                                        </span>
-                                    ) : null}
-                                </span>
-                            )}
-                        </div>
-                    )}
+                    <div className="mt-1 text-[11px] text-gray-700 dark:text-gray-200">
+                        {flowStepMetrics.length === 1 ? (
+                            <span>Consider adding a second step (strong RPE and healthy deliverability).
+                                {(addStepSuggestion as any)?.estimate ? (
+                                    <span className="ml-1 text-gray-500" title="Estimate is conservative and depends on how many emails your flow sends and may vary with audience behavior.">
+                                        Est. +{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((addStepSuggestion as any).estimate.estimatedRevenue)} in next {(addStepSuggestion as any).horizonDays} days
+                                    </span>
+                                ) : null}
+                            </span>
+                        ) : (
+                            <span>Consider adding a follow-up after S{flowStepMetrics[flowStepMetrics.length - 1].sequencePosition} (solid RPE, clear deliverability).
+                                {(addStepSuggestion as any)?.estimate ? (
+                                    <span className="ml-1 text-gray-500" title="Estimate is conservative and depends on how many emails your flow sends and may vary with audience behavior.">
+                                        Est. +{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((addStepSuggestion as any).estimate.estimatedRevenue)} in next {(addStepSuggestion as any).horizonDays} days
+                                    </span>
+                                ) : null}
+                            </span>
+                        )}
+                    </div>
                 </div>
             )}
             {/* Naming note styled like Data Coverage Notice (purple) */}
