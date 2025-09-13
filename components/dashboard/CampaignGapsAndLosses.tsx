@@ -52,20 +52,12 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
     const weekly90Plus = granularity === 'weekly' && daysSpan >= 90;
     if (!weekly90Plus) {
         return (
-            <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
-                <div className="flex items-center gap-2 mb-2"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Gaps & Losses
-                    <InfoTooltipIcon placement="top" content={(
-                        <div>
-                            <p className="font-semibold mb-1">What</p>
-                            <p>Weeks you did not send and what that might have cost.</p>
-                            <p className="font-semibold mt-2 mb-1">How</p>
-                            <p>We find weeks without campaigns and estimate missed revenue.</p>
-                            <p className="font-semibold mt-2 mb-1">Why</p>
-                            <p>Keep a steady weekly cadence going forward. Plan a realistic schedule and monitor for new gaps.</p>
-                        </div>
-                    )} />
-                </h3></div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">This module is available only in the Weekly view for ranges 90 days or longer.</div>
+            <div className="mt-6">
+                <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-10 bg-white dark:bg-gray-900 flex flex-col items-center justify-center text-center">
+                    <CalendarRange className="w-10 h-10 text-gray-300 mb-3" />
+                    <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Weekly view and 90+ days required</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">This module is available only in the Weekly view for ranges 90 days or longer.</p>
+                </div>
             </div>
         );
     }
@@ -105,7 +97,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
             </div>
             {showInsufficientBanner && (
                 <div className="mb-4 rounded-md border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 p-3">
-                    <div className="text-sm text-amber-800 dark:text-amber-200">Insufficient data to estimate weekly losses. Need ≥66% of weeks with campaigns sent in this period. Try expanding your time range.</div>
+                    <div className="text-sm text-amber-800 dark:text-amber-200">Limited weekly coverage (need ≥66% of weeks with campaigns). Estimates shown below are conservative and may be less reliable. Consider expanding your time range.</div>
                     {result.suspectedCsvCoverageGap && (
                         <div className="mt-1 text-xs text-amber-700/90 dark:text-amber-300/90">
                             Heads up: We detected a long {result.suspectedCsvCoverageGap.weeks} week stretch without any campaigns ({result.suspectedCsvCoverageGap.start} → {result.suspectedCsvCoverageGap.end}). If this looks wrong, re-export your Campaigns CSV for that span.
@@ -182,7 +174,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                     <TooltipPortal
                         content={(
                             <div className="max-w-xs text-gray-900 dark:text-gray-100">
-                                <div className="text-sm">Conservative estimate of revenue missed during short gaps (1–4 weeks). We look at typical nearby weeks, cap outliers, and multiply by the number of missing weeks.</div>
+                                <div className="text-sm">Conservative estimate of revenue missed during gaps. For short gaps (1–4 weeks), we use nearby typical weeks. For longer gaps, we estimate each week using a local ±8 week window with conservative caps and a gentle decay for very long runs.</div>
                             </div>
                         )}
                     >

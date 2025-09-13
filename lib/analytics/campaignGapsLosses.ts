@@ -101,8 +101,9 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
       const runLen = j - i;
       zeroSendWeeks += runLen;
       if (runLen > longestGap) { longestGap = runLen; longestGapStartIdx = i; }
-  // Previously: if (runLen > 4) hasLongGaps = true;
-  // We no longer gate on long gaps; keep computing longestGap for display only.
+      // Flag presence of long gaps (>=5 weeks). We do not gate UI on this anymore, but we surface the flag.
+      if (runLen >= 5) hasLongGaps = true;
+      // We no longer gate on long gaps; keep computing longestGap for display only.
       i = j;
     } else {
       i++;
@@ -187,19 +188,22 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   const threshold = Math.ceil(0.66 * coverageDenom);
   const insufficientWeeklyData = sentWeeksAll < threshold;
 
-  // Cap support: 90th percentile of non-zero campaign revenue within the selected range (complete weeks only)
+  // Cap support: 75th percentile of non-zero campaign revenue within the selected range (complete weeks only)
   const nonZeroWeeklyInRange = completeWeeks.map(w => w.campaignRevenue).filter(v => (v || 0) > 0) as number[];
-  const p90Cap = percentile(nonZeroWeeklyInRange, 0.9);
+  const p75Cap = percentile(nonZeroWeeklyInRange, 0.75);
 
-  // Build zero-send runs again but consider only runs length 1-4 for loss estimation (>=5 flagged via hasLongGaps)
+  // Build runs for loss estimation over weeks with zero campaign revenue (includes zero-send and zero-revenue weeks).
+  // We'll treat 1–4 week runs with the original local-median approach, and >=5 week runs with a conservative
+  // weekly estimator (±8-week window, p40, p75 cap, min 4 refs, decay beyond week 12).
   type Run = { startIdx: number; len: number };
-  const runs: Run[] = [];
+  const runsForEstimate: Run[] = [];
   let a = 0;
   while (a < completeWeeks.length) {
-    if (isZeroSend(completeWeeks[a])) {
-      let b = a; while (b < completeWeeks.length && isZeroSend(completeWeeks[b])) b++;
+    const isZeroRev = (completeWeeks[a].campaignRevenue || 0) === 0;
+    if (isZeroRev) {
+      let b = a; while (b < completeWeeks.length && ((completeWeeks[b].campaignRevenue || 0) === 0)) b++;
       const len = b - a;
-      if (len >= 1 && len <= 4) runs.push({ startIdx: a, len });
+      runsForEstimate.push({ startIdx: a, len });
       a = b;
     } else a++;
   }
@@ -239,16 +243,53 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   }
 
   let estimatedLostRevenue: number | undefined = 0;
-  for (const run of runs) {
-    let refs = collectRefs(run);
-    if (refs.length < 3) continue; // insufficient references for this run
-    refs = trimOrWinsorize(refs);
-    if (!refs.length) continue;
-    let expected = median(refs);
-    // Cap expected by 90th percentile cap within selected range
-    expected = Math.min(expected, p90Cap);
-    // For multi-week gaps, same expected for each week
-    estimatedLostRevenue += expected * run.len;
+  // Global fallback median when local refs are insufficient
+  const globalMedian = median(nonZeroWeeklyInRange);
+  const ONE_WEEK = 7 * ONE_DAY;
+  for (const run of runsForEstimate) {
+    if (run.len >= 1 && run.len <= 4) {
+      // Short gaps: original approach with trimming/winsorization and median
+      let refs = collectRefs(run);
+      if (refs.length < 3) continue; // insufficient references for this short run
+      refs = trimOrWinsorize(refs);
+      if (!refs.length) continue;
+      let expected = median(refs);
+      // Cap expected by 75th percentile cap within selected range
+      expected = Math.min(expected, p75Cap);
+      estimatedLostRevenue += expected * run.len;
+    } else if (run.len >= 5) {
+      // Long gaps: per-week conservative estimate using ±8-week local window, p40, p75 cap,
+      // require at least 4 refs; otherwise fall back to global median of non-zero weeks.
+      for (let offset = 0; offset < run.len; offset++) {
+        const weekIdx = run.startIdx + offset;
+        // Collect references from window [weekIdx-8, weekIdx+8], excluding zero weeks (by definition), using non-zero campaignRevenue
+        const windowRefs: number[] = [];
+        const lo = Math.max(0, weekIdx - 8);
+        const hi = Math.min(completeWeeks.length - 1, weekIdx + 8);
+        for (let k = lo; k <= hi; k++) {
+          if (k >= run.startIdx && k < run.startIdx + run.len) continue; // skip inside the gap
+          const wk = completeWeeks[k];
+          const v = wk.campaignRevenue || 0;
+          if (v > 0) windowRefs.push(v);
+        }
+        let expected: number | null = null;
+        if (windowRefs.length >= 4) {
+          // Use p40 of local references
+          expected = percentile(windowRefs, 0.40);
+        } else if (globalMedian > 0) {
+          // Fallback to global median of non-zero weeks in range
+          expected = globalMedian;
+        }
+        if (expected == null || expected <= 0) continue;
+        // Cap at p75 cap for safety
+        expected = Math.min(expected, p75Cap);
+        // Apply conservative decay beyond week 12 within a continuous gap (week index within run is 1-based)
+        const posInRun = offset + 1;
+        let decay = 1;
+        if (posInRun > 12) decay = Math.pow(0.95, posInRun - 12);
+        estimatedLostRevenue += expected * decay;
+      }
+    }
   }
   // If nothing computed, keep as undefined rather than 0
   if (estimatedLostRevenue === 0) estimatedLostRevenue = undefined;

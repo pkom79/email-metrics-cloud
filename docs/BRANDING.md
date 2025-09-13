@@ -2,7 +2,7 @@
 
 This guide defines the design tokens, components, and patterns used across the app. Treat it as the single source of truth and keep it updated as we standardize. When adding or modifying UI, reference this document and prefer the shared components listed here.
 
-Last updated: 2025-09-13 (Custom Segment compare layout + delta formatting + Overview sourcing)
+Last updated: 2025-09-13 (Custom Segment compare layout + delta formatting + Overview sourcing; Weekly 90+ empty state pattern)
 
 ## theme and modes
 - Tailwind: v3.x, darkMode: class
@@ -49,6 +49,15 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 ### Section Containers
 - `.section-card`: Rounded card with border and padding.
 - `.section-header`: Title at left, controls at right.
+### Empty states (standardized)
+- Use a dashed border card when a module is gated by view/range or has no sufficient data for the section:
+  - Container: `rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-10 bg-white dark:bg-gray-900`
+  - Icon: lucide icon in muted gray (e.g., `text-gray-300`) sized 40px–48px above the copy
+  - Title: `text-base font-semibold text-gray-900 dark:text-gray-100`
+  - Body: `text-sm text-gray-600 dark:text-gray-400` centered, concise guidance
+- Examples:
+  - Weekly-only module for 90+ day ranges: Title “Weekly view and 90+ days required”, body “This module is available only in the Weekly view for ranges 90 days or longer.” Icon: `CalendarRange`.
+  - Zero full weeks in range: Title “Not enough data in this period”, body “We didn’t find any complete weeks inside this range. Try a longer date range.” Icon: `MailX`.
 ### Export controls
 
 ## Inline data links + tooltip (Segments)
