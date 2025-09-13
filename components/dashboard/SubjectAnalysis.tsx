@@ -71,11 +71,11 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                 {/* Length bins */}
                 <div className="mb-6">
                     <div className="flex items-center gap-2 mb-3 justify-center"><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Performance by Subject Length</h4></div>
-                    {/* 4 in a line on md+ screens, centered container */}
-                    <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Single-row layout on md+: baseline + 1–3 bins centered */}
+                    <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:justify-center gap-4">
                         {/* Baseline card */}
                         <TooltipPortal content={(<div className="text-xs">Reference average for comparison.</div>)}>
-                            <div className="w-full rounded-2xl border border-gray-200 dark:border-gray-800 p-5 bg-white dark:bg-gray-900">
+                            <div className="w-full md:w-auto rounded-2xl border border-gray-200 dark:border-gray-800 p-5 bg-white dark:bg-gray-900">
                                 <div className="text-base text-gray-600 dark:text-gray-400">Baseline</div>
                                 <div className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{fmt(result.baseline.value)}</div>
                                 <div className="text-sm text-gray-600 dark:text-gray-400">{result.baseline.countCampaigns} campaigns • {result.baseline.totalEmails.toLocaleString()} emails</div>
@@ -84,8 +84,7 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                         </TooltipPortal>
                         {result.lengthBins
                             .filter(b => b.countCampaigns > 0)
-                            .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
-                            .slice(0, 3)
+                            // Keep analytics order (range-ascending); no resort, no slice
                             .map(b => (
                                 <TooltipPortal key={b.key} content={(
                                     <div>
@@ -95,7 +94,7 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                                         </ul>
                                     </div>
                                 )}>
-                                    <div className="w-full rounded-2xl border border-gray-200 dark:border-gray-800 p-5 bg-white dark:bg-gray-900">
+                                    <div className="w-full md:w-auto rounded-2xl border border-gray-200 dark:border-gray-800 p-5 bg-white dark:bg-gray-900">
                                         <div className="text-base text-gray-600 dark:text-gray-400">{b.label} chars</div>
                                         <div className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{fmt(b.value)}</div>
                                         <div className="text-sm text-gray-600 dark:text-gray-400">{b.countCampaigns} campaigns • {b.totalEmails.toLocaleString()} emails</div>

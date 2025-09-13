@@ -181,6 +181,12 @@ Subject Line Analysis (new):
 - Accessibility: tooltips use the standardized `TooltipPortal` with 100ms delay.
  - Baseline: include a left-most Baseline card in each section showing the weighted average metric for the selection. All lifts are shown as relative % change vs Baseline (including RPE).
 
+Dynamic Subject Length bins:
+- Binning: Use equal-count dynamic bins by number of campaigns (target tertiles). Handle tie groups at boundaries so a single length doesn’t split across bins.
+- Fallbacks: If a bin would be empty after tie handling, reduce to 2 bins (halves). If still not possible (all same length), show a single range bin.
+- Labels: Display as ranges only, e.g., “22–38” followed by “chars” in the card label. Keys for export mirror this range string.
+- Layout: Always a single row on md+ with the Baseline card first, then 1–3 bins. Center the row as a whole. On small screens, stack vertically with standard gaps.
+
 ### Status coloring (correlations, trends)
 - Favorable vs unfavorable coloring depends on metric semantics:
   - Positive metrics (e.g., revenue): upward/positive correlation is `text-emerald-600`, negative is `text-rose-600`.

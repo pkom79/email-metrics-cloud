@@ -84,11 +84,70 @@ function computeAggregate(campaigns: ProcessedCampaign[], metric: SubjectMetricK
   return { countCampaigns: campaigns.length, totalEmails: emails, totalOpens: opens, totalClicks: clicks, totalRevenue: rev, value };
 }
 
-function toLengthBin(len: number): { key: string; label: string; range: [number, number] | [number, null] } {
-  if (len <= 30) return { key: '0-30', label: '0–30', range: [0, 30] };
-  if (len <= 50) return { key: '31-50', label: '31–50', range: [31, 50] };
-  if (len <= 70) return { key: '51-70', label: '51–70', range: [51, 70] };
-  return { key: '71+', label: '71+', range: [71, null] };
+// Build dynamic tertile bins (by number of campaigns), with tie-aware boundaries and 2/1-bin fallback
+function computeLengthBinsDynamic(campaigns: ProcessedCampaign[], metric: SubjectMetricKey, baseline: MetricAggregate): LengthBinStat[] {
+  const items = campaigns.map(c => ({ c, len: normalize(c.subject || c.campaignName || '').length }));
+  if (!items.length) return [];
+  items.sort((a, b) => a.len - b.len);
+  // Group by exact length to handle ties cleanly at boundaries
+  const groups: Array<{ len: number; items: ProcessedCampaign[] }> = [];
+  for (const it of items) {
+    const last = groups[groups.length - 1];
+    if (last && last.len === it.len) last.items.push(it.c); else groups.push({ len: it.len, items: [it.c] });
+  }
+  const n = items.length;
+  const cum: number[] = [];
+  let acc = 0;
+  for (const g of groups) { acc += g.items.length; cum.push(acc); }
+  const findSplit = (target: number) => {
+    for (let i = 0; i < cum.length; i++) { if (cum[i] >= target) return i; }
+    return cum.length - 1;
+  };
+  // Attempt 3 bins
+  const t1 = Math.ceil(n / 3);
+  const t2 = Math.ceil((2 * n) / 3);
+  let i1 = findSplit(t1) - 0; // index of last group in bin1
+  let i2 = findSplit(t2) - 0; // index of last group in bin2
+  const want3 = i1 >= 0 && i1 < groups.length - 1 && i2 > i1 && i2 < groups.length - 1;
+  let bins: ProcessedCampaign[][] = [];
+  if (want3) {
+    const b1 = groups.slice(0, i1 + 1).flatMap(g => g.items);
+    const b2 = groups.slice(i1 + 1, i2 + 1).flatMap(g => g.items);
+    const b3 = groups.slice(i2 + 1).flatMap(g => g.items);
+    if (b1.length && b2.length && b3.length) bins = [b1, b2, b3];
+  }
+  // Fallback to 2 bins if any would be empty
+  if (bins.length === 0) {
+    const midTarget = Math.ceil(n / 2);
+    const mid = findSplit(midTarget);
+    if (mid >= 0 && mid < groups.length - 1) {
+      const b1 = groups.slice(0, mid + 1).flatMap(g => g.items);
+      const b2 = groups.slice(mid + 1).flatMap(g => g.items);
+      if (b1.length && b2.length) bins = [b1, b2];
+    }
+  }
+  // If still empty (e.g., all same length), use 1 bin
+  if (bins.length === 0) bins = [groups.flatMap(g => g.items)];
+
+  // Build stats per bin (sorted by min length asc)
+  const out: LengthBinStat[] = bins.map(list => {
+    const lengths = list.map(c => normalize(c.subject || c.campaignName || '').length);
+    const minL = Math.min(...lengths);
+    const maxL = Math.max(...lengths);
+    const label = `${minL}–${maxL}`;
+    const key = label; // export key is the range label
+    const agg = computeAggregate(list, metric);
+    const examples = list
+      .slice()
+      .sort((a, b) => (b.emailsSent || 0) - (a.emailsSent || 0))
+      .map(c => normalize(c.subject || c.campaignName || ''))
+      .filter(Boolean)
+      .slice(0, 5);
+    const lift = baseline.value > 0 ? ((agg.value - baseline.value) / baseline.value) * 100 : 0;
+    return { key, label, range: [minL, maxL], countCampaigns: agg.countCampaigns, totalEmails: agg.totalEmails, totalOpens: agg.totalOpens, totalClicks: agg.totalClicks, totalRevenue: agg.totalRevenue, value: agg.value, liftVsBaseline: lift, examples };
+  });
+  out.sort((a, b) => (a.range[0] as number) - (b.range[0] as number));
+  return out;
 }
 
 // Simple emoji presence detection; modern Node supports Extended_Pictographic
@@ -203,29 +262,8 @@ export function computeSubjectAnalysis(
 
   const baseline = computeAggregate(campaigns, metric);
 
-  // Length bins
-  const byBin = new Map<string, ProcessedCampaign[]>();
-  const binInfo = new Map<string, ReturnType<typeof toLengthBin>>();
-  for (const c of campaigns) {
-    const s = normalize(c.subject || c.campaignName || '');
-    const b = toLengthBin(s.length);
-    binInfo.set(b.key, b);
-    const arr = byBin.get(b.key) || [];
-    arr.push(c);
-    byBin.set(b.key, arr);
-  }
-  const lengthBins: LengthBinStat[] = Array.from(byBin.entries()).map(([key, list]) => {
-    const agg = computeAggregate(list, metric);
-    const info = binInfo.get(key)!;
-    const examples = list
-      .slice()
-      .sort((a, b) => (b.emailsSent || 0) - (a.emailsSent || 0))
-      .map(c => normalize(c.subject || c.campaignName || ''))
-      .filter(Boolean)
-      .slice(0, 5);
-  const lift = baseline.value > 0 ? ((agg.value - baseline.value) / baseline.value) * 100 : 0;
-  return { key, label: info.label, range: info.range, countCampaigns: agg.countCampaigns, totalEmails: agg.totalEmails, totalOpens: agg.totalOpens, totalClicks: agg.totalClicks, totalRevenue: agg.totalRevenue, value: agg.value, liftVsBaseline: lift, examples };
-  }).sort((a, b) => a.label.localeCompare(b.label));
+  // Length bins — dynamic tertiles by number of campaigns (tie-aware), with 2/1-bin fallback
+  const lengthBins: LengthBinStat[] = computeLengthBinsDynamic(campaigns, metric, baseline);
 
   // Build category predicates with explicit term lists (multi-category allowed)
   type CategoryDef = { key: string; label: string; terms?: string[]; match: (s: string) => boolean };
