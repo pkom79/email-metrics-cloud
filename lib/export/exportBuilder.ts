@@ -151,6 +151,9 @@ export interface LlmExportJson {
       indicatorAvailable?: boolean;
       disabledReason?: string;
       notEnoughData?: boolean;
+      // Scoring config/baselines used for this flow
+      baselines?: { rpeBaseline: number; s1Sends: number };
+      config?: { revenueLed: true };
       // Add-step suggestion with conservative estimate (Option B)
       addStepSuggestion?: {
         suggested: boolean;
@@ -176,7 +179,17 @@ export interface LlmExportJson {
         stepNumber: number;
         emailName?: string;
         total: FlowMetricTotals;
-        indicator?: { rating: 'good' | 'needs_work' | 'consider_pausing' | 'low_data'; score: number; reasons: string[] };
+        stepScore?: {
+          score: number; // 0-100
+          action: 'scale' | 'keep' | 'improve' | 'pause';
+          notes?: string[];
+          pillars: {
+            money: { points: number; A1_rpeIndex: number; A2_punch: number; A3_absRevenue: number };
+            deliverability: { points: number; penalties: Array<{ type: 'unsubscribe' | 'spam' | 'bounce'; amount: number; tier: number }>; hardStop: boolean };
+            volume: { points: number; smallSamplePenalty: number; baseline: { s1: number } };
+          };
+          baselines: { rpeBaseline: number; revenueShare: number };
+        };
       }>;
     }>;
   };
@@ -1054,66 +1067,88 @@ export async function buildLlmExportJson(params: {
           const totalFlowSends = steps.reduce((sum, s) => sum + (s.total.emailsSent || 0), 0);
           const notEnoughData = totalFlowSends < 2000;
 
-          // Composite scoring for steps
+          // New 0–100 scoring with pillars
           const s1Sends = steps[0]?.total.emailsSent || 0;
-          const volumeGate = (sends: number) => sends >= Math.max(500, Math.round(0.05 * s1Sends));
-          const vals = {
-            rpe: steps.map(s => s.total.revenuePerEmail),
-            cvr: steps.map(s => s.total.conversionRate),
-            ctr: steps.map(s => s.total.clickRate),
-            open: steps.map(s => s.total.openRate),
-            unsub: steps.map(s => s.total.unsubscribeRate),
-            spam: steps.map(s => s.total.spamRate),
-            bounce: steps.map(s => s.total.bounceRate),
-          };
-          const srt = {
-            rpe: [...vals.rpe].sort((a,b)=>a-b),
-            cvr: [...vals.cvr].sort((a,b)=>a-b),
-            ctr: [...vals.ctr].sort((a,b)=>a-b),
-            open: [...vals.open].sort((a,b)=>a-b),
-            unsub: [...vals.unsub].sort((a,b)=>a-b),
-            spam: [...vals.spam].sort((a,b)=>a-b),
-            bounce: [...vals.bounce].sort((a,b)=>a-b),
-          };
-          const rpeMedian = (() => { const t = srt.rpe; const n = t.length; return n ? (n%2? t[(n-1)/2] : (t[n/2-1]+t[n/2])/2) : 0; })();
-          const stepIndicators = steps.map((s, i) => {
-            if (!indicatorAvailable) return undefined;
-            if (!volumeGate(s.total.emailsSent)) return { rating: 'low_data', score: 0, reasons: ['Low data volume'] } as const;
-            const abs = 0.40*percentile(s.total.revenuePerEmail, srt.rpe)
-                      + 0.25*percentile(s.total.conversionRate, srt.cvr)
-                      + 0.15*percentile(s.total.clickRate, srt.ctr)
-                      + 0.05*percentile(s.total.openRate, srt.open)
-                      - 0.10*percentile(s.total.unsubscribeRate, srt.unsub)
-                      - 0.03*percentile(s.total.spamRate, srt.spam)
-                      - 0.02*percentile(s.total.bounceRate, srt.bounce);
+          const flowRevenueTotal = total.totalRevenue || 0;
+          const baselinePool = (() => {
+            let pool = steps.filter(s => s.total.emailsSent >= 250);
+            if (!pool.length) pool = steps.filter(s => s.total.emailsSent >= 100);
+            if (!pool.length) pool = steps;
+            return pool;
+          })();
+          const rpes = baselinePool.map(s => s.total.revenuePerEmail).filter(v => Number.isFinite(v)).sort((a,b)=>a-b);
+          const rpeBaseline = (() => { const n = rpes.length; return n ? (n%2? rpes[(n-1)/2] : (rpes[n/2-1]+rpes[n/2])/2) : 0; })();
+          const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
+          const stepScores = steps.map((s, i) => {
             const prev = i > 0 ? steps[i-1] : null;
-            const pctDelta = (a: number, b: number) => (b === 0 ? 0 : (a - b) / Math.max(Math.abs(b), 1e-9));
-            const dRpe = prev ? pctDelta(s.total.revenuePerEmail, prev.total.revenuePerEmail) : 0;
-            const dCvr = prev ? pctDelta(s.total.conversionRate, prev.total.conversionRate) : 0;
-            const dCtr = prev ? pctDelta(s.total.clickRate, prev.total.clickRate) : 0;
-            const dOpen = prev ? pctDelta(s.total.openRate, prev.total.openRate) : 0;
-            const dUnsub = prev ? pctDelta(s.total.unsubscribeRate, prev.total.unsubscribeRate) : 0;
-            const dSpam = prev ? pctDelta(s.total.spamRate, prev.total.spamRate) : 0;
-            const clamp = (x: number, scale=0.5) => Math.max(-1, Math.min(1, x/scale));
-            const rel = 0.45*clamp(dRpe)
-                      + 0.25*clamp(dCvr)
-                      + 0.20*clamp(dCtr)
-                      + 0.05*clamp(dOpen)
-                      - 0.04*clamp(dUnsub)
-                      - 0.01*clamp(dSpam);
-            let extraPenalty = 0;
-            if (prev && prev.total.emailsSent > 0) {
-                const drop = (prev.total.emailsSent - s.total.emailsSent) / prev.total.emailsSent;
-                if (drop > 0.6 && s.total.revenuePerEmail < rpeMedian) extraPenalty = 0.7;
+            const notes: string[] = [];
+            // Money: A1/A2/A3
+            const index = rpeBaseline > 0 ? (s.total.revenuePerEmail / rpeBaseline) : 0;
+            const a1 = clamp(((index - 0.5) / (1.25 - 0.5)) * 35, 0, 35);
+            if (index >= 1.1) notes.push('RPE above baseline'); else if (index < 0.9) notes.push('RPE below baseline');
+            let a2 = 0;
+            if (prev && prev.total.revenuePerEmail > 0) {
+              const delta = (s.total.revenuePerEmail - prev.total.revenuePerEmail) / prev.total.revenuePerEmail;
+              a2 = clamp((delta / 0.5) * 15, 0, 15);
+              if (delta > 0.1) notes.push('RPE up vs prior');
+              if (delta < -0.1) notes.push('RPE down vs prior');
+              const drop = prev.total.emailsSent > 0 ? (prev.total.emailsSent - s.total.emailsSent) / prev.total.emailsSent : 0;
+              if (drop > 0.6 && index < 1.0) { a2 = Math.min(a2, 3); notes.push('Heavy reach drop'); }
+            } else {
+              a2 = s.total.revenuePerEmail >= rpeBaseline ? 8 : 4;
             }
-            const score = abs + rel - extraPenalty;
-            const reasons: string[] = [];
-            const deliverabilityIssue = (s.total.unsubscribeRate > 0.30) || (s.total.spamRate > 0.03) || (s.total.bounceRate > 1.0);
-            if (deliverabilityIssue) reasons.push('Deliverability risk');
-            if (prev && Math.max(-1, Math.min(1, (dRpe/0.5))) < -0.6) reasons.push('RPE down vs prior');
-            if (s.total.revenuePerEmail >= rpeMedian) reasons.push('Strong RPE');
-            const rating: 'good' | 'needs_work' | 'consider_pausing' | 'low_data' = !indicatorAvailable ? 'low_data' : (score >= 1.0 ? 'good' : (score <= -1.0 || deliverabilityIssue ? 'consider_pausing' : 'needs_work'));
-            return { rating, score, reasons } as const;
+            const revenueShare = flowRevenueTotal > 0 ? (s.total.totalRevenue / flowRevenueTotal) : 0;
+            let a3 = 0;
+            if (revenueShare >= 0.30) a3 = 20; else if (revenueShare >= 0.20) a3 = 16; else if (revenueShare >= 0.10) a3 = 10; else if (revenueShare >= 0.05) a3 = 6; else if (revenueShare >= 0.02) a3 = 3; else a3 = 0;
+            if (revenueShare >= 0.2) notes.push('High revenue share');
+            const moneyPoints = clamp(a1 + a2 + a3, 0, 70);
+            // Deliverability penalties
+            const unsub = s.total.unsubscribeRate; const spam = s.total.spamRate; const bounce = s.total.bounceRate;
+            let penalties: Array<{ type: 'unsubscribe'|'spam'|'bounce'; amount: number; tier: number }> = [];
+            let hardStop = false;
+            if (spam >= 0.08) { hardStop = true; penalties.push({ type: 'spam', amount: 20, tier: 3 }); }
+            else if (spam >= 0.05) { penalties.push({ type: 'spam', amount: 15, tier: 2 }); }
+            else if (spam >= 0.03) { penalties.push({ type: 'spam', amount: 8, tier: 1 }); }
+            if (unsub >= 0.8) { hardStop = true; penalties.push({ type: 'unsubscribe', amount: 12, tier: 3 }); }
+            else if (unsub >= 0.5) { penalties.push({ type: 'unsubscribe', amount: 8, tier: 2 }); }
+            else if (unsub >= 0.3) { penalties.push({ type: 'unsubscribe', amount: 4, tier: 1 }); }
+            if (bounce >= 2.0) { hardStop = true; penalties.push({ type: 'bounce', amount: 10, tier: 3 }); }
+            else if (bounce >= 1.5) { penalties.push({ type: 'bounce', amount: 6, tier: 2 }); }
+            else if (bounce >= 1.0) { penalties.push({ type: 'bounce', amount: 3, tier: 1 }); }
+            let deliverabilityPenalty = penalties.reduce((sum, p) => sum + p.amount, 0);
+            deliverabilityPenalty = Math.min(deliverabilityPenalty, 20);
+            const deliverabilityPoints = -deliverabilityPenalty;
+            if (penalties.length) notes.push('Deliverability penalties');
+            // Volume points
+            const sends = s.total.emailsSent;
+            let vol = 0;
+            if (sends >= Math.max(1000, 0.5 * s1Sends)) vol = 10;
+            else if (sends >= Math.max(500, 0.25 * s1Sends)) vol = 7;
+            else if (sends >= Math.max(250, 0.10 * s1Sends)) vol = 5;
+            else if (sends >= 100) vol = 3; else vol = 1;
+            const smallSamplePenalty = sends < 250 ? 3 : 0;
+            const volumePoints = Math.max(0, Math.min(10, vol - smallSamplePenalty));
+            if (smallSamplePenalty > 0) notes.push('Small sample');
+            let score = Math.max(0, Math.min(100, moneyPoints + deliverabilityPoints + volumePoints));
+            let action: 'scale'|'keep'|'improve'|'pause' = 'improve';
+            if (hardStop) action = 'pause';
+            else if (score >= 75) action = 'scale';
+            else if (score >= 60) action = 'keep';
+            else if (score >= 40) action = 'improve';
+            else action = 'pause';
+            return {
+              stepScore: {
+                score,
+                action,
+                notes,
+                pillars: {
+                  money: { points: moneyPoints, A1_rpeIndex: a1, A2_punch: a2, A3_absRevenue: a3 },
+                  deliverability: { points: deliverabilityPoints, penalties, hardStop },
+                  volume: { points: volumePoints, smallSamplePenalty, baseline: { s1: s1Sends } },
+                },
+                baselines: { rpeBaseline, revenueShare },
+              }
+            } as const;
           });
 
           // Add-step suggestion gates and estimate
@@ -1121,12 +1156,11 @@ export async function buildLlmExportJson(params: {
           try {
             if (indicatorAvailable) {
               const last = steps[steps.length - 1];
-              const ratings = stepIndicators.map(x => x?.rating);
-              const ratingIsGood = ratings[ratings.length - 1] === 'good';
+              const lastScore = stepScores[stepScores.length - 1]?.stepScore;
+              const isScale = lastScore?.action === 'scale';
               const volumeOk = last.total.emailsSent >= Math.max(500, Math.round(0.05 * (steps[0]?.total.emailsSent || 0)));
               const deliverabilityOk = last.total.unsubscribeRate <= 0.30 && last.total.spamRate <= 0.03;
-              const rpeMedianHere = rpeMedian;
-              const rpeOk = last.total.revenuePerEmail >= rpeMedianHere;
+              const rpeOk = last.total.revenuePerEmail >= rpeBaseline;
               const prev = steps.length > 1 ? steps[steps.length - 2] : null;
               const deltaRpeOk = prev ? (last.total.revenuePerEmail - prev.total.revenuePerEmail) >= 0 : true;
               const lastStepRevenue = last.total.totalRevenue;
@@ -1139,7 +1173,7 @@ export async function buildLlmExportJson(params: {
                   ? Math.max(1, Math.ceil((new Date(customTo).getTime() - new Date(customFrom).getTime()) / (1000*60*60*24)))
                   : ((dateRange as any) === 'all' ? 0 : parseInt(String(dateRange).replace('d','')));
               const isRecentWindow = endsAtLast && (days === 30 || days === 90);
-              const suggested = ratingIsGood && rpeOk && deltaRpeOk && deliverabilityOk && volumeOk && absoluteRevenueOk && isRecentWindow;
+              const suggested = isScale && rpeOk && deltaRpeOk && deliverabilityOk && volumeOk && absoluteRevenueOk && isRecentWindow;
               const rpes = steps.map(s => s.total.revenuePerEmail).filter(v => isFinite(v) && v >= 0).sort((a,b)=>a-b);
               const idx = rpes.length ? Math.floor(0.25 * (rpes.length - 1)) : 0;
               let floor = rpes.length ? rpes[idx] : last.total.revenuePerEmail;
@@ -1158,13 +1192,13 @@ export async function buildLlmExportJson(params: {
             }
           } catch {}
 
-          // Merge indicators into steps
-          const stepsWithIndicators = steps.map((s, i) => ({
+          // Merge scores into steps
+          const stepsWithScores = steps.map((s, i) => ({
             ...s,
-            indicator: stepIndicators[i]
+            stepScore: stepScores[i]?.stepScore
           }));
           const disabledReason = indicatorAvailable ? undefined : (hasDup ? 'duplicate_names' : (!orderOk ? 'order_inconsistent' : 'unknown'));
-          return { flowName, total, steps: stepsWithIndicators, indicatorAvailable, disabledReason, notEnoughData, addStepSuggestion };
+          return { flowName, total, steps: stepsWithScores, indicatorAvailable, disabledReason, notEnoughData, addStepSuggestion, baselines: { rpeBaseline, s1Sends }, config: { revenueLed: true } };
         }).filter(Boolean) as any[];
         if (flows.length) {
           json.flowStepAnalysis = { disclaimer, flows } as any;
