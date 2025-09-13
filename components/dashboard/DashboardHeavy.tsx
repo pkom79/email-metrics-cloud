@@ -436,9 +436,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const ALL_FLOWS = useMemo(() => dm.getFlowEmails(), [dm, dataVersion]);
     const hasData = ALL_CAMPAIGNS.length > 0 || ALL_FLOWS.length > 0;
     const REFERENCE_DATE = useMemo(() => {
-        const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow);
+        // Always anchor to ALL campaigns + ALL flows for global reference date
         const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime());
-        const flowTs = flowSubset.map(f => f.sentDate.getTime());
+        const flowTs = ALL_FLOWS.map(f => f.sentDate.getTime());
         const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n));
 
         if (!all.length) return new Date();
@@ -450,7 +450,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         }
 
         return new Date(maxTime);
-    }, [ALL_CAMPAIGNS, ALL_FLOWS, selectedFlow]);
+    }, [ALL_CAMPAIGNS, ALL_FLOWS]);
     // Global earliest date in dataset
     const GLOBAL_MIN_DATE = useMemo(() => {
         const all = [...ALL_CAMPAIGNS.map(c => c.sentDate.getTime()), ...ALL_FLOWS.map(f => f.sentDate.getTime())].filter(n => Number.isFinite(n));
@@ -568,7 +568,41 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     // Filters
     const filteredCampaigns = useMemo(() => { if (!hasData) return [] as typeof ALL_CAMPAIGNS; let list = ALL_CAMPAIGNS; if (dateRange === 'custom' && customActive) { const from = new Date(customFrom! + 'T00:00:00'); const to = new Date(customTo! + 'T23:59:59'); list = list.filter(c => c.sentDate >= from && c.sentDate <= to); } else if (dateRange !== 'all') { const days = parseInt(dateRange.replace('d', '')); const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999); const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0); list = list.filter(c => c.sentDate >= start && c.sentDate <= end); } return list; }, [ALL_CAMPAIGNS, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
-    const filteredFlowEmails = useMemo(() => { if (!hasData) return [] as typeof ALL_FLOWS; let flows = ALL_FLOWS; if (selectedFlow !== 'all') flows = flows.filter(f => f.flowName === selectedFlow); if (dateRange === 'custom' && customActive) { const from = new Date(customFrom! + 'T00:00:00'); const to = new Date(customTo! + 'T23:59:59'); flows = flows.filter(f => f.sentDate >= from && f.sentDate <= to); } else if (dateRange !== 'all') { const days = parseInt(dateRange.replace('d', '')); const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999); const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0); flows = flows.filter(f => f.sentDate >= start && f.sentDate <= end); } return flows; }, [ALL_FLOWS, selectedFlow, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
+    const filteredFlowEmails = useMemo(() => {
+        if (!hasData) return [] as typeof ALL_FLOWS;
+        let flows = ALL_FLOWS;
+        // Apply Flow Performance selection only for non-overview sections
+        if (selectedFlow !== 'all') flows = flows.filter(f => f.flowName === selectedFlow);
+        // Apply date filtering
+        if (dateRange === 'custom' && customActive) {
+            const from = new Date(customFrom! + 'T00:00:00');
+            const to = new Date(customTo! + 'T23:59:59');
+            flows = flows.filter(f => f.sentDate >= from && f.sentDate <= to);
+        } else if (dateRange !== 'all') {
+            const days = parseInt(dateRange.replace('d', ''));
+            const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999);
+            const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0);
+            flows = flows.filter(f => f.sentDate >= start && f.sentDate <= end);
+        }
+        return flows;
+    }, [ALL_FLOWS, selectedFlow, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
+
+    // Overview should always use ALL flows (date-filtered), regardless of Flow Performance selection
+    const filteredFlowEmailsAll = useMemo(() => {
+        if (!hasData) return [] as typeof ALL_FLOWS;
+        let flows = ALL_FLOWS; // intentionally no selectedFlow filter
+        if (dateRange === 'custom' && customActive) {
+            const from = new Date(customFrom! + 'T00:00:00');
+            const to = new Date(customTo! + 'T23:59:59');
+            flows = flows.filter(f => f.sentDate >= from && f.sentDate <= to);
+        } else if (dateRange !== 'all') {
+            const days = parseInt(dateRange.replace('d', ''));
+            const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999);
+            const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0);
+            flows = flows.filter(f => f.sentDate >= start && f.sentDate <= end);
+        }
+        return flows;
+    }, [ALL_FLOWS, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
 
     // Delayed loading of heavy flow components after main dashboard stabilizes
     useEffect(() => {
@@ -606,9 +640,39 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     const defCampaigns = useDeferredValue(filteredCampaigns);
     const defFlows = useDeferredValue(filteredFlowEmails);
+    const defFlowsOverview = useDeferredValue(filteredFlowEmailsAll);
 
     // Sync custom inputs with preset
-    useEffect(() => { if (!hasData) return; if (dateRange === 'custom') return; const to = new Date(REFERENCE_DATE); const toISO = (d: Date) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const da = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${da}`; }; if (dateRange === 'all') { const flowSubset = selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow); const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime()); const flowTs = flowSubset.map(f => f.sentDate.getTime()); const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n)); if (all.length) { let minTime = all[0]; for (let i = 1; i < all.length; i++) { if (all[i] < minTime) minTime = all[i]; } const from = new Date(minTime); setCustomFrom(toISO(from)); setCustomTo(toISO(to)); } else { setCustomFrom(undefined); setCustomTo(undefined); } } else { const days = parseInt(String(dateRange).replace('d', '')); if (Number.isFinite(days)) { const from = new Date(to); from.setDate(from.getDate() - days + 1); setCustomFrom(toISO(from)); setCustomTo(toISO(to)); } } }, [dateRange, REFERENCE_DATE, selectedFlow, ALL_CAMPAIGNS, ALL_FLOWS, hasData]);
+    useEffect(() => {
+        if (!hasData) return;
+        if (dateRange === 'custom') return;
+        const to = new Date(REFERENCE_DATE);
+        const toISO = (d: Date) => { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const da = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${da}`; };
+        if (dateRange === 'all') {
+            // Always compute from ALL campaigns + ALL flows
+            const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime());
+            const flowTs = ALL_FLOWS.map(f => f.sentDate.getTime());
+            const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n));
+            if (all.length) {
+                let minTime = all[0];
+                for (let i = 1; i < all.length; i++) { if (all[i] < minTime) minTime = all[i]; }
+                const from = new Date(minTime);
+                setCustomFrom(toISO(from));
+                setCustomTo(toISO(to));
+            } else {
+                setCustomFrom(undefined);
+                setCustomTo(undefined);
+            }
+        } else {
+            const days = parseInt(String(dateRange).replace('d', ''));
+            if (Number.isFinite(days)) {
+                const from = new Date(to);
+                from.setDate(from.getDate() - days + 1);
+                setCustomFrom(toISO(from));
+                setCustomTo(toISO(to));
+            }
+        }
+    }, [dateRange, REFERENCE_DATE, ALL_CAMPAIGNS, ALL_FLOWS, hasData]);
 
     // Optimized date range change handler - let useEffect handle calculations
     const handleDateRangeChange = useCallback((value: string) => {
@@ -616,25 +680,63 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     }, []);
 
     // Metrics calculations
-    const overviewMetrics = useMemo(() => { const all = [...defCampaigns, ...defFlows]; if (!all.length) return null as any; const totalRevenue = all.reduce((s, e) => s + e.revenue, 0); const totalEmailsSent = all.reduce((s, e) => s + e.emailsSent, 0); const totalOrders = all.reduce((s, e) => s + e.totalOrders, 0); const totalOpens = all.reduce((s, e) => s + e.uniqueOpens, 0); const totalClicks = all.reduce((s, e) => s + e.uniqueClicks, 0); const totalUnsubs = all.reduce((s, e) => s + e.unsubscribesCount, 0); const totalSpam = all.reduce((s, e) => s + e.spamComplaintsCount, 0); const totalBounces = all.reduce((s, e) => s + e.bouncesCount, 0); const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0; const revenuePerEmail = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0; const openRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0; const clickRate = totalEmailsSent > 0 ? (totalClicks / totalEmailsSent) * 100 : 0; const clickToOpenRate = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0; const conversionRate = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0; const unsubscribeRate = totalEmailsSent > 0 ? (totalUnsubs / totalEmailsSent) * 100 : 0; const spamRate = totalEmailsSent > 0 ? (totalSpam / totalEmailsSent) * 100 : 0; const bounceRate = totalEmailsSent > 0 ? (totalBounces / totalEmailsSent) * 100 : 0; const mk = (k: string, v: number) => { const d = calcPoP(k, 'all'); return { value: v, change: d.changePercent, isPositive: d.isPositive, previousValue: d.previousValue, previousPeriod: d.previousPeriod }; }; return { totalRevenue: mk('totalRevenue', totalRevenue), averageOrderValue: mk('avgOrderValue', avgOrderValue), revenuePerEmail: mk('revenuePerEmail', revenuePerEmail), openRate: mk('openRate', openRate), clickRate: mk('clickRate', clickRate), clickToOpenRate: mk('clickToOpenRate', clickToOpenRate), emailsSent: mk('emailsSent', totalEmailsSent), totalOrders: mk('totalOrders', totalOrders), conversionRate: mk('conversionRate', conversionRate), unsubscribeRate: mk('unsubscribeRate', unsubscribeRate), spamRate: mk('spamRate', spamRate), bounceRate: mk('bounceRate', bounceRate) }; }, [defCampaigns, defFlows, calcPoP]);
+    const overviewMetrics = useMemo(() => {
+        const all = [...defCampaigns, ...defFlowsOverview]; // use ALL flows for overview
+        if (!all.length) return null as any;
+        const totalRevenue = all.reduce((s, e) => s + e.revenue, 0);
+        const totalEmailsSent = all.reduce((s, e) => s + e.emailsSent, 0);
+        const totalOrders = all.reduce((s, e) => s + e.totalOrders, 0);
+        const totalOpens = all.reduce((s, e) => s + e.uniqueOpens, 0);
+        const totalClicks = all.reduce((s, e) => s + e.uniqueClicks, 0);
+        const totalUnsubs = all.reduce((s, e) => s + e.unsubscribesCount, 0);
+        const totalSpam = all.reduce((s, e) => s + e.spamComplaintsCount, 0);
+        const totalBounces = all.reduce((s, e) => s + e.bouncesCount, 0);
+        const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+        const revenuePerEmail = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0;
+        const openRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0;
+        const clickRate = totalEmailsSent > 0 ? (totalClicks / totalEmailsSent) * 100 : 0;
+        const clickToOpenRate = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0;
+        const conversionRate = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0;
+        const unsubscribeRate = totalEmailsSent > 0 ? (totalUnsubs / totalEmailsSent) * 100 : 0;
+        const spamRate = totalEmailsSent > 0 ? (totalSpam / totalEmailsSent) * 100 : 0;
+        const bounceRate = totalEmailsSent > 0 ? (totalBounces / totalEmailsSent) * 100 : 0;
+        const mk = (k: string, v: number) => {
+            const d = calcPoP(k, 'all');
+            return { value: v, change: d.changePercent, isPositive: d.isPositive, previousValue: d.previousValue, previousPeriod: d.previousPeriod };
+        };
+        return {
+            totalRevenue: mk('totalRevenue', totalRevenue),
+            averageOrderValue: mk('avgOrderValue', avgOrderValue),
+            revenuePerEmail: mk('revenuePerEmail', revenuePerEmail),
+            openRate: mk('openRate', openRate),
+            clickRate: mk('clickRate', clickRate),
+            clickToOpenRate: mk('clickToOpenRate', clickToOpenRate),
+            emailsSent: mk('emailsSent', totalEmailsSent),
+            totalOrders: mk('totalOrders', totalOrders),
+            conversionRate: mk('conversionRate', conversionRate),
+            unsubscribeRate: mk('unsubscribeRate', unsubscribeRate),
+            spamRate: mk('spamRate', spamRate),
+            bounceRate: mk('bounceRate', bounceRate)
+        };
+    }, [defCampaigns, defFlowsOverview, calcPoP]);
     const campaignMetrics = useMemo(() => { const all = defCampaigns; if (!all.length) return null as any; const totalRevenue = all.reduce((s, e) => s + e.revenue, 0); const totalEmailsSent = all.reduce((s, e) => s + e.emailsSent, 0); const totalOrders = all.reduce((s, e) => s + e.totalOrders, 0); const totalOpens = all.reduce((s, e) => s + e.uniqueOpens, 0); const totalClicks = all.reduce((s, e) => s + e.uniqueClicks, 0); const totalUnsubs = all.reduce((s, e) => s + e.unsubscribesCount, 0); const totalSpam = all.reduce((s, e) => s + e.spamComplaintsCount, 0); const totalBounces = all.reduce((s, e) => s + e.bouncesCount, 0); const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0; const revenuePerEmail = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0; const openRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0; const clickRate = totalEmailsSent > 0 ? (totalClicks / totalEmailsSent) * 100 : 0; const clickToOpenRate = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0; const conversionRate = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0; const unsubscribeRate = totalEmailsSent > 0 ? (totalUnsubs / totalEmailsSent) * 100 : 0; const spamRate = totalEmailsSent > 0 ? (totalSpam / totalEmailsSent) * 100 : 0; const bounceRate = totalEmailsSent > 0 ? (totalBounces / totalEmailsSent) * 100 : 0; const mk = (k: string, v: number) => { const d = calcPoP(k, 'campaigns'); return { value: v, change: d.changePercent, isPositive: d.isPositive, previousValue: d.previousValue, previousPeriod: d.previousPeriod }; }; return { totalRevenue: mk('totalRevenue', totalRevenue), averageOrderValue: mk('avgOrderValue', avgOrderValue), revenuePerEmail: mk('revenuePerEmail', revenuePerEmail), openRate: mk('openRate', openRate), clickRate: mk('clickRate', clickRate), clickToOpenRate: mk('clickToOpenRate', clickToOpenRate), emailsSent: mk('emailsSent', totalEmailsSent), totalOrders: mk('totalOrders', totalOrders), conversionRate: mk('conversionRate', conversionRate), unsubscribeRate: mk('unsubscribeRate', unsubscribeRate), spamRate: mk('spamRate', spamRate), bounceRate: mk('bounceRate', bounceRate) }; }, [defCampaigns, calcPoP]);
     const flowMetrics = useMemo(() => { const all = defFlows; if (!all.length) return null as any; const totalRevenue = all.reduce((s, e) => s + e.revenue, 0); const totalEmailsSent = all.reduce((s, e) => s + e.emailsSent, 0); const totalOrders = all.reduce((s, e) => s + e.totalOrders, 0); const totalOpens = all.reduce((s, e) => s + e.uniqueOpens, 0); const totalClicks = all.reduce((s, e) => s + e.uniqueClicks, 0); const totalUnsubs = all.reduce((s, e) => s + e.unsubscribesCount, 0); const totalSpam = all.reduce((s, e) => s + e.spamComplaintsCount, 0); const totalBounces = all.reduce((s, e) => s + e.bouncesCount, 0); const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0; const revenuePerEmail = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0; const openRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0; const clickRate = totalEmailsSent > 0 ? (totalClicks / totalEmailsSent) * 100 : 0; const clickToOpenRate = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0; const conversionRate = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0; const unsubscribeRate = totalEmailsSent > 0 ? (totalUnsubs / totalEmailsSent) * 100 : 0; const spamRate = totalEmailsSent > 0 ? (totalSpam / totalEmailsSent) * 100 : 0; const bounceRate = totalEmailsSent > 0 ? (totalBounces / totalEmailsSent) * 100 : 0; const mk = (k: string, v: number) => { const d = calcPoP(k, 'flows', { flowName: selectedFlow }); return { value: v, change: d.changePercent, isPositive: d.isPositive, previousValue: d.previousValue, previousPeriod: d.previousPeriod }; }; return { totalRevenue: mk('totalRevenue', totalRevenue), averageOrderValue: mk('avgOrderValue', avgOrderValue), revenuePerEmail: mk('revenuePerEmail', revenuePerEmail), openRate: mk('openRate', openRate), clickRate: mk('clickRate', clickRate), clickToOpenRate: mk('clickToOpenRate', clickToOpenRate), emailsSent: mk('emailsSent', totalEmailsSent), totalOrders: mk('totalOrders', totalOrders), conversionRate: mk('conversionRate', conversionRate), unsubscribeRate: mk('unsubscribeRate', unsubscribeRate), spamRate: mk('spamRate', spamRate), bounceRate: mk('bounceRate', bounceRate) }; }, [defFlows, calcPoP, selectedFlow]);
 
     const effectiveSeriesRange = dateRange === 'custom' && customActive ? 'custom' : dateRange;
     const overviewSeries = useMemo(() => ({
-        totalRevenue: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'revenue', effectiveSeriesRange, granularity, customFrom, customTo),
-        averageOrderValue: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'avgOrderValue', effectiveSeriesRange, granularity, customFrom, customTo),
-        revenuePerEmail: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'revenuePerEmail', effectiveSeriesRange, granularity, customFrom, customTo),
-        openRate: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'openRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        clickRate: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'clickRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        clickToOpenRate: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'clickToOpenRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        emailsSent: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'emailsSent', effectiveSeriesRange, granularity, customFrom, customTo),
-        totalOrders: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'totalOrders', effectiveSeriesRange, granularity, customFrom, customTo),
-        conversionRate: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'conversionRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        unsubscribeRate: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'unsubscribeRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        spamRate: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'spamRate', effectiveSeriesRange, granularity, customFrom, customTo),
-        bounceRate: dm.getMetricTimeSeries(defCampaigns as any, defFlows as any, 'bounceRate', effectiveSeriesRange, granularity, customFrom, customTo),
-    }), [defCampaigns, defFlows, effectiveSeriesRange, granularity, dm, customFrom, customTo]);
+        totalRevenue: dm.getMetricTimeSeries(defCampaigns as any, defFlowsOverview as any, 'revenue', effectiveSeriesRange, granularity, customFrom, customTo),
+        averageOrderValue: dm.getMetricTimeSeries(defCampaigns as any, defFlowsOverview as any, 'avgOrderValue', effectiveSeriesRange, granularity, customFrom, customTo),
+        revenuePerEmail: dm.getMetricTimeSeries(defCampaigns as any, defFlowsOverview as any, 'revenuePerEmail', effectiveSeriesRange, granularity, customFrom, customTo),
+        openRate: dm.getMetricTimeSeries(defCampaigns as any, defFlowsOverview as any, 'openRate', effectiveSeriesRange, granularity, customFrom, customTo),
+        clickRate: dm.getMetricTimeSeries(defCampaigns as any, defFlowsOverview as any, 'clickRate', effectiveSeriesRange, granularity, customFrom, customTo),
+        clickToOpenRate: dm.getMetricTimeSeries(defCampaigns as any, defFlowsOverview as any, 'clickToOpenRate', effectiveSeriesRange, granularity, customFrom, customTo),
+        emailsSent: dm.getMetricTimeSeries(defCampaigns as any, defFlowsOverview as any, 'emailsSent', effectiveSeriesRange, granularity, customFrom, customTo),
+        totalOrders: dm.getMetricTimeSeries(defCampaigns as any, defFlowsOverview as any, 'totalOrders', effectiveSeriesRange, granularity, customFrom, customTo),
+        conversionRate: dm.getMetricTimeSeries(defCampaigns as any, defFlowsOverview as any, 'conversionRate', effectiveSeriesRange, granularity, customFrom, customTo),
+        unsubscribeRate: dm.getMetricTimeSeries(defCampaigns as any, defFlowsOverview as any, 'unsubscribeRate', effectiveSeriesRange, granularity, customFrom, customTo),
+        spamRate: dm.getMetricTimeSeries(defCampaigns as any, defFlowsOverview as any, 'spamRate', effectiveSeriesRange, granularity, customFrom, customTo),
+        bounceRate: dm.getMetricTimeSeries(defCampaigns as any, defFlowsOverview as any, 'bounceRate', effectiveSeriesRange, granularity, customFrom, customTo),
+    }), [defCampaigns, defFlowsOverview, effectiveSeriesRange, granularity, dm, customFrom, customTo]);
     const campaignSeries = useMemo(() => ({
         totalRevenue: dm.getMetricTimeSeries(defCampaigns as any, [], 'revenue', effectiveSeriesRange, granularity, customFrom, customTo),
         averageOrderValue: dm.getMetricTimeSeries(defCampaigns as any, [], 'avgOrderValue', effectiveSeriesRange, granularity, customFrom, customTo),

@@ -2,7 +2,7 @@
 
 This guide defines the design tokens, components, and patterns used across the app. Treat it as the single source of truth and keep it updated as we standardize. When adding or modifying UI, reference this document and prefer the shared components listed here.
 
-Last updated: 2025-09-10 (icons + subject analysis naming)
+Last updated: 2025-09-13 (Custom Segment compare layout + delta formatting + Overview sourcing)
 
 ## theme and modes
 - Tailwind: v3.x, darkMode: class
@@ -73,20 +73,31 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 ### Segment Comparison (A/B) — Custom Segment
 - Uploads: Two optional CSV inputs, labeled "Segment A" and "Segment B". A is the baseline.
 - Labels: After upload, show an editable text field to rename each segment (defaults to file name).
-- Layout inside each stat card when both segments are present:
-  - Top row: Segment A value (use `tabular-nums`).
-  - Middle row: Segment B value (use `tabular-nums`).
-  - Bottom row: Delta chip "Δ vs A" showing relative percent change; text `text-emerald-600` when favorable, `text-rose-600` when unfavorable, gray when 0.0% or N/A.
+- Layout when both segments are present (compact compare):
+  - Row 1: Segment A value (left-aligned, `tabular-nums`). Prefix with `A:`.
+  - Row 2: Segment B value (left-aligned, `tabular-nums`). Prefix with `B:`. Immediately to the right of the B value, show the inline delta text "Δ vs A" as a relative percent.
+  - B-value tinting: Apply `text-emerald-600` when favorable vs A, `text-rose-600` when unfavorable; use neutral gray when equal or N/A. Ensure sufficient contrast in dark mode (`dark:text-emerald-400` / `dark:text-rose-400` acceptable).
 - Favorability:
   - Higher is better: revenue, members, AOV, revenue/member, created%, engaged%, non‑suppressed%, opt‑in%.
   - Lower is better: average days between orders, unsubscribed%, spam complaint%, user suppressed%.
-- Rounding:
+- Formatting and rounding:
   - Currency: 2 decimals.
-  - Rates and deltas: 1 decimal as a percent (e.g., 12.3%).
+  - Rates: 1 decimal as a percent in cards (e.g., 12.3%).
+  - Deltas (relative % vs A):
+    - 0–99.9%: show one decimal (e.g., 12.3%).
+    - ≥100%: no decimals (e.g., 125%).
+    - ≥1000%: thousands‑grouped integer (e.g., 1,463%).
   - Counts: integers using `toLocaleString()`.
-- Anchoring for N‑day windows: use Today for both A and B.
+- Anchoring for N‑day windows: anchor to `referenceDate` when provided; otherwise Today. Use the same anchor for both A and B.
 - Baseline zero: show "N/A (no baseline)" when A = 0 and B > 0; show "—" when both are zero.
-- Single-file behavior: When only Segment A is present, render the original single-segment cards without delta rows.
+- Single-file behavior: When only Segment A is present, render the original single-segment cards without delta text.
+- Row headers and order (both single and compare views):
+  1) Revenue & Value
+  2) Customer Base
+  3) Order Behavior
+  4) Acquisition
+  5) Engagement
+  6) Deliverability & List Health
 
 ### Selects
 - Use `SelectBase` for dropdowns; has consistent padding, border, focus ring:
@@ -137,6 +148,10 @@ Notices:
 - Grid labels: 11px; `fill-gray-600 dark:fill-gray-400`
 - Volume shading uses gradient with low opacity.
 - Hover overlays: app-specific, not part of the standardized Info tooltip scope.
+
+Overview (Email Performance Overview):
+- Data source: Always aggregates All Flows (date‑filtered), regardless of the Flow Performance selection elsewhere. Campaigns remain included per date selection.
+- Scope color: Use the All scope accent `#8b5cf6` for lines/areas.
 
 Audience Growth header:
 - Show the big total number at top-right; below it, show the compact arrow+percent change matching the big cards. No additional "Total …" label; rely on the metric dropdown.
