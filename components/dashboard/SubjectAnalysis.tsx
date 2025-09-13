@@ -22,6 +22,7 @@ export default function SubjectAnalysis({ campaigns }: Props) {
     const [metric, setMetric] = useState<SubjectMetricKey>('openRate');
     const segments = useMemo(() => uniqueSegmentsFromCampaigns(campaigns), [campaigns]);
     const [segment, setSegment] = useState<string>('ALL_SEGMENTS');
+    const [reliableOnly, setReliableOnly] = useState<boolean>(true);
 
     const result = useMemo(() => computeSubjectAnalysis(campaigns, metric, segment), [campaigns, metric, segment]);
 
@@ -64,6 +65,17 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                                 {metricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                             </SelectBase>
                         </div>
+                        <button
+                            className={`px-2.5 py-1 text-xs font-medium rounded border ${reliableOnly ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}
+                            onClick={() => setReliableOnly(v => !v)}
+                        >
+                            Only show reliable
+                        </button>
+                        <InfoTooltipIcon content={(<div>
+                            <div className="font-semibold mb-1">Reliable</div>
+                            <div>Meets volume (≥5 campaigns and ≥2% of total emails) and passes significance at 95% (FDR‑adjusted for rates; bootstrap CI for RPE).</div>
+                            <div className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">Open Rate may be inflated by Apple MPP. Prefer CTR/CTO/RPE for decisions.</div>
+                        </div>)} />
                     </div>
                 </div>
 
@@ -104,14 +116,14 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                     </div>
                 </div>
 
-                {/* Keyword & Emoji */}
+                {/* Categories */}
                 <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-3 justify-center"><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Keyword & Emoji Lift</h4></div>
+                    <div className="flex items-center gap-2 mb-3 justify-center"><h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Category Lifts</h4></div>
                     <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {result.keywordEmojis
-                            .filter(f => f.countCampaigns > 0 && !(f.key?.startsWith('none:')))
+                        {result.categories
+                            .filter(f => f.countCampaigns > 0)
+                            .filter(f => !reliableOnly || f.reliable)
                             .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline))
-                            .slice(0, 8)
                             .map(f => (
                                 <TooltipPortal key={f.key} content={(
                                     <div>
@@ -119,6 +131,7 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                                         <ul className="list-disc pl-4 text-xs space-y-1">
                                             {(f.examples || []).map((ex, i) => (<li key={i} className="truncate max-w-xs" title={ex}>{ex}</li>))}
                                         </ul>
+                                        {f.reliable ? (<div className="mt-2 text-[11px] text-emerald-600">Reliable at 95%</div>) : (<div className="mt-2 text-[11px] text-gray-500">Insufficient evidence</div>)}
                                     </div>
                                 )}>
                                     <div className="w-full rounded-2xl border border-gray-200 dark:border-gray-800 p-5 bg-white dark:bg-gray-900 flex items-center justify-between">
@@ -126,7 +139,7 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                                             <div className="text-base text-gray-900 dark:text-gray-100">{f.label}</div>
                                             <div className="text-sm text-gray-600 dark:text-gray-400">{f.countCampaigns} campaigns • {f.totalEmails.toLocaleString()} emails</div>
                                         </div>
-                                        <div className={`text-base font-medium ${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{liftFmt(f.liftVsBaseline)}</div>
+                                        <div className={`${f.liftVsBaseline >= 0 ? 'text-emerald-600' : 'text-rose-600'} text-base font-medium`}>{liftFmt(f.liftVsBaseline)}</div>
                                     </div>
                                 </TooltipPortal>
                             ))}

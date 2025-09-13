@@ -125,12 +125,21 @@ export interface LlmExportJson {
     spamRate: number;
     bounceRate: number;
   }>;
-  // Subject Line Analysis (All Segments): provide only lifts vs account-average for the selected time period
+  // Subject Line Analysis (All Segments): category-based, reliable entries only
   subjectLineAnalysis?: {
-    openRate: SubjectMetricLiftSet;
-    clickToOpenRate: SubjectMetricLiftSet;
-    clickRate: SubjectMetricLiftSet;
-    revenuePerEmail: SubjectMetricLiftSet;
+    categories: Array<{
+      key: string; label: string;
+      metrics: {
+        openRate?: { value: number; liftVsBaseline: number; countCampaigns: number; totalEmails: number; reliable: boolean; pAdj?: number };
+        clickRate?: { value: number; liftVsBaseline: number; countCampaigns: number; totalEmails: number; reliable: boolean; pAdj?: number };
+        clickToOpenRate?: { value: number; liftVsBaseline: number; countCampaigns: number; totalEmails: number; reliable: boolean; pAdj?: number };
+        revenuePerEmail?: { value: number; liftVsBaseline: number; countCampaigns: number; totalEmails: number; reliable: boolean; ci95?: { lo: number; hi: number } };
+      };
+      examples?: string[];
+    }>;
+    baseline: { openRate: number; clickRate: number; clickToOpenRate: number; revenuePerEmail: number };
+    lengthBins: Array<{ key: string; label: string; value: number; liftVsBaseline: number; countCampaigns: number; totalEmails: number }>;
+    note: string; // overlapping categories; reliable = volume + significance
   };
   // Flow Step Analysis (lookback totals only — per flow and per step; no time series)
   flowStepAnalysis?: {
@@ -218,25 +227,7 @@ export type ExportMetricValues = {
   bounceRate: number;
 };
 
-// Lifts set for one metric across requested feature groups
-type SubjectMetricLiftSet = {
-  lengthBins: { '0-30': number; '31-50': number; '51-70': number };
-  keywordEmoji: {
-    exclusive: number; sale: number; emojiPresent: number; limited: number; save: number; off: number; discount: number; percentOff: number;
-  };
-  // Number of campaigns where each keyword/emoji feature was present (for significance)
-  keywordEmojiCounts: {
-    exclusive: number; sale: number; emojiPresent: number; limited: number; save: number; off: number; discount: number; percentOff: number;
-  };
-  punctuationCasing: {
-    brackets: number; exclamation: number; percent: number; allCaps: number; questionMark: number; number: number;
-  };
-  urgency: { tonight: number; now: number; hours: number; midnight: number; final: number; today: number; ends: number; ending: number };
-  personalization: { youYour: number };
-  priceAnchoring: { currency: number; percentDiscount: number; dollarDiscount: number };
-  imperativeStart: { startsWithVerb: number };
-  reuseFatigue: { averageChange: number; subjectsCount: number };
-};
+  // Removed legacy SubjectMetricLiftSet; replaced by categories block
 
 type FlowMetricTotals = {
   totalRevenue: number;
@@ -383,7 +374,7 @@ export async function buildLlmExportJson(params: {
         campaignFlowSplit: 'Monthly split of revenue and emails between Campaigns vs Flows over the full-month window, plus period totals.',
         sendVolumeImpact: 'Correlation between emails sent and performance metrics across the selected lookback buckets, by segment (Campaigns/Flows).',
         campaignSendFrequency: 'KPIs by weekly send frequency buckets (1, 2, 3, 4+) over the selected lookback period; includes campaign counts.',
-        subjectLineAnalysis: 'Lifts vs account average for subject features (All Segments) over the selected lookback period; includes counts where available.',
+  subjectLineAnalysis: 'Category-level lifts vs account average (All Segments) over the selected lookback. Only categories meeting volume and significance are included; baseline and length bins provided.',
         audienceSizePerformance: 'KPIs by audience size (emails sent) buckets over the selected lookback period; includes campaign counts and audience size totals.',
         campaignGapsAndLosses: 'Weekly-only analysis identifying zero-send weeks, longest gaps, coverage, estimated lost revenue, and zero-revenue campaigns over the lookback period.',
   campaignPerformanceByDayOfWeek: 'KPIs by weekday over the selected lookback period; includes how many campaigns were sent on each day.',
@@ -754,83 +745,35 @@ export async function buildLlmExportJson(params: {
         }))
       };
 
-      // Subject Line Analysis (All Segments) — compute per metric and map to requested keys
-      const buildSubjectSet = (metric: 'openRate' | 'clickToOpenRate' | 'clickRate' | 'revenuePerEmail'): SubjectMetricLiftSet => {
-        const res = computeSubjectAnalysis(campaigns as any, metric, 'ALL_SEGMENTS');
-        const getLift = (arr: Array<{ key: string; liftVsBaseline: number }>, key: string): number => {
-          const f = arr.find(x => x.key === key);
-          return f ? f.liftVsBaseline : 0;
+      // Subject Line Analysis (All Segments) — categories with reliability gating, plus baseline and length bins
+      const buildCategories = () => {
+        const metrics: Array<'openRate' | 'clickRate' | 'clickToOpenRate' | 'revenuePerEmail'> = ['openRate','clickRate','clickToOpenRate','revenuePerEmail'];
+        const perMetric = metrics.map(m => ({ m, res: computeSubjectAnalysis(campaigns as any, m, 'ALL_SEGMENTS') }));
+        // Build category map keyed by category key
+        const map = new Map<string, { key: string; label: string; metrics: any; examples?: string[] }>();
+        for (const { m, res } of perMetric) {
+          for (const c of res.categories) {
+            if (!map.has(c.key)) map.set(c.key, { key: c.key, label: c.label, metrics: {}, examples: c.examples });
+            if (c.reliable) {
+              map.get(c.key)!.metrics[m] = { value: c.value, liftVsBaseline: c.liftVsBaseline, countCampaigns: c.countCampaigns, totalEmails: c.totalEmails, reliable: !!c.reliable, pAdj: c.pAdj, ci95: c.ci95 };
+            }
+          }
+        }
+        // Baselines
+        const base = {
+          openRate: perMetric.find(x => x.m==='openRate')!.res.baseline.value,
+          clickRate: perMetric.find(x => x.m==='clickRate')!.res.baseline.value,
+          clickToOpenRate: perMetric.find(x => x.m==='clickToOpenRate')!.res.baseline.value,
+          revenuePerEmail: perMetric.find(x => x.m==='revenuePerEmail')!.res.baseline.value,
         };
-        const getCount = (arr: Array<{ key: string; countCampaigns?: number }>, key: string): number => {
-          const f = arr.find(x => x.key === key) as any;
-          return f && typeof f.countCampaigns === 'number' ? f.countCampaigns : 0;
-        };
-        const lb = (k: '0-30' | '31-50' | '51-70'): number => {
-          const f = (res.lengthBins || []).find(x => (x as any).key === k);
-          return f ? (f as any).liftVsBaseline : 0;
-        };
-        const avgChange = (() => {
-          const list = res.reuse || [];
-          if (!list.length) return 0;
-          const sum = list.reduce((s, r) => s + (r.change || 0), 0);
-          return sum / list.length;
-        })();
-        return {
-          lengthBins: { '0-30': lb('0-30'), '31-50': lb('31-50'), '51-70': lb('51-70') },
-          keywordEmoji: {
-            exclusive: getLift(res.keywordEmojis as any, 'kw:exclusive'),
-            sale: getLift(res.keywordEmojis as any, 'kw:sale'),
-            emojiPresent: getLift(res.keywordEmojis as any, 'emoji'),
-            limited: getLift(res.keywordEmojis as any, 'kw:limited'),
-            save: getLift(res.keywordEmojis as any, 'kw:save'),
-            off: getLift(res.keywordEmojis as any, 'kw:off'),
-            discount: getLift(res.keywordEmojis as any, 'kw:discount'),
-            percentOff: getLift(res.keywordEmojis as any, 'kw:% off'),
-          },
-          keywordEmojiCounts: {
-            exclusive: getCount(res.keywordEmojis as any, 'kw:exclusive'),
-            sale: getCount(res.keywordEmojis as any, 'kw:sale'),
-            emojiPresent: getCount(res.keywordEmojis as any, 'emoji'),
-            limited: getCount(res.keywordEmojis as any, 'kw:limited'),
-            save: getCount(res.keywordEmojis as any, 'kw:save'),
-            off: getCount(res.keywordEmojis as any, 'kw:off'),
-            discount: getCount(res.keywordEmojis as any, 'kw:discount'),
-            percentOff: getCount(res.keywordEmojis as any, 'kw:% off'),
-          },
-          punctuationCasing: {
-            brackets: getLift(res.punctuationCasing as any, 'brackets'),
-            exclamation: getLift(res.punctuationCasing as any, 'exclaim'),
-            percent: getLift(res.punctuationCasing as any, 'percent'),
-            allCaps: getLift(res.punctuationCasing as any, 'allcaps'),
-            questionMark: getLift(res.punctuationCasing as any, 'qmark'),
-            number: getLift(res.punctuationCasing as any, 'number'),
-          },
-          urgency: {
-            tonight: getLift(res.deadlines as any, 'deadline:tonight'),
-            now: getLift(res.deadlines as any, 'deadline:now'),
-            hours: getLift(res.deadlines as any, 'deadline:hours'),
-            midnight: getLift(res.deadlines as any, 'deadline:midnight'),
-            final: getLift(res.deadlines as any, 'deadline:final'),
-            today: getLift(res.deadlines as any, 'deadline:today'),
-            ends: getLift(res.deadlines as any, 'deadline:ends'),
-            ending: getLift(res.deadlines as any, 'deadline:ending'),
-          },
-          personalization: { youYour: getLift(res.personalization as any, 'p:you') },
-          priceAnchoring: {
-            currency: getLift(res.priceAnchoring as any, 'cur'),
-            percentDiscount: getLift(res.priceAnchoring as any, 'pct'),
-            dollarDiscount: getLift(res.priceAnchoring as any, 'price$'),
-          },
-          imperativeStart: { startsWithVerb: getLift(res.imperativeStart as any, 'imperative') },
-          reuseFatigue: { averageChange: avgChange, subjectsCount: (res.reuse || []).length },
-        };
+        // Length bins — take from the currently selected metric in UI? Export a neutral set from openRate for consistency here
+        const lbRes = perMetric.find(x => x.m==='openRate')!.res.lengthBins || [];
+        const lengthBins = lbRes.map(b => ({ key: (b as any).key, label: (b as any).label, value: b.value, liftVsBaseline: b.liftVsBaseline, countCampaigns: b.countCampaigns, totalEmails: b.totalEmails }));
+        const categories = Array.from(map.values()).filter(c => Object.keys(c.metrics).length > 0);
+        return { categories, baseline: base, lengthBins };
       };
-      json.subjectLineAnalysis = {
-        openRate: buildSubjectSet('openRate'),
-        clickToOpenRate: buildSubjectSet('clickToOpenRate'),
-        clickRate: buildSubjectSet('clickRate'),
-        revenuePerEmail: buildSubjectSet('revenuePerEmail'),
-      };
+      const cat = buildCategories();
+      json.subjectLineAnalysis = { ...cat, note: 'Categories may overlap. Only entries meeting volume and significance are included.' } as any;
 
       // Campaign Performance by Audience Size — compute buckets like the dashboard component
       const computeAudienceBuckets = () => {
