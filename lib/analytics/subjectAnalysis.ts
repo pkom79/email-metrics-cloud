@@ -229,10 +229,18 @@ export function computeSubjectAnalysis(
 
   // Build category predicates with explicit term lists (multi-category allowed)
   type CategoryDef = { key: string; label: string; terms?: string[]; match: (s: string) => boolean };
-  const mkMatcher = (terms: string[]) => (s: string) => {
-    const l = s.toLowerCase();
-    return terms.some(t => l.includes(t));
+  const escapeRegex = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matchTerm = (s: string, term: string): boolean => {
+    if (!term) return false;
+    const subj = (s || '').toLowerCase();
+    const t = term.toLowerCase();
+    // Allow flexible whitespace inside the term
+    const body = escapeRegex(t).replace(/\s+/g, '\\s+');
+    // Word boundary by non-alphanumeric guards at both ends
+    const re = new RegExp(`(^|[^A-Za-z0-9])(${body})(?=[^A-Za-z0-9]|$)`, 'i');
+    return re.test(subj);
   };
+  const mkMatcher = (terms: string[]) => (s: string) => terms.some(t => matchTerm(s, t));
   const CATEGORY_DEFS: Array<CategoryDef> = [
     { key: 'emoji', label: 'Emojis', terms: [], match: (s) => EMOJI_RE.test(s) },
     { key: 'deadline', label: 'Deadline & Urgency', terms: ['today','tonight','now','hurry','last chance','ends','ending','final','final hours','final call','deadline','expires','expiring','closing','countdown','one day only','24 hours','48 hours','through friday','ends sunday','by midnight','by eod','time is running out','act now','don’t wait','dont wait','window closes','last window','almost over','today only','this weekend only','ends tonight','last day','last chance to shop','offer ends','closing soon','limited hours','hours left','minutes left','going fast','ends in','final countdown','cut-off tonight','wraps up soon'], match: mkMatcher(['today','tonight','now','hurry','last chance','ends','ending','final','final hours','final call','deadline','expires','expiring','closing','countdown','one day only','24 hours','48 hours','through friday','ends sunday','by midnight','by eod','time is running out','act now','don’t wait','dont wait','window closes','last window','almost over','today only','this weekend only','ends tonight','last day','last chance to shop','offer ends','closing soon','limited hours','hours left','minutes left','going fast','ends in','final countdown','cut-off tonight','wraps up soon']) },
@@ -273,7 +281,7 @@ export function computeSubjectAnalysis(
     .filter(f => f.countCampaigns > 0)
     .sort((a, b) => (b.liftVsBaseline - a.liftVsBaseline) || (b.totalEmails - a.totalEmails));
 
-  // Compute top used terms (campaign-level presence) per category
+  // Compute top used terms (campaign-level presence) per category; only within the category subset
   const defByKey = new Map(CATEGORY_DEFS.map(d => [d.key, d] as const));
   for (const cat of categoriesRaw) {
     const def = defByKey.get(cat.key);
@@ -285,12 +293,12 @@ export function computeSubjectAnalysis(
     }
     const counts = new Map<string, number>();
     for (const t of terms) counts.set(t, 0);
-    for (const c of campaigns) {
-      const s = (c.subject || c.campaignName || '').toLowerCase();
+    // Only count terms in campaigns that belong to this category
+    const subset = campaigns.filter(c => def!.match(c.subject || c.campaignName || ''));
+    for (const c of subset) {
+      const s = (c.subject || c.campaignName || '');
       for (const t of terms) {
-        if (s.includes(t)) {
-          counts.set(t, (counts.get(t) || 0) + 1);
-        }
+        if (matchTerm(s, t)) counts.set(t, (counts.get(t) || 0) + 1);
       }
     }
     const list = Array.from(counts.entries())
