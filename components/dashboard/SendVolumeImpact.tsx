@@ -4,6 +4,7 @@ import SelectBase from "../ui/SelectBase";
 import { Activity } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import TooltipPortal from '../TooltipPortal';
+import AutoFitText from "../ui/AutoFitText";
 import { DataManager } from '../../lib/data/dataManager';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
 import { computeAxisMax, thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
@@ -498,7 +499,13 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                         <TooltipPortal content={tooltip}>
                             <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Pearson correlation (r) between send volume and this metric over time (n ≥ 3). Positive means the metric tends to be higher in higher-volume periods. Negative means it tends to be lower when volume is higher. Strength: Neg <0.1, Weak <0.3, Moderate <0.5, Strong <0.7.">
                                 <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Correlation</div>
-                                <div className={`text-2xl md:text-3xl font-semibold leading-none ${colorClass}`}>{labelText}</div>
+                                <AutoFitText
+                                    text={labelText}
+                                    className={`w-full ${colorClass}`}
+                                    maxPx={24}
+                                    minPx={14}
+                                    stepPx={1}
+                                />
                             </div>
                         </TooltipPortal>
                     );
