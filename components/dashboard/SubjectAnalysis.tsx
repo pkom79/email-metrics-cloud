@@ -5,7 +5,7 @@ import SelectBase from "../ui/SelectBase";
 import InfoTooltipIcon from "../InfoTooltipIcon";
 import TooltipPortal from "../TooltipPortal";
 import type { ProcessedCampaign } from "../../lib/data/dataTypes";
-import { computeSubjectAnalysis, uniqueSegmentsFromCampaigns, type SubjectMetricKey } from "../../lib/analytics/subjectAnalysis";
+import { computeSubjectAnalysis, type SubjectMetricKey } from "../../lib/analytics/subjectAnalysis";
 
 interface Props {
     campaigns: ProcessedCampaign[];
@@ -20,11 +20,9 @@ const metricOptions: { value: SubjectMetricKey; label: string }[] = [
 
 export default function SubjectAnalysis({ campaigns }: Props) {
     const [metric, setMetric] = useState<SubjectMetricKey>('openRate');
-    const segments = useMemo(() => uniqueSegmentsFromCampaigns(campaigns), [campaigns]);
-    const [segment, setSegment] = useState<string>('ALL_SEGMENTS');
     // Always show only reliable categories per spec (no toggle)
 
-    const result = useMemo(() => computeSubjectAnalysis(campaigns, metric, segment), [campaigns, metric, segment]);
+    const result = useMemo(() => computeSubjectAnalysis(campaigns, metric, undefined), [campaigns, metric]);
 
     const formatPercent = (v: number) => `${(v ?? 0).toFixed(1)}%`;
     const formatCurrency = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0);
@@ -54,12 +52,6 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                         </h3>
                     </div>
                     <div className="section-controls flex items-center gap-2">
-                        <div className="relative">
-                            <SelectBase value={segment} onChange={e => setSegment((e.target as HTMLSelectElement).value)} className="select-base h-9">
-                                <option value="ALL_SEGMENTS">All Segments</option>
-                                {segments.map(s => (<option key={s} value={s}>{s}</option>))}
-                            </SelectBase>
-                        </div>
                         <div className="relative">
                             <SelectBase value={metric} onChange={e => setMetric((e.target as HTMLSelectElement).value as SubjectMetricKey)} className="select-base h-9">
                                 {metricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
