@@ -176,6 +176,30 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
     const hasDuplicateNames = useMemo(() => Object.values(duplicateNameCounts).some(c => c > 1), [duplicateNameCounts]);
 
+    // Detect out-of-order steps by median sent date per step (simple monotonicity check)
+    const isOrderConsistent = useMemo(() => {
+        if (!selectedFlow) return true;
+        try {
+            const byStep: Array<{ pos: number; median: number } | null> = [];
+            for (let pos = 1; flowSequenceInfo && pos <= flowSequenceInfo.sequenceLength; pos++) {
+                const emails = currentFlowEmails.filter(e => e.flowName === selectedFlow && e.sequencePosition === pos);
+                if (!emails.length) { byStep.push(null); continue; }
+                const times = emails.map(e => new Date(e.sentDate).getTime()).sort((a, b) => a - b);
+                const mid = Math.floor(times.length / 2);
+                const median = times.length % 2 === 0 ? Math.round((times[mid - 1] + times[mid]) / 2) : times[mid];
+                byStep.push({ pos, median });
+            }
+            // Ignore nulls (missing steps), require non-decreasing medians
+            let last: number | null = null;
+            for (const rec of byStep) {
+                if (!rec) continue;
+                if (last != null && rec.median < last) return false;
+                last = rec.median;
+            }
+            return true;
+        } catch { return true; }
+    }, [selectedFlow, flowSequenceInfo, currentFlowEmails]);
+
     // Summaries for auto-selection logic
     const flowSummaries = useMemo(() => {
         const map: Record<string, { revenue: number }> = {};
@@ -292,6 +316,166 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         console.log(`Generated ${stepMetrics.length} step metrics for ${selectedFlow}`);
         return stepMetrics;
     }, [selectedFlow, currentFlowEmails, flowSequenceInfo]);
+
+    // Composite scoring across steps (absolute within-flow + relative vs prior)
+    const stepScores = useMemo(() => {
+        if (!flowStepMetrics.length) return { scores: [] as number[], ratings: [] as ("good" | "needs_work" | "consider_pausing" | "low_data")[], reasons: [] as string[][] };
+        const s1Sends = flowStepMetrics[0]?.emailsSent || 0;
+        const volumeGate = (sends: number) => sends >= Math.max(500, Math.round(0.05 * s1Sends));
+        const arr = flowStepMetrics;
+        const vals = {
+            rpe: arr.map(s => s.revenuePerEmail),
+            cvr: arr.map(s => s.conversionRate),
+            ctr: arr.map(s => s.clickRate),
+            open: arr.map(s => s.openRate),
+            unsub: arr.map(s => s.unsubscribeRate),
+            spam: arr.map(s => s.spamRate),
+            bounce: arr.map(s => s.bounceRate),
+        };
+        const percentile = (v: number, sorted: number[]) => {
+            if (!sorted.length) return 0.5;
+            let lo = 0, hi = sorted.length - 1;
+            while (lo <= hi) {
+                const mid = (lo + hi) >> 1;
+                if (sorted[mid] < v) lo = mid + 1; else hi = mid - 1;
+            }
+            return sorted.length ? Math.max(0, Math.min(1, lo / sorted.length)) : 0.5;
+        };
+        const srt = {
+            rpe: [...vals.rpe].sort((a, b) => a - b),
+            cvr: [...vals.cvr].sort((a, b) => a - b),
+            ctr: [...vals.ctr].sort((a, b) => a - b),
+            open: [...vals.open].sort((a, b) => a - b),
+            unsub: [...vals.unsub].sort((a, b) => a - b),
+            spam: [...vals.spam].sort((a, b) => a - b),
+            bounce: [...vals.bounce].sort((a, b) => a - b),
+        };
+        const rpeMedian = (() => { const t = srt.rpe; const n = t.length; return n ? (n % 2 ? t[(n - 1) / 2] : (t[n / 2 - 1] + t[n / 2]) / 2) : 0; })();
+        const scores: number[] = [];
+        const ratings: ("good" | "needs_work" | "consider_pausing" | "low_data")[] = [];
+        const reasons: string[][] = [];
+        for (let i = 0; i < arr.length; i++) {
+            const s = arr[i];
+            const rs: string[] = [];
+            if (!volumeGate(s.emailsSent)) {
+                scores.push(0);
+                ratings.push('low_data');
+                reasons.push(['Low data volume']);
+                continue;
+            }
+            // Absolute percentiles (0..1) with penalties inverted for negative metrics
+            const abs = 0.40 * percentile(s.revenuePerEmail, srt.rpe)
+                + 0.25 * percentile(s.conversionRate, srt.cvr)
+                + 0.15 * percentile(s.clickRate, srt.ctr)
+                + 0.05 * percentile(s.openRate, srt.open)
+                - 0.10 * percentile(s.unsubscribeRate, srt.unsub)
+                - 0.03 * percentile(s.spamRate, srt.spam)
+                - 0.02 * percentile(s.bounceRate, srt.bounce);
+            // Relative deltas vs prior step (scaled; clamp to [-1,1])
+            const prev = i > 0 ? arr[i - 1] : null;
+            const pctDelta = (a: number, b: number) => (b === 0 ? 0 : (a - b) / Math.max(Math.abs(b), 1e-9));
+            const dRpe = prev ? pctDelta(s.revenuePerEmail, prev.revenuePerEmail) : 0;
+            const dCvr = prev ? pctDelta(s.conversionRate, prev.conversionRate) : 0;
+            const dCtr = prev ? pctDelta(s.clickRate, prev.clickRate) : 0;
+            const dOpen = prev ? pctDelta(s.openRate, prev.openRate) : 0;
+            const dUnsub = prev ? pctDelta(s.unsubscribeRate, prev.unsubscribeRate) : 0;
+            const dSpam = prev ? pctDelta(s.spamRate, prev.spamRate) : 0;
+            const clamp = (x: number, scale = 0.5) => Math.max(-1, Math.min(1, x / scale)); // scale 50% change -> 1.0
+            const rel = 0.45 * clamp(dRpe)
+                + 0.25 * clamp(dCvr)
+                + 0.20 * clamp(dCtr)
+                + 0.05 * clamp(dOpen)
+                - 0.04 * clamp(dUnsub)
+                - 0.01 * clamp(dSpam);
+            // Extra penalty: reach collapse >60% and RPE below median
+            let extraPenalty = 0;
+            if (prev && prev.emailsSent > 0) {
+                const drop = (prev.emailsSent - s.emailsSent) / prev.emailsSent;
+                if (drop > 0.6 && s.revenuePerEmail < rpeMedian) extraPenalty = 0.7;
+            }
+            const score = abs + rel - extraPenalty;
+            scores.push(score);
+
+            // Deliverability red flags
+            const deliverabilityIssue = (s.unsubscribeRate > 0.30) || (s.spamRate > 0.03) || (s.bounceRate > 1.0);
+            if (deliverabilityIssue) rs.push('Deliverability risk');
+            if (prev && clamp(dRpe) < -0.6) rs.push('RPE down vs prior');
+            if (s.revenuePerEmail >= rpeMedian) rs.push('Strong RPE');
+
+            const rating: typeof ratings[number] = score >= 1.0 ? 'good' : (score <= -1.0 || deliverabilityIssue ? 'consider_pausing' : 'needs_work');
+            ratings.push(rating);
+            reasons.push(rs);
+        }
+        return { scores, ratings, reasons, rpeMedian, s1Sends } as any;
+    }, [flowStepMetrics]);
+
+    // Summary and indicator availability
+    const indicatorAvailable = useMemo(() => !hasDuplicateNames && isOrderConsistent, [hasDuplicateNames, isOrderConsistent]);
+    const totalFlowSends = useMemo(() => flowStepMetrics.reduce((sum, s) => sum + (s.emailsSent || 0), 0), [flowStepMetrics]);
+    const notEnoughDataCard = useMemo(() => totalFlowSends < 2000, [totalFlowSends]);
+
+    // Add-step suggestion logic + estimate (Option B)
+    const addStepSuggestion = useMemo(() => {
+        if (!indicatorAvailable || !flowStepMetrics.length) return { suggested: false } as any;
+        const lastIdx = flowStepMetrics.length - 1;
+        const last = flowStepMetrics[lastIdx];
+        const ratings = (stepScores as any).ratings as ("good" | "needs_work" | "consider_pausing" | "low_data")[];
+        const s1Sends = (stepScores as any).s1Sends as number;
+        const rpeMedian = (stepScores as any).rpeMedian as number;
+        const volumeOk = last.emailsSent >= Math.max(500, Math.round(0.05 * s1Sends));
+        const deliverabilityOk = last.unsubscribeRate <= 0.30 && last.spamRate <= 0.03;
+        const rpeOk = last.revenuePerEmail >= rpeMedian;
+        const prev = lastIdx > 0 ? flowStepMetrics[lastIdx - 1] : null;
+        const deltaRpeOk = prev ? (last.revenuePerEmail - prev.revenuePerEmail) >= 0 : true;
+        const lastStepRevenue = last.revenue || 0;
+        const flowRevenue = flowStepMetrics.reduce((sum, s) => sum + (s.revenue || 0), 0);
+        const lastRevenuePct = flowRevenue > 0 ? (lastStepRevenue / flowRevenue) * 100 : 0;
+        const absoluteRevenueOk = (lastStepRevenue >= 500) || (lastRevenuePct >= 5);
+
+        // Date window gating: show only if "recent" (last X days) OR custom ending at last email date
+        const dm = dataManager;
+        const lastEmailDate = dm.getLastEmailDate();
+        const endsAtLast = dateRange === 'all' ? false : (dateRange === 'custom' ? (customTo ? new Date(customTo).toDateString() === lastEmailDate.toDateString() : false) : true);
+        const days = dateRange === 'custom' && customFrom && customTo
+            ? Math.max(1, Math.ceil((new Date(customTo).getTime() - new Date(customFrom).getTime()) / (1000 * 60 * 60 * 24)))
+            : (dateRange === 'all' ? 0 : parseInt(dateRange.replace('d', '')));
+        const isRecentWindow = endsAtLast && (days === 30 || days === 90);
+
+        const ratingIsGood = ratings[lastIdx] === 'good';
+        const suggested = ratingIsGood && rpeOk && deltaRpeOk && deliverabilityOk && volumeOk && absoluteRevenueOk && isRecentWindow;
+
+        // Estimate (Option B) when suggested or to include in JSON gates
+        const rpeFloor = (() => {
+            const rpes = flowStepMetrics.map(s => s.revenuePerEmail).filter(v => isFinite(v) && v >= 0).sort((a, b) => a - b);
+            if (!rpes.length) return last.revenuePerEmail;
+            const idx = Math.floor(0.25 * (rpes.length - 1));
+            let floor = rpes[idx];
+            if (!isFinite(floor)) floor = last.revenuePerEmail;
+            return Math.min(floor, last.revenuePerEmail);
+        })();
+        const projectedReach = Math.round(last.emailsSent * 0.5);
+        const estimatedRevenue = Math.round(projectedReach * rpeFloor * 100) / 100;
+
+        const reason = suggested
+            ? (flowStepMetrics.length === 1 ? 'Strong RPE and healthy deliverability' : `S${last.sequencePosition} performing well; follow-up could add value`)
+            : undefined;
+
+        return {
+            suggested,
+            reason,
+            horizonDays: isRecentWindow ? (days as 30 | 90) : undefined,
+            estimate: suggested ? { projectedReach, rpeFloor, estimatedRevenue, assumptions: { reachPctOfLastStep: 0.5, rpePercentile: 25, clampedToLastStepRpe: true } } : undefined,
+            gates: {
+                lastStepRevenue,
+                lastStepRevenuePctOfFlow: lastRevenuePct,
+                deliverabilityOk,
+                volumeOk,
+                rpeOk,
+                deltaRpeOk,
+                isRecentWindow
+            }
+        } as const;
+    }, [indicatorAvailable, flowStepMetrics, stepScores, dataManager, dateRange, customFrom, customTo]);
 
     const getStepSparklineData = React.useCallback((sequencePosition: number, metric: string) => {
         if (!selectedFlow) return [] as { value: number; date: string }[];
@@ -451,8 +635,6 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 </span>
             );
         }
-        // Change from gray to emerald for no data cases to match global chart color scheme
-        if (value === 0 && sparklineData.length === 0) { chartColor = '#10b981'; dotColor = chartColor; }
         const chartGradient = `linear-gradient(180deg, ${chartColor}40 0%, ${chartColor}10 100%)`;
         let xTicks: { x: number; label: string }[] = [];
         if (sparklineData.length > 1) {
@@ -750,12 +932,76 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                     </div>
                 </div>
             </div>
+            {/* Flow-level indicators row and summary */}
+            {selectedFlow && (
+                <div className="mb-3">
+                    {indicatorAvailable ? (
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                {flowStepMetrics.map((s, i) => {
+                                    const rating = (stepScores as any).ratings?.[i] as string | undefined;
+                                    const color = rating === 'good' ? '#059669' /* emerald-600 */
+                                        : rating === 'needs_work' ? '#f59e0b' /* amber-500 */
+                                            : rating === 'consider_pausing' ? '#e11d48' /* rose-600 */
+                                                : '#d1d5db'; /* gray-300 */
+                                    return <span key={i} className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} title={`S${s.sequencePosition}: ${s.emailName}`} />;
+                                })}
+                            </div>
+                            <div className="text-[11px] text-gray-600 dark:text-gray-300">
+                                {(() => {
+                                    const r = (stepScores as any).ratings as string[] | undefined;
+                                    if (!r || !r.length) return null;
+                                    const good = r.map((v, i) => v === 'good' ? i + 1 : null).filter(Boolean) as number[];
+                                    const work = r.map((v, i) => v === 'needs_work' ? i + 1 : null).filter(Boolean) as number[];
+                                    const pause = r.map((v, i) => v === 'consider_pausing' ? i + 1 : null).filter(Boolean) as number[];
+                                    const parts: string[] = [];
+                                    if (good.length) parts.push(`Good: S${good.join('–S')}`.replace('S,', 'S'));
+                                    if (work.length) parts.push(`Needs work: S${work.join(', S')}`);
+                                    if (pause.length) parts.push(`Consider pausing: S${pause.join(', S')}`);
+                                    return parts.join(' • ');
+                                })()}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-[11px] text-gray-600 dark:text-gray-300">Indicator unavailable (duplicate names or step order inconsistent).</div>
+                    )}
+                    {/* Add-step suggestion */}
+                    {indicatorAvailable && (addStepSuggestion as any)?.suggested && (
+                        <div className="mt-1 text-[11px] text-gray-700 dark:text-gray-200">
+                            {flowStepMetrics.length === 1 ? (
+                                <span>Consider adding a second step (strong RPE and healthy deliverability).
+                                    {(addStepSuggestion as any)?.estimate ? (
+                                        <span className="ml-1 text-gray-500" title="Estimate is conservative and depends on how many emails your flow sends and may vary with audience behavior.">
+                                            Est. +{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((addStepSuggestion as any).estimate.estimatedRevenue)} in next {(addStepSuggestion as any).horizonDays} days
+                                        </span>
+                                    ) : null}
+                                </span>
+                            ) : (
+                                <span>Consider adding a follow-up after S{flowStepMetrics[flowStepMetrics.length - 1].sequencePosition} (solid RPE, clear deliverability).
+                                    {(addStepSuggestion as any)?.estimate ? (
+                                        <span className="ml-1 text-gray-500" title="Estimate is conservative and depends on how many emails your flow sends and may vary with audience behavior.">
+                                            Est. +{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((addStepSuggestion as any).estimate.estimatedRevenue)} in next {(addStepSuggestion as any).horizonDays} days
+                                        </span>
+                                    ) : null}
+                                </span>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
             {/* Naming note styled like Data Coverage Notice (purple) */}
             <div className="mb-3">
                 <div className="p-0 text-purple-700 dark:text-purple-200">
                     <span className="text-xs"><span className="font-medium">Naming Note:</span> Flow steps are organized by message names. When you create an A/B test, Klaviyo may give the same name to multiple emails, which can mess up the order. To avoid this, rename emails with clear suffixes like “-A” and “-B” so the order stays correct.</span>
                 </div>
             </div>
+
+            {/* Not enough data empty state card (still render charts below) */}
+            {selectedFlow && notEnoughDataCard && (
+                <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900 mb-3">
+                    <div className="text-sm text-gray-700 dark:text-gray-200">Not enough data. This module uses limited data for the selected window; results may be noisy.</div>
+                </div>
+            )}
 
             {selectedFlow && (
                 <div className="grid grid-cols-1 gap-6">
