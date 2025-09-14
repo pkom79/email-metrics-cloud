@@ -2,7 +2,7 @@
 
 This guide defines the design tokens, components, and patterns used across the app. Treat it as the single source of truth and keep it updated as we standardize. When adding or modifying UI, reference this document and prefer the shared components listed here.
 
-Last updated: 2025-09-13 (Custom Segment compare layout + delta formatting + Overview sourcing; Weekly 90+ empty state pattern)
+Last updated: 2025-09-14 (Flow Step Analysis: Money pillar labels switched to RI/ERS; Deliverability tooltip formatting standardized to arrow; Score N/A rule)
 
 ## theme and modes
 - Tailwind: v3.x, darkMode: class
@@ -239,3 +239,23 @@ Dynamic Subject Length bins:
 
 ---
 If you find a UI that deviates from this guide, log it and standardize by replacing ad-hoc markup with the shared components/utilities above.
+
+## Flow Step Analysis — Score & Tooltip Nomenclature
+
+Scope: Applies to both UI and export surfaces. Keep naming, formatting, and calculations in strict parity.
+
+- Pillars and weights: Money 70, Deliverability 20, Confidence 10 (total 100).
+- Money pillar (70 points total) is composed of two 0–35 point sub-parts:
+  - Revenue Index (RI): points = 35 × clamp(RI, 0, 2.0) / 2.0. RI is the step’s Revenue per Email divided by the baseline median RPE across steps. For single‑step flows, the baseline uses flows‑only account RPE for the selected window (exclude campaigns).
+  - Email Rev Share (ERS): keep existing bins; max 35 points. Label everywhere as “Email Rev Share (ERS)”.
+- Deliverability (20 points): additive bins with a low‑volume adjustment. In tooltips, show each bin as “→ value/max” (no plus sign), using title case labels.
+- Confidence (10 points): 1 point per 100 emails sent in the window, capped at 10.
+- Score N/A: When store revenue in the selected window is zero, show “Score N/A” in the UI; export should also note the lack of store revenue.
+- Notes: When RI ≥ 1.4, include “High Revenue Index” in the notes. Retain the high‑revenue guardrail note when applicable.
+
+Formatting:
+- RI display: use “x.x×” format in tooltips (e.g., “1.4×”).
+- Use `tabular-nums` on numeric tooltip rows for alignment.
+
+Color and Icons:
+- Use brand semantic colors per this guide. Keep section header icon in purple. Tooltip icon via `InfoTooltipIcon`.

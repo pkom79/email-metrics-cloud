@@ -319,7 +319,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
     }, [selectedFlow, currentFlowEmails, flowSequenceInfo]);
 
     // Flow Step Score (0–100) with simplified pillars:
-    // Money (70) = Flow Revenue Share (35) + Store (flows+campaigns) Revenue Share (35)
+    // Money (70) = Revenue Index (35) + Store (flows+campaigns) Revenue Share (35)
     // Deliverability (20) = bin-based score with low-volume adjustment (<0.5% of account sends) applied only if base < 15
     // Statistical Confidence (10) = 1 point per 100 sends, capped at 10
     const stepScores = useMemo(() => {
@@ -341,19 +341,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 
         const results: Array<any> = [];
-        // Helper mappers for Money pillar bins (deterministic, inclusive bounds as specified)
-        const flowShareToPoints = (share: number): number => {
-            // share is 0..1
-            if (!isFinite(share) || share <= 0) return 5; // floor bucket
-            const pct = share * 100;
-            if (pct >= 50) return 35;
-            if (pct >= 30) return 30;
-            if (pct >= 20) return 25;
-            if (pct >= 10) return 20;
-            if (pct >= 5) return 15;
-            if (pct >= 2) return 10;
-            return 5;
-        };
+        // Helper mapper for Store share pillar bins (ERS stays as-is); RI is continuous 0–35
         const storeShareToPoints = (share: number): number => {
             if (!isFinite(share) || share <= 0) return 5;
             const pct = share * 100;
@@ -365,17 +353,39 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             if (pct >= 0.25) return 10;
             return 5;
         };
+        // Compute RI baseline (median RPE across steps; if one-step flow, use flows-only account RPE)
+        const rpesForBaseline = arr
+            .filter(s => (s.emailsSent || 0) > 0)
+            .map(s => {
+                const e = s.emailsSent || 0; const r = s.revenue || 0; return e > 0 ? r / e : 0;
+            })
+            .sort((a, b) => a - b);
+        let medianRPE = 0;
+        if (rpesForBaseline.length > 0) {
+            const mid = Math.floor(rpesForBaseline.length / 2);
+            medianRPE = rpesForBaseline.length % 2 === 0 ? (rpesForBaseline[mid - 1] + rpesForBaseline[mid]) / 2 : rpesForBaseline[mid];
+        }
+        if (arr.length === 1) {
+            // flows-only RPE across account in the same window (exclude campaigns)
+            try {
+                const flowsOnlyAgg = dm.getAggregatedMetricsForPeriod([], dm.getFlowEmails(), start, end);
+                medianRPE = flowsOnlyAgg.revenuePerEmail || 0;
+            } catch { }
+        }
+
         for (let i = 0; i < arr.length; i++) {
             const s = arr[i];
             const notes: string[] = [];
-            // Money pillar (max 70) = Flow Revenue Share (35) + Store Revenue Share (35)
-            const flowShare = flowRevenueTotal > 0 ? (s.revenue / flowRevenueTotal) : 0;
-            const flowSharePts = clamp(flowShareToPoints(flowShare), 0, 35);
+            // Money pillar (max 70) = Revenue Index (35) + Store Revenue Share (35)
+            const rpe = (s.emailsSent || 0) > 0 ? (s.revenue || 0) / (s.emailsSent || 0) : 0;
+            const riRaw = medianRPE > 0 ? (rpe / medianRPE) : 0;
+            const riClipped = clamp(riRaw, 0, 2.0);
+            const riPts = 35 * (riClipped / 2);
             const storeShare = storeRevenueTotal > 0 ? (s.revenue / storeRevenueTotal) : 0;
             const storeSharePts = clamp(storeShareToPoints(storeShare), 0, 35);
-            if (flowShare >= 0.2) notes.push('High flow revenue share');
+            if (riClipped >= 1.4) notes.push('High Revenue Index');
             if (storeRevenueTotal <= 0) notes.push('No store revenue in window');
-            const moneyPoints = clamp(flowSharePts + storeSharePts, 0, 70);
+            const moneyPoints = clamp(riPts + storeSharePts, 0, 70);
 
             // Deliverability Score D (0–20)
             const unsub = s.unsubscribeRate; // percent
@@ -431,7 +441,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             const flowSendShare = totalFlowSendsInWindow > 0 ? (s.emailsSent / totalFlowSendsInWindow) : 0;
             // High-risk guardrail using critical thresholds aligned with scoring bins
             const riskHigh = (spam >= 0.30) || (unsub > 1.00) || (bounce >= 5.00) || (openPct < 20) || (clickPct < 1);
-            const highMoney = (moneyPoints >= 55) || (flowSendShare > 0 && (flowShare / flowSendShare) >= 1.4);
+            const highMoney = (moneyPoints >= 55) || (riClipped >= 1.4);
             const lowMoney = (moneyPoints <= 35);
 
             const deliverabilityPoints = D; // 0..20
@@ -446,7 +456,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             else action = 'pause';
             // Guardrail for non-risk high revenue/share cases
             const highAbsRevenue = s.revenue >= 5000;
-            const highRevenueShare = flowShare >= 0.10;
+            const flowShareForGuard = flowRevenueTotal > 0 ? (s.revenue / flowRevenueTotal) : 0; // guardrail only
+            const highRevenueShare = flowShareForGuard >= 0.10;
             if (!riskHigh && action === 'pause' && (highAbsRevenue || highRevenueShare)) {
                 action = 'keep';
                 notes.push('High revenue guardrail');
@@ -457,7 +468,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 action,
                 notes,
                 pillars: {
-                    money: { points: moneyPoints, flowSharePts, storeSharePts, flowShare, storeShare },
+                    money: { points: moneyPoints, ri: riClipped, riPts, storeSharePts, storeShare },
                     deliverability: { points: deliverabilityPoints, base: baseD, lowVolumeAdjusted, riskHigh },
                     confidence: { points: scPoints }
                 },
@@ -762,10 +773,10 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 const pct3 = (v: number) => `${(v).toFixed(3)}%`;
                                 const fmtOpen = (v: number) => `${v.toFixed(1)}%`;
                                 const fmtClick = (v: number) => `${v.toFixed(2)}%`;
-                                // Money rev-share color: strong shares in emerald, others neutral
-                                const flowShare = (res.pillars?.money?.flowShare ?? 0) * 100;
+                                // Money: RI color based on points; ERS uses same thresholding
+                                const riVal = res.pillars?.money?.ri ?? 0;
                                 const storeShare = (res.pillars?.money?.storeShare ?? 0) * 100;
-                                const flowColor = (res.pillars?.money?.flowSharePts ?? 0) >= 25 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300';
+                                const flowColor = (res.pillars?.money?.riPts ?? 0) >= 25 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300';
                                 const storeColor = (res.pillars?.money?.storeSharePts ?? 0) >= 25 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300';
 
                                 // Deliverability metric points per current bins
@@ -779,8 +790,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 const unsubPts = unsub < 0.20 ? 3 : (unsub < 0.50 ? 2.5 : (unsub < 1.00 ? 1 : 0));
                                 const openPts = open >= 30 ? 2 : (open >= 20 ? 1 : 0);
                                 const clickPts = click > 3 ? 1 : (click >= 1 ? 0.5 : 0);
-                                const isExcellent = (metric: 'spam'|'bounce'|'unsub'|'open'|'click') => {
-                                    switch(metric){
+                                const isExcellent = (metric: 'spam' | 'bounce' | 'unsub' | 'open' | 'click') => {
+                                    switch (metric) {
                                         case 'spam': return spamPts === 7;
                                         case 'bounce': return bouncePts === 7;
                                         case 'unsub': return unsubPts === 3;
@@ -788,8 +799,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         case 'click': return clickPts === 1; // >3%
                                     }
                                 };
-                                const isDanger = (metric: 'spam'|'bounce'|'unsub'|'open'|'click') => {
-                                    switch(metric){
+                                const isDanger = (metric: 'spam' | 'bounce' | 'unsub' | 'open' | 'click') => {
+                                    switch (metric) {
                                         case 'spam': return spam >= 0.30;
                                         case 'bounce': return bounce >= 5.00;
                                         case 'unsub': return unsub > 1.00;
@@ -797,7 +808,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         case 'click': return click < 1;
                                     }
                                 };
-                                const colorFor = (metric: 'spam'|'bounce'|'unsub'|'open'|'click') => isDanger(metric) ? 'text-rose-600' : (isExcellent(metric) ? 'text-emerald-600' : 'text-gray-700 dark:text-gray-300');
+                                const colorFor = (metric: 'spam' | 'bounce' | 'unsub' | 'open' | 'click') => isDanger(metric) ? 'text-rose-600' : (isExcellent(metric) ? 'text-emerald-600' : 'text-gray-700 dark:text-gray-300');
 
                                 // Gating reason if riskHigh prevented scale
                                 const riskHigh = !!res?.pillars?.deliverability?.riskHigh;
@@ -818,18 +829,18 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         <div className="mt-1 text-[11px] text-gray-600 dark:text-gray-400">Money {Math.round(m)} · Deliverability {Math.round(d)} · Confidence {Math.round(c)}</div>
                                         {/* Money */}
                                         <div className="mt-2 text-xs text-gray-700 dark:text-gray-300 space-y-1">
-                                            <div className="flex items-center gap-1"><span>Flow share:</span> <span className={`tabular-nums ${flowColor}`}>{pct1(flowShare)}</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{Math.round(res.pillars?.money?.flowSharePts || 0)}/35</span></div>
-                                            <div className="flex items-center gap-1"><span>Store share:</span> <span className={`tabular-nums ${storeColor}`}>{pct1(storeShare)}</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{Math.round(res.pillars?.money?.storeSharePts || 0)}/35</span></div>
+                                            <div className="flex items-center gap-1"><span>Revenue Index:</span> <span className={`tabular-nums ${flowColor}`}>{`${(riVal).toFixed(1)}×`}</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{Math.round(res.pillars?.money?.riPts || 0)}/35</span></div>
+                                            <div className="flex items-center gap-1"><span>Email Rev Share (ERS):</span> <span className={`tabular-nums ${storeColor}`}>{pct1(storeShare)}</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{Math.round(res.pillars?.money?.storeSharePts || 0)}/35</span></div>
                                         </div>
                                         {/* Deliverability metric-by-metric */}
                                         <div className="mt-2 text-xs text-gray-700 dark:text-gray-300">
-                                            <div className="font-medium text-gray-800 dark:text-gray-200">Deliverability breakdown</div>
+                                            <div className="font-medium text-gray-800 dark:text-gray-200">Deliverability Breakdown</div>
                                             <div className="mt-1 space-y-0.5">
-                                                <div className={`flex items-center gap-1 ${colorFor('spam')}`}>Spam <span className="tabular-nums">({pct3(spam)})</span> <span className="text-gray-500">·</span> <span className="tabular-nums">+{spamPts}</span></div>
-                                                <div className={`flex items-center gap-1 ${colorFor('bounce')}`}>Bounce <span className="tabular-nums">({pct2(bounce)})</span> <span className="text-gray-500">·</span> <span className="tabular-nums">+{bouncePts}</span></div>
-                                                <div className={`flex items-center gap-1 ${colorFor('unsub')}`}>Unsub <span className="tabular-nums">({pct2(unsub)})</span> <span className="text-gray-500">·</span> <span className="tabular-nums">+{unsubPts}</span></div>
-                                                <div className={`flex items-center gap-1 ${colorFor('open')}`}>Open <span className="tabular-nums">({fmtOpen(open)})</span> <span className="text-gray-500">·</span> <span className="tabular-nums">+{openPts}</span></div>
-                                                <div className={`flex items-center gap-1 ${colorFor('click')}`}>Click <span className="tabular-nums">({fmtClick(click)})</span> <span className="text-gray-500">·</span> <span className="tabular-nums">+{clickPts}</span></div>
+                                                <div className={`flex items-center gap-1 ${colorFor('spam')}`}>Spam <span className="tabular-nums">({pct3(spam)})</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{spamPts}/7</span></div>
+                                                <div className={`flex items-center gap-1 ${colorFor('bounce')}`}>Bounce <span className="tabular-nums">({pct2(bounce)})</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{bouncePts}/7</span></div>
+                                                <div className={`flex items-center gap-1 ${colorFor('unsub')}`}>Unsub <span className="tabular-nums">({pct2(unsub)})</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{unsubPts}/3</span></div>
+                                                <div className={`flex items-center gap-1 ${colorFor('open')}`}>Open <span className="tabular-nums">({fmtOpen(open)})</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{openPts}/2</span></div>
+                                                <div className={`flex items-center gap-1 ${colorFor('click')}`}>Click <span className="tabular-nums">({fmtClick(click)})</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{clickPts}/1</span></div>
                                             </div>
                                             {typeof baseD === 'number' && Math.abs(deltaAdj) > 0.05 ? (
                                                 <div className="mt-1 text-[11px] text-gray-600 dark:text-gray-400">Low-volume adj: +{(deltaAdj).toFixed(1)} → {Math.round(d)}</div>

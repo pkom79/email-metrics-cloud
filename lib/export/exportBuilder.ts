@@ -184,7 +184,7 @@ export interface LlmExportJson {
           action: 'scale' | 'keep' | 'improve' | 'pause';
           notes?: string[];
           pillars: {
-            money: { points: number; flowSharePts: number; storeSharePts: number; flowShare: number; storeShare: number };
+            money: { points: number; riPts: number; ersPts: number; ri: number; ers: number };
             deliverability: { points: number; base: number; lowVolumeAdjusted: boolean; riskHigh: boolean };
             confidence: { points: number };
           };
@@ -1079,25 +1079,35 @@ export async function buildLlmExportJson(params: {
           const accountSendsTotal = overallAgg.emailsSent || 0;
           const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
           const totalFlowSendsInWindow = steps.reduce((sum, s) => sum + (s.total.emailsSent || 0), 0);
+          // Revenue Index baseline (median RPE across steps; for single‑step flows use flows‑only RPE in window)
+          let medianRPE = 0;
+          try {
+            const rpes = steps
+              .filter(st => (st.total.emailsSent || 0) > 0)
+              .map(st => (st.total.totalRevenue || 0) / (st.total.emailsSent || 1))
+              .filter(v => Number.isFinite(v) && v >= 0)
+              .sort((a, b) => a - b);
+            if (rpes.length > 0) {
+              const mid = Math.floor(rpes.length / 2);
+              medianRPE = rpes.length % 2 === 0 ? (rpes[mid - 1] + rpes[mid]) / 2 : rpes[mid];
+            }
+            if (steps.length === 1) {
+              const flowsOnlyAgg = dm.getAggregatedMetricsForPeriod([], dm.getFlowEmails(), s2, e2);
+              medianRPE = flowsOnlyAgg?.revenuePerEmail || medianRPE || 0;
+            }
+          } catch {}
+
           const stepScores = steps.map((s, i) => {
             const notes: string[] = [];
-            // Money pillar = flow share (35) + store share (35) via discrete bins
-            const flowShare = flowRevenueTotal > 0 ? (s.total.totalRevenue / flowRevenueTotal) : 0;
-            const flowSharePts = (() => {
-              if (!isFinite(flowShare) || flowShare <= 0) return 5;
-              const pct = flowShare * 100;
-              if (pct >= 50) return 35;
-              if (pct >= 30) return 30;
-              if (pct >= 20) return 25;
-              if (pct >= 10) return 20;
-              if (pct >= 5) return 15;
-              if (pct >= 2) return 10;
-              return 5;
-            })();
-            const storeShare = storeRevenueTotal > 0 ? (s.total.totalRevenue / storeRevenueTotal) : 0;
-            const storeSharePts = (() => {
-              if (!isFinite(storeShare) || storeShare <= 0) return 5;
-              const pct = storeShare * 100;
+            // Money pillar (max 70) = Revenue Index (35) + Email Rev Share (ERS, 35)
+            const rpe = (s.total.emailsSent || 0) > 0 ? (s.total.totalRevenue || 0) / (s.total.emailsSent || 1) : 0;
+            const riRaw = medianRPE > 0 ? (rpe / medianRPE) : 0;
+            const riClipped = clamp(riRaw, 0, 2.0);
+            const riPts = 35 * (riClipped / 2);
+            const ers = storeRevenueTotal > 0 ? (s.total.totalRevenue / storeRevenueTotal) : 0;
+            const ersPts = (() => {
+              if (!isFinite(ers) || ers <= 0) return 5;
+              const pct = ers * 100;
               if (pct >= 5) return 35;
               if (pct >= 3) return 30;
               if (pct >= 2) return 25;
@@ -1106,9 +1116,9 @@ export async function buildLlmExportJson(params: {
               if (pct >= 0.25) return 10;
               return 5;
             })();
-            if (flowShare >= 0.2) notes.push('High flow revenue share');
+            if (riClipped >= 1.4) notes.push('High Revenue Index');
             if (storeRevenueTotal <= 0) notes.push('No store revenue in window');
-            const moneyPoints = clamp(flowSharePts + storeSharePts, 0, 70);
+            const moneyPoints = clamp(riPts + ersPts, 0, 70);
             // Deliverability additive bins + proportional low-volume adjustment
             const unsub = s.total.unsubscribeRate; const spam = s.total.spamRate; const bounce = s.total.bounceRate;
             const openPct = s.total.openRate; const clickPct = s.total.clickRate;
@@ -1153,7 +1163,7 @@ export async function buildLlmExportJson(params: {
             const scPoints = clamp(Math.floor((s.total.emailsSent || 0) / 100), 0, 10);
             const flowSendShare = totalFlowSendsInWindow > 0 ? (s.total.emailsSent / totalFlowSendsInWindow) : 0;
             const riskHigh = (spam >= 0.30) || (unsub > 1.00) || (bounce >= 5.00) || (openPct < 20) || (clickPct < 1);
-            const highMoney = (moneyPoints >= 55) || (flowSendShare > 0 && (flowShare / flowSendShare) >= 1.4);
+            const highMoney = (moneyPoints >= 55) || (riClipped >= 1.4);
             const lowMoney = (moneyPoints <= 35);
             const deliverabilityPoints = D;
             let score = Math.max(0, Math.min(100, moneyPoints + deliverabilityPoints + scPoints));
@@ -1170,7 +1180,7 @@ export async function buildLlmExportJson(params: {
                 action,
                 notes,
                 pillars: {
-                  money: { points: moneyPoints, flowSharePts, storeSharePts, flowShare, storeShare },
+                  money: { points: moneyPoints, riPts, ersPts, ri: riClipped, ers },
                   deliverability: { points: deliverabilityPoints, base: baseD, lowVolumeAdjusted, riskHigh },
                   confidence: { points: scPoints },
                 },
