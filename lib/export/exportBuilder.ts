@@ -403,7 +403,7 @@ export async function buildLlmExportJson(params: {
       generatedAt: new Date().toISOString(),
       moduleDescriptions: {
         period: 'Full-month window used for full-period metrics and monthly splits (fromMonth–toMonth inclusive).',
-        metrics: 'Full-month aggregated KPIs for the window; split into overall, campaigns-only, and flows-only.',
+  metrics: 'Full-month aggregated KPIs for the window; split into overall and campaigns-only views.',
         audienceOverview: 'Snapshot from Audience Overview at export time: only profiles that can receive email (not suppressed). Includes Total Active Audience, Buyers, % of audience, Avg CLV (All), Avg CLV (Buyers).',
         audienceGrowth: 'Daily/Weekly/Monthly counts for Created, First Active, and Subscribed over the selected lookback period; includes period totals.',
         purchaseFrequencyDistribution: 'How many profiles have never purchased, purchased once, twice, 3–5 times, or 6+ times; includes counts and percent of audience.',

@@ -670,6 +670,21 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                         {indicatorAvailable ? (() => {
                             const res = (stepScores as any).results?.[index] as any | undefined;
                             if (!res) return null;
+                            // If there's no store revenue in the selected window, show a disabled gray N/A indicator
+                            const storeRevTotalCtx = (stepScores as any).context?.storeRevenueTotal as number | undefined;
+                            if (!storeRevTotalCtx || storeRevTotalCtx <= 0) {
+                                const naTipNode = (
+                                    <div className="max-w-xs">
+                                        <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">Score N/A</div>
+                                        <div className="mt-2 text-xs text-gray-700 dark:text-gray-300">No store revenue in the selected window.</div>
+                                    </div>
+                                );
+                                return (
+                                    <TooltipPortal content={naTipNode}>
+                                        <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#9ca3af' }} aria-label={`Score N/A indicator`} />
+                                    </TooltipPortal>
+                                );
+                            }
                             const action = res.action as 'scale' | 'keep' | 'improve' | 'pause';
                             const color = action === 'scale' ? '#10b981' // emerald
                                 : action === 'keep' ? '#7c3aed' // purple
@@ -689,7 +704,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{label} · Score {Math.round(res.score)}</div>
                                     <div className="mt-2 text-xs text-gray-700 dark:text-gray-300 space-y-1">
                                         <div>Money: <span className="tabular-nums font-medium">{Math.round(m)}</span> <span className="text-[11px]">(flow {Math.round((res.pillars?.money?.flowSharePts || 0))}/35 · store {Math.round((res.pillars?.money?.storeSharePts || 0))}/35)</span></div>
-                                        <div>Deliverability: <span className="tabular-nums font-medium">{Math.round(d)}</span> {typeof baseD === 'number' && baseD !== d ? <span className="ml-1 text-[11px]">(base {baseD}{lva ? ', low-volume adj.' : ''})</span> : null}</div>
+                                        <div>Deliverability: <span className="tabular-nums font-medium">{Math.round(d)}</span> {typeof baseD === 'number' && baseD !== d ? <span className="ml-1 text-[11px]">(base {baseD.toFixed(1)}{lva ? ', low-volume adj.' : ''})</span> : null}</div>
                                         <div>Confidence: <span className="tabular-nums font-medium">{Math.round(c)}</span></div>
                                         {res.notes?.length ? (
                                             <div className="pt-1 text-[11px] text-gray-600 dark:text-gray-400">{res.notes.join(' · ')}</div>
