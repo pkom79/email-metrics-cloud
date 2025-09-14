@@ -35,6 +35,7 @@ interface FlowStepMetrics {
 }
 
 export default function FlowStepAnalysis({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period' }: FlowStepAnalysisProps) {
+    const DIAG_DASHBOARD = (process.env.NEXT_PUBLIC_DIAG_DASHBOARD === '1');
     const [hoveredPoint, setHoveredPoint] = useState<{
         chartIndex: number;
         x: number;
@@ -217,10 +218,10 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         }
 
         const flowEmails = currentFlowEmails.filter(email => email.flowName === selectedFlow);
-        console.log(`Flow emails for ${selectedFlow}:`, flowEmails.length);
+        if (DIAG_DASHBOARD) console.log(`Flow emails for ${selectedFlow}:`, flowEmails.length);
 
         if (flowEmails.length === 0) {
-            console.warn(`No emails found for flow: ${selectedFlow}`);
+            if (DIAG_DASHBOARD) console.warn(`No emails found for flow: ${selectedFlow}`);
             return [];
         }
 
@@ -232,13 +233,13 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
             // Fallback: if no emails match messageId, try sequence position
             if (stepEmails.length === 0) {
-                console.warn(`No emails for messageId ${messageId}, trying sequence position ${idx + 1}`);
+                if (DIAG_DASHBOARD) console.warn(`No emails for messageId ${messageId}, trying sequence position ${idx + 1}`);
                 stepEmails = flowEmails.filter(email => email.sequencePosition === idx + 1);
             }
 
             // If still no emails, create empty step
             if (stepEmails.length === 0) {
-                console.warn(`No emails found for step ${idx + 1} in flow ${selectedFlow}`);
+                if (DIAG_DASHBOARD) console.warn(`No emails found for step ${idx + 1} in flow ${selectedFlow}`);
                 const emailName = flowSequenceInfo.emailNames[idx] || `Step ${idx + 1}`;
                 stepMetrics.push({
                     sequencePosition: idx + 1,
@@ -314,9 +315,51 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             previousEmailsSent = totalEmailsSent;
         });
 
-        console.log(`Generated ${stepMetrics.length} step metrics for ${selectedFlow}`);
+        if (DIAG_DASHBOARD) console.log(`Generated ${stepMetrics.length} step metrics for ${selectedFlow}`);
         return stepMetrics;
     }, [selectedFlow, currentFlowEmails, flowSequenceInfo]);
+
+    // Memoize current and previous time series per step to avoid recomputation on render/hover
+    const stepSeriesByPosition = useMemo(() => {
+        const record: Record<number, { curr: { value: number; date: string }[]; prev: { value: number; date: string }[] }> = {};
+        if (!selectedFlow || !flowSequenceInfo) return record;
+        for (let position = 1; position <= flowSequenceInfo.sequenceLength; position++) {
+            try {
+                const curr = dataManager.getFlowStepTimeSeries(
+                    currentFlowEmails,
+                    selectedFlow,
+                    position,
+                    selectedMetric,
+                    dateRange,
+                    granularity,
+                    customFrom,
+                    customTo
+                ) as { value: number; date: string }[];
+
+                let prev: { value: number; date: string }[] = [];
+                if (dateWindows && dateRange !== 'all') {
+                    const { prevStartDateOnly, prevEndDateOnly } = dateWindows;
+                    try {
+                        prev = dataManager.getFlowStepTimeSeries(
+                            previousFlowEmails,
+                            selectedFlow,
+                            position,
+                            selectedMetric,
+                            'custom',
+                            granularity,
+                            prevStartDateOnly.toISOString().slice(0, 10),
+                            prevEndDateOnly.toISOString().slice(0, 10)
+                        ) as { value: number; date: string }[];
+                    } catch { /* ignore */ }
+                }
+                record[position] = { curr, prev };
+            } catch {
+                record[position] = { curr: [], prev: [] };
+            }
+        }
+        return record;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedFlow, flowSequenceInfo, currentFlowEmails, previousFlowEmails, selectedMetric, dateRange, granularity, customFrom, customTo, dataManager, dateWindows]);
 
     // Flow Step Score (0–100) with simplified pillars:
     // Money (70) = Revenue Index (35) + Store (flows+campaigns) Revenue Share (35)
@@ -558,11 +601,10 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         } as const;
     }, [indicatorAvailable, flowStepMetrics, stepScores, dataManager, dateRange, customFrom, customTo]);
 
-    const getStepSparklineData = React.useCallback((sequencePosition: number, metric: string) => {
+    const getStepSparklineData = React.useCallback((sequencePosition: number, _metric: string) => {
         if (!selectedFlow) return [] as { value: number; date: string }[];
-        const chartEmails = currentFlowEmails;
-        return dataManager.getFlowStepTimeSeries(chartEmails, selectedFlow, sequencePosition, metric, dateRange, granularity, customFrom, customTo);
-    }, [selectedFlow, currentFlowEmails, dataManager, dateRange, granularity, customFrom, customTo]);
+        return stepSeriesByPosition[sequencePosition]?.curr || [];
+    }, [selectedFlow, stepSeriesByPosition]);
 
     const sharedYAxisRange = useMemo(() => {
         if (!selectedFlow) return { min: 0, max: 10 };
@@ -571,21 +613,17 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         let allValues: number[] = [];
         let allPrevValues: number[] = [];
         for (let position = 1; flowSequenceInfo && position <= flowSequenceInfo.sequenceLength; position++) {
-            const data = getStepSparklineData(position, selectedMetric);
-            allValues = allValues.concat(data.map(d => Math.max(0, d.value)));
-            if (dateWindows && dateRange !== 'all') {
-                const { prevStartDateOnly, prevEndDateOnly } = dateWindows;
-                try {
-                    const prevData = dataManager.getFlowStepTimeSeries(previousFlowEmails, selectedFlow || '', position, selectedMetric, 'custom', granularity, prevStartDateOnly.toISOString().slice(0, 10), prevEndDateOnly.toISOString().slice(0, 10));
-                    if (prevData && prevData.length) allPrevValues = allPrevValues.concat(prevData.map((d: any) => Math.max(0, d.value)));
-                } catch { }
-            }
+            const series = stepSeriesByPosition[position];
+            const curr = series?.curr || [];
+            const prev = series?.prev || [];
+            if (curr.length) allValues = allValues.concat(curr.map(d => Math.max(0, d.value)));
+            if (prev.length) allPrevValues = allPrevValues.concat(prev.map(d => Math.max(0, d.value)));
         }
         if (allValues.length === 0 && allPrevValues.length === 0) return { min: 0, max: 10 };
         const max = computeAxisMax(allValues, allPrevValues, type as any);
         return { min: 0, max };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedFlow, selectedMetric, flowSequenceInfo, getStepSparklineData, dateWindows, dateRange, granularity]);
+    }, [selectedFlow, selectedMetric, flowSequenceInfo, stepSeriesByPosition]);
 
     const getStepPeriodChange = (sequencePosition: number, metric: string): { change: number; isPositive: boolean; previousValue: number; previousPeriod: { startDate: Date; endDate: Date } } | null => {
         if (!selectedFlow || dateRange === 'all') return null;
@@ -657,6 +695,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
     const renderStepChart = (step: FlowStepMetrics, index: number) => {
         const sparklineData = getStepSparklineData(step.sequencePosition, selectedMetric);
+        const prevSeries = stepSeriesByPosition[step.sequencePosition]?.prev || [];
         const periodChange = getStepPeriodChange(step.sequencePosition, selectedMetric);
         const value = step[selectedMetric as keyof FlowStepMetrics] as number;
         const yAxisRange = sharedYAxisRange;
@@ -920,24 +959,21 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                     }
                                     const areaPath = pathD + ` L 850,120 L 0,120 Z`;
 
-                                    // Build compare series area if previous period exists
+                                    // Build compare series area if previous period exists (use memoized previous series)
                                     let compareArea: string | null = null;
                                     try {
-                                        if (dateWindows && dateRange !== 'all') {
-                                            const { prevStartDateOnly, prevEndDateOnly } = dateWindows;
-                                            const prevData = dataManager.getFlowStepTimeSeries(previousFlowEmails, selectedFlow || '', step.sequencePosition, selectedMetric, 'custom', granularity, prevStartDateOnly.toISOString().slice(0, 10), prevEndDateOnly.toISOString().slice(0, 10));
-                                            if (prevData && prevData.length >= 2) {
-                                                const cmpPts = prevData.map((point, i) => { const x = (i / (prevData.length - 1)) * 850; const v = point.value; const y = 120 - ((v - yAxisRange.min) / (yAxisRange.max - yAxisRange.min)) * 100; return { x, y }; });
-                                                let cmpPath = `M ${cmpPts[0].x},${cmpPts[0].y}`;
-                                                for (let j = 1; j < cmpPts.length; j++) {
-                                                    const cp1x = cmpPts[j - 1].x + (cmpPts[j].x - cmpPts[j - 1].x) * 0.4;
-                                                    const cp1y = cmpPts[j - 1].y;
-                                                    const cp2x = cmpPts[j].x - (cmpPts[j].x - cmpPts[j - 1].x) * 0.4;
-                                                    const cp2y = cmpPts[j].y;
-                                                    cmpPath += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${cmpPts[j].x},${cmpPts[j].y}`;
-                                                }
-                                                compareArea = cmpPath + ` L 850,120 L 0,120 Z`;
+                                        const prevData = prevSeries;
+                                        if (prevData && prevData.length >= 2) {
+                                            const cmpPts = prevData.map((point, i) => { const x = (i / (prevData.length - 1)) * 850; const v = point.value; const y = 120 - ((v - yAxisRange.min) / (yAxisRange.max - yAxisRange.min)) * 100; return { x, y }; });
+                                            let cmpPath = `M ${cmpPts[0].x},${cmpPts[0].y}`;
+                                            for (let j = 1; j < cmpPts.length; j++) {
+                                                const cp1x = cmpPts[j - 1].x + (cmpPts[j].x - cmpPts[j - 1].x) * 0.4;
+                                                const cp1y = cmpPts[j - 1].y;
+                                                const cp2x = cmpPts[j].x - (cmpPts[j].x - cmpPts[j - 1].x) * 0.4;
+                                                const cp2y = cmpPts[j].y;
+                                                cmpPath += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${cmpPts[j].x},${cmpPts[j].y}`;
                                             }
+                                            compareArea = cmpPath + ` L 850,120 L 0,120 Z`;
                                         }
                                     } catch { }
 
@@ -1039,10 +1075,9 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         }
                                     })()}</div>
                                     {(() => {
-                                        if (!dateWindows || dateRange === 'all') return null;
-                                        const { prevStartDateOnly, prevEndDateOnly } = dateWindows;
+                                        if (dateRange === 'all') return null;
                                         try {
-                                            const prevData = dataManager.getFlowStepTimeSeries(previousFlowEmails, selectedFlow || '', step.sequencePosition, selectedMetric, 'custom', granularity, prevStartDateOnly.toISOString().slice(0, 10), prevEndDateOnly.toISOString().slice(0, 10));
+                                            const prevData = prevSeries;
                                             if (!prevData || prevData.length === 0) return null;
                                             const idx = (sparklineData.length > 1 && prevData.length > 1)
                                                 ? Math.round((hoveredPoint.pointIndex / (sparklineData.length - 1)) * (prevData.length - 1))
