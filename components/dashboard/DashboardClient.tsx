@@ -13,6 +13,8 @@ const DashboardHeavy = dynamic(() => import('./DashboardHeavy'), {
 interface Props { businessName?: string; userId?: string }
 
 export default function DashboardClient({ businessName, userId }: Props) {
+    // Temporary: allow mobile by default; require desktop only if explicitly enabled via env
+    const REQUIRE_DESKTOP = process.env.NEXT_PUBLIC_REQUIRE_DESKTOP === '1';
     // Instant mobile detection (runs in constructor on client-side hydration)
     const [isMobile, setIsMobile] = useState<boolean>(() => {
         if (typeof window === 'undefined') return false; // assume desktop during SSR
@@ -66,6 +68,7 @@ export default function DashboardClient({ businessName, userId }: Props) {
         </div>
     ), []);
 
-    if (isMobile && !forceDesktop) return mobileNotice;
+    // Only block mobile when explicitly required
+    if (REQUIRE_DESKTOP && isMobile && !forceDesktop) return mobileNotice;
     return <DashboardHeavy businessName={businessName} userId={userId} />;
 }
