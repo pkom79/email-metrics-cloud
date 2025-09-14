@@ -1,6 +1,7 @@
 "use client";
 import React, { useMemo, useState } from 'react';
-import { UploadCloud, ListChecks, Info, CalendarRange } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { UploadCloud, ListChecks, Info, CalendarRange, Loader2 } from 'lucide-react';
 import Papa from 'papaparse';
 import { ProcessedSubscriber } from '../../lib/data/dataTypes';
 import { SubscriberTransformer } from '../../lib/data/transformers/subscriberTransformer';
@@ -15,6 +16,10 @@ type Props = {
 };
 
 const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, customTo, referenceDate, onSetMainDateRange }) => {
+    const searchParams = useSearchParams();
+    const segDiagEnabled = (typeof window !== 'undefined') && (
+        (process.env.NEXT_PUBLIC_DIAG_SEGMENT === '1') || (process.env.NEXT_PUBLIC_DIAG_UPLOAD === '1') || (searchParams?.get('diag') === '1')
+    );
     // Segment A
     const [segmentASubscribers, setSegmentASubscribers] = useState<ProcessedSubscriber[]>([]);
     const [segmentAName, setSegmentAName] = useState<string>('');
@@ -28,7 +33,15 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
     const [errorB, setErrorB] = useState<string>('');
     const fileInputIdB = 'custom-segment-file-input-b';
 
+    // Diagnostics state
+    const [ingestStartA, setIngestStartA] = useState<number | null>(null);
+    const [ingestStartB, setIngestStartB] = useState<number | null>(null);
+    const [progressA, setProgressA] = useState<number>(0);
+    const [progressB, setProgressB] = useState<number>(0);
+    const [diag, setDiag] = useState<{ a?: any; b?: any } | null>(null);
+
     const parseCsvInto = (
+        seg: 'A' | 'B',
         file: File,
         setters: {
             setSubs: (v: ProcessedSubscriber[]) => void;
@@ -39,16 +52,62 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
     ) => {
         const { setSubs, setName, setError, setFileName } = setters;
         setFileName(file.name);
+
+        // Enforce local analysis size cap (default 100MB)
+        const MAX_LOCAL_ANALYZE_MB = Number(process.env.NEXT_PUBLIC_MAX_LOCAL_ANALYZE_MB || 100);
+        const sizeMB = file.size / 1024 / 1024;
+        if (sizeMB > MAX_LOCAL_ANALYZE_MB) {
+            setError(`File is ${sizeMB.toFixed(2)} MB which exceeds the ${MAX_LOCAL_ANALYZE_MB} MB limit for in‑browser analysis. Please split the export or reduce the date range.`);
+            return;
+        }
+
+        // Diagnostics timers
+        if (segDiagEnabled) {
+            if (seg === 'A') { setIngestStartA(Date.now()); setProgressA(0); }
+            else { setIngestStartB(Date.now()); setProgressB(0); }
+            try { console.time(`[SegDiag] parse(${seg}) total`); } catch { /* ignore */ }
+        }
+
+        const rows: any[] = [];
         Papa.parse(file, {
             header: true,
+            dynamicTyping: true,
             skipEmptyLines: true,
-            complete: (results) => {
+            worker: true,
+            chunk: (chunk) => {
+                rows.push(...(chunk.data as any[]));
+                if (segDiagEnabled && (chunk as any).meta?.cursor && file.size) {
+                    const pct = Math.min(((chunk as any).meta.cursor / file.size) * 100, 99);
+                    if (seg === 'A') setProgressA(pct); else setProgressB(pct);
+                    try { if (Math.round(pct) % 20 === 0) console.log('[SegDiag] progress', seg, Math.round(pct) + '%'); } catch { /* noop */ }
+                }
+            },
+            complete: () => {
                 try {
                     const transformer = new SubscriberTransformer();
-                    const processed = transformer.transform(results.data as any);
+                    const processed = transformer.transform(rows as any);
                     setSubs(processed);
                     setName(file.name.replace(/\.csv$/i, ''));
                     setError('');
+                    if (segDiagEnabled) {
+                        const elapsedMs = (seg === 'A' ? ingestStartA : ingestStartB) ? Date.now() - (seg === 'A' ? (ingestStartA as number) : (ingestStartB as number)) : null;
+                        const snap = {
+                            fileName: file.name,
+                            sizeMB: sizeMB.toFixed(2),
+                            count: processed.length,
+                            elapsedMs,
+                            userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+                        };
+                        setDiag(prev => ({ ...(prev || {}), [seg.toLowerCase()]: snap }));
+                        try {
+                            const key = 'emc:lastCustomSegmentDiag';
+                            const merged = { ...(diag || {}), [seg.toLowerCase()]: snap };
+                            sessionStorage.setItem(key, JSON.stringify(merged));
+                            console.timeEnd?.(`[SegDiag] parse(${seg}) total`);
+                            console.log('[SegDiag] snapshot', seg, snap);
+                        } catch { /* ignore */ }
+                    }
+                    if (seg === 'A') setProgressA(100); else setProgressB(100);
                 } catch (err) {
                     setError('Failed to parse segment CSV. Please check the format.');
                 }
@@ -617,7 +676,7 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                             <label htmlFor={fileInputIdA} className="inline-flex items-center px-3 py-2 rounded-lg cursor-pointer border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:border-purple-500" title="Choose a CSV file">
                                 Choose File
                             </label>
-                            <input id={fileInputIdA} type="file" accept=".csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) parseCsvInto(f, { setSubs: setSegmentASubscribers, setName: setSegmentAName, setError: setErrorA, setFileName: setFileNameA }); }} />
+                            <input id={fileInputIdA} type="file" accept=".csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) parseCsvInto('A', f, { setSubs: setSegmentASubscribers, setName: setSegmentAName, setError: setErrorA, setFileName: setFileNameA }); }} />
                             {fileNameA && (<div className="text-sm text-gray-700 dark:text-gray-300 break-all flex-1 min-w-0">{fileNameA}</div>)}
                             {fileNameA && (
                                 <button type="button" onClick={() => { setSegmentASubscribers([]); setSegmentAName(''); setFileNameA(''); setErrorA(''); const input = document.getElementById(fileInputIdA) as HTMLInputElement | null; if (input) input.value = ''; }} className="ml-auto px-3 py-2 rounded-lg text-sm font-medium border bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-700" title="Reset Segment A">
@@ -625,6 +684,14 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                                 </button>
                             )}
                         </div>
+                        {segDiagEnabled && (
+                            <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                                <div className="flex items-center gap-2 mb-1"><span className="capitalize">Segment A progress</span>{progressA > 0 && progressA < 100 && (<Loader2 className="w-3 h-3 animate-spin" />)}</div>
+                                <div className="h-2 bg-purple-100 dark:bg-purple-900/40 rounded">
+                                    <div className="h-2 rounded bg-gradient-to-r from-purple-600 to-purple-700" style={{ width: `${Math.round(progressA)}%` }} />
+                                </div>
+                            </div>
+                        )}
                         {hasA && (
                             <input value={segmentAName} onChange={e => setSegmentAName(e.target.value)} placeholder="Segment A label" className="h-9 px-3 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500" />
                         )}
@@ -636,7 +703,7 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                             <label htmlFor={fileInputIdB} className="inline-flex items-center px-3 py-2 rounded-lg cursor-pointer border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:border-purple-500" title="Choose a CSV file">
                                 Choose File
                             </label>
-                            <input id={fileInputIdB} type="file" accept=".csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) parseCsvInto(f, { setSubs: setSegmentBSubscribers, setName: setSegmentBName, setError: setErrorB, setFileName: setFileNameB }); }} />
+                            <input id={fileInputIdB} type="file" accept=".csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) parseCsvInto('B', f, { setSubs: setSegmentBSubscribers, setName: setSegmentBName, setError: setErrorB, setFileName: setFileNameB }); }} />
                             {fileNameB && (<div className="text-sm text-gray-700 dark:text-gray-300 break-all flex-1 min-w-0">{fileNameB}</div>)}
                             {fileNameB && (
                                 <button type="button" onClick={() => { setSegmentBSubscribers([]); setSegmentBName(''); setFileNameB(''); setErrorB(''); const input = document.getElementById(fileInputIdB) as HTMLInputElement | null; if (input) input.value = ''; }} className="ml-auto px-3 py-2 rounded-lg text-sm font-medium border bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-700" title="Reset Segment B">
@@ -644,12 +711,40 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                                 </button>
                             )}
                         </div>
+                        {segDiagEnabled && (
+                            <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                                <div className="flex items-center gap-2 mb-1"><span className="capitalize">Segment B progress</span>{progressB > 0 && progressB < 100 && (<Loader2 className="w-3 h-3 animate-spin" />)}</div>
+                                <div className="h-2 bg-purple-100 dark:bg-purple-900/40 rounded">
+                                    <div className="h-2 rounded bg-gradient-to-r from-purple-600 to-purple-700" style={{ width: `${Math.round(progressB)}%` }} />
+                                </div>
+                            </div>
+                        )}
                         {hasB && (
                             <input value={segmentBName} onChange={e => setSegmentBName(e.target.value)} placeholder="Segment B label" className="h-9 px-3 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500" />
                         )}
                         {errorB && <div className="text-red-500 text-sm">{errorB}</div>}
                     </div>
                 </div>
+
+                {segDiagEnabled && (
+                    <div className="mt-4 p-3 rounded-lg border bg-purple-50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-800 text-xs text-gray-700 dark:text-gray-300">
+                        <div className="font-medium text-purple-800 dark:text-purple-200 mb-2">Diagnostics</div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="rounded-md border border-purple-200/60 dark:border-purple-800/60 bg-white/70 dark:bg-gray-900/40 p-2">
+                                <div className="text-purple-900 dark:text-purple-200 font-medium">Segment A</div>
+                                <div>File: {fileNameA || '—'}</div>
+                                <div>Progress: {Math.round(progressA)}%</div>
+                                {diag?.a && (<div>Rows: {diag.a.count?.toLocaleString?.() || diag.a.count} · Elapsed: {diag.a.elapsedMs ? Math.round(diag.a.elapsedMs / 1000) + 's' : '—'}</div>)}
+                            </div>
+                            <div className="rounded-md border border-purple-200/60 dark:border-purple-800/60 bg-white/70 dark:bg-gray-900/40 p-2">
+                                <div className="text-purple-900 dark:text-purple-200 font-medium">Segment B</div>
+                                <div>File: {fileNameB || '—'}</div>
+                                <div>Progress: {Math.round(progressB)}%</div>
+                                {diag?.b && (<div>Rows: {diag.b.count?.toLocaleString?.() || diag.b.count} · Elapsed: {diag.b.elapsedMs ? Math.round(diag.b.elapsedMs / 1000) + 's' : '—'}</div>)}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Outside-of-range notices (below upload buttons, more visible as dashed cards) */}
                 {(outsideA || outsideB) && (
