@@ -918,19 +918,19 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     <div className="p-6 sm:p-8 mb-2">
                         <div className="flex items-start justify-between gap-4">
                             <div>
-                                <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>
+                                <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>
                                 {businessName && <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>}
                             </div>
                             <div className="flex items-center gap-3 relative">
                                 {!isAdmin && (<>
-                                    <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"><UploadIcon className="h-4 w-4" />Upload New Reports</button>
-                                    <button onClick={handleExportJson} disabled={exportBusy} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button>
+                                    <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"><UploadIcon className="h-4 w-4" />Upload New Reports</button>
+                                    <button onClick={handleExportJson} disabled={exportBusy} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button>
                                 </>)}
                                 {isAdmin && (<>
                                     <div className="relative">
-                                        <SelectBase value={selectedAccountId} onChange={e => { const val = (e.target as HTMLSelectElement).value; setSelectedAccountId(val); const a = (allAccounts || []).find(x => x.id === val); setSelectedAccountLabel(a?.label || a?.businessName || a?.id || ''); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="text-sm" minWidthClass="min-w-[240px]">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</SelectBase>
+                                        <SelectBase value={selectedAccountId} onChange={e => { const val = (e.target as HTMLSelectElement).value; setSelectedAccountId(val); const a = (allAccounts || []).find(x => x.id === val); setSelectedAccountLabel(a?.label || a?.businessName || a?.id || ''); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="w-full sm:w-auto text-sm" minWidthClass="sm:min-w-[240px]">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</SelectBase>
                                     </div>
-                                    <button onClick={handleExportJson} disabled={exportBusy || !selectedAccountId} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button>
+                                    <button onClick={handleExportJson} disabled={exportBusy || !selectedAccountId} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button>
                                 </>)}
                             </div>
                         </div>
@@ -1229,7 +1229,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     <section>
                         <div className="flex items-center gap-2 mb-3">
                             <Mail className="w-5 h-5 text-purple-600" />
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Email Performance Overview
+                            <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Email Performance Overview
                                 <InfoTooltipIcon placement="top" content={(
                                     <div>
                                         <p className="font-semibold mb-1">What</p>
@@ -1295,7 +1295,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     <section>
                         <div className="flex items-center gap-2 mb-3">
                             <Send className="w-5 h-5 text-purple-600" />
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Performance
+                            <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Performance
                                 <InfoTooltipIcon placement="top" content={(
                                     <div>
                                         <p className="font-semibold mb-1">What</p>
@@ -1371,7 +1371,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     <section>
                         <div className="section-card">
                             <div className="section-header">
-                                <div className="flex items-center gap-2"><MailSearch className="w-5 h-5 text-purple-600" /><h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Details
+                                <div className="flex items-center gap-2"><MailSearch className="w-5 h-5 text-purple-600" /><h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Details
                                     <InfoTooltipIcon placement="top" content={(
                                         <div>
                                             <p className="font-semibold mb-1">What</p>
@@ -1453,7 +1453,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 )}
                 {flowMetrics && (
                     <section>
-                        <div className="flex items-center justify-between gap-2 mb-3">
+                            <div className="flex items-center justify-between gap-2 mb-3">
                             <div className="flex items-center gap-2"><Zap className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Flow Performance
                                 <InfoTooltipIcon placement="top" content={(
                                     <div>
@@ -1466,8 +1466,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     </div>
                                 )} />
                             </h2></div>
-                            <div className="relative">
-                                <SelectBase value={selectedFlow} onChange={e => { setSelectedFlow((e.target as HTMLSelectElement).value); }} className="px-4 py-2 pr-9 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm" minWidthClass="min-w-[220px]">
+                            <div className="relative w-full sm:w-auto">
+                                <SelectBase value={selectedFlow} onChange={e => { setSelectedFlow((e.target as HTMLSelectElement).value); }} className="w-full sm:w-auto px-3 py-1.5 pr-9 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm" minWidthClass="sm:min-w-[220px]">
                                     <option value="all">All Flows</option>
                                     {uniqueFlowNames.map(f => <option key={f} value={f}>{f}</option>)}
                                 </SelectBase>
