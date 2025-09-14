@@ -152,7 +152,7 @@ export interface LlmExportJson {
       disabledReason?: string;
       notEnoughData?: boolean;
       // Scoring config/baselines used for this flow
-      baselines?: { rpeBaseline: number; s1Sends: number };
+      baselines?: { s1Sends: number; flowRevenueTotal: number; storeRevenueTotal: number };
       config?: { revenueLed: true };
       // Add-step suggestion with conservative estimate (Option B)
       addStepSuggestion?: {
@@ -184,11 +184,11 @@ export interface LlmExportJson {
           action: 'scale' | 'keep' | 'improve' | 'pause';
           notes?: string[];
           pillars: {
-            money: { points: number; A1_rpeIndex: number; A2_punch: number; A3_absRevenue: number };
-            deliverability: { points: number; penalties: Array<{ type: string; amount: number; source: 'base' | 'engagement' | 'delta' }>; riskHigh: boolean };
-            volume: { points: number; smallSamplePenalty: number; baseline: { s1: number } };
+            money: { points: number; flowSharePts: number; storeSharePts: number; flowShare: number; storeShare: number };
+            deliverability: { points: number; base: number; lowVolumeAdjusted: boolean; riskHigh: boolean };
+            confidence: { points: number };
           };
-          baselines: { rpeBaseline: number; revenueShare: number };
+          baselines: { flowRevenueTotal: number; storeRevenueTotal: number };
         };
       }>;
     }>;
@@ -1067,116 +1067,46 @@ export async function buildLlmExportJson(params: {
           const totalFlowSends = steps.reduce((sum, s) => sum + (s.total.emailsSent || 0), 0);
           const notEnoughData = totalFlowSends < 2000;
 
-          // New 0–100 scoring with pillars
+          // New simplified 0–100 scoring with pillars (Money, Deliverability, Confidence)
           const s1Sends = steps[0]?.total.emailsSent || 0;
           const flowRevenueTotal = total.totalRevenue || 0;
-          const baselinePool = (() => {
-            let pool = steps.filter(s => s.total.emailsSent >= 250);
-            if (!pool.length) pool = steps.filter(s => s.total.emailsSent >= 100);
-            if (!pool.length) pool = steps;
-            return pool;
-          })();
-          const rpes = baselinePool.map(s => s.total.revenuePerEmail).filter(v => Number.isFinite(v)).sort((a,b)=>a-b);
-          const rpeBaseline = (() => { const n = rpes.length; return n ? (n%2? rpes[(n-1)/2] : (rpes[n/2-1]+rpes[n/2])/2) : 0; })();
+          // Resolve account/store aggregates for window (campaigns + flows)
+          const resolvedWindow = dm.getResolvedDateRange(dateRange as any, customFrom as any, customTo as any);
+          const start = resolvedWindow?.startDate ?? new Date(0);
+          const end = resolvedWindow?.endDate ?? new Date();
+          const overallAgg = dm.getAggregatedMetricsForPeriod(dm.getCampaigns(), dm.getFlowEmails(), start, end);
+          const storeRevenueTotal = overallAgg.totalRevenue || 0;
+          const accountSendsTotal = overallAgg.emailsSent || 0;
           const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
           const totalFlowSendsInWindow = steps.reduce((sum, s) => sum + (s.total.emailsSent || 0), 0);
           const stepScores = steps.map((s, i) => {
-            const prev = i > 0 ? steps[i-1] : null;
             const notes: string[] = [];
-            // Money: A1/A2/A3
-            const index = rpeBaseline > 0 ? (s.total.revenuePerEmail / rpeBaseline) : 0;
-            const a1 = clamp(((index - 0.5) / (1.25 - 0.5)) * 35, 0, 35);
-            if (index >= 1.1) notes.push('RPE above baseline'); else if (index < 0.9) notes.push('RPE below baseline');
-            let a2 = 0;
-            if (!prev) {
-              if (rpeBaseline > 0) {
-                a2 = s.total.revenuePerEmail >= rpeBaseline ? 15 : clamp((s.total.revenuePerEmail / rpeBaseline) * 15, 0, 15);
-              } else { a2 = 15; }
-              notes.push('No prior step: baseline comparison');
-            } else if (prev && prev.total.revenuePerEmail > 0) {
-              const delta = (s.total.revenuePerEmail - prev.total.revenuePerEmail) / prev.total.revenuePerEmail;
-              const anchors = [
-                { d: -0.40, p: 0 },
-                { d: -0.20, p: 7.5 },
-                { d: -0.05, p: 10 },
-                { d: 0.0, p: 11.25 },
-                { d: 0.10, p: 12.5 },
-                { d: 0.25, p: 13.75 },
-                { d: 0.40, p: 15 },
-              ];
-              const piecewise = (x: number) => {
-                if (x <= anchors[0].d) return anchors[0].p;
-                if (x >= anchors[anchors.length - 1].d) return anchors[anchors.length - 1].p;
-                for (let k = 1; k < anchors.length; k++) {
-                  const a = anchors[k - 1] as any, b = anchors[k] as any;
-                  if (x >= a.d && x <= b.d) {
-                    const t = (x - a.d) / (b.d - a.d);
-                    return a.p + t * (b.p - a.p);
-                  }
-                }
-                return anchors[anchors.length - 1].p;
-              };
-              a2 = clamp(piecewise(delta), 0, 15);
-              if (delta > 0.1) notes.push('RPE up vs prior');
-              if (delta < -0.1) notes.push('RPE down vs prior');
-            }
-            const revenueShare = flowRevenueTotal > 0 ? (s.total.totalRevenue / flowRevenueTotal) : 0;
-            let a3 = 0;
-            if (revenueShare >= 0.30) a3 = 20; else if (revenueShare >= 0.20) a3 = 16; else if (revenueShare >= 0.10) a3 = 10; else if (revenueShare >= 0.05) a3 = 6; else if (revenueShare >= 0.02) a3 = 3; else a3 = 0;
-            if (revenueShare >= 0.2) notes.push('High revenue share');
-            const moneyPoints = clamp(a1 + a2 + a3, 0, 70);
-            // Deliverability Score D (0–20)
+            // Money pillar = flow share (35) + store share (35)
+            const flowShare = flowRevenueTotal > 0 ? (s.total.totalRevenue / flowRevenueTotal) : 0;
+            const flowSharePts = clamp(35 * flowShare, 0, 35);
+            const storeShare = storeRevenueTotal > 0 ? (s.total.totalRevenue / storeRevenueTotal) : 0;
+            const storeSharePts = clamp(35 * storeShare, 0, 35);
+            if (flowShare >= 0.2) notes.push('High flow revenue share');
+            if (storeRevenueTotal <= 0) notes.push('No store revenue in window');
+            const moneyPoints = clamp(flowSharePts + storeSharePts, 0, 70);
+            // Deliverability bins + low-volume adj
             const unsub = s.total.unsubscribeRate; const spam = s.total.spamRate; const bounce = s.total.bounceRate;
             const openPct = s.total.openRate; const ctoPct = s.total.clickToOpenRate;
-            let D = 20; const penalties: Array<{ type: string; amount: number; source: 'base'|'engagement'|'delta' }> = [];
-            const halved = (s.total.emailsSent || 0) < 1000;
-            if (spam >= 0.10) { D = 0; penalties.push({ type: 'spam_hard', amount: 20, source: 'base' }); }
-            else if (spam >= 0.05) { const amt = halved ? 6 : 12; D -= amt; penalties.push({ type: 'spam', amount: amt, source: 'base' }); }
-            else if (spam >= 0.03) { const amt = halved ? 3 : 6; D -= amt; penalties.push({ type: 'spam', amount: amt, source: 'base' }); }
-            if (D > 0) {
-              if (unsub >= 1.20) { D = 0; penalties.push({ type: 'unsub_hard', amount: 20, source: 'base' }); }
-              else if (unsub >= 0.60) { const amt = halved ? 4 : 8; D -= amt; penalties.push({ type: 'unsub', amount: amt, source: 'base' }); }
-              else if (unsub >= 0.30) { const amt = halved ? 2 : 4; D -= amt; penalties.push({ type: 'unsub', amount: amt, source: 'base' }); }
-            }
-            if (D > 0) {
-              if (bounce >= 2.50) { D = 0; penalties.push({ type: 'bounce_hard', amount: 20, source: 'base' }); }
-              else if (bounce >= 1.50) { D -= 6; penalties.push({ type: 'bounce', amount: 6, source: 'base' }); }
-              else if (bounce >= 1.00) { D -= 3; penalties.push({ type: 'bounce', amount: 3, source: 'base' }); }
-            }
-            if (openPct < 12) { D -= 4; penalties.push({ type: 'open_low', amount: 4, source: 'engagement' }); }
-            else if (openPct < 18) { D -= 2; penalties.push({ type: 'open_mid', amount: 2, source: 'engagement' }); }
-            if (ctoPct < 6) { D -= 4; penalties.push({ type: 'cto_low', amount: 4, source: 'engagement' }); }
-            else if (ctoPct < 9) { D -= 2; penalties.push({ type: 'cto_mid', amount: 2, source: 'engagement' }); }
-            if (prev) {
-              const dSpam = spam - prev.total.spamRate; const dUnsub = unsub - prev.total.unsubscribeRate;
-              const dOpen = openPct - prev.total.openRate; const dCTO = ctoPct - prev.total.clickToOpenRate;
-              if (dSpam >= 0.05) { D -= 6; penalties.push({ type: 'delta_spam_high', amount: 6, source: 'delta' }); }
-              else if (dSpam >= 0.03) { D -= 4; penalties.push({ type: 'delta_spam', amount: 4, source: 'delta' }); }
-              if (dUnsub >= 0.50) { D -= 5; penalties.push({ type: 'delta_unsub_high', amount: 5, source: 'delta' }); }
-              else if (dUnsub >= 0.30) { D -= 3; penalties.push({ type: 'delta_unsub', amount: 3, source: 'delta' }); }
-              if (dOpen <= -12) { D -= 3; penalties.push({ type: 'delta_open_high', amount: 3, source: 'delta' }); }
-              else if (dOpen <= -8) { D -= 2; penalties.push({ type: 'delta_open', amount: 2, source: 'delta' }); }
-              if (dCTO <= -5) { D -= 3; penalties.push({ type: 'delta_cto_high', amount: 3, source: 'delta' }); }
-              else if (dCTO <= -3) { D -= 2; penalties.push({ type: 'delta_cto', amount: 2, source: 'delta' }); }
-              if (dSpam <= -0.03 && dUnsub <= -0.30 && dCTO >= 3) { D = Math.min(20, D + 2); }
-            }
-            if (D < 0) D = 0;
-            // Volume points
-            const sends = s.total.emailsSent;
-            let vol = 0;
-            if (sends >= Math.max(1000, 0.5 * s1Sends)) vol = 10;
-            else if (sends >= Math.max(500, 0.25 * s1Sends)) vol = 7;
-            else if (sends >= Math.max(250, 0.10 * s1Sends)) vol = 5;
-            else if (sends >= 100) vol = 3; else vol = 1;
-            const smallSamplePenalty = sends < 250 ? 3 : 0;
-            const volumePoints = Math.max(0, Math.min(10, vol - smallSamplePenalty));
-            if (smallSamplePenalty > 0) notes.push('Small sample');
+            const severe = (spam >= 0.10) || (unsub >= 1.20) || (bounce >= 2.50) || (openPct < 8) || (ctoPct < 4);
+            const moderateHigh = (!severe) && ((spam >= 0.05) || (unsub >= 0.60) || (bounce >= 1.50) || (openPct < 12) || (ctoPct < 6));
+            const moderate = (!severe && !moderateHigh) && ((spam >= 0.03) || (unsub >= 0.30) || (bounce >= 1.00) || (openPct < 18) || (ctoPct < 9));
+            let baseD = 20; if (severe) baseD = 0; else if (moderateHigh) baseD = 10; else if (moderate) baseD = 15; else baseD = 20;
+            const sendShareOfAccount = accountSendsTotal > 0 ? ((s.total.emailsSent || 0) / accountSendsTotal) : 0;
+            const lowVolumeAdjusted = (sendShareOfAccount > 0 && sendShareOfAccount < 0.005 && baseD < 15);
+            const D = lowVolumeAdjusted ? Math.min(15, baseD + 3) : baseD;
+            // Statistical Confidence (10): 1pt per 100 sends
+            const scPoints = clamp(Math.floor((s.total.emailsSent || 0) / 100), 0, 10);
             const flowSendShare = totalFlowSendsInWindow > 0 ? (s.total.emailsSent / totalFlowSendsInWindow) : 0;
-            const riskHigh = (spam >= 0.10) || (unsub >= 1.20) || (bounce >= 2.50) || (ctoPct < 4) || (openPct < 8);
-            const highMoney = (moneyPoints >= 55) || (rpeBaseline > 0 && s.total.revenuePerEmail >= 1.5 * rpeBaseline) || (flowSendShare > 0 && ((flowRevenueTotal > 0 ? (s.total.totalRevenue / flowRevenueTotal) : 0) / flowSendShare) >= 1.4);
-            const lowMoney = (moneyPoints <= 35) || (rpeBaseline > 0 && s.total.revenuePerEmail <= 0.8 * rpeBaseline);
+            const riskHigh = severe;
+            const highMoney = (moneyPoints >= 55) || (flowSendShare > 0 && (flowShare / flowSendShare) >= 1.4);
+            const lowMoney = (moneyPoints <= 35);
             const deliverabilityPoints = D;
-            let score = Math.max(0, Math.min(100, moneyPoints + deliverabilityPoints + volumePoints));
+            let score = Math.max(0, Math.min(100, moneyPoints + deliverabilityPoints + scPoints));
             let action: 'scale'|'keep'|'improve'|'pause' = 'improve';
             if (lowMoney && riskHigh) action = 'pause';
             else if (riskHigh && highMoney) action = 'keep';
@@ -1190,11 +1120,11 @@ export async function buildLlmExportJson(params: {
                 action,
                 notes,
                 pillars: {
-                  money: { points: moneyPoints, A1_rpeIndex: a1, A2_punch: a2, A3_absRevenue: a3 },
-                  deliverability: { points: deliverabilityPoints, penalties, riskHigh },
-                  volume: { points: volumePoints, smallSamplePenalty, baseline: { s1: s1Sends } },
+                  money: { points: moneyPoints, flowSharePts, storeSharePts, flowShare, storeShare },
+                  deliverability: { points: deliverabilityPoints, base: baseD, lowVolumeAdjusted, riskHigh },
+                  confidence: { points: scPoints },
                 },
-                baselines: { rpeBaseline, revenueShare },
+                baselines: { flowRevenueTotal, storeRevenueTotal },
               }
             } as const;
           });
@@ -1207,7 +1137,10 @@ export async function buildLlmExportJson(params: {
               const lastScore = stepScores[stepScores.length - 1]?.stepScore;
               const lastScoreVal = Number(lastScore?.score) || 0;
               const volumeOk = last.total.emailsSent >= Math.max(500, Math.round(0.05 * (steps[0]?.total.emailsSent || 0)));
-              const rpeOk = last.total.revenuePerEmail >= rpeBaseline;
+              // Recompute median RPE across steps for gating compatible with simplified model
+              const rpesGate = steps.map(s => s.total.revenuePerEmail).filter((v: number) => isFinite(v) && v >= 0).sort((a:number,b:number)=>a-b);
+              const rpeMedianGate = rpesGate.length ? (rpesGate.length % 2 ? rpesGate[(rpesGate.length-1)/2] : (rpesGate[rpesGate.length/2 - 1] + rpesGate[rpesGate.length/2]) / 2) : last.total.revenuePerEmail;
+              const rpeOk = last.total.revenuePerEmail >= rpeMedianGate;
               const prev = steps.length > 1 ? steps[steps.length - 2] : null;
               const deltaRpeOk = prev ? (last.total.revenuePerEmail - prev.total.revenuePerEmail) >= 0 : true;
               const lastStepRevenue = last.total.totalRevenue;
@@ -1248,7 +1181,7 @@ export async function buildLlmExportJson(params: {
             stepScore: stepScores[i]?.stepScore
           }));
           const disabledReason = indicatorAvailable ? undefined : (hasDup ? 'duplicate_names' : (!orderOk ? 'order_inconsistent' : 'unknown'));
-          return { flowName, total, steps: stepsWithScores, indicatorAvailable, disabledReason, notEnoughData, addStepSuggestion, baselines: { rpeBaseline, s1Sends }, config: { revenueLed: true } };
+          return { flowName, total, steps: stepsWithScores, indicatorAvailable, disabledReason, notEnoughData, addStepSuggestion, baselines: { s1Sends, flowRevenueTotal, storeRevenueTotal }, config: { revenueLed: true } };
         }).filter(Boolean) as any[];
         if (flows.length) {
           json.flowStepAnalysis = { disclaimer, flows } as any;
