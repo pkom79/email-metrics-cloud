@@ -14,6 +14,19 @@ export class CSVParser {
     private async parseCSV<T>(file: File, onProgress?: (progress: number) => void): Promise<ParseResult<T>> {
         return new Promise((resolve) => {
             const results: T[] = [];
+            // Throttle progress emissions to avoid render thrash
+            let lastEmit = 0;
+            let lastPct = -1;
+            const emitProgress = (pct: number) => {
+                const now = Date.now();
+                // Emit if 120ms passed or progress advanced by >= 1%
+                if (!onProgress) return;
+                if (pct >= 100 || now - lastEmit >= 120 || Math.floor(pct) > Math.floor(lastPct)) {
+                    lastEmit = now;
+                    lastPct = pct;
+                    try { onProgress(Math.min(pct, 99)); } catch {}
+                }
+            };
 
             Papa.parse(file, {
                 header: true,
@@ -22,13 +35,13 @@ export class CSVParser {
                 worker: true,
                 chunk: (chunk: Papa.ParseResult<T>) => {
                     results.push(...chunk.data);
-                    if (onProgress && chunk.meta.cursor && file.size) {
+                    if (chunk.meta.cursor && file.size) {
                         const progress = (chunk.meta.cursor / file.size) * 100;
-                        onProgress(Math.min(progress, 99));
+                        emitProgress(progress);
                     }
                 },
                 complete: () => {
-                    if (onProgress) onProgress(100);
+                    try { onProgress && onProgress(100); } catch {}
                     resolve({ success: true, data: results });
                 },
                 error: (error: Error) => resolve({ success: false, error: `Failed to parse CSV: ${error.message}` }),
@@ -157,7 +170,9 @@ export class CSVParser {
             validData.push(row);
         });
         try {
-            console.info(`[CSVParser] Campaign rows accepted: ${validData.length}, rejected: ${rejected.length}`);
+            if (process.env.NEXT_PUBLIC_DIAG_UPLOAD === '1' || process.env.NEXT_PUBLIC_DIAG_SEGMENT === '1' || process.env.NEXT_PUBLIC_DIAG_DASHBOARD === '1') {
+                console.info(`[CSVParser] Campaign rows accepted: ${validData.length}, rejected: ${rejected.length}`);
+            }
         } catch {}
         if (validData.length === 0) return { success: false, error: 'No valid campaign data found. Ensure the CSV has Campaign Name and Send Time/Date columns.' };
         return { success: true, data: validData };

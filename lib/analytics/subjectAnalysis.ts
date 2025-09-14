@@ -132,8 +132,9 @@ function computeLengthBinsDynamic(campaigns: ProcessedCampaign[], metric: Subjec
   // Build stats per bin (sorted by min length asc)
   const out: LengthBinStat[] = bins.map(list => {
     const lengths = list.map(c => normalize(c.subject || c.campaignName || '').length);
-    const minL = Math.min(...lengths);
-    const maxL = Math.max(...lengths);
+    // Avoid spreading potentially large arrays into Math.min/Math.max
+    let minL = Infinity; let maxL = -Infinity;
+    for (const L of lengths) { if (L < minL) minL = L; if (L > maxL) maxL = L; }
     const label = `${minL}–${maxL}`;
     const key = label; // export key is the range label
     const agg = computeAggregate(list, metric);
