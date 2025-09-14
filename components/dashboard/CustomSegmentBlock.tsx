@@ -305,11 +305,20 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
     // Compute created_at coverage for uploaded segments and detect if selected filter window is entirely outside
     const dateFmt = (d: Date | null) => d ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' }) : 'N/A';
     const createdSpan = (subs: ProcessedSubscriber[]) => {
-        const dates = subs.map(s => (s.profileCreated instanceof Date ? s.profileCreated : null)).filter((d): d is Date => !!d);
-        if (dates.length === 0) return { min: null as Date | null, max: null as Date | null };
-        const min = new Date(Math.min(...dates.map(d => d.getTime())));
-        const max = new Date(Math.max(...dates.map(d => d.getTime())));
-        return { min, max };
+        // Compute min/max iteratively to avoid spreading a large array into Math.min/Math.max (which can overflow the call stack)
+        let minTime = Infinity;
+        let maxTime = -Infinity;
+        for (const s of subs) {
+            const created = s.profileCreated instanceof Date ? s.profileCreated : null;
+            if (!created) continue;
+            const t = created.getTime();
+            if (t < minTime) minTime = t;
+            if (t > maxTime) maxTime = t;
+        }
+        if (!isFinite(minTime) || !isFinite(maxTime)) {
+            return { min: null as Date | null, max: null as Date | null };
+        }
+        return { min: new Date(minTime), max: new Date(maxTime) };
     };
     const spanA = useMemo(() => createdSpan(segmentASubscribers), [segmentASubscribers]);
     const spanB = useMemo(() => createdSpan(segmentBSubscribers), [segmentBSubscribers]);
