@@ -23,3 +23,30 @@ Contract
 Notes
 - Follow branding guidelines in `docs/BRANDING.md` when any UI for audience is added later. No UI changes are made here.
 - Keep PII out of logs. Do not commit real production data.
+
+Safe API route (staging-only)
+- Endpoint: `POST /api/klaviyo/audience-sync`
+- Purpose: Map provided profiles (from a request body) into subscribers.csv. Defaults to dry-run.
+
+Request body
+{
+   "mode": "dry-run",               // or "live" (requires x-admin-job-secret and AUDIENCE_STAGING_BUCKET)
+   "format": "json",                // or "csv" for raw CSV response (dry-run only)
+   "source": "profiles",            // only "profiles" is enabled in this route
+   "profiles": [ { "id": "...", "email": "...", "created": "ISO" } ],
+   "accountId": "acc_123",          // optional (live)
+   "uploadId": "2025-09-14"         // optional (live)
+}
+
+Headers for live mode
+- `x-admin-job-secret: <ADMIN_JOB_SECRET>`
+- Environment must set `AUDIENCE_STAGING_BUCKET` and `ADMIN_JOB_SECRET`.
+
+Responses
+- dry-run json: `{ mode: 'dry-run', rows: <number>, csvPreview: [first 5 lines] }`
+- dry-run csv: raw CSV stream
+- live json: `{ mode: 'live', wrote: { bucket, path }, rows }`
+
+Safety
+- No fetching from Klaviyo is performed by this route.
+- Live writes are gated by a secret header and a staging-only bucket. This cannot overwrite canonical CSVs.
