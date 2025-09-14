@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import SelectBase from "../ui/SelectBase";
 import { Activity } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
@@ -116,7 +116,10 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
     // X ticks (max 6)
     const xTicks = useMemo(() => {
         if (points.length < 2) return [] as { x: number; label: string }[];
-        const count = Math.min(6, points.length);
+        // Fewer ticks on small screens
+        let maxTicks = 6;
+        try { if (typeof window !== 'undefined' && window.innerWidth < 640) maxTicks = 4; } catch { /* noop */ }
+        const count = Math.min(maxTicks, points.length);
         const res: { x: number; label: string }[] = [];
         for (let i = 0; i < count; i++) {
             const idx = Math.round((i / (count - 1)) * (points.length - 1));
@@ -420,7 +423,8 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                         )} />
                     </h3>
                 </div>
-                <div className="section-controls">
+                {/* Controls: wrap on mobile */}
+                <div className="section-controls flex flex-wrap sm:flex-nowrap items-center justify-end gap-2">
                     <div className="flex items-center gap-1.5">
                         <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Sort:</span>
                         <div className="flex gap-1.5 ml-1 flex-nowrap">
@@ -428,15 +432,15 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                             <button onClick={() => setSortMode('volume')} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${sortMode === 'volume' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Volume</button>
                         </div>
                     </div>
-                    <div className="relative">
-                        <SelectBase value={scope} onChange={e => setScope((e.target as HTMLSelectElement).value as SourceScope)} className="px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                    <div className="relative w-full sm:w-auto">
+                        <SelectBase value={scope} onChange={e => setScope((e.target as HTMLSelectElement).value as SourceScope)} className="w-full sm:w-auto px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                             <option value="all">All Emails</option>
                             <option value="campaigns">Campaigns</option>
                             <option value="flows">Flows</option>
                         </SelectBase>
                     </div>
-                    <div className="relative">
-                        <SelectBase value={metric} onChange={e => setMetric((e.target as HTMLSelectElement).value as MetricKey)} className="px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                    <div className="relative w-full sm:w-auto">
+                        <SelectBase value={metric} onChange={e => setMetric((e.target as HTMLSelectElement).value as MetricKey)} className="w-full sm:w-auto px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                             {METRIC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </SelectBase>
                     </div>
