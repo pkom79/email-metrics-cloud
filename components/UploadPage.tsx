@@ -1,15 +1,24 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Upload, CheckCircle, FileText, Zap, Send, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 import { DataManager } from '../lib/data/dataManager';
 import { supabase } from '../lib/supabase/client';
 
 export default function UploadPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const diagEnabled = (typeof window !== 'undefined') && (
+        (process.env.NEXT_PUBLIC_DIAG_UPLOAD === '1') || (searchParams?.get('diag') === '1')
+    );
     const [hoveredZone, setHoveredZone] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [errors, setErrors] = useState<string[]>([]);
+
+    // Diagnostics state (only used when diagEnabled)
+    const [ingestStartTs, setIngestStartTs] = useState<number | null>(null);
+    const [ingestProgress, setIngestProgress] = useState<any>(null);
+    const [diagSnapshot, setDiagSnapshot] = useState<any>(null);
 
     // Text animation state
     const words = ['Simple', 'Useful', 'Valuable', 'Truthful', 'Actionable'];
@@ -97,6 +106,19 @@ export default function UploadPage() {
                 ...prev,
                 [type]: { name: file.name, sizeMB: (file.size / 1024 / 1024).toFixed(2) }
             }));
+            if (diagEnabled) {
+                try {
+                    // Keep diagnostics panel up-to-date with selected files
+                    const snapshot = {
+                        filesMB: {
+                            subscribers: fileRefs.current.subscribers ? (fileRefs.current.subscribers.size / 1024 / 1024).toFixed(2) : undefined,
+                            flows: fileRefs.current.flows ? (fileRefs.current.flows.size / 1024 / 1024).toFixed(2) : undefined,
+                            campaigns: fileRefs.current.campaigns ? (fileRefs.current.campaigns.size / 1024 / 1024).toFixed(2) : undefined,
+                        }
+                    };
+                    setDiagSnapshot((prev: any) => ({ ...(prev || {}), ...snapshot }));
+                } catch { /* noop */ }
+            }
         };
         input.click();
     };
@@ -107,12 +129,20 @@ export default function UploadPage() {
         setErrors([]);
         try {
             const files = fileRefs.current as { subscribers: File; flows: File; campaigns: File };
+            if (diagEnabled) {
+                setIngestStartTs(Date.now());
+                setIngestProgress({ phase: 'precheck', t: Date.now() });
+                try { console.time('[UploadDiag] ingest(total)'); } catch { /* ignore */ }
+            }
             // Enforce a hard 100 MB cap (or env override) for local analysis
             const MAX_LOCAL_ANALYZE_MB = Number(process.env.NEXT_PUBLIC_MAX_LOCAL_ANALYZE_MB || 100);
             const tooLargeForLocal = Object.entries(files)
                 .filter(([, f]) => (f.size / 1024 / 1024) > MAX_LOCAL_ANALYZE_MB)
                 .map(([k, f]) => `${k} (${(f.size / 1024 / 1024).toFixed(2)} MB)`);
             if (tooLargeForLocal.length > 0) {
+                if (diagEnabled) {
+                    try { console.warn('[UploadDiag] blocked by size cap', { MAX_LOCAL_ANALYZE_MB, tooLargeForLocal }); } catch { /* ignore */ }
+                }
                 setErrors([`One or more files exceed the ${MAX_LOCAL_ANALYZE_MB} MB limit for in-browser analysis: ${tooLargeForLocal.join(', ')}. Please split the export or reduce the date range and try again.`]);
                 return;
             }
@@ -124,10 +154,51 @@ export default function UploadPage() {
             if (oversized.length > 0) {
                 // Skip server upload for oversized files; process locally for instant results
                 const dm = DataManager.getInstance();
-                const result = await dm.loadCSVFiles(files, () => { });
+                const result = await dm.loadCSVFiles(files, (p) => {
+                    if (!diagEnabled) return;
+                    setIngestProgress({ ...p, t: Date.now(), phase: 'local-parse' });
+                    try {
+                        const cp = Math.round(p?.campaigns?.progress || 0);
+                        const fp = Math.round(p?.flows?.progress || 0);
+                        const sp = Math.round(p?.subscribers?.progress || 0);
+                        if (cp % 25 === 0 || fp % 25 === 0 || sp % 25 === 0) {
+                            console.log('[UploadDiag] progress (local only)', p);
+                        }
+                    } catch { /* ignore */ }
+                });
                 if (!result.success) {
                     setErrors(result.errors);
                 } else {
+                    if (diagEnabled) {
+                        try {
+                            const dm = DataManager.getInstance();
+                            const elapsedMs = ingestStartTs ? (Date.now() - ingestStartTs) : null;
+                            const snapshot = {
+                                elapsedMs,
+                                filesMB: {
+                                    subscribers: (files.subscribers.size / 1024 / 1024).toFixed(2),
+                                    flows: (files.flows.size / 1024 / 1024).toFixed(2),
+                                    campaigns: (files.campaigns.size / 1024 / 1024).toFixed(2),
+                                },
+                                finalCounts: {
+                                    campaigns: dm.getCampaigns().length,
+                                    flows: dm.getFlowEmails().length,
+                                    subscribers: dm.getSubscribers().length,
+                                },
+                                lastEmailDateISO: dm.getLastEmailDate()?.toISOString?.(),
+                                progressFinal: ingestProgress,
+                                userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+                                memoryMB: (typeof performance !== 'undefined' && (performance as any).memory)
+                                    ? Math.round((performance as any).memory.usedJSHeapSize / 1024 / 1024)
+                                    : undefined,
+                            };
+                            setDiagSnapshot(snapshot);
+                            sessionStorage.setItem('emc:lastIngestDiag', JSON.stringify(snapshot));
+                            console.timeEnd?.('[UploadDiag] ingest(total)');
+                            console.log('[UploadDiag] snapshot (local-only path)', snapshot);
+                            console.table?.(snapshot.finalCounts);
+                        } catch { /* ignore */ }
+                    }
                     router.push('/dashboard');
                 }
                 return;
@@ -194,10 +265,52 @@ export default function UploadPage() {
                 }
             }            // 5) also process locally for instant dashboard
             const dm = DataManager.getInstance();
-            const result = await dm.loadCSVFiles(files, () => { });
+            if (diagEnabled) { try { console.time('[UploadDiag] dm.loadCSVFiles'); } catch { /* ignore */ } }
+            const result = await dm.loadCSVFiles(files, (p) => {
+                if (!diagEnabled) return;
+                setIngestProgress({ ...p, t: Date.now(), phase: 'local-parse' });
+                try {
+                    const cp = Math.round(p?.campaigns?.progress || 0);
+                    const fp = Math.round(p?.flows?.progress || 0);
+                    const sp = Math.round(p?.subscribers?.progress || 0);
+                    if (cp % 25 === 0 || fp % 25 === 0 || sp % 25 === 0) {
+                        console.log('[UploadDiag] progress', p);
+                    }
+                } catch { /* ignore */ }
+            });
+            if (diagEnabled) { try { console.timeEnd('[UploadDiag] dm.loadCSVFiles'); } catch { /* ignore */ } }
             if (!result.success) {
                 setErrors(result.errors);
             } else {
+                if (diagEnabled) {
+                    try {
+                        const elapsedMs = ingestStartTs ? (Date.now() - ingestStartTs) : null;
+                        const snapshot = {
+                            elapsedMs,
+                            filesMB: {
+                                subscribers: (files.subscribers.size / 1024 / 1024).toFixed(2),
+                                flows: (files.flows.size / 1024 / 1024).toFixed(2),
+                                campaigns: (files.campaigns.size / 1024 / 1024).toFixed(2),
+                            },
+                            finalCounts: {
+                                campaigns: dm.getCampaigns().length,
+                                flows: dm.getFlowEmails().length,
+                                subscribers: dm.getSubscribers().length,
+                            },
+                            lastEmailDateISO: dm.getLastEmailDate()?.toISOString?.(),
+                            progressFinal: ingestProgress,
+                            userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+                            memoryMB: (typeof performance !== 'undefined' && (performance as any).memory)
+                                ? Math.round((performance as any).memory.usedJSHeapSize / 1024 / 1024)
+                                : undefined,
+                        };
+                        setDiagSnapshot(snapshot);
+                        sessionStorage.setItem('emc:lastIngestDiag', JSON.stringify(snapshot));
+                        console.timeEnd?.('[UploadDiag] ingest(total)');
+                        console.log('[UploadDiag] snapshot', snapshot);
+                        console.table?.(snapshot.finalCounts);
+                    } catch { /* ignore */ }
+                }
                 router.push('/dashboard');
             }
         } catch (e: any) {
@@ -338,6 +451,74 @@ export default function UploadPage() {
                             </button>
                             {!allUploaded && !isProcessing && (<p className="text-gray-400 dark:text-gray-500 text-sm mt-4">Upload all three reports to enable analysis</p>)}
                         </div>
+                        {/* Diagnostics panel (visible only when diagEnabled) */}
+                        {diagEnabled && (
+                            <div className="mt-8">
+                                <div className="p-4 rounded-lg border bg-purple-50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-800">
+                                    <div className="flex items-start justify-between">
+                                        <div>
+                                            <div className="font-semibold text-purple-800 dark:text-purple-200">Diagnostics</div>
+                                            <div className="text-xs text-purple-700/80 dark:text-purple-300/80 mt-1">
+                                                Live ingest progress and final snapshot for troubleshooting large uploads.
+                                            </div>
+                                        </div>
+                                        <div className="text-xs text-purple-700/80 dark:text-purple-300/80">
+                                            {ingestStartTs ? `Elapsed: ${Math.round((Date.now() - ingestStartTs) / 1000)}s` : 'Idle'}
+                                        </div>
+                                    </div>
+
+                                    {/* File sizes */}
+                                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                                        {(['subscribers', 'flows', 'campaigns'] as const).map((k) => {
+                                            const meta = fileInfo[k];
+                                            return (
+                                                <div key={k} className="rounded-md border border-purple-200/60 dark:border-purple-800/60 bg-white/70 dark:bg-gray-900/40 p-2">
+                                                    <div className="text-purple-900 dark:text-purple-200 font-medium capitalize">{k}</div>
+                                                    <div className="text-gray-600 dark:text-gray-400 mt-1">
+                                                        {meta ? `${meta.name} (${meta.sizeMB} MB)` : 'No file selected'}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Progress bars */}
+                                    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        {(['subscribers', 'flows', 'campaigns'] as const).map((k) => {
+                                            const pct = Math.round(ingestProgress?.[k]?.progress || 0);
+                                            return (
+                                                <div key={k}>
+                                                    <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+                                                        <span className="capitalize">{k} progress</span><span>{pct}%</span>
+                                                    </div>
+                                                    <div className="h-2 bg-purple-100 dark:bg-purple-900/40 rounded">
+                                                        <div
+                                                            className="h-2 rounded bg-gradient-to-r from-purple-600 to-purple-700"
+                                                            style={{ width: `${pct}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Final counts (if available) */}
+                                    {diagSnapshot && (
+                                        <div className="mt-4 text-xs text-gray-700 dark:text-gray-300">
+                                            <div className="font-medium mb-1">Final counts</div>
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                <div className="rounded-md border border-gray-200 dark:border-gray-700 p-2">Campaigns: {diagSnapshot.finalCounts?.campaigns}</div>
+                                                <div className="rounded-md border border-gray-200 dark:border-gray-700 p-2">Flow emails: {diagSnapshot.finalCounts?.flows}</div>
+                                                <div className="rounded-md border border-gray-200 dark:border-gray-700 p-2">Subscribers: {diagSnapshot.finalCounts?.subscribers ?? 'n/a'}</div>
+                                            </div>
+                                            <div className="mt-2 text-gray-600 dark:text-gray-400">
+                                                Last email date: {diagSnapshot.lastEmailDateISO || 'n/a'} · Elapsed: {Math.round((diagSnapshot.elapsedMs || 0) / 1000)}s
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
