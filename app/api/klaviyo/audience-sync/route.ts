@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { mapProfilesToSubscribersCsvRows, toCsv, KlaviyoProfileMinimal } from '../../../../lib/klaviyo/audienceMapping';
 import { createServiceClient } from '../../../../lib/supabase/server';
+import { fetchAllSubscribedProfiles } from '../../../../lib/klaviyo/client';
 
 type Mode = 'dry-run' | 'live';
 type Format = 'json' | 'csv';
@@ -14,6 +15,10 @@ interface RequestBody {
   // Optional metadata for live writes
   accountId?: string;
   uploadId?: string;
+  // When source === 'klaviyo'
+  klaviyoApiKey?: string; // staging-only key
+  pageSize?: number;
+  maxPages?: number;
 }
 
 const ADMIN_SECRET = process.env.ADMIN_JOB_SECRET;
@@ -31,17 +36,33 @@ export async function POST(req: NextRequest) {
     const format: Format = body.format ?? 'json';
     const source = body.source ?? 'profiles';
 
-    // Only support provided profiles in this safe staging route.
-    if (source !== 'profiles') {
-      return new Response(JSON.stringify({ error: 'source=klaviyo not enabled in this environment' }), { status: 501 });
+    let mappedRows: ReturnType<typeof mapProfilesToSubscribersCsvRows> = [];
+    if (source === 'profiles') {
+      const profiles = Array.isArray(body.profiles) ? body.profiles : [];
+      if (!profiles.length) {
+        return new Response(JSON.stringify({ error: 'No profiles provided' }), { status: 400 });
+      }
+      mappedRows = mapProfilesToSubscribersCsvRows(profiles);
+    } else if (source === 'klaviyo') {
+      // Gated by env flag and admin secret; fetch all NOT SUPPRESSED (includes never_subscribed, list imports, Shopify leads).
+      if (process.env.KLAVIYO_ENABLE !== 'true') {
+        return new Response(JSON.stringify({ error: 'Klaviyo source disabled' }), { status: 501 });
+      }
+      const providedSecret = req.headers.get('x-admin-job-secret') || '';
+      if (!ADMIN_SECRET || providedSecret !== ADMIN_SECRET) {
+        return new Response(JSON.stringify({ error: 'Unauthorized for klaviyo source' }), { status: 401 });
+      }
+      const apiKey = body.klaviyoApiKey || process.env.KLAVIYO_API_KEY;
+      if (!apiKey) {
+        return new Response(JSON.stringify({ error: 'Missing klaviyoApiKey' }), { status: 400 });
+      }
+      const profiles = await fetchAllSubscribedProfiles(apiKey, { pageSize: body.pageSize, maxPages: body.maxPages });
+      mappedRows = mapProfilesToSubscribersCsvRows(profiles);
+    } else {
+      return new Response(JSON.stringify({ error: 'Unsupported source' }), { status: 400 });
     }
 
-    const profiles = Array.isArray(body.profiles) ? body.profiles : [];
-    if (!profiles.length) {
-      return new Response(JSON.stringify({ error: 'No profiles provided' }), { status: 400 });
-    }
-
-    const rows = mapProfilesToSubscribersCsvRows(profiles);
+    const rows = mappedRows;
     const csv = toCsv(rows);
 
     if (mode === 'live') {

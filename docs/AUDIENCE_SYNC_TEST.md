@@ -26,9 +26,9 @@ Notes
 
 Safe API route (staging-only)
 - Endpoint: `POST /api/klaviyo/audience-sync`
-- Purpose: Map provided profiles (from a request body) into subscribers.csv. Defaults to dry-run.
+- Purpose: Map provided profiles (from a request body) into subscribers.csv, or fetch from Klaviyo (staging-only). Defaults to dry-run.
 
-Request body
+Request body (profiles source)
 {
    "mode": "dry-run",               // or "live" (requires x-admin-job-secret and AUDIENCE_STAGING_BUCKET)
    "format": "json",                // or "csv" for raw CSV response (dry-run only)
@@ -50,3 +50,20 @@ Responses
 Safety
 - No fetching from Klaviyo is performed by this route.
 - Live writes are gated by a secret header and a staging-only bucket. This cannot overwrite canonical CSVs.
+
+Klaviyo source (staging-only, gated)
+- Set env: `KLAVIYO_ENABLE=true`, `ADMIN_JOB_SECRET`, (optional) `KLAVIYO_API_KEY`.
+- Request body (klaviyo source):
+{
+   "mode": "dry-run",
+   "format": "json",
+   "source": "klaviyo",
+   "klaviyoApiKey": "<staging_key>",   // or use env KLAVIYO_API_KEY
+   "pageSize": 200,                     // optional; default 100
+   "maxPages": 5                        // optional safety cap
+}
+
+Semantics
+- Fetches all profiles that are NOT suppressed (excludes suppressed/unsubscribed), including never_subscribed, list imports, and Shopify leads.
+- Client-side filtering enforces not-suppressed; no PII or secrets are logged.
+- Live mode writes only to `audience-staging/<accountId>/<uploadId>/subscribers.csv` in `AUDIENCE_STAGING_BUCKET`.
