@@ -19,6 +19,7 @@ export class CSVParser {
                 header: true,
                 dynamicTyping: true,
                 skipEmptyLines: true,
+                worker: true,
                 chunk: (chunk: Papa.ParseResult<T>) => {
                     results.push(...chunk.data);
                     if (onProgress && chunk.meta.cursor && file.size) {
@@ -47,6 +48,7 @@ export class CSVParser {
                 header: false,
                 dynamicTyping: true,
                 skipEmptyLines: true,
+                worker: true,
                 complete: (parseResults) => {
                     const allRows = parseResults.data as any[][];
                     if (allRows.length <= 3) {

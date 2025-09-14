@@ -83,6 +83,14 @@ export default function UploadPage() {
             if (!file) return;
             // reset any prior errors when a file is replaced
             setErrors([]);
+
+            // Hard cap for local analysis to keep UX reliable on very large files
+            const MAX_LOCAL_ANALYZE_MB = Number(process.env.NEXT_PUBLIC_MAX_LOCAL_ANALYZE_MB || 100);
+            const fileSizeMB = file.size / 1024 / 1024;
+            if (fileSizeMB > MAX_LOCAL_ANALYZE_MB) {
+                setErrors([`File "${file.name}" is ${fileSizeMB.toFixed(2)} MB which exceeds the ${MAX_LOCAL_ANALYZE_MB} MB limit for in-browser analysis. Please split the export or reduce the date range and try again.`]);
+                return;
+            }
             fileRefs.current[type] = file;
             setUploads((prev) => ({ ...prev, [type]: true }));
             setFileInfo((prev) => ({
@@ -99,6 +107,15 @@ export default function UploadPage() {
         setErrors([]);
         try {
             const files = fileRefs.current as { subscribers: File; flows: File; campaigns: File };
+            // Enforce a hard 100 MB cap (or env override) for local analysis
+            const MAX_LOCAL_ANALYZE_MB = Number(process.env.NEXT_PUBLIC_MAX_LOCAL_ANALYZE_MB || 100);
+            const tooLargeForLocal = Object.entries(files)
+                .filter(([, f]) => (f.size / 1024 / 1024) > MAX_LOCAL_ANALYZE_MB)
+                .map(([k, f]) => `${k} (${(f.size / 1024 / 1024).toFixed(2)} MB)`);
+            if (tooLargeForLocal.length > 0) {
+                setErrors([`One or more files exceed the ${MAX_LOCAL_ANALYZE_MB} MB limit for in-browser analysis: ${tooLargeForLocal.join(', ')}. Please split the export or reduce the date range and try again.`]);
+                return;
+            }
             const maxMb = Number(process.env.NEXT_PUBLIC_MAX_SIGNED_UPLOAD_MB || process.env.NEXT_PUBLIC_SUPABASE_MAX_UPLOAD_MB) || 50;
             const oversized = Object.entries(files)
                 .filter(([, f]) => f.size > maxMb * 1024 * 1024)
