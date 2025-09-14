@@ -158,7 +158,7 @@ export interface LlmExportJson {
       addStepSuggestion?: {
         suggested: boolean;
         reason?: string;
-        horizonDays?: 30 | 90;
+  horizonDays?: number;
         estimate?: {
           projectedReach: number;
           rpeFloor: number;
@@ -1215,11 +1215,14 @@ export async function buildLlmExportJson(params: {
               const lastRevenuePct = flowRevenue > 0 ? (lastStepRevenue / flowRevenue) * 100 : 0;
               const absoluteRevenueOk = (lastStepRevenue >= 500) || (lastRevenuePct >= 5);
               const lastEmailDate = dm.getLastEmailDate();
-              const endsAtLast = (dateRange as any) === 'all' ? false : ((dateRange as any) === 'custom' ? (customTo ? new Date(customTo).toDateString() === lastEmailDate.toDateString() : false) : true);
-              const days = (dateRange as any) === 'custom' && customFrom && customTo
-                  ? Math.max(1, Math.ceil((new Date(customTo).getTime() - new Date(customFrom).getTime()) / (1000*60*60*24)))
-                  : ((dateRange as any) === 'all' ? 0 : parseInt(String(dateRange).replace('d','')));
-              const isRecentWindow = endsAtLast && (days === 30 || days === 90);
+              // Treat 'all' as Last 2 Years: presets and 'all' end at last; custom must end at last
+              const endsAtLast = (dateRange as any) === 'custom'
+                ? (customTo ? new Date(customTo).toDateString() === lastEmailDate.toDateString() : false)
+                : true;
+              // Compute days using resolved range so 'all' and presets are accurate
+              const resolvedWindow = dm.getResolvedDateRange(dateRange as any, customFrom as any, customTo as any);
+              const days = resolvedWindow ? Math.max(1, Math.ceil((resolvedWindow.endDate.getTime() - resolvedWindow.startDate.getTime()) / (1000*60*60*24)) + 1) : 0;
+              const isRecentWindow = endsAtLast; // allow any range length if it ends at last record
               const suggested = (lastScoreVal >= 75) && rpeOk && deltaRpeOk && volumeOk && absoluteRevenueOk && isRecentWindow;
               const rpes = steps.map(s => s.total.revenuePerEmail).filter(v => isFinite(v) && v >= 0).sort((a,b)=>a-b);
               const idx = rpes.length ? Math.floor(0.25 * (rpes.length - 1)) : 0;
@@ -1232,7 +1235,7 @@ export async function buildLlmExportJson(params: {
               addStepSuggestion = {
                 suggested,
                 reason,
-                horizonDays: isRecentWindow ? (days as 30 | 90) : undefined,
+                horizonDays: isRecentWindow ? days : undefined,
                 estimate: suggested ? { projectedReach, rpeFloor, estimatedRevenue, assumptions: { reachPctOfLastStep: 0.5, rpePercentile: 25, clampedToLastStepRpe: true } } : undefined,
                 gates: { lastStepRevenue, lastStepRevenuePctOfFlow: lastRevenuePct, deliverabilityOk: true, volumeOk, rpeOk, deltaRpeOk, isRecentWindow }
               };

@@ -521,14 +521,19 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const lastRevenuePct = flowRevenue > 0 ? (lastStepRevenue / flowRevenue) * 100 : 0;
         const absoluteRevenueOk = (lastStepRevenue >= 500) || (lastRevenuePct >= 5);
 
-        // Date window gating: show only if "recent" (last X days) OR custom ending at last email date
+        // Date window gating: show if the selected range ends at the last email date (any length),
+        // or if it's a preset range (which we align to end at last email date). User asked to allow
+        // suggestions across all such ranges once volume threshold is met.
         const dm = dataManager;
         const lastEmailDate = dm.getLastEmailDate();
-        const endsAtLast = dateRange === 'all' ? false : (dateRange === 'custom' ? (customTo ? new Date(customTo).toDateString() === lastEmailDate.toDateString() : false) : true);
-        const days = dateRange === 'custom' && customFrom && customTo
-            ? Math.max(1, Math.ceil((new Date(customTo).getTime() - new Date(customFrom).getTime()) / (1000 * 60 * 60 * 24)))
-            : (dateRange === 'all' ? 0 : parseInt(dateRange.replace('d', '')));
-        const isRecentWindow = endsAtLast && (days === 30 || days === 90);
+        // Treat 'all' as Last 2 Years. Any preset ends at last; custom must end at last.
+        const endsAtLast = (dateRange === 'custom')
+            ? (customTo ? new Date(customTo).toDateString() === lastEmailDate.toDateString() : false)
+            : true;
+        // Compute window length in days using DataManager to cover 'all' and presets accurately
+        const resolved = dm.getResolvedDateRange(dateRange, customFrom, customTo);
+        const days = resolved ? Math.max(1, Math.ceil((resolved.endDate.getTime() - resolved.startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1) : 0;
+        const isRecentWindow = endsAtLast; // any end-at-last window qualifies
 
         // Suggest add-step when last step has a strong overall score (>=75) and all gates pass.
         const suggested = (lastScoreVal >= 75) && rpeOk && deltaRpeOk && volumeOk && absoluteRevenueOk && isRecentWindow;
@@ -552,7 +557,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         return {
             suggested,
             reason,
-            horizonDays: isRecentWindow ? (days as 30 | 90) : undefined,
+            horizonDays: isRecentWindow ? days : undefined,
             estimate: suggested ? { projectedReach, rpeFloor, estimatedRevenue, assumptions: { reachPctOfLastStep: 0.5, rpePercentile: 25, clampedToLastStepRpe: true } } : undefined,
             gates: {
                 lastStepRevenue,
@@ -1059,23 +1064,21 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             {/* Add-step suggestion (header-level dots removed; dots shown per step) */}
             {selectedFlow && indicatorAvailable && (addStepSuggestion as any)?.suggested && (
                 <div className="mb-3">
-                    <div className="mt-1 text-[11px] text-gray-700 dark:text-gray-200">
+                    <div className="mt-1 text-xs text-emerald-900 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg px-3 py-2 inline-flex items-center gap-2">
+                        <GitBranch className="w-4 h-4 text-emerald-600" />
                         {flowStepMetrics.length === 1 ? (
-                            <span>Consider adding a second step (strong RPE and healthy deliverability).
-                                {(addStepSuggestion as any)?.estimate ? (
-                                    <span className="ml-1 text-gray-500" title="Estimate is conservative and depends on how many emails your flow sends and may vary with audience behavior.">
-                                        Est. +{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((addStepSuggestion as any).estimate.estimatedRevenue)} in next {(addStepSuggestion as any).horizonDays} days
-                                    </span>
-                                ) : null}
-                            </span>
+                            <span className="font-medium">Consider adding a second step</span>
                         ) : (
-                            <span>Consider adding a follow-up after S{flowStepMetrics[flowStepMetrics.length - 1].sequencePosition} (strong recent performance).
-                                {(addStepSuggestion as any)?.estimate ? (
-                                    <span className="ml-1 text-gray-500" title="Estimate is conservative and depends on how many emails your flow sends and may vary with audience behavior.">
-                                        Est. +{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((addStepSuggestion as any).estimate.estimatedRevenue)} in next {(addStepSuggestion as any).horizonDays} days
-                                    </span>
-                                ) : null}
+                            <span className="font-medium">Consider adding a follow-up after S{flowStepMetrics[flowStepMetrics.length - 1].sequencePosition}</span>
+                        )}
+                        <span className="text-emerald-800 dark:text-emerald-200">(strong recent performance)</span>
+                        {(addStepSuggestion as any)?.estimate ? (
+                            <span className="ml-1 text-emerald-700 dark:text-emerald-300" title="Estimate is conservative and depends on how many emails your flow sends and may vary with audience behavior.">
+                                Est. +{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((addStepSuggestion as any).estimate.estimatedRevenue)} in next {(addStepSuggestion as any).horizonDays} days
                             </span>
+                        ) : null}
+                        {(!isFinite((addStepSuggestion as any)?.estimate?.estimatedRevenue) || !(addStepSuggestion as any)?.estimate) && (
+                            <span className="sr-only">Add-step estimate unavailable</span>
                         )}
                     </div>
                 </div>
