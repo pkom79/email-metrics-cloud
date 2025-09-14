@@ -34,7 +34,19 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
         try {
             if (dateRange === 'custom' && customFrom && customTo) return { start: new Date(customFrom + 'T00:00:00'), end: new Date(customTo + 'T23:59:59') };
             if (dateRange === 'all') {
-                const dates = activeSubs.map(s => s.profileCreated.getTime()); if (!dates.length) return null; return { start: new Date(Math.min(...dates)), end: new Date(Math.max(...dates)) };
+                // Avoid spreading large arrays into Math.min/Math.max which can overflow the call stack
+                let minTime = Infinity;
+                let maxTime = -Infinity;
+                for (const s of activeSubs) {
+                    const d = s.profileCreated;
+                    if (d instanceof Date && !isNaN(d.getTime())) {
+                        const t = d.getTime();
+                        if (t < minTime) minTime = t;
+                        if (t > maxTime) maxTime = t;
+                    }
+                }
+                if (!isFinite(minTime) || !isFinite(maxTime)) return null;
+                return { start: new Date(minTime), end: new Date(maxTime) };
             }
             const days = parseInt(dateRange.replace('d', '')) || 30;
             const end = dm.getLastEmailDate() || new Date(); end.setHours(23, 59, 59, 999);
