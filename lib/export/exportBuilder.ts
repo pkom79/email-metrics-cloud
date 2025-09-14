@@ -1081,28 +1081,78 @@ export async function buildLlmExportJson(params: {
           const totalFlowSendsInWindow = steps.reduce((sum, s) => sum + (s.total.emailsSent || 0), 0);
           const stepScores = steps.map((s, i) => {
             const notes: string[] = [];
-            // Money pillar = flow share (35) + store share (35)
+            // Money pillar = flow share (35) + store share (35) via discrete bins
             const flowShare = flowRevenueTotal > 0 ? (s.total.totalRevenue / flowRevenueTotal) : 0;
-            const flowSharePts = clamp(35 * flowShare, 0, 35);
+            const flowSharePts = (() => {
+              if (!isFinite(flowShare) || flowShare <= 0) return 5;
+              const pct = flowShare * 100;
+              if (pct >= 50) return 35;
+              if (pct >= 30) return 30;
+              if (pct >= 20) return 25;
+              if (pct >= 10) return 20;
+              if (pct >= 5) return 15;
+              if (pct >= 2) return 10;
+              return 5;
+            })();
             const storeShare = storeRevenueTotal > 0 ? (s.total.totalRevenue / storeRevenueTotal) : 0;
-            const storeSharePts = clamp(35 * storeShare, 0, 35);
+            const storeSharePts = (() => {
+              if (!isFinite(storeShare) || storeShare <= 0) return 5;
+              const pct = storeShare * 100;
+              if (pct >= 5) return 35;
+              if (pct >= 3) return 30;
+              if (pct >= 2) return 25;
+              if (pct >= 1) return 20;
+              if (pct >= 0.5) return 15;
+              if (pct >= 0.25) return 10;
+              return 5;
+            })();
             if (flowShare >= 0.2) notes.push('High flow revenue share');
             if (storeRevenueTotal <= 0) notes.push('No store revenue in window');
             const moneyPoints = clamp(flowSharePts + storeSharePts, 0, 70);
-            // Deliverability bins + low-volume adj
+            // Deliverability additive bins + proportional low-volume adjustment
             const unsub = s.total.unsubscribeRate; const spam = s.total.spamRate; const bounce = s.total.bounceRate;
-            const openPct = s.total.openRate; const ctoPct = s.total.clickToOpenRate;
-            const severe = (spam >= 0.10) || (unsub >= 1.20) || (bounce >= 2.50) || (openPct < 8) || (ctoPct < 4);
-            const moderateHigh = (!severe) && ((spam >= 0.05) || (unsub >= 0.60) || (bounce >= 1.50) || (openPct < 12) || (ctoPct < 6));
-            const moderate = (!severe && !moderateHigh) && ((spam >= 0.03) || (unsub >= 0.30) || (bounce >= 1.00) || (openPct < 18) || (ctoPct < 9));
-            let baseD = 20; if (severe) baseD = 0; else if (moderateHigh) baseD = 10; else if (moderate) baseD = 15; else baseD = 20;
+            const openPct = s.total.openRate; const clickPct = s.total.clickRate;
+            const spamPts = ((): number => {
+              if (spam < 0.05) return 7;
+              if (spam < 0.10) return 6;
+              if (spam < 0.20) return 3;
+              if (spam < 0.30) return 1;
+              return 0;
+            })();
+            const bouncePts = ((): number => {
+              if (bounce < 1.0) return 7;
+              if (bounce < 2.0) return 6;
+              if (bounce < 3.0) return 3;
+              if (bounce < 5.0) return 1;
+              return 0;
+            })();
+            const unsubPts = ((): number => {
+              if (unsub < 0.20) return 3;
+              if (unsub < 0.50) return 2.5;
+              if (unsub < 1.00) return 1;
+              return 0;
+            })();
+            const openPts = ((): number => {
+              if (openPct >= 30) return 2; // 30-40 and >40 both 2 pts
+              if (openPct >= 20) return 1;
+              return 0;
+            })();
+            const clickPts = ((): number => {
+              if (clickPct > 3) return 1;
+              if (clickPct >= 1) return 0.5;
+              return 0;
+            })();
+            let baseD = clamp(spamPts + bouncePts + unsubPts + openPts + clickPts, 0, 20);
             const sendShareOfAccount = accountSendsTotal > 0 ? ((s.total.emailsSent || 0) / accountSendsTotal) : 0;
-            const lowVolumeAdjusted = (sendShareOfAccount > 0 && sendShareOfAccount < 0.005 && baseD < 15);
-            const D = lowVolumeAdjusted ? Math.min(15, baseD + 3) : baseD;
+            const applyVolumeAdj = (baseD < 15) && (sendShareOfAccount > 0) && (sendShareOfAccount < 0.005);
+            const volumeFactor = applyVolumeAdj ? (1 - (sendShareOfAccount / 0.005)) : 0;
+            const adjustedD = applyVolumeAdj ? (baseD + (20 - baseD) * volumeFactor) : baseD;
+            const lowVolumeAdjusted = applyVolumeAdj;
+            const D = Math.max(0, Math.min(20, adjustedD));
             // Statistical Confidence (10): 1pt per 100 sends
             const scPoints = clamp(Math.floor((s.total.emailsSent || 0) / 100), 0, 10);
             const flowSendShare = totalFlowSendsInWindow > 0 ? (s.total.emailsSent / totalFlowSendsInWindow) : 0;
-            const riskHigh = severe;
+            const riskHigh = (spam >= 0.30) || (unsub > 1.00) || (bounce >= 5.00) || (openPct < 20) || (clickPct < 1);
             const highMoney = (moneyPoints >= 55) || (flowSendShare > 0 && (flowShare / flowSendShare) >= 1.4);
             const lowMoney = (moneyPoints <= 35);
             const deliverabilityPoints = D;

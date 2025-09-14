@@ -341,14 +341,38 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 
         const results: Array<any> = [];
+        // Helper mappers for Money pillar bins (deterministic, inclusive bounds as specified)
+        const flowShareToPoints = (share: number): number => {
+            // share is 0..1
+            if (!isFinite(share) || share <= 0) return 5; // floor bucket
+            const pct = share * 100;
+            if (pct >= 50) return 35;
+            if (pct >= 30) return 30;
+            if (pct >= 20) return 25;
+            if (pct >= 10) return 20;
+            if (pct >= 5) return 15;
+            if (pct >= 2) return 10;
+            return 5;
+        };
+        const storeShareToPoints = (share: number): number => {
+            if (!isFinite(share) || share <= 0) return 5;
+            const pct = share * 100;
+            if (pct >= 5) return 35;
+            if (pct >= 3) return 30;
+            if (pct >= 2) return 25;
+            if (pct >= 1) return 20;
+            if (pct >= 0.5) return 15;
+            if (pct >= 0.25) return 10;
+            return 5;
+        };
         for (let i = 0; i < arr.length; i++) {
             const s = arr[i];
             const notes: string[] = [];
             // Money pillar (max 70) = Flow Revenue Share (35) + Store Revenue Share (35)
             const flowShare = flowRevenueTotal > 0 ? (s.revenue / flowRevenueTotal) : 0;
-            const flowSharePts = clamp(35 * flowShare, 0, 35);
+            const flowSharePts = clamp(flowShareToPoints(flowShare), 0, 35);
             const storeShare = storeRevenueTotal > 0 ? (s.revenue / storeRevenueTotal) : 0;
-            const storeSharePts = clamp(35 * storeShare, 0, 35);
+            const storeSharePts = clamp(storeShareToPoints(storeShare), 0, 35);
             if (flowShare >= 0.2) notes.push('High flow revenue share');
             if (storeRevenueTotal <= 0) notes.push('No store revenue in window');
             const moneyPoints = clamp(flowSharePts + storeSharePts, 0, 70);
@@ -358,23 +382,55 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             const spam = s.spamRate; // percent
             const bounce = s.bounceRate; // percent
             const openPct = s.openRate; // percent
-            const ctoPct = s.clickToOpenRate; // percent
-            // New bin-based deliverability
-            let baseD = 20;
-            const severe = (spam >= 0.10) || (unsub >= 1.20) || (bounce >= 2.50) || (openPct < 8) || (ctoPct < 4);
-            const moderateHigh = (!severe) && ((spam >= 0.05) || (unsub >= 0.60) || (bounce >= 1.50) || (openPct < 12) || (ctoPct < 6));
-            const moderate = (!severe && !moderateHigh) && ((spam >= 0.03) || (unsub >= 0.30) || (bounce >= 1.00) || (openPct < 18) || (ctoPct < 9));
-            if (severe) baseD = 0; else if (moderateHigh) baseD = 10; else if (moderate) baseD = 15; else baseD = 20;
-            // Low-volume adjustment: if this step <0.5% of account sends and base < 15, bump up to soften noise (cap 15)
+            const clickPct = s.clickRate; // percent (use click rate per spec)
+
+            // Additive bins per metric (weights total 20)
+            const spamPts = (() => {
+                if (spam < 0.05) return 7;
+                if (spam < 0.10) return 6;
+                if (spam < 0.20) return 3;
+                if (spam < 0.30) return 1;
+                return 0;
+            })();
+            const bouncePts = (() => {
+                if (bounce < 1.0) return 7;
+                if (bounce < 2.0) return 6;
+                if (bounce < 3.0) return 3;
+                if (bounce < 5.0) return 1;
+                return 0;
+            })();
+            const unsubPts = (() => {
+                if (unsub < 0.20) return 3;
+                if (unsub < 0.50) return 2.5;
+                if (unsub < 1.00) return 1;
+                return 0;
+            })();
+            const openPts = (() => {
+                if (openPct >= 30) return 2; // 30-40 and >40 both 2 pts
+                if (openPct >= 20) return 1;
+                return 0;
+            })();
+            const clickPts = (() => {
+                if (clickPct > 3) return 1;
+                if (clickPct >= 1) return 0.5;
+                return 0;
+            })();
+            let baseD = clamp(spamPts + bouncePts + unsubPts + openPts + clickPts, 0, 20);
+
+            // Volume adjustment: only if base < 15 and volume% < 0.5% of account sends
             const sendShareOfAccount = accountSendsTotal > 0 ? (s.emailsSent / accountSendsTotal) : 0;
-            const lowVolumeAdjusted = (sendShareOfAccount > 0 && sendShareOfAccount < 0.005 && baseD < 15);
-            const D = lowVolumeAdjusted ? Math.min(15, baseD + 3) : baseD;
+            const applyVolumeAdj = (baseD < 15) && (sendShareOfAccount > 0) && (sendShareOfAccount < 0.005);
+            const volumeFactor = applyVolumeAdj ? (1 - (sendShareOfAccount / 0.005)) : 0; // 0..1
+            const adjustedD = applyVolumeAdj ? (baseD + (20 - baseD) * volumeFactor) : baseD;
+            const lowVolumeAdjusted = applyVolumeAdj;
+            const D = clamp(adjustedD, 0, 20);
 
             // Statistical Confidence (max 10): 1 point per 100 sends, cap 10
             const scPoints = clamp(Math.floor((s.emailsSent || 0) / 100), 0, 10);
 
             const flowSendShare = totalFlowSendsInWindow > 0 ? (s.emailsSent / totalFlowSendsInWindow) : 0;
-            const riskHigh = (spam >= 0.10) || (unsub >= 1.20) || (bounce >= 2.50) || (ctoPct < 4) || (openPct < 8);
+            // High-risk guardrail using critical thresholds aligned with scoring bins
+            const riskHigh = (spam >= 0.30) || (unsub > 1.00) || (bounce >= 5.00) || (openPct < 20) || (clickPct < 1);
             const highMoney = (moneyPoints >= 55) || (flowSendShare > 0 && (flowShare / flowSendShare) >= 1.4);
             const lowMoney = (moneyPoints <= 35);
 
