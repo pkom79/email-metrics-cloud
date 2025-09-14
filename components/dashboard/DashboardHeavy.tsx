@@ -916,12 +916,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             <div className="pt-4 sm:pt-6">
                 <div className="max-w-7xl mx-auto">
                     <div className="p-6 sm:p-8 mb-2">
-                        <div className="flex items-start justify-between gap-4">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                             <div>
                                 <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>
                                 {businessName && <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>}
                             </div>
-                            <div className="flex items-center gap-3 relative">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 relative">
                                 {!isAdmin && (<>
                                     <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none"><UploadIcon className="h-4 w-4" />Upload New Reports</button>
                                     <button onClick={handleExportJson} disabled={exportBusy} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button>
@@ -1394,9 +1394,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     <div className="relative min-w-0 w-full sm:w-auto"><SelectBase value={selectedCampaignMetric} onChange={e => setSelectedCampaignMetric((e.target as HTMLSelectElement).value)} className="w-full sm:w-auto px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">{campaignMetricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</SelectBase></div>
                                 </div>
                             </div>
-                            <div className="-mt-2 mb-2 text-sm text-gray-600 dark:text-gray-400">You sent {filteredCampaigns.length} {filteredCampaigns.length === 1 ? 'campaign' : 'campaigns'} in this time range.</div>
+                            <div className="-mt-1 mb-1 text-sm text-gray-600 dark:text-gray-400">You sent {filteredCampaigns.length} {filteredCampaigns.length === 1 ? 'campaign' : 'campaigns'} in this time range.</div>
                             <div>{getSortedCampaigns().slice(0, displayedCampaigns).map((c, i) => (
-                                <div key={c.id} className={`group relative p-4 avoid-break ${i !== 0 ? 'border-t border-gray-200 dark:border-gray-800' : ''} md:grid md:items-center md:gap-4 md:[grid-template-columns:minmax(0,1fr)_400px_max-content]`}>
+                                <div key={c.id} className={`group relative p-3 sm:p-4 avoid-break ${i !== 0 ? 'border-t border-gray-200 dark:border-gray-800' : ''} md:grid md:items-center md:gap-4 md:[grid-template-columns:minmax(0,1fr)_400px_max-content]`}>
                                     {/* Subject (col 1) */}
                                     <div className="md:col-start-1 md:col-end-2 min-w-0">
                                         <div className="flex items-center gap-3 mb-1.5"><h4 className="font-medium text-gray-900 dark:text-gray-100 truncate">{c.subject}</h4></div>

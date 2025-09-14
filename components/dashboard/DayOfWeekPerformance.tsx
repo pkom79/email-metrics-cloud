@@ -81,7 +81,7 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
 
     return (
         <section className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
-            <div className="flex items-center justify-between px-6 py-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-6 py-4">
                 <div className="flex items-center gap-3">
                     <CalendarFold className="w-5 h-5 text-purple-600" />
                     <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Performance by Day of Week

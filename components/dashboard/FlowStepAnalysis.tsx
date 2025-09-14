@@ -1152,7 +1152,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
     return (
         <section className="section-card">
-            <div className="section-header mb-2">
+            <div className="section-header mb-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div className="flex items-center gap-2">
                     <Workflow className="w-6 h-6 text-purple-600" />
                     <h3 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Flow Step Analysis
