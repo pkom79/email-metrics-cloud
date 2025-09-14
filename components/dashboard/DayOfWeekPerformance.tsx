@@ -84,7 +84,7 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
             <div className="flex items-center justify-between px-6 py-4">
                 <div className="flex items-center gap-3">
                     <CalendarFold className="w-5 h-5 text-purple-600" />
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Performance by Day of Week
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Performance by Day of Week
                         <InfoTooltipIcon placement="top" content={(
                             <div className="leading-snug">
                                 <p className="font-semibold mb-1">What</p>
@@ -98,11 +98,11 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
                         )} />
                     </h3>
                 </div>
-                <div className="relative">
+                <div className="relative min-w-0 w-full sm:w-auto">
                     <SelectBase
                         value={selectedMetric}
                         onChange={(e) => setSelectedMetric((e.target as HTMLSelectElement).value)}
-                        className="px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+                        className="w-full sm:w-auto px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm"
                     >
                         {metricOptions.map(metric => (
                             <option key={metric.value} value={metric.value}>

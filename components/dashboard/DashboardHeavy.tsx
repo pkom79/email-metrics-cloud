@@ -923,14 +923,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             </div>
                             <div className="flex items-center gap-3 relative">
                                 {!isAdmin && (<>
-                                    <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"><UploadIcon className="h-4 w-4" />Upload New Reports</button>
-                                    <button onClick={handleExportJson} disabled={exportBusy} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button>
+                                    <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none"><UploadIcon className="h-4 w-4" />Upload New Reports</button>
+                                    <button onClick={handleExportJson} disabled={exportBusy} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button>
                                 </>)}
                                 {isAdmin && (<>
                                     <div className="relative">
                                         <SelectBase value={selectedAccountId} onChange={e => { const val = (e.target as HTMLSelectElement).value; setSelectedAccountId(val); const a = (allAccounts || []).find(x => x.id === val); setSelectedAccountLabel(a?.label || a?.businessName || a?.id || ''); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="w-full sm:w-auto text-sm" minWidthClass="sm:min-w-[240px]">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</SelectBase>
                                     </div>
-                                    <button onClick={handleExportJson} disabled={exportBusy || !selectedAccountId} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-xs sm:px-4 sm:py-2 sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button>
+                                    <button onClick={handleExportJson} disabled={exportBusy || !selectedAccountId} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button>
                                 </>)}
                             </div>
                         </div>
@@ -1371,7 +1371,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     <section>
                         <div className="section-card">
                             <div className="section-header">
-                                <div className="flex items-center gap-2"><MailSearch className="w-5 h-5 text-purple-600" /><h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Details
+                                <div className="flex items-center gap-2"><MailSearch className="w-5 h-5 text-purple-600" /><h3 className="text-base sm:text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Details
                                     <InfoTooltipIcon placement="top" content={(
                                         <div>
                                             <p className="font-semibold mb-1">What</p>
@@ -1383,15 +1383,15 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                         </div>
                                     )} />
                                 </h3></div>
-                                <div className="section-controls">
-                                    <div className="flex items-center gap-1.5">
+                                <div className="section-controls flex-wrap gap-y-2">
+                                    <div className="flex items-center gap-1.5 min-w-0">
                                         <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Sort:</span>
                                         <div className="flex gap-1.5 ml-1 flex-nowrap">
                                             <button onClick={() => setCampaignSortOrder('desc')} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${campaignSortOrder === 'desc' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Desc</button>
                                             <button onClick={() => setCampaignSortOrder('asc')} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${campaignSortOrder === 'asc' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Asc</button>
                                         </div>
                                     </div>
-                                    <div className="relative"><SelectBase value={selectedCampaignMetric} onChange={e => setSelectedCampaignMetric((e.target as HTMLSelectElement).value)} className="px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">{campaignMetricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</SelectBase></div>
+                                    <div className="relative min-w-0 w-full sm:w-auto"><SelectBase value={selectedCampaignMetric} onChange={e => setSelectedCampaignMetric((e.target as HTMLSelectElement).value)} className="w-full sm:w-auto px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">{campaignMetricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</SelectBase></div>
                                 </div>
                             </div>
                             <div className="-mt-2 mb-2 text-sm text-gray-600 dark:text-gray-400">You sent {filteredCampaigns.length} {filteredCampaigns.length === 1 ? 'campaign' : 'campaigns'} in this time range.</div>
@@ -1453,7 +1453,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 )}
                 {flowMetrics && (
                     <section>
-                            <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center justify-between gap-2 mb-3">
                             <div className="flex items-center gap-2"><Zap className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Flow Performance
                                 <InfoTooltipIcon placement="top" content={(
                                     <div>
