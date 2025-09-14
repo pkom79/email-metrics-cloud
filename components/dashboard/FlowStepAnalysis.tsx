@@ -755,19 +755,101 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                             const c = res.pillars?.confidence?.points ?? 0;
                             const baseD = res.pillars?.deliverability?.base;
                             const lva = res.pillars?.deliverability?.lowVolumeAdjusted;
-                            const tipNode = (
-                                <div className="max-w-xs">
-                                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{label} · Score {Math.round(res.score)}</div>
-                                    <div className="mt-2 text-xs text-gray-700 dark:text-gray-300 space-y-1">
-                                        <div>Money: <span className="tabular-nums font-medium">{Math.round(m)}</span> <span className="text-[11px]">(flow {Math.round((res.pillars?.money?.flowSharePts || 0))}/35 · store {Math.round((res.pillars?.money?.storeSharePts || 0))}/35)</span></div>
-                                        <div>Deliverability: <span className="tabular-nums font-medium">{Math.round(d)}</span> {typeof baseD === 'number' && baseD !== d ? <span className="ml-1 text-[11px]">(base {baseD.toFixed(1)}{lva ? ', low-volume adj.' : ''})</span> : null}</div>
-                                        <div>Confidence: <span className="tabular-nums font-medium">{Math.round(c)}</span></div>
+                            const tipNode = (() => {
+                                // Helper formatters and color rules
+                                const pct1 = (v: number) => `${(v).toFixed(1)}%`;
+                                const pct2 = (v: number) => `${(v).toFixed(2)}%`;
+                                const pct3 = (v: number) => `${(v).toFixed(3)}%`;
+                                const fmtOpen = (v: number) => `${v.toFixed(1)}%`;
+                                const fmtClick = (v: number) => `${v.toFixed(2)}%`;
+                                // Money rev-share color: strong shares in emerald, others neutral
+                                const flowShare = (res.pillars?.money?.flowShare ?? 0) * 100;
+                                const storeShare = (res.pillars?.money?.storeShare ?? 0) * 100;
+                                const flowColor = (res.pillars?.money?.flowSharePts ?? 0) >= 25 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300';
+                                const storeColor = (res.pillars?.money?.storeSharePts ?? 0) >= 25 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300';
+
+                                // Deliverability metric points per current bins
+                                const spam = step.spamRate;
+                                const bounce = step.bounceRate;
+                                const unsub = step.unsubscribeRate;
+                                const open = step.openRate;
+                                const click = step.clickRate;
+                                const spamPts = spam < 0.05 ? 7 : (spam < 0.10 ? 6 : (spam < 0.20 ? 3 : (spam < 0.30 ? 1 : 0)));
+                                const bouncePts = bounce < 1.0 ? 7 : (bounce < 2.0 ? 6 : (bounce < 3.0 ? 3 : (bounce < 5.0 ? 1 : 0)));
+                                const unsubPts = unsub < 0.20 ? 3 : (unsub < 0.50 ? 2.5 : (unsub < 1.00 ? 1 : 0));
+                                const openPts = open >= 30 ? 2 : (open >= 20 ? 1 : 0);
+                                const clickPts = click > 3 ? 1 : (click >= 1 ? 0.5 : 0);
+                                const isExcellent = (metric: 'spam'|'bounce'|'unsub'|'open'|'click') => {
+                                    switch(metric){
+                                        case 'spam': return spamPts === 7;
+                                        case 'bounce': return bouncePts === 7;
+                                        case 'unsub': return unsubPts === 3;
+                                        case 'open': return openPts === 2; // 30%+
+                                        case 'click': return clickPts === 1; // >3%
+                                    }
+                                };
+                                const isDanger = (metric: 'spam'|'bounce'|'unsub'|'open'|'click') => {
+                                    switch(metric){
+                                        case 'spam': return spam >= 0.30;
+                                        case 'bounce': return bounce >= 5.00;
+                                        case 'unsub': return unsub > 1.00;
+                                        case 'open': return open < 20;
+                                        case 'click': return click < 1;
+                                    }
+                                };
+                                const colorFor = (metric: 'spam'|'bounce'|'unsub'|'open'|'click') => isDanger(metric) ? 'text-rose-600' : (isExcellent(metric) ? 'text-emerald-600' : 'text-gray-700 dark:text-gray-300');
+
+                                // Gating reason if riskHigh prevented scale
+                                const riskHigh = !!res?.pillars?.deliverability?.riskHigh;
+                                const gated = (res.action !== 'scale') && riskHigh;
+                                const reasons: string[] = [];
+                                if (spam >= 0.30) reasons.push('spam ≥ 0.30%');
+                                if (unsub > 1.00) reasons.push('unsub > 1.00%');
+                                if (bounce >= 5.00) reasons.push('bounce ≥ 5.00%');
+                                if (open < 20) reasons.push('open < 20%');
+                                if (click < 1) reasons.push('click < 1%');
+                                const deltaAdj = typeof baseD === 'number' ? (d - baseD) : 0;
+
+                                return (
+                                    <div className="max-w-xs">
+                                        {/* Header */}
+                                        <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{label} · Score {Math.round(res.score)}</div>
+                                        {/* Pillar summary */}
+                                        <div className="mt-1 text-[11px] text-gray-600 dark:text-gray-400">Money {Math.round(m)} · Deliverability {Math.round(d)} · Confidence {Math.round(c)}</div>
+                                        {/* Money */}
+                                        <div className="mt-2 text-xs text-gray-700 dark:text-gray-300 space-y-1">
+                                            <div className="flex items-center gap-1"><span>Flow share:</span> <span className={`tabular-nums ${flowColor}`}>{pct1(flowShare)}</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{Math.round(res.pillars?.money?.flowSharePts || 0)}/35</span></div>
+                                            <div className="flex items-center gap-1"><span>Store share:</span> <span className={`tabular-nums ${storeColor}`}>{pct1(storeShare)}</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{Math.round(res.pillars?.money?.storeSharePts || 0)}/35</span></div>
+                                        </div>
+                                        {/* Deliverability metric-by-metric */}
+                                        <div className="mt-2 text-xs text-gray-700 dark:text-gray-300">
+                                            <div className="font-medium text-gray-800 dark:text-gray-200">Deliverability breakdown</div>
+                                            <div className="mt-1 space-y-0.5">
+                                                <div className={`flex items-center gap-1 ${colorFor('spam')}`}>Spam <span className="tabular-nums">({pct3(spam)})</span> <span className="text-gray-500">·</span> <span className="tabular-nums">+{spamPts}</span></div>
+                                                <div className={`flex items-center gap-1 ${colorFor('bounce')}`}>Bounce <span className="tabular-nums">({pct2(bounce)})</span> <span className="text-gray-500">·</span> <span className="tabular-nums">+{bouncePts}</span></div>
+                                                <div className={`flex items-center gap-1 ${colorFor('unsub')}`}>Unsub <span className="tabular-nums">({pct2(unsub)})</span> <span className="text-gray-500">·</span> <span className="tabular-nums">+{unsubPts}</span></div>
+                                                <div className={`flex items-center gap-1 ${colorFor('open')}`}>Open <span className="tabular-nums">({fmtOpen(open)})</span> <span className="text-gray-500">·</span> <span className="tabular-nums">+{openPts}</span></div>
+                                                <div className={`flex items-center gap-1 ${colorFor('click')}`}>Click <span className="tabular-nums">({fmtClick(click)})</span> <span className="text-gray-500">·</span> <span className="tabular-nums">+{clickPts}</span></div>
+                                            </div>
+                                            {typeof baseD === 'number' && Math.abs(deltaAdj) > 0.05 ? (
+                                                <div className="mt-1 text-[11px] text-gray-600 dark:text-gray-400">Low-volume adj: +{(deltaAdj).toFixed(1)} → {Math.round(d)}</div>
+                                            ) : null}
+                                        </div>
+                                        {/* Confidence */}
+                                        <div className="mt-2 text-xs text-gray-700 dark:text-gray-300">
+                                            <div className="font-medium text-gray-800 dark:text-gray-200">Confidence</div>
+                                            <div className="mt-1"><span>Emails sent:</span> <span className="tabular-nums">{(step.emailsSent || 0).toLocaleString('en-US')}</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{Math.round(c)}/10</span></div>
+                                        </div>
+                                        {/* Notes and gating reason */}
+                                        {gated ? (
+                                            <div className="pt-2 text-[11px] text-amber-700 dark:text-amber-300">Scale gated: {reasons.join(', ')}</div>
+                                        ) : null}
                                         {res.notes?.length ? (
                                             <div className="pt-1 text-[11px] text-gray-600 dark:text-gray-400">{res.notes.join(' · ')}</div>
                                         ) : null}
                                     </div>
-                                </div>
-                            );
+                                );
+                            })();
                             return (
                                 <TooltipPortal content={tipNode}>
                                     <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} aria-label={`${label} indicator`} />
