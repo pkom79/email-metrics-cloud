@@ -20,27 +20,6 @@
 			"problemMatcher": [
 				"$tsc"
 			]
-		},
-		{
-			"label": "Build Project Once",
-			"type": "shell",
-			"command": "npm run build",
-			"isBackground": false,
-			"group": "build"
-		},
-		{
-			"label": "Build Project Once",
-			"type": "shell",
-			"command": "npm run build",
-			"isBackground": false,
-			"group": "build"
-		},
-		{
-			"label": "Build Project Once",
-			"type": "shell",
-			"command": "npm run build",
-			"isBackground": false,
-			"group": "build"
 		}
 	]
 }
