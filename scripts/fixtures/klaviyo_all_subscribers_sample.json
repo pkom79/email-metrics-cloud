@@ -1,0 +1,23 @@
+{
+    "data": [
+        {
+            "id": "01HXXAAA",
+            "email": "alice@example.com",
+            "created": "2024-11-10T13:45:00Z",
+            "first_name": "Alice",
+            "last_name": "A"
+        },
+        {
+            "id": "01HXXAAB",
+            "email": "bob@example.com",
+            "created": "2023-07-01T02:10:00Z",
+            "first_name": "Bob",
+            "last_name": "B"
+        },
+        {
+            "id": "01HXXAAC",
+            "email": "cory@example.com",
+            "created": "2022-03-22T20:00:00Z"
+        }
+    ]
+}
