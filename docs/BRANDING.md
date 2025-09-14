@@ -259,3 +259,46 @@ Formatting:
 
 Color and Icons:
 - Use brand semantic colors per this guide. Keep section header icon in purple. Tooltip icon via `InfoTooltipIcon`.
+
+## Mobile Filters Drawer (Dashboard)
+
+Purpose: Provide full access to date range, granularity, compare, and flow filters on small screens without crowding the header. Desktop filter bar remains unchanged.
+
+Trigger (mobile only):
+- Placement: Right-aligned in the header area under the page title.
+- Style: Compact pill button `rounded-full` with subtle border and light surface.
+  - Classes: `inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-medium text-gray-900 dark:text-gray-100 shadow-sm`
+  - Indicator: Small purple dot `w-2 h-2 rounded-full bg-purple-600` at the left.
+- Label: "Filters".
+
+Bottom Sheet:
+- Container: `fixed bottom-0 left-0 right-0 z-50`, rounded top corners (`rounded-t-2xl`), border top, shadow. Backdrop: `bg-black/40`.
+- Surface: `bg-white dark:bg-gray-900`; Border: `border-gray-200 dark:border-gray-800`.
+- Handle: A small grabber bar at top center (`h-1 w-10 bg-gray-300 dark:bg-gray-700 rounded-full`). Close button uses `X` icon (lucide) in the top-right.
+- Scrolling: Content area max height ~75vh with `overflow-y-auto`.
+
+Contents:
+- Date Range
+  - Presets dropdown using `SelectBase` with full width and standard padding.
+  - Optional custom date inputs: two `type="date"` fields with min/max clamped to the allowed window; changing either sets the range to Custom.
+- Granularity
+  - Segmented buttons mirroring desktop style; disabled states follow the same rules and tooltips.
+- Compare
+  - Two buttons: "Prev Period", "Prev Year" with disabled state when the window isn't available; parity with desktop logic and colors.
+- Flow (convenience)
+  - Dropdown using `SelectBase` listing live flow names plus "All Flows".
+
+Footer:
+- Left: "Reset" secondary button (bordered neutral) reverting to defaults: 30d, Daily, Prev Period, All Flows, no custom dates.
+- Right: "Apply" primary button filled in brand purple (`bg-purple-600 hover:bg-purple-700`).
+
+Accessibility:
+- The sheet uses `role="dialog" aria-modal="true"`; backdrop click or the Close button dismisses it.
+- Focus should remain within the sheet while open; initial focus on the presets dropdown is preferred. On close, return focus to the "Filters" trigger.
+
+Dark Mode:
+- Mirror light styles with `dark:` variants for surface, text, and borders as noted above.
+
+Notes:
+- Do not hide or reduce filters on mobile; the drawer provides complete parity with desktop controls.
+- State changes are staged locally and applied on "Apply" to avoid jarring re-renders while users adjust multiple controls.

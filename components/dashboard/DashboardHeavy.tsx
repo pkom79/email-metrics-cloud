@@ -122,6 +122,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [stickyBar, setStickyBar] = useState(false);
     const [showCustomDateModal, setShowCustomDateModal] = useState(false);
     const [exportBusy, setExportBusy] = useState(false);
+    // Mobile Filters drawer state
+    const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+    const [mfDateRange, setMfDateRange] = useState<typeof dateRange>(dateRange);
+    const [mfCustomFrom, setMfCustomFrom] = useState<string | undefined>(customFrom);
+    const [mfCustomTo, setMfCustomTo] = useState<string | undefined>(customTo);
+    const [mfGranularity, setMfGranularity] = useState<typeof granularity>(granularity);
+    const [mfCompareMode, setMfCompareMode] = useState<typeof compareMode>(compareMode);
+    const [mfSelectedFlow, setMfSelectedFlow] = useState<string>(selectedFlow);
 
     // Granularity validation logic
     const totalDays = useMemo(() => {
@@ -965,6 +973,22 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 </div>
             )}
             {/* Filters bar (sticky) */}
+            {/* Mobile filters trigger (visible only on small screens) */}
+            <div className="sm:hidden pt-2">
+                <div className="max-w-7xl mx-auto px-4">
+                    <div className="flex items-center justify-end">
+                        <button
+                            onClick={() => { setMfDateRange(dateRange); setMfCustomFrom(customFrom); setMfCustomTo(customTo); setMfGranularity(granularity); setMfCompareMode(compareMode); setMfSelectedFlow(selectedFlow); setMobileFiltersOpen(true); }}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-medium text-gray-900 dark:text-gray-100 shadow-sm"
+                            aria-label="Open Filters"
+                        >
+                            <span className="w-2 h-2 rounded-full bg-purple-600" aria-hidden></span>
+                            Filters
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div className={`hidden sm:block sm:pt-2 ${stickyBar ? 'sm:sticky sm:top-0 sm:z-50' : ''}`}> <div className="max-w-7xl mx-auto px-4"><div className={`rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${stickyBar ? 'shadow-lg' : 'shadow-sm'} px-3 py-2 sm:mx-[-30px]`}>
                 <div className="hidden sm:flex items-center justify-center gap-3 flex-nowrap whitespace-nowrap">
                     {/* Custom date inputs */}
@@ -1081,6 +1105,104 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         );
                     })()}
                 </div></div></div></div>
+
+            {/* Mobile Filters Bottom Sheet */}
+            {mobileFiltersOpen && (
+                <div className="sm:hidden fixed inset-0 z-50" role="dialog" aria-modal="true">
+                    {/* Backdrop */}
+                    <div className="absolute inset-0 bg-black/40" onClick={() => setMobileFiltersOpen(false)} aria-hidden="true" />
+                    {/* Sheet */}
+                    <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-2xl border-t border-gray-200 dark:border-gray-800 shadow-2xl">
+                        <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+                            <div className="h-1 w-10 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto" aria-hidden></div>
+                            <button onClick={() => setMobileFiltersOpen(false)} className="absolute right-3 top-2 p-1 rounded text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" aria-label="Close">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="px-4 pb-4 max-h-[75vh] overflow-y-auto">
+                            <div className="space-y-4">
+                                {/* Date Range */}
+                                <div>
+                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Date Range</div>
+                                    <div className="relative w-full">
+                                        <SelectBase value={mfDateRange === 'custom' ? '' : mfDateRange} onChange={e => setMfDateRange(((e.target as HTMLSelectElement).value || '30d') as any)} className="w-full px-3 py-2 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">
+                                            <option value="" disabled>Presets</option>
+                                            <option value="30d">Last 30 days</option>
+                                            <option value="60d">Last 60 days</option>
+                                            <option value="90d">Last 90 days</option>
+                                            <option value="120d">Last 120 days</option>
+                                            <option value="180d">Last 180 days</option>
+                                            <option value="365d">Last 365 days</option>
+                                            <option value="all">Last 2 Years</option>
+                                        </SelectBase>
+                                    </div>
+                                    {/* Custom dates */}
+                                    <div className="mt-2 flex items-center gap-2">
+                                        <input type="date" min={allowedMinISO} max={allowedMaxISO} value={mfCustomFrom || ''} onChange={e => { let v = e.target.value || undefined as any; if (v) { if (v < allowedMinISO) v = allowedMinISO; if (v > allowedMaxISO) v = allowedMaxISO; } setMfCustomFrom(v); if (v && mfCustomTo && new Date(v) > new Date(mfCustomTo)) setMfCustomTo(v); setMfDateRange('custom'); }} className="flex-1 px-3 py-2 rounded-md text-sm border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
+                                        <span className="text-sm text-gray-500">to</span>
+                                        <input type="date" min={allowedMinISO} max={allowedMaxISO} value={mfCustomTo || ''} onChange={e => { let v = e.target.value || undefined as any; if (v) { if (v < allowedMinISO) v = allowedMinISO; if (v > allowedMaxISO) v = allowedMaxISO; } setMfCustomTo(v); if (v && mfCustomFrom && new Date(v) < new Date(mfCustomFrom)) setMfCustomFrom(v); setMfDateRange('custom'); }} className="flex-1 px-3 py-2 rounded-md text-sm border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
+                                    </div>
+                                </div>
+
+                                {/* Granularity */}
+                                <div>
+                                    <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Granularity</div>
+                                    <div className="flex gap-2">
+                                        {granularityOptions.map(option => (
+                                            <button key={option.key} onClick={() => { if (!option.disabled) setMfGranularity(option.key); }} disabled={option.disabled} title={option.tooltip} className={`px-3 py-1.5 rounded text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${mfGranularity === option.key ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Compare */}
+                                {(() => {
+                                    const rangeKey = (mfDateRange === 'custom' && mfCustomFrom && mfCustomTo) ? `custom:${mfCustomFrom}:${mfCustomTo}` : mfDateRange;
+                                    const prevAvail = dm.isCompareWindowAvailable(rangeKey, 'prev-period', mfCustomFrom, mfCustomTo);
+                                    const yearAvail = dm.isCompareWindowAvailable(rangeKey, 'prev-year', mfCustomFrom, mfCustomTo);
+                                    return (
+                                        <div>
+                                            <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Compare</div>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => prevAvail && setMfCompareMode('prev-period')} disabled={!prevAvail} className={`px-3 py-1.5 rounded text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${mfCompareMode === 'prev-period' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Prev Period</button>
+                                                <button onClick={() => yearAvail && setMfCompareMode('prev-year')} disabled={!yearAvail} className={`px-3 py-1.5 rounded text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${mfCompareMode === 'prev-year' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Prev Year</button>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* Flow selector (convenience) */}
+                                {(() => {
+                                    try {
+                                        const liveFlows = (dm.getFlowEmails?.() || []).filter((e: any) => e?.status && String(e.status).toLowerCase() === 'live');
+                                        const namesSet = new Set<string>();
+                                        for (const e of liveFlows) { if (e?.flowName) namesSet.add(e.flowName); }
+                                        const names = Array.from(namesSet).sort();
+                                        return (
+                                            <div>
+                                                <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Flow</div>
+                                                <div className="relative w-full">
+                                                    <SelectBase value={mfSelectedFlow} onChange={e => setMfSelectedFlow((e.target as HTMLSelectElement).value)} className="w-full px-3 py-2 pr-9 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">
+                                                        <option value="all">All Flows</option>
+                                                        {names.map(n => <option key={n} value={n}>{n}</option>)}
+                                                    </SelectBase>
+                                                </div>
+                                            </div>
+                                        );
+                                    } catch { return null; }
+                                })()}
+                            </div>
+                        </div>
+                        <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur">
+                            <div className="flex items-center justify-between">
+                                <button onClick={() => { setMfDateRange('30d'); setMfCustomFrom(undefined); setMfCustomTo(undefined); setMfGranularity('daily'); setMfCompareMode('prev-period'); setMfSelectedFlow('all'); }} className="px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-200">Reset</button>
+                                <button onClick={() => { setDateRange(mfDateRange); setCustomFrom(mfCustomFrom); setCustomTo(mfCustomTo); setGranularity(mfGranularity); setCompareMode(mfCompareMode); setSelectedFlow(mfSelectedFlow); setMobileFiltersOpen(false); }} className="px-4 py-2 rounded-md bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700">Apply</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
             {/* Empty state (no data) */}
             {!showOverlay && !hasData && (
                 <div className="px-6 pb-4">
