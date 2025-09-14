@@ -763,12 +763,32 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                             const d = res.pillars?.deliverability?.points ?? 0;
                             const v = res.pillars?.volume?.points ?? 0;
                             const penalties = res.pillars?.deliverability?.penalties || [];
+                            const friendlyPenalty = (t: string) => ({
+                                spam_hard: 'spam (hard stop)',
+                                spam: 'spam',
+                                unsub_hard: 'unsubs (hard stop)',
+                                unsub: 'unsubs',
+                                bounce_hard: 'bounces (hard stop)',
+                                bounce: 'bounces',
+                                open_low: 'low opens',
+                                open_mid: 'modest opens',
+                                cto_low: 'low CTO',
+                                cto_mid: 'modest CTO',
+                                delta_spam_high: 'spam ↑↑',
+                                delta_spam: 'spam ↑',
+                                delta_unsub_high: 'unsubs ↑↑',
+                                delta_unsub: 'unsubs ↑',
+                                delta_open_high: 'opens ↓↓',
+                                delta_open: 'opens ↓',
+                                delta_cto_high: 'CTO ↓↓',
+                                delta_cto: 'CTO ↓',
+                            } as Record<string, string>)[t] || t;
                             const tipNode = (
                                 <div className="max-w-xs">
                                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{label} · Score {Math.round(res.score)}</div>
                                     <div className="mt-2 text-xs text-gray-700 dark:text-gray-300 space-y-1">
                                         <div>Money: <span className="tabular-nums font-medium">{Math.round(m)}</span></div>
-                                        <div>Deliverability: <span className="tabular-nums font-medium">{Math.round(d)}</span>{penalties.length ? <span className="ml-1 text-[11px]">({penalties.map((p: any) => p.type).join(', ')})</span> : null}</div>
+                                        <div>Deliverability: <span className="tabular-nums font-medium">{Math.round(d)}</span>{penalties.length ? <span className="ml-1 text-[11px]">({penalties.map((p: any) => `-${p.amount} ${friendlyPenalty(p.type)}`).join(', ')})</span> : null}</div>
                                         <div>Volume: <span className="tabular-nums font-medium">{Math.round(v)}</span></div>
                                         {res.notes?.length ? (
                                             <div className="pt-1 text-[11px] text-gray-600 dark:text-gray-400">{res.notes.join(' · ')}</div>
@@ -1043,7 +1063,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 <p className="font-semibold mt-2 mb-1">How</p>
                                 <p>Pick a flow and a metric to see each message side by side. Rates are computed per message; revenue is total for that step.</p>
                                 <p className="font-semibold mt-2 mb-1">Why</p>
-                                <p>Find weak links, rename confusing steps, and test subject lines or timing where drop a0offs appear.</p>
+                                <p>Find weak links, rename confusing steps, and test subject lines or timing where drop-offs appear.</p>
                             </div>
                         )} />
                     </h3>
