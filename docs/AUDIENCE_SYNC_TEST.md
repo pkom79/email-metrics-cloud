@@ -79,6 +79,13 @@ Troubleshooting
 - 400 unknown source: Body must set `source` to `profiles` or `klaviyo`.
 - No file written in live mode: Ensure `AUDIENCE_STAGING_BUCKET` exists in Supabase Storage and the service role has write access.
 
+Live write requirements
+- Add these to your root `.env.local` so the server can write to Supabase Storage:
+   - `NEXT_PUBLIC_SUPABASE_URL=...` (your Supabase project URL)
+   - `SUPABASE_SERVICE_ROLE_KEY=...` (service role key)
+- Verify they’re loaded: visit `/api/debug-env` and check that Supabase URL and service key are detected (lengths shown, not the secrets).
+- After setting, restart `npm run dev`.
+
 # Audience Sync (all_subscribers) — Safe Test
 
 Purpose: Validate mapping Klaviyo's all_subscribers segment into our canonical `subscribers.csv` schema without touching production data or UI.
