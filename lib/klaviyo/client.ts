@@ -49,7 +49,8 @@ function mapRawToMinimal(p: KlaviyoApiProfileRaw): SubscribedProfileMinimal | nu
 }
 
 export async function fetchAllSubscribedProfiles(apiKey: string, opts: FetchProfilesOptions = {}): Promise<SubscribedProfileMinimal[]> {
-  const pageSize = Math.min(Math.max(opts.pageSize ?? 100, 1), 500);
+  // Klaviyo enforces page size between 1 and 100
+  const pageSize = Math.min(Math.max(opts.pageSize ?? 100, 1), 100);
   const maxPages = Math.min(Math.max(opts.maxPages ?? 100, 1), 1000); // hard safety cap
   const revision = opts.revision || process.env.KLAVIYO_API_REVISION || '2024-06-15';
 
