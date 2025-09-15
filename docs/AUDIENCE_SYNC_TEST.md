@@ -1,5 +1,86 @@
 # Audience Sync (all_subscribers) — Safe Test
 
+## Quickstart (step-by-step)
+
+Follow these steps to test safely on your machine. Defaults are non-destructive.
+
+1) Prerequisites
+- Start your dev server in another terminal: npm run dev
+- Create or update `.env.local` at the repo root:
+   KLAVIYO_ENABLE=true
+   ADMIN_JOB_SECRET=replace-with-strong-secret
+   AUDIENCE_STAGING_BUCKET=audience-staging           # create this bucket in Supabase Storage
+   # Optional if you don’t want to pass it in requests
+   KLAVIYO_API_KEY=pk_xxx_staging_only
+
+2) Dry-run against Klaviyo (JSON preview)
+- In a terminal, run:
+   curl -sS -X POST "http://localhost:3000/api/klaviyo/audience-sync" \
+      -H "Content-Type: application/json" \
+      -H "x-admin-job-secret: $ADMIN_JOB_SECRET" \
+      -d '{
+         "mode": "dry-run",
+         "format": "json",
+         "source": "klaviyo",
+         "pageSize": 100,
+         "maxPages": 1
+      }'
+
+Expected: JSON with a row count and a few preview lines of CSV. Suppressed/unsubscribed are excluded; never_subscribed and list/Shopify leads are included.
+
+3) Dry-run but get raw CSV locally (no writes)
+- In a terminal, run:
+   curl -sS -X POST "http://localhost:3000/api/klaviyo/audience-sync" \
+      -H "Content-Type: application/json" \
+      -H "x-admin-job-secret: $ADMIN_JOB_SECRET" \
+      -d '{
+         "mode": "dry-run",
+         "format": "csv",
+         "source": "klaviyo",
+         "pageSize": 200,
+         "maxPages": 2
+      }' > /tmp/subscribers.csv
+   open /tmp/subscribers.csv
+
+4) Optional: Live write to a staging bucket (safe path)
+- Choose IDs for isolation:
+   export EMC_ACCOUNT_ID=acc_canary_1
+   export EMC_UPLOAD_ID=$(date +%Y-%m-%d_%H-%M-%S)
+
+- Run:
+   curl -sS -X POST "http://localhost:3000/api/klaviyo/audience-sync" \
+      -H "Content-Type: application/json" \
+      -H "x-admin-job-secret: $ADMIN_JOB_SECRET" \
+      -d "{\n      \"mode\": \"live\",\n      \"format\": \"json\",\n      \"source\": \"klaviyo\",\n      \"accountId\": \"$EMC_ACCOUNT_ID\",\n      \"uploadId\": \"$EMC_UPLOAD_ID\",\n      \"pageSize\": 500,\n      \"maxPages\": 10\n    }"
+
+Expected: JSON confirming a write into Supabase Storage at
+audience-staging/<accountId>/<uploadId>/subscribers.csv within the `AUDIENCE_STAGING_BUCKET`.
+
+5) Optional: Test without Klaviyo (send your own profiles)
+- Use the fixture mapping locally:
+   node scripts/convert-all-subscribers-fixture-to-csv.js > /tmp/subscribers.csv && open /tmp/subscribers.csv
+
+- Or call the API with your own profiles:
+   curl -sS -X POST "http://localhost:3000/api/klaviyo/audience-sync" \
+      -H "Content-Type: application/json" \
+      -H "x-admin-job-secret: $ADMIN_JOB_SECRET" \
+      -d '{
+         "mode": "dry-run",
+         "format": "json",
+         "source": "profiles",
+         "profiles": [
+            { "id": "01", "email": "a@example.com", "created": "2024-01-01T00:00:00Z", "first_name": "A", "last_name": "Ex" },
+            { "id": "02", "email": "b@example.com", "created": "2024-02-01T00:00:00Z" }
+         ]
+      }'
+
+Troubleshooting
+- 401/403: Ensure `x-admin-job-secret` matches `ADMIN_JOB_SECRET` and `KLAVIYO_ENABLE=true` is in `.env.local`.
+- 400 unknown source: Body must set `source` to `profiles` or `klaviyo`.
+- No file written in live mode: Ensure `AUDIENCE_STAGING_BUCKET` exists in Supabase Storage and the service role has write access.
+
+# Audience Sync (all_subscribers) — Safe Test
+
 Purpose: Validate mapping Klaviyo's all_subscribers segment into our canonical `subscribers.csv` schema without touching production data or UI.
 
 Artifacts
