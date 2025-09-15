@@ -55,10 +55,13 @@ export async function fetchAllSubscribedProfiles(apiKey: string, opts: FetchProf
 
   // Base URL for Klaviyo Profiles API (JSON:API). We ask for only the fields we need.
   const base = 'https://a.klaviyo.com/api/profiles';
-  const fields = 'fields[profile]=email,first_name,last_name,created,subscriptions,suppressions,email_suppressed';
+  // Request only valid fields per Klaviyo Profiles JSON:API
+  // Allowed examples: email, first_name, last_name, created, subscriptions, etc.
+  const fields = 'fields[profile]=email,first_name,last_name,created,subscriptions';
   // No server-side filter: we include all and filter client-side to remove suppressed/unsubscribed.
 
-  let url = `${base}?page[size]=${pageSize}&${fields}`;
+  const additional = 'additional-fields[profile]=subscriptions';
+  let url = `${base}?page[size]=${pageSize}&${fields}&${additional}`;
   const headers: Record<string, string> = {
     Authorization: `Klaviyo-API-Key ${apiKey}`,
     Accept: 'application/json',
