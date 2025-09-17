@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import crypto from 'crypto';
 import { createServiceClient } from '../../../../lib/supabase/server';
 import { ingestBucketName } from '../../../../lib/storage/ingest';
 
@@ -145,10 +146,10 @@ export async function POST(req: NextRequest) {
     // live write path requires accountId
     if (!accountId) return new Response(JSON.stringify({ error: 'accountId required for live mode' }), { status: 400 });
 
-    const supabase = createServiceClient();
-    const bucket = ingestBucketName();
-    const idemp = (req.headers.get('x-idempotency-key') || '').trim();
-    const uploadId = idemp ? stableId(`${accountId}:${idemp}`) : new Date().toISOString().replace(/[:.]/g, '-');
+  const supabase = createServiceClient();
+  const bucket = ingestBucketName();
+  const idemp = (req.headers.get('x-idempotency-key') || '').trim();
+  const uploadId = idemp ? stableUuid(`${accountId}:${idemp}`) : (crypto.randomUUID ? crypto.randomUUID() : stableUuid(`${accountId}:${Date.now()}`));
 
     // Write three CSVs to the ingest bucket
     const up = async (name: string, content: string) => {
@@ -162,7 +163,12 @@ export async function POST(req: NextRequest) {
     await up('subscribers.csv', audienceCsv);
 
     // Ensure uploads row exists and is bound to account
-    await supabase.from('uploads').upsert({ id: uploadId, account_id: accountId, status: 'bound', updated_at: new Date().toISOString() } as any, { onConflict: 'id' });
+    {
+      const { error: upErr } = await supabase
+        .from('uploads')
+        .upsert({ id: uploadId, account_id: accountId, status: 'bound', updated_at: new Date().toISOString() } as any, { onConflict: 'id' });
+      if (upErr) return new Response(JSON.stringify({ error: 'UpsertUploadFailed', details: upErr.message }), { status: 500 });
+    }
 
     // Create snapshot row
     const { data: snap, error: snapErr } = await supabase
@@ -181,10 +187,16 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function stableId(s: string) {
-  let h = 2166136261 >>> 0;
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
-  return 'id_' + (h >>> 0).toString(16);
+// Deterministic UUID (v5-like) using SHA-1 over a fixed namespace and the provided name
+function stableUuid(name: string) {
+  const ns = crypto.createHash('sha1').update('email-metrics-orchestrator').digest();
+  const hash = crypto.createHash('sha1').update(ns).update(name).digest();
+  const bytes = Uint8Array.from(hash.slice(0, 16));
+  // Set version 5 (SHA-1) and variant RFC 4122
+  bytes[6] = (bytes[6] & 0x0f) | 0x50; // 0101 0000 -> version 5
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // 10xx xxxx -> RFC 4122 variant
+  const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.substr(0,8)}-${hex.substr(8,4)}-${hex.substr(12,4)}-${hex.substr(16,4)}-${hex.substr(20,12)}`;
 }
 
 // Cron-friendly GET: accepts query params, validates token, forwards to POST with idempotency
