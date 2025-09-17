@@ -46,8 +46,8 @@ The cleanup system follows strict safety rules to prevent accidental data loss:
 # Retention period for soft-deleted accounts (days)
 ACCOUNT_RETENTION_DAYS=30
 
-# Preauth uploads bucket name
-PREAUTH_BUCKET=preauth-uploads
+# Ingest uploads bucket name (fallback to PREAUTH_BUCKET if unset)
+DATA_INGEST_BUCKET=preauth-uploads
 ```
 
 ## API Endpoints

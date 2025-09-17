@@ -22,6 +22,7 @@ Follow these steps to test safely on your machine. Defaults are non-destructive.
          "mode": "dry-run",
          "format": "json",
          "source": "klaviyo",
+         "schema": "minimal",
          "pageSize": 100,
          "maxPages": 1
       }'
@@ -37,6 +38,7 @@ Expected: JSON with a row count and a few preview lines of CSV. Suppressed/unsub
          "mode": "dry-run",
          "format": "csv",
          "source": "klaviyo",
+         "schema": "extended",
          "pageSize": 200,
          "maxPages": 2
       }' > /tmp/subscribers.csv
@@ -51,7 +53,7 @@ Expected: JSON with a row count and a few preview lines of CSV. Suppressed/unsub
    curl -sS -X POST "http://localhost:3000/api/klaviyo/audience-sync" \
       -H "Content-Type: application/json" \
       -H "x-admin-job-secret: $ADMIN_JOB_SECRET" \
-      -d "{\n      \"mode\": \"live\",\n      \"format\": \"json\",\n      \"source\": \"klaviyo\",\n      \"accountId\": \"$EMC_ACCOUNT_ID\",\n      \"uploadId\": \"$EMC_UPLOAD_ID\",\n      \"pageSize\": 500,\n      \"maxPages\": 10\n    }"
+   -d "{\n      \"mode\": \"live\",\n      \"format\": \"json\",\n      \"source\": \"klaviyo\",\n      \"schema\": \"required\",\n      \"accountId\": \"$EMC_ACCOUNT_ID\",\n      \"uploadId\": \"$EMC_UPLOAD_ID\",\n      \"pageSize\": 500,\n      \"maxPages\": 10\n    }"
 
 Expected: JSON confirming a write into Supabase Storage at
 audience-staging/<accountId>/<uploadId>/subscribers.csv within the `AUDIENCE_STAGING_BUCKET`.
@@ -146,6 +148,7 @@ Klaviyo source (staging-only, gated)
    "mode": "dry-run",
    "format": "json",
    "source": "klaviyo",
+   "schema": "minimal" | "extended" | "required",
    "klaviyoApiKey": "<staging_key>",   // or use env KLAVIYO_API_KEY
    "pageSize": 200,                     // optional; default 100
    "maxPages": 5                        // optional safety cap
@@ -155,3 +158,12 @@ Semantics
 - Fetches all profiles that are NOT suppressed (excludes suppressed/unsubscribed), including never_subscribed, list imports, and Shopify leads.
 - Client-side filtering enforces not-suppressed; no PII or secrets are logged.
 - Live mode writes only to `audience-staging/<accountId>/<uploadId>/subscribers.csv` in `AUDIENCE_STAGING_BUCKET`.
+
+Schemas
+- minimal: Smallest set for current dashboard: Email, Email Marketing Consent, Created At, Klaviyo ID, First/Last Name.
+- extended: Adds many optional Klaviyo fields (subscriptions, phone, locale, predictive analytics JSON, etc.).
+- required: Emits exactly the requested headers for downstream reporting:
+   Email, Klaviyo ID, First Name, Last Name, Email Marketing Consent, Email Suppressions, Email Suppressions Timestamp, First Active, Last Active, Profile Created On, Last Open, Last Click, Total Customer Lifetime Value, Predicted Customer Lifetime Value, Predicted Number Of Orders, Average Order Value, Average Days Between Orders, Historic Customer Lifetime Value, Historic Number Of Orders, Expected Date Of Next Order.
+
+Note on event-derived fields (required schema)
+- First Active, Last Open, and Last Click require Klaviyo Events API. These are currently left blank in output and will be populated in a follow-up enrichment step.

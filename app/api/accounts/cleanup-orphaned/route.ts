@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '../../../../lib/supabase/server';
+import { ingestBucketName } from '../../../../lib/storage/ingest';
 import { getServerUser } from '../../../../lib/supabase/auth';
 
 export const runtime = 'nodejs';
@@ -57,7 +58,7 @@ export async function POST() {
                         .eq('account_id', account.id);
 
                     // Remove storage files for all uploads
-                    const bucket = process.env.PREAUTH_BUCKET || 'preauth-uploads';
+                    const bucket = ingestBucketName();
                     for (const upload of uploads || []) {
                         try {
                             const { data: list } = await supabase.storage.from(bucket).list(upload.id, { limit: 100 });

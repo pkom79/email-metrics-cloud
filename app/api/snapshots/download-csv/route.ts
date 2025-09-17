@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerUser } from '../../../../lib/supabase/auth';
 import { createServiceClient } from '../../../../lib/supabase/server';
+import { ingestBucketName } from '../../../../lib/storage/ingest';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -72,7 +73,7 @@ export async function GET(request: Request) {
         const probe = [
             { bucket: 'uploads', path: `${snap.account_id}/${snap.upload_id}/${fileName}` },
             { bucket: 'csv-uploads', path: `${snap.account_id}/${snap.upload_id}/${fileName}` },
-            { bucket: (process.env.PREAUTH_BUCKET || 'preauth-uploads'), path: `${snap.upload_id}/${fileName}` },
+            { bucket: ingestBucketName(), path: `${snap.upload_id}/${fileName}` },
         ];
         let csvText: string | null = null;
         for (const p of probe) {

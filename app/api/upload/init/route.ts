@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { createServiceClient } from '../../../../lib/supabase/server';
+import { ingestBucketName } from '../../../../lib/storage/ingest';
 import { cookies } from 'next/headers';
 
 export const runtime = 'nodejs';
@@ -8,7 +9,7 @@ export const runtime = 'nodejs';
 export async function POST() {
     try {
         const supabase = createServiceClient();
-        const bucket = process.env.PREAUTH_BUCKET || 'preauth-uploads';
+        const bucket = ingestBucketName();
         const uploadId = randomUUID();
 
         // Create uploads row (preauth)

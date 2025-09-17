@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '../../../../lib/supabase/server';
+import { ingestBucketName } from '../../../../lib/storage/ingest';
 
 export const runtime = 'nodejs';
 
@@ -9,7 +10,7 @@ export async function POST(request: Request) {
         if (!uploadId) return NextResponse.json({ error: 'uploadId required' }, { status: 400 });
 
         const supabase = createServiceClient();
-        const bucket = process.env.PREAUTH_BUCKET || 'preauth-uploads';
+        const bucket = ingestBucketName();
         const required = ['subscribers.csv', 'flows.csv', 'campaigns.csv'];
 
         const { data: list, error: listErr } = await supabase.storage.from(bucket).list(uploadId, { limit: 100 });

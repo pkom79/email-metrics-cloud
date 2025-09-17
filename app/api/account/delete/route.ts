@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerUser } from '../../../../lib/supabase/auth';
 import { createServiceClient } from '../../../../lib/supabase/server';
+import { ingestBucketName } from '../../../../lib/storage/ingest';
 
 export const runtime = 'nodejs';
 
@@ -26,7 +27,7 @@ export async function POST() {
         const accountId = acct.id as string;
 
         // 2. Collect upload IDs for storage cleanup (preauth bucket only; account-specific bucket paths not used yet)
-        const bucket = process.env.PREAUTH_BUCKET || 'preauth-uploads';
+        const bucket = ingestBucketName();
         const { data: uploads, error: uploadsErr } = await supabase
             .from('uploads')
             .select('id')

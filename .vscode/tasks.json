@@ -92,6 +92,134 @@
 			"command": "npm run build",
 			"isBackground": false,
 			"group": "build"
+		},
+		{
+			"label": "Typecheck Project",
+			"type": "shell",
+			"command": "npm run typecheck",
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Typecheck Project",
+			"type": "shell",
+			"command": "npm run typecheck",
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Typecheck Project",
+			"type": "shell",
+			"command": "npm run typecheck",
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Typecheck Project",
+			"type": "shell",
+			"command": "npm run typecheck",
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Typecheck Project",
+			"type": "shell",
+			"command": "npm run typecheck",
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Typecheck Project",
+			"type": "shell",
+			"command": "npm run typecheck",
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Typecheck Project",
+			"type": "shell",
+			"command": "npm run typecheck",
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Typecheck Project",
+			"type": "shell",
+			"command": "npm run typecheck",
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "Typecheck Project",
+			"type": "shell",
+			"command": "npm run typecheck",
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Typecheck Project",
+			"type": "shell",
+			"command": "npm run typecheck",
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Typecheck Project",
+			"type": "shell",
+			"command": "npm run typecheck",
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Typecheck Project",
+			"type": "shell",
+			"command": "npm run typecheck",
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Typecheck Project",
+			"type": "shell",
+			"command": "npm run typecheck",
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Typecheck Project",
+			"type": "shell",
+			"command": "npm run typecheck",
+			"isBackground": false,
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build"
 		}
 	]
 }

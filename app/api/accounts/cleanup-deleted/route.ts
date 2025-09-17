@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '../../../../lib/supabase/server';
+import { ingestBucketName } from '../../../../lib/storage/ingest';
 import { getServerUser } from '../../../../lib/supabase/auth';
 
 export const runtime = 'nodejs';
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
             parseInt(process.env.DELETED_ACCOUNT_RETENTION_DAYS || '30'); // Default 30 days
         
         const supabase = createServiceClient();
-        const bucket = process.env.PREAUTH_BUCKET || 'preauth-uploads';
+        const bucket = ingestBucketName();
         const now = new Date();
         const cutoffDate = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
         

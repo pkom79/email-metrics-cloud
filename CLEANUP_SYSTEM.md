@@ -65,14 +65,14 @@ MAX_UPLOADS_PER_ACCOUNT=1
 # How many days to retain soft-deleted accounts (default: 30)
 DELETED_ACCOUNT_RETENTION_DAYS=30
 
-# Storage bucket for preauth uploads
-PREAUTH_BUCKET=preauth-uploads
+# Storage bucket for ingest (fallback to PREAUTH_BUCKET if unset)
+DATA_INGEST_BUCKET=preauth-uploads
 ```
 
 ## Data Flow and Storage Locations
 
 ### Storage Locations
-- **`preauth-uploads` bucket**: Temporary storage for CSV files before account creation
+- **Ingest bucket** (default `preauth-uploads`): Temporary storage for CSV files before/after account creation
 - **`accounts` table**: Account metadata
 - **`uploads` table**: Upload tracking with status (`preauth` → `bound` → `processing` → `processed`)
 - **`snapshots` table**: Processed data snapshots

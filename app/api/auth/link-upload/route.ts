@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerUser } from '../../../../lib/supabase/auth';
 import { createServiceClient } from '../../../../lib/supabase/server';
+import { ingestBucketName } from '../../../../lib/storage/ingest';
 
 export const runtime = 'nodejs';
 
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
         if (!uploadId) return NextResponse.json({ error: 'uploadId required' }, { status: 400 });
 
         const supabase = createServiceClient();
-        const bucket = process.env.PREAUTH_BUCKET || 'preauth-uploads';
+        const bucket = ingestBucketName();
 
         // 1) Ensure account exists (single-user workspace for now)
         const { data: acctRow, error: acctSelErr } = await supabase

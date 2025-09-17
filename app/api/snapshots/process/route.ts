@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '../../../../lib/supabase/server';
+import { ingestBucketName } from '../../../../lib/storage/ingest';
 import { getServerUser } from '../../../../lib/supabase/auth';
 import Papa from 'papaparse';
 import { CampaignTransformer } from '../../../../lib/data/transformers/campaignTransformer';
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
             if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
-        const bucket = process.env.PREAUTH_BUCKET || 'preauth-uploads';
+        const bucket = ingestBucketName();
         const requiredFiles = ['campaigns.csv', 'flows.csv', 'subscribers.csv'] as const;
         const texts: Record<string, string> = {};
         for (const fname of requiredFiles) {

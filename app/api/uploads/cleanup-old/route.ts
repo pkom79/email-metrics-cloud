@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '../../../../lib/supabase/server';
+import { ingestBucketName } from '../../../../lib/storage/ingest';
 import { getServerUser } from '../../../../lib/supabase/auth';
 
 export const runtime = 'nodejs';
@@ -15,7 +16,7 @@ export async function POST() {
         }
 
         const supabase = createServiceClient();
-        const bucket = process.env.PREAUTH_BUCKET || 'preauth-uploads';
+        const bucket = ingestBucketName();
         const maxUploadsPerAccount = parseInt(process.env.MAX_UPLOADS_PER_ACCOUNT || '1');
         const now = new Date();
         

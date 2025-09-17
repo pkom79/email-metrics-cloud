@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerUser } from '../../../../lib/supabase/auth';
 import { createServiceClient } from '../../../../lib/supabase/server';
+import { ingestBucketName } from '../../../../lib/storage/ingest';
 import { cookies } from 'next/headers';
 
 export const runtime = 'nodejs';
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
     }
 
     const supabase = createServiceClient();
-    const bucket = process.env.PREAUTH_BUCKET || 'preauth-uploads';
+    const bucket = ingestBucketName();
 
     // Ensure account exists
     let accountId: string | undefined;

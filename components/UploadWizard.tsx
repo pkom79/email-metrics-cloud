@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase/client';
+import { ingestBucketNamePublic } from '../lib/storage/ingest';
 import { DataManager } from '../lib/data/dataManager';
 
 function stripName(file?: File | null) {
@@ -64,7 +65,7 @@ export default function UploadWizard() {
         if (!data?.urls?.subscribers?.token) {
             throw new Error('Upload init did not return signed tokens. Check server env and bucket.');
         }
-        const bucket = data.bucket || (process.env.NEXT_PUBLIC_PREAUTH_BUCKET || 'preauth-uploads');
+        const bucket = data.bucket || ingestBucketNamePublic();
         return { uploadId: data.uploadId, bucket, urls: data.urls };
     }
 
