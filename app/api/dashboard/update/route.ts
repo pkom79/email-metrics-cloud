@@ -207,7 +207,8 @@ export async function GET(req: NextRequest) {
       return new Response(JSON.stringify({ error: 'Klaviyo source disabled' }), { status: 501 });
     }
     const url = new URL(req.url);
-    const token = url.searchParams.get('token') || '';
+    const headerToken = req.headers.get('x-admin-job-secret') || '';
+    const token = url.searchParams.get('token') || headerToken || '';
     if (!ADMIN_SECRET || token !== ADMIN_SECRET) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
     }
