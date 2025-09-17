@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       end: end || undefined,
       limitFlows: body.flow?.limitFlows ?? 20,
       limitMessages: body.flow?.limitMessages ?? 50,
-      enrichMessageNames: body.flow?.enrichMessageNames ?? true,
+  enrichMessageNames: body.flow?.enrichMessageNames ?? false,
       klaviyoApiKey: apiKey,
     };
     const campaignPayload = {

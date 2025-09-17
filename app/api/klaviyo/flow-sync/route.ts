@@ -187,7 +187,22 @@ export async function POST(req: NextRequest) {
     const messagesByFlow = new Map<string, string[]>();
     if (body.enrichMessageNames) {
       for (const flow of selectedFlows) {
-        const fetchedMsgs = await fetchFlowMessages(apiKey, flow.id, { pageSize: 50, maxPages: 3 });
+        let fetchedMsgs: any[] = [];
+        // Retry a few times on throttling
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            fetchedMsgs = await fetchFlowMessages(apiKey, flow.id, { pageSize: 50, maxPages: 3 });
+            break;
+          } catch (e: any) {
+            const msg = String(e?.message || '');
+            if (/429/.test(msg) || /throttled/i.test(msg)) {
+              const backoff = 500 * (attempt + 1);
+              await new Promise(r => setTimeout(r, backoff));
+              continue;
+            }
+            throw e;
+          }
+        }
         const msgs = fetchedMsgs.slice(0, limitMessages);
         messagesByFlow.set(flow.id, msgs.map(m => String(m.id)));
         for (const m of msgs) {
