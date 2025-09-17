@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     }
     const body = await req.json().catch(() => ({}));
     const mode = body.mode || 'dry-run';
+    const format = (body.format || 'json').toLowerCase();
     const accountId = body.accountId || 'acc_canary_1';
     const apiKey = body.klaviyoApiKey || process.env.KLAVIYO_API_KEY;
     if (!apiKey) {
@@ -144,6 +145,9 @@ export async function POST(req: NextRequest) {
         return new Response(JSON.stringify({ error: 'UploadFailed', details: error.message }), { status: 500 });
       }
       return new Response(JSON.stringify({ mode: 'live', wrote: { bucket: CAMPAIGN_STAGING_BUCKET, path }, rows: rows.length }), { status: 200 });
+    }
+    if (format === 'csv') {
+      return new Response(csvContent, { status: 200, headers: { 'content-type': 'text/csv; charset=utf-8' } });
     }
     return new Response(JSON.stringify({ mode: 'dry-run', rows: rows.length, preview: csvLines.slice(0, 4) }), { status: 200 });
   } catch (err: any) {

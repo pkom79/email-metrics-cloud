@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     // Campaign CSV (from preview lines)
     const campRes = await fetch(`${origin}/api/klaviyo/campaign-sync`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': process.env.ADMIN_JOB_SECRET || '' }, body: JSON.stringify({
-        mode: 'dry-run', timeframeKey: body.campaign?.timeframeKey || (days <= 30 ? 'last_30_days' : undefined)
+        mode: 'dry-run', format: 'csv', timeframeKey: body.campaign?.timeframeKey || (days <= 30 ? 'last_30_days' : undefined)
       })
     });
     if (!campRes.ok) return http502('CampaignSyncFailed', await campRes.text().catch(() => ''));
@@ -90,7 +90,10 @@ export async function POST(req: NextRequest) {
       })
     });
     // If profiles source returns 400 (no profiles), fallback to klaviyo source (staging key must be configured for this workspace)
-    const audienceCsv = audRes.ok ? await audRes.text() : '';
+    let audienceCsv = audRes.ok ? await audRes.text() : '';
+    if (!audienceCsv || !audienceCsv.trim()) {
+      audienceCsv = 'Email,Klaviyo ID,First Name,Last Name,Email Marketing Consent\n';
+    }
 
     if (mode === 'dry-run') {
       return new Response(JSON.stringify({

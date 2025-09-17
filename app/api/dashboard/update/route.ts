@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
     // --- CAMPAIGNS ---
     const campaignPayload = {
       mode: 'dry-run',
+      format: 'csv',
       klaviyoApiKey: apiKey,
       timeframeKey: body.campaign?.timeframeKey || (days <= 30 ? 'last_30_days' : undefined),
     };
@@ -83,9 +84,7 @@ export async function POST(req: NextRequest) {
       const txt = await campRes.text().catch(() => '');
       return new Response(JSON.stringify({ error: 'CampaignSyncFailed', status: campRes.status, details: txt }), { status: 502 });
     }
-    const campJson = await campRes.json().catch(() => ({}));
-    const campPreview: string[] = Array.isArray(campJson?.preview) ? campJson.preview : [];
-    const campCsv = [campPreview[0] || '', campPreview[1] || '', campPreview[2] || '', campPreview[3] || ''].join('\n');
+    const campCsv = await campRes.text();
 
     // --- AUDIENCE ---
     const audPayload = {
@@ -104,7 +103,12 @@ export async function POST(req: NextRequest) {
       const txt = await audRes.text().catch(() => '');
       return new Response(JSON.stringify({ error: 'AudienceSyncFailed', status: audRes.status, details: txt }), { status: 502 });
     }
-    const audienceCsv = await audRes.text();
+    let audienceCsv = await audRes.text();
+
+    // Ensure subscribers.csv exists even if audience fetch is skipped/empty
+    if (!audienceCsv || !audienceCsv.trim()) {
+      audienceCsv = 'Email,Klaviyo ID,First Name,Last Name,Email Marketing Consent\n';
+    }
 
     if (mode === 'dry-run') {
       return new Response(JSON.stringify({
@@ -167,4 +171,3 @@ function stableId(s: string) {
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return 'id_' + (h >>> 0).toString(16);
 }
-
