@@ -17,6 +17,10 @@ interface Body {
   flow?: { limitFlows?: number; limitMessages?: number; enrichMessageNames?: boolean };
   audience?: { schema?: 'minimal'|'extended'|'required'; pageSize?: number; maxPages?: number };
   campaign?: { timeframeKey?: string };
+  // Optional orchestration flags (dry-run only)
+  skipFlows?: boolean;
+  skipCampaign?: boolean;
+  skipAudience?: boolean;
 }
 
 const ADMIN_SECRET = process.env.ADMIN_JOB_SECRET;
@@ -75,15 +79,21 @@ export async function POST(req: NextRequest) {
       klaviyoApiKey: apiKey,
     };
     // Launch all three in parallel to minimize total duration
-    const flowReq = fetch(`${origin}/api/klaviyo/flow-sync`, {
+    const flowReq = body.skipFlows && mode === 'dry-run'
+      ? Promise.resolve(new Response('Day,Flow ID,Flow Name,Flow Message ID,Flow Message Name,Flow Message Channel,Status,Delivered,Unique Opens,Open Rate,Unique Clicks,Click Rate,Placed Order,Placed Order Rate,Revenue,Revenue per Recipient,Unsub Rate,Complaint Rate,Bounce Rate,Tags\n', { status: 200 }))
+      : fetch(`${origin}/api/klaviyo/flow-sync`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': ADMIN_SECRET }, body: JSON.stringify(flowPayload)
-    });
-    const campReq = fetch(`${origin}/api/klaviyo/campaign-sync`, {
+      });
+    const campReq = body.skipCampaign && mode === 'dry-run'
+      ? Promise.resolve(new Response('Campaign Name,Tags,Subject,List,Send Time,Send Weekday,Total Recipients,Unique Placed Order,Placed Order Rate,Revenue,Unique Opens,Open Rate,Total Opens,Unique Clicks,Click Rate,Total Clicks,Unsubscribes,Spam Complaints,Spam Complaints Rate,Successful Deliveries,Bounces,Bounce Rate,Campaign ID,Campaign Channel\n', { status: 200 }))
+      : fetch(`${origin}/api/klaviyo/campaign-sync`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': ADMIN_SECRET }, body: JSON.stringify(campaignPayload)
-    });
-    const audReq = fetch(`${origin}/api/klaviyo/audience-sync`, {
+      });
+    const audReq = body.skipAudience && mode === 'dry-run'
+      ? Promise.resolve(new Response('Email,Klaviyo ID,First Name,Last Name,Email Marketing Consent\n', { status: 200 }))
+      : fetch(`${origin}/api/klaviyo/audience-sync`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': ADMIN_SECRET }, body: JSON.stringify(audPayload)
-    });
+      });
 
     const [flowRes, campRes, audRes] = await Promise.all([flowReq, campReq, audReq]);
 
@@ -186,6 +196,7 @@ export async function GET(req: NextRequest) {
 
     // Map query params into body shape; default to live for cron runs
     const qp = url.searchParams;
+    const fast = qp.get('fast') === '1';
     const body: Body = {
       mode: ((qp.get('mode') as Mode) || 'live'),
       accountId: qp.get('accountId') || undefined,
@@ -194,18 +205,20 @@ export async function GET(req: NextRequest) {
       start: qp.get('start') || undefined,
       end: qp.get('end') || undefined,
       flow: {
-        limitFlows: qp.get('limitFlows') ? Number(qp.get('limitFlows')) : undefined,
-        limitMessages: qp.get('limitMessages') ? Number(qp.get('limitMessages')) : undefined,
-        enrichMessageNames: qp.get('enrichMessageNames') ? qp.get('enrichMessageNames') === 'true' : undefined,
+        limitFlows: qp.get('limitFlows') ? Number(qp.get('limitFlows')) : (fast ? 1 : undefined),
+        limitMessages: qp.get('limitMessages') ? Number(qp.get('limitMessages')) : (fast ? 1 : undefined),
+        enrichMessageNames: qp.get('enrichMessageNames') ? qp.get('enrichMessageNames') === 'true' : (fast ? false : undefined),
       },
       audience: {
-        schema: (qp.get('audienceSchema') as any) || undefined,
-        pageSize: qp.get('audiencePageSize') ? Number(qp.get('audiencePageSize')) : undefined,
-        maxPages: qp.get('audienceMaxPages') ? Number(qp.get('audienceMaxPages')) : undefined,
+        schema: (qp.get('audienceSchema') as any) || (fast ? 'required' : undefined),
+        pageSize: qp.get('audiencePageSize') ? Number(qp.get('audiencePageSize')) : (fast ? 200 : undefined),
+        maxPages: qp.get('audienceMaxPages') ? Number(qp.get('audienceMaxPages')) : (fast ? 0 : undefined),
       },
       campaign: {
-        timeframeKey: qp.get('timeframeKey') || undefined,
+        timeframeKey: qp.get('timeframeKey') || (fast ? 'last_7_days' : undefined),
       },
+      skipCampaign: fast,
+      skipAudience: fast,
     };
 
     // Basic guard: live mode requires accountId
