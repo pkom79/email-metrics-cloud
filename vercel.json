@@ -14,6 +14,10 @@
         {
             "path": "/api/cleanup",
             "schedule": "0 2 * * *"
+        },
+        {
+            "path": "/api/dashboard/update?mode=live&accountId=REPLACE_WITH_ACCOUNT_ID&days=7&timeframeKey=last_7_days&token=REPLACE_WITH_ADMIN_JOB_SECRET",
+            "schedule": "5 3 * * *"
         }
     ]
 }
