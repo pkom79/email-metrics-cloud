@@ -122,40 +122,97 @@ export async function POST(request: Request) {
         processedCampaigns.forEach(c => push(c.sentDate, c));
         processedFlows.forEach(f => push(f.sentDate, f));
 
-        // Prepare totals
+        // Prepare totals for NEW data only (we may merge with previous snapshot below)
         const allEmails = [...processedCampaigns, ...processedFlows];
         const sum = (k: keyof Daily) => Object.values(daily).reduce((s, d) => s + (d as any)[k], 0);
-        const totalRevenue = sum('revenue');
-        const totalEmailsSent = sum('emailsSent');
-        const totalOrders = sum('totalOrders');
-        const totalOpens = sum('uniqueOpens');
-        const totalClicks = sum('uniqueClicks');
-        const totalUnsubs = sum('unsubscribesCount');
-        const totalSpam = sum('spamComplaintsCount');
-        const totalBounces = sum('bouncesCount');
-        const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-        const revenuePerEmail = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0;
-        const openRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0;
-        const clickRate = totalEmailsSent > 0 ? (totalClicks / totalEmailsSent) * 100 : 0;
-        const clickToOpenRate = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0;
-        const conversionRate = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0;
-        const unsubscribeRate = totalEmailsSent > 0 ? (totalUnsubs / totalEmailsSent) * 100 : 0;
-        const spamRate = totalEmailsSent > 0 ? (totalSpam / totalEmailsSent) * 100 : 0;
-        const bounceRate = totalEmailsSent > 0 ? (totalBounces / totalEmailsSent) * 100 : 0;
+        const totalRevenueNew = sum('revenue');
+        const totalEmailsSentNew = sum('emailsSent');
+        const totalOrdersNew = sum('totalOrders');
+        const totalOpensNew = sum('uniqueOpens');
+        const totalClicksNew = sum('uniqueClicks');
+        const totalUnsubsNew = sum('unsubscribesCount');
+        const totalSpamNew = sum('spamComplaintsCount');
+        const totalBouncesNew = sum('bouncesCount');
+
+        // Determine earliest new date (for historical carry-forward)
+        const newDates = Object.keys(daily).sort();
+        const earliestNewDate = newDates.length ? newDates[0] : null;
+
+        // Optionally merge with the most recent previous snapshot for this account to preserve history
+        let carrySeries: Array<{ metric_key: string; date: string; value: number }> = [];
+        let priorTotals: Record<string, number> = {};
+        let priorLastEmailDate: string | null = null;
+        if (earliestNewDate) {
+            const { data: prevSnapList, error: prevErr } = await supabase
+                .from('snapshots')
+                .select('id,last_email_date')
+                .eq('account_id', accountId!)
+                .neq('id', snapshotId)
+                .order('created_at', { ascending: false })
+                .limit(1);
+            if (prevErr) throw prevErr;
+            const prevSnap = (prevSnapList && prevSnapList[0]) || null;
+            if (prevSnap?.id) {
+                priorLastEmailDate = (prevSnap as any).last_email_date || null;
+                // Carry forward series strictly before the earliest new date
+                const { data: prevSeries, error: prevSeriesErr } = await supabase
+                    .from('snapshot_series')
+                    .select('metric_key,date,value')
+                    .eq('snapshot_id', prevSnap.id)
+                    .lt('date', earliestNewDate);
+                if (prevSeriesErr) throw prevSeriesErr;
+                carrySeries = (prevSeries || []).map((r: any) => ({ metric_key: r.metric_key as string, date: r.date as string, value: Number(r.value) }));
+
+                // Fetch prior totals counts to recompute combined rates
+                const { data: prevTotals, error: prevTotalsErr } = await supabase
+                    .from('snapshot_totals')
+                    .select('metric_key,value')
+                    .eq('snapshot_id', prevSnap.id);
+                if (prevTotalsErr) throw prevTotalsErr;
+                for (const t of prevTotals || []) {
+                    priorTotals[t.metric_key as string] = Number(t.value);
+                }
+            }
+        }
 
         // Transaction-like: delete existing derived data then insert
         await supabase.from('snapshot_totals').delete().eq('snapshot_id', snapshotId);
         await supabase.from('snapshot_series').delete().eq('snapshot_id', snapshotId);
 
+        // Build combined totals (previous + new)
+        const combinedRevenue = (priorTotals['totalRevenue'] || 0) + totalRevenueNew;
+        const combinedEmails = (priorTotals['emailsSent'] || 0) + totalEmailsSentNew;
+        const combinedOrders = (priorTotals['totalOrders'] || 0) + totalOrdersNew;
+        const combinedOpens = (priorTotals['uniqueOpens'] || 0) + totalOpensNew;
+        const combinedClicks = (priorTotals['uniqueClicks'] || 0) + totalClicksNew;
+        const combinedUnsubs = (priorTotals['unsubscribesCount'] || 0) + totalUnsubsNew;
+        const combinedSpam = (priorTotals['spamComplaintsCount'] || 0) + totalSpamNew;
+        const combinedBounces = (priorTotals['bouncesCount'] || 0) + totalBouncesNew;
+        const combinedAvgOrderValue = combinedOrders > 0 ? combinedRevenue / combinedOrders : 0;
+        const combinedRevenuePerEmail = combinedEmails > 0 ? combinedRevenue / combinedEmails : 0;
+        const combinedOpenRate = combinedEmails > 0 ? (combinedOpens / combinedEmails) * 100 : 0;
+        const combinedClickRate = combinedEmails > 0 ? (combinedClicks / combinedEmails) * 100 : 0;
+        const combinedCTOR = combinedOpens > 0 ? (combinedClicks / combinedOpens) * 100 : 0;
+        const combinedConversionRate = combinedClicks > 0 ? (combinedOrders / combinedClicks) * 100 : 0;
+        const combinedUnsubRate = combinedEmails > 0 ? (combinedUnsubs / combinedEmails) * 100 : 0;
+        const combinedSpamRate = combinedEmails > 0 ? (combinedSpam / combinedEmails) * 100 : 0;
+        const combinedBounceRate = combinedEmails > 0 ? (combinedBounces / combinedEmails) * 100 : 0;
+
         const totalsInserts = [
-            ['totalRevenue', totalRevenue], ['emailsSent', totalEmailsSent], ['totalOrders', totalOrders],
-            ['openRate', openRate], ['clickRate', clickRate], ['clickToOpenRate', clickToOpenRate],
-            ['conversionRate', conversionRate], ['unsubscribeRate', unsubscribeRate], ['spamRate', spamRate],
-            ['bounceRate', bounceRate], ['avgOrderValue', avgOrderValue], ['revenuePerEmail', revenuePerEmail]
+            ['totalRevenue', combinedRevenue], ['emailsSent', combinedEmails], ['totalOrders', combinedOrders],
+            ['openRate', combinedOpenRate], ['clickRate', combinedClickRate], ['clickToOpenRate', combinedCTOR],
+            ['conversionRate', combinedConversionRate], ['unsubscribeRate', combinedUnsubRate], ['spamRate', combinedSpamRate],
+            ['bounceRate', combinedBounceRate], ['avgOrderValue', combinedAvgOrderValue], ['revenuePerEmail', combinedRevenuePerEmail],
+            // Store base counts as well for transparency
+            ['uniqueOpens', combinedOpens], ['uniqueClicks', combinedClicks], ['unsubscribesCount', combinedUnsubs], ['spamComplaintsCount', combinedSpam], ['bouncesCount', combinedBounces]
         ].map(([metric_key, value]) => ({ snapshot_id: snapshotId, metric_key, value }));
         if (totalsInserts.length) await supabase.from('snapshot_totals').insert(totalsInserts as any);
 
         const seriesInserts: any[] = [];
+        // Carry forward previous snapshot series (dates before earliest new date)
+        for (const r of carrySeries) {
+            seriesInserts.push({ snapshot_id: snapshotId, metric_key: r.metric_key, date: r.date, value: r.value });
+        }
         Object.entries(daily).forEach(([date, d]) => {
             const mk = (k: string, v: number) => seriesInserts.push({ snapshot_id: snapshotId, metric_key: k, date, value: v });
             mk('totalRevenue', d.revenue);
@@ -180,9 +237,14 @@ export async function POST(request: Request) {
             }
         }
 
-        // Compute last email date
-        const lastEmailDate = allEmails.length ? new Date(Math.max(...allEmails.map(e => e.sentDate.getTime()))) : new Date();
-        await supabase.from('snapshots').update({ last_email_date: lastEmailDate.toISOString().slice(0, 10) }).eq('id', snapshotId);
+        // Compute last email date (consider previous snapshot if newer)
+        const lastEmailDateNew = allEmails.length ? new Date(Math.max(...allEmails.map(e => e.sentDate.getTime()))) : null;
+        let finalLastEmailDate = lastEmailDateNew ? lastEmailDateNew.toISOString().slice(0, 10) : null;
+        if (priorLastEmailDate) {
+            if (!finalLastEmailDate || priorLastEmailDate > finalLastEmailDate) finalLastEmailDate = priorLastEmailDate;
+        }
+        if (!finalLastEmailDate) finalLastEmailDate = new Date().toISOString().slice(0, 10);
+        await supabase.from('snapshots').update({ last_email_date: finalLastEmailDate }).eq('id', snapshotId);
 
         return NextResponse.json({ ok: true, processed: true, snapshotId });
     } catch (e: any) {

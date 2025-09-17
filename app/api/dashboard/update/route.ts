@@ -61,7 +61,8 @@ export async function POST(req: NextRequest) {
       end: end || undefined,
       limitFlows: body.flow?.limitFlows ?? 20,
       limitMessages: body.flow?.limitMessages ?? 50,
-  enrichMessageNames: body.flow?.enrichMessageNames ?? false,
+      // Default to enriching names in live runs so UI shows message names instead of IDs
+      enrichMessageNames: body.flow?.enrichMessageNames ?? (mode === 'live'),
       klaviyoApiKey: apiKey,
     };
     const campaignPayload = {
