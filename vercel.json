@@ -16,7 +16,7 @@
             "schedule": "0 2 * * *"
         },
         {
-            "path": "/api/dashboard/update?mode=live&accountId=REPLACE_WITH_ACCOUNT_ID&days=7&timeframeKey=last_7_days&token=REPLACE_WITH_ADMIN_JOB_SECRET",
+            "path": "/api/dashboard/update?mode=live&accountId=6e756a88-791e-46ac-b3b9-15c7ed33f8f7&days=7&timeframeKey=last_7_days&token=JAogCb0igpP1zlJqQlqBkPbWEQV/rnomzPUDJtJFxz/sT3zydQlAncqkrasIuDGj",
             "schedule": "5 3 * * *"
         }
     ]
