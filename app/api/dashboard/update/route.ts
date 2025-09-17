@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     base.search = '';
     const origin = base.origin;
 
-    // --- FLOWS ---
+    // Prepare payloads
     const flowPayload = {
       mode: 'dry-run',
       format: 'csv',
@@ -59,34 +59,12 @@ export async function POST(req: NextRequest) {
       enrichMessageNames: body.flow?.enrichMessageNames ?? true,
       klaviyoApiKey: apiKey,
     };
-    const flowRes = await fetch(`${origin}/api/klaviyo/flow-sync`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-admin-job-secret': ADMIN_SECRET },
-      body: JSON.stringify(flowPayload)
-    });
-    if (!flowRes.ok) {
-      const txt = await flowRes.text().catch(() => '');
-      return new Response(JSON.stringify({ error: 'FlowSyncFailed', status: flowRes.status, details: txt }), { status: 502 });
-    }
-    const flowsCsv = await flowRes.text();
-
-    // --- CAMPAIGNS ---
     const campaignPayload = {
       mode: 'dry-run',
       format: 'csv',
       klaviyoApiKey: apiKey,
       timeframeKey: body.campaign?.timeframeKey || (days <= 30 ? 'last_30_days' : undefined),
     };
-    const campRes = await fetch(`${origin}/api/klaviyo/campaign-sync`, {
-      method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': ADMIN_SECRET }, body: JSON.stringify(campaignPayload)
-    });
-    if (!campRes.ok) {
-      const txt = await campRes.text().catch(() => '');
-      return new Response(JSON.stringify({ error: 'CampaignSyncFailed', status: campRes.status, details: txt }), { status: 502 });
-    }
-    const campCsv = await campRes.text();
-
-    // --- AUDIENCE ---
     const audPayload = {
       mode: 'dry-run',
       format: 'csv',
@@ -96,14 +74,36 @@ export async function POST(req: NextRequest) {
       maxPages: body.audience?.maxPages ?? 2,
       klaviyoApiKey: apiKey,
     };
-    const audRes = await fetch(`${origin}/api/klaviyo/audience-sync`, {
+    // Launch all three in parallel to minimize total duration
+    const flowReq = fetch(`${origin}/api/klaviyo/flow-sync`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': ADMIN_SECRET }, body: JSON.stringify(flowPayload)
+    });
+    const campReq = fetch(`${origin}/api/klaviyo/campaign-sync`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': ADMIN_SECRET }, body: JSON.stringify(campaignPayload)
+    });
+    const audReq = fetch(`${origin}/api/klaviyo/audience-sync`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': ADMIN_SECRET }, body: JSON.stringify(audPayload)
     });
+
+    const [flowRes, campRes, audRes] = await Promise.all([flowReq, campReq, audReq]);
+
+    if (!flowRes.ok) {
+      const txt = await flowRes.text().catch(() => '');
+      return new Response(JSON.stringify({ error: 'FlowSyncFailed', status: flowRes.status, details: txt }), { status: 502 });
+    }
+    if (!campRes.ok) {
+      const txt = await campRes.text().catch(() => '');
+      return new Response(JSON.stringify({ error: 'CampaignSyncFailed', status: campRes.status, details: txt }), { status: 502 });
+    }
     if (!audRes.ok) {
       const txt = await audRes.text().catch(() => '');
       return new Response(JSON.stringify({ error: 'AudienceSyncFailed', status: audRes.status, details: txt }), { status: 502 });
     }
-    let audienceCsv = await audRes.text();
+
+    const [flowsCsv, campCsv, audienceCsvRaw] = await Promise.all([
+      flowRes.text(), campRes.text(), audRes.text()
+    ]);
+    let audienceCsv = audienceCsvRaw;
 
     // Ensure subscribers.csv exists even if audience fetch is skipped/empty
     if (!audienceCsv || !audienceCsv.trim()) {
