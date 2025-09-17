@@ -178,8 +178,8 @@ export async function POST(req: NextRequest) {
       .single();
     if (snapErr) return new Response(JSON.stringify({ error: 'CreateSnapshotFailed', details: snapErr.message }), { status: 500 });
 
-    // Trigger processing
-    await fetch(`${origin}/api/snapshots/process`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uploadId }) }).catch(() => {});
+  // Trigger processing (admin bypass)
+  await fetch(`${origin}/api/snapshots/process`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': ADMIN_SECRET! }, body: JSON.stringify({ uploadId }) }).catch(() => {});
 
     return new Response(JSON.stringify({ mode, accountId, uploadId, snapshotId: snap?.id, wrote: { bucket, keys: ['flows.csv','campaigns.csv','subscribers.csv'] }, ms: Date.now() - t0 }), { status: 200, headers: { 'content-type': 'application/json' } });
   } catch (err: any) {

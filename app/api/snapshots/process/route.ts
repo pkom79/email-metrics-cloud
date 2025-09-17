@@ -12,8 +12,16 @@ export const runtime = 'nodejs';
 // Idempotent: existing totals/series for snapshot are replaced
 export async function POST(request: Request) {
     try {
-        const user = await getServerUser();
-        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const ADMIN_SECRET = process.env.ADMIN_JOB_SECRET;
+        const providedSecret = (request.headers.get('x-admin-job-secret') || '').trim();
+        const adminBypass = !!ADMIN_SECRET && providedSecret === ADMIN_SECRET;
+
+        // Require either a logged-in user or admin bypass via secret
+        let user: any = null;
+        if (!adminBypass) {
+            user = await getServerUser();
+            if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
         const supabase = createServiceClient();
         const { snapshotId: bodySnapshotId, uploadId: bodyUploadId } = await request.json().catch(() => ({}));
         if (!bodySnapshotId && !bodyUploadId) return NextResponse.json({ error: 'snapshotId or uploadId required' }, { status: 400 });
@@ -45,16 +53,18 @@ export async function POST(request: Request) {
         if (!snapshotId || !uploadId) return NextResponse.json({ error: 'Snapshot linkage missing' }, { status: 400 });
 
         // Basic ownership check (service role bypasses RLS so manually assert owner)
-        const { data: acct, error: acctErr } = await supabase
-            .from('accounts')
-            .select('owner_user_id')
-            .eq('id', accountId!)
-            .maybeSingle();
-        if (acctErr) throw acctErr;
-        if (!acct || (acct as any).owner_user_id !== user.id) {
-            // Allow admin role
-            const isAdmin = user.app_metadata?.role === 'admin';
-            if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        if (!adminBypass) {
+            const { data: acct, error: acctErr } = await supabase
+                .from('accounts')
+                .select('owner_user_id')
+                .eq('id', accountId!)
+                .maybeSingle();
+            if (acctErr) throw acctErr;
+            if (!acct || (acct as any).owner_user_id !== user.id) {
+                // Allow admin role
+                const isAdmin = user.app_metadata?.role === 'admin';
+                if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+            }
         }
 
         const bucket = ingestBucketName();
