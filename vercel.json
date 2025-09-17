@@ -2,6 +2,12 @@
     "functions": {
         "app/api/cleanup/route.ts": {
             "maxDuration": 300
+        },
+        "app/api/dashboard/update/route.ts": {
+            "maxDuration": 300
+        },
+        "app/api/snapshots/process/route.ts": {
+            "maxDuration": 300
         }
     },
     "crons": [

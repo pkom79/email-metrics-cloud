@@ -171,3 +171,68 @@ function stableId(s: string) {
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return 'id_' + (h >>> 0).toString(16);
 }
+
+// Cron-friendly GET: accepts query params, validates token, forwards to POST with idempotency
+export async function GET(req: NextRequest) {
+  try {
+    if (process.env.KLAVIYO_ENABLE !== 'true') {
+      return new Response(JSON.stringify({ error: 'Klaviyo source disabled' }), { status: 501 });
+    }
+    const url = new URL(req.url);
+    const token = url.searchParams.get('token') || '';
+    if (!ADMIN_SECRET || token !== ADMIN_SECRET) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+    }
+
+    // Map query params into body shape; default to live for cron runs
+    const qp = url.searchParams;
+    const body: Body = {
+      mode: ((qp.get('mode') as Mode) || 'live'),
+      accountId: qp.get('accountId') || undefined,
+      klaviyoApiKey: qp.get('klaviyoApiKey') || undefined,
+      days: qp.get('days') ? Number(qp.get('days')) : undefined,
+      start: qp.get('start') || undefined,
+      end: qp.get('end') || undefined,
+      flow: {
+        limitFlows: qp.get('limitFlows') ? Number(qp.get('limitFlows')) : undefined,
+        limitMessages: qp.get('limitMessages') ? Number(qp.get('limitMessages')) : undefined,
+        enrichMessageNames: qp.get('enrichMessageNames') ? qp.get('enrichMessageNames') === 'true' : undefined,
+      },
+      audience: {
+        schema: (qp.get('audienceSchema') as any) || undefined,
+        pageSize: qp.get('audiencePageSize') ? Number(qp.get('audiencePageSize')) : undefined,
+        maxPages: qp.get('audienceMaxPages') ? Number(qp.get('audienceMaxPages')) : undefined,
+      },
+      campaign: {
+        timeframeKey: qp.get('timeframeKey') || undefined,
+      },
+    };
+
+    // Basic guard: live mode requires accountId
+    if ((body.mode || 'live') === 'live' && !body.accountId) {
+      return new Response(JSON.stringify({ error: 'accountId required for live mode' }), { status: 400 });
+    }
+
+    // Idempotency for nightly runs (UTC date)
+    const todayUtc = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const idempotency = qp.get('idempotency') || `nightly-${todayUtc}`;
+
+    // Reuse the POST logic via internal fetch
+    const origin = `${url.protocol}//${url.host}`;
+    const res = await fetch(`${origin}/api/dashboard/update`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-admin-job-secret': token,
+        'x-idempotency-key': idempotency,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const contentType = res.headers.get('content-type') || 'application/json';
+    const text = await res.text();
+    return new Response(text, { status: res.status, headers: { 'content-type': contentType } });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: 'Unexpected error', details: String(err?.message || err) }), { status: 500 });
+  }
+}
