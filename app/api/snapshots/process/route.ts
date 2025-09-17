@@ -140,7 +140,7 @@ export async function POST(request: Request) {
 
         // Optionally merge with the most recent previous snapshot for this account to preserve history
         let carrySeries: Array<{ metric_key: string; date: string; value: number }> = [];
-        let priorTotals: Record<string, number> = {};
+    let priorTotals: Record<string, number> = {};
         let priorLastEmailDate: string | null = null;
         if (earliestNewDate) {
             const { data: prevSnapList, error: prevErr } = await supabase
@@ -163,14 +163,10 @@ export async function POST(request: Request) {
                 if (prevSeriesErr) throw prevSeriesErr;
                 carrySeries = (prevSeries || []).map((r: any) => ({ metric_key: r.metric_key as string, date: r.date as string, value: Number(r.value) }));
 
-                // Fetch prior totals counts to recompute combined rates
-                const { data: prevTotals, error: prevTotalsErr } = await supabase
-                    .from('snapshot_totals')
-                    .select('metric_key,value')
-                    .eq('snapshot_id', prevSnap.id);
-                if (prevTotalsErr) throw prevTotalsErr;
-                for (const t of prevTotals || []) {
-                    priorTotals[t.metric_key as string] = Number(t.value);
+                // Derive prior base totals strictly from carried series to avoid double counting overlap
+                const keys = ['totalRevenue','emailsSent','totalOrders','uniqueOpens','uniqueClicks','unsubscribesCount','spamComplaintsCount','bouncesCount'] as const;
+                for (const k of keys) {
+                    priorTotals[k] = carrySeries.filter(r => r.metric_key === k).reduce((s, r) => s + Number(r.value || 0), 0);
                 }
             }
         }
@@ -180,14 +176,14 @@ export async function POST(request: Request) {
         await supabase.from('snapshot_series').delete().eq('snapshot_id', snapshotId);
 
         // Build combined totals (previous + new)
-        const combinedRevenue = (priorTotals['totalRevenue'] || 0) + totalRevenueNew;
-        const combinedEmails = (priorTotals['emailsSent'] || 0) + totalEmailsSentNew;
-        const combinedOrders = (priorTotals['totalOrders'] || 0) + totalOrdersNew;
-        const combinedOpens = (priorTotals['uniqueOpens'] || 0) + totalOpensNew;
-        const combinedClicks = (priorTotals['uniqueClicks'] || 0) + totalClicksNew;
-        const combinedUnsubs = (priorTotals['unsubscribesCount'] || 0) + totalUnsubsNew;
-        const combinedSpam = (priorTotals['spamComplaintsCount'] || 0) + totalSpamNew;
-        const combinedBounces = (priorTotals['bouncesCount'] || 0) + totalBouncesNew;
+    const combinedRevenue = (priorTotals['totalRevenue'] || 0) + totalRevenueNew;
+    const combinedEmails = (priorTotals['emailsSent'] || 0) + totalEmailsSentNew;
+    const combinedOrders = (priorTotals['totalOrders'] || 0) + totalOrdersNew;
+    const combinedOpens = (priorTotals['uniqueOpens'] || 0) + totalOpensNew;
+    const combinedClicks = (priorTotals['uniqueClicks'] || 0) + totalClicksNew;
+    const combinedUnsubs = (priorTotals['unsubscribesCount'] || 0) + totalUnsubsNew;
+    const combinedSpam = (priorTotals['spamComplaintsCount'] || 0) + totalSpamNew;
+    const combinedBounces = (priorTotals['bouncesCount'] || 0) + totalBouncesNew;
         const combinedAvgOrderValue = combinedOrders > 0 ? combinedRevenue / combinedOrders : 0;
         const combinedRevenuePerEmail = combinedEmails > 0 ? combinedRevenue / combinedEmails : 0;
         const combinedOpenRate = combinedEmails > 0 ? (combinedOpens / combinedEmails) * 100 : 0;
