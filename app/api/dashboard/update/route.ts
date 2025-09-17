@@ -79,17 +79,18 @@ export async function POST(req: NextRequest) {
       klaviyoApiKey: apiKey,
     };
     // Launch all three in parallel to minimize total duration
-    const flowReq = body.skipFlows && mode === 'dry-run'
+    const flowReq = body.skipFlows
       ? Promise.resolve(new Response('Day,Flow ID,Flow Name,Flow Message ID,Flow Message Name,Flow Message Channel,Status,Delivered,Unique Opens,Open Rate,Unique Clicks,Click Rate,Placed Order,Placed Order Rate,Revenue,Revenue per Recipient,Unsub Rate,Complaint Rate,Bounce Rate,Tags\n', { status: 200 }))
       : fetch(`${origin}/api/klaviyo/flow-sync`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': ADMIN_SECRET }, body: JSON.stringify(flowPayload)
       });
-    const campReq = body.skipCampaign && mode === 'dry-run'
+    // If skip flags are set, return header-only CSV even in live mode to allow partial/lite runs
+    const campReq = body.skipCampaign
       ? Promise.resolve(new Response('Campaign Name,Tags,Subject,List,Send Time,Send Weekday,Total Recipients,Unique Placed Order,Placed Order Rate,Revenue,Unique Opens,Open Rate,Total Opens,Unique Clicks,Click Rate,Total Clicks,Unsubscribes,Spam Complaints,Spam Complaints Rate,Successful Deliveries,Bounces,Bounce Rate,Campaign ID,Campaign Channel\n', { status: 200 }))
       : fetch(`${origin}/api/klaviyo/campaign-sync`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': ADMIN_SECRET }, body: JSON.stringify(campaignPayload)
       });
-    const audReq = body.skipAudience && mode === 'dry-run'
+    const audReq = body.skipAudience
       ? Promise.resolve(new Response('Email,Klaviyo ID,First Name,Last Name,Email Marketing Consent\n', { status: 200 }))
       : fetch(`${origin}/api/klaviyo/audience-sync`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': ADMIN_SECRET }, body: JSON.stringify(audPayload)
@@ -197,6 +198,7 @@ export async function GET(req: NextRequest) {
     // Map query params into body shape; default to live for cron runs
     const qp = url.searchParams;
     const fast = qp.get('fast') === '1';
+    const lite = qp.get('lite') === '1'; // live-friendly partial run: skip heavy producers, still writes header-only CSVs
     const body: Body = {
       mode: ((qp.get('mode') as Mode) || 'live'),
       accountId: qp.get('accountId') || undefined,
@@ -205,9 +207,9 @@ export async function GET(req: NextRequest) {
       start: qp.get('start') || undefined,
       end: qp.get('end') || undefined,
       flow: {
-        limitFlows: qp.get('limitFlows') ? Number(qp.get('limitFlows')) : (fast ? 1 : undefined),
-        limitMessages: qp.get('limitMessages') ? Number(qp.get('limitMessages')) : (fast ? 1 : undefined),
-        enrichMessageNames: qp.get('enrichMessageNames') ? qp.get('enrichMessageNames') === 'true' : (fast ? false : undefined),
+        limitFlows: qp.get('limitFlows') ? Number(qp.get('limitFlows')) : ((fast || lite) ? 1 : undefined),
+        limitMessages: qp.get('limitMessages') ? Number(qp.get('limitMessages')) : ((fast || lite) ? 1 : undefined),
+        enrichMessageNames: qp.get('enrichMessageNames') ? qp.get('enrichMessageNames') === 'true' : ((fast || lite) ? false : undefined),
       },
       audience: {
         schema: (qp.get('audienceSchema') as any) || (fast ? 'required' : undefined),
@@ -217,8 +219,9 @@ export async function GET(req: NextRequest) {
       campaign: {
         timeframeKey: qp.get('timeframeKey') || (fast ? 'last_7_days' : undefined),
       },
-      skipCampaign: fast,
-      skipAudience: fast,
+      skipFlows: fast || lite,
+      skipCampaign: fast || lite,
+      skipAudience: fast || lite,
     };
 
     // Basic guard: live mode requires accountId
