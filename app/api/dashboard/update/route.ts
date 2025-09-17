@@ -67,8 +67,12 @@ export async function POST(req: NextRequest) {
       mode: 'dry-run',
       format: 'csv',
       klaviyoApiKey: apiKey,
-      timeframeKey: body.campaign?.timeframeKey || (days <= 30 ? 'last_30_days' : undefined),
-    };
+      // Do not default timeframeKey; allow route to use explicit days/start/end for tight windows
+      timeframeKey: body.campaign?.timeframeKey || undefined,
+      days,
+      start: start || undefined,
+      end: end || undefined,
+    } as any;
     const audPayload = {
       mode: 'dry-run',
       format: 'csv',

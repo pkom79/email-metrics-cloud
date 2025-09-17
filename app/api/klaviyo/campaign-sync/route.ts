@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { createServiceClient } from '../../../../lib/supabase/server';
-import { fetchAccountTimezone, fetchCampaigns, fetchCampaignValues, fetchMetricIds, fetchCampaignMessages, fetchCampaignTags, fetchListDetails } from '../../../../lib/klaviyo/client';
+import { fetchAccountTimezone, fetchCampaigns, fetchCampaignValues, fetchMetricIds, fetchCampaignMessages, fetchCampaignTags, fetchListDetails, aggregateCampaignMetricsViaEvents } from '../../../../lib/klaviyo/client';
 import dayjs from '../../../../lib/dayjs';
 
 const ADMIN_SECRET = process.env.ADMIN_JOB_SECRET;
@@ -24,9 +24,22 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: 'Missing Klaviyo API key' }), { status: 400 });
     }
     const timezone = (await fetchAccountTimezone(apiKey)) || 'UTC';
-    const timeframeKey = body.timeframeKey || 'last_30_days';
+    // Resolve timeframe (default last 3 days) in account timezone
+    const days = Math.max(1, Math.min(body.days ?? 3, 30));
+    const endZoned = body.end ? dayjs.tz(body.end, timezone).endOf('day') : dayjs().tz(timezone).endOf('day');
+    const startZoned = body.start ? dayjs.tz(body.start, timezone).startOf('day') : endZoned.startOf('day').subtract(days - 1, 'day');
+    const startISO = startZoned.utc().format('YYYY-MM-DDTHH:mm:ss[Z]');
+    const endISO = endZoned.utc().format('YYYY-MM-DDTHH:mm:ss[Z]');
+
+    // Fetch campaigns and prefer those whose send_time falls within the timeframe
     const campaigns = await fetchCampaigns(apiKey, { channel: 'email', pageSize: 50, maxPages: 3 });
-    const limited = campaigns.slice(0, 20);
+    const inWindow = campaigns.filter(c => {
+      const st = c?.attributes?.send_time || c?.attributes?.scheduled_at;
+      if (!st) return false;
+      const d = dayjs(st).tz(timezone);
+      return (d.isAfter(startZoned) || d.isSame(startZoned)) && (d.isBefore(endZoned) || d.isSame(endZoned));
+    });
+    const limited = (inWindow.length > 0 ? inWindow : campaigns).slice(0, 20);
     const campaignIds = limited.map(c => c.id);
     let conversionMetricId = body.conversionMetricId || process.env.SHOPIFY_PLACED_ORDER_METRIC_ID;
     if (!conversionMetricId) {
@@ -36,7 +49,36 @@ export async function POST(req: NextRequest) {
     if (!conversionMetricId) {
       return new Response(JSON.stringify({ error: 'Missing conversion metric id' }), { status: 400 });
     }
-    const metrics = await fetchCampaignValues({ apiKey, campaignIds, conversionMetricId, timeframeKey });
+    // Prefer explicit start/end for a tight window; allow timeframeKey override when provided
+    const timeframeKey = body.timeframeKey as string | undefined;
+    let metrics: Array<{ campaign_id?: string; statistics: Record<string, number> }> = [];
+    try {
+      metrics = await fetchCampaignValues({ apiKey, campaignIds, conversionMetricId, timeframeKey, startISO: timeframeKey ? undefined : startISO, endISO: timeframeKey ? undefined : endISO });
+    } catch (err: any) {
+      // Fallback: aggregate via Events API per campaign for short windows when campaign-values is throttled
+      const msg = String(err?.message || err || '');
+      const tooLongRetry = /\[limiter\].*campaign-values.*retry-after/i.test(msg) || /status\":429/.test(msg);
+      if (!tooLongRetry) {
+        throw err;
+      }
+      const results: Array<{ campaign_id?: string; statistics: Record<string, number> }> = [];
+      for (const cid of campaignIds) {
+        try {
+          // Optionally pass an email message id to help filter events precisely
+          let emailMsgId: string | undefined;
+          try {
+            const msgs = await fetchCampaignMessages(apiKey, cid, { pageSize: 10 });
+            const emailMsg = msgs.find((m: any) => (m?.attributes?.channel || m?.attributes?.definition?.channel || '').toLowerCase() === 'email') || msgs[0];
+            emailMsgId = String(emailMsg?.id || '');
+          } catch {}
+          const agg = await aggregateCampaignMetricsViaEvents({ apiKey, startISO, endISO, campaignId: cid, campaignMessageId: emailMsgId });
+          results.push({ campaign_id: cid, statistics: agg.statistics || {} });
+          // Small delay to be polite across categories
+          await new Promise(r => setTimeout(r, 250));
+        } catch {}
+      }
+      metrics = results;
+    }
     const metricsById = new Map<string, Record<string, number>>();
     for (const entry of metrics) {
       metricsById.set(entry.campaign_id || '', entry.statistics || {});
