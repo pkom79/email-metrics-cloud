@@ -17,7 +17,7 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const accountId = body.accountId;
-  const uploadId = body.uploadId;
+  let uploadId: string | undefined = body.uploadId;
   const label = body.label;
   const doProcess = body.process;
     if (!accountId || !uploadId) {
@@ -27,13 +27,51 @@ export async function POST(request: Request) {
     const supabase = createServiceClient();
     const bucket = ingestBucketName();
     const required = ['flows.csv','campaigns.csv','subscribers.csv'] as const;
-    const missing: string[] = [];
+
+    // If uploadId not provided, try to auto-detect most recent folder containing all required files
+    if (!uploadId) {
+      // First: prefer recent rows from uploads table
+      const { data: uploadRows } = await supabase
+        .from('uploads')
+        .select('id,updated_at')
+        .order('updated_at', { ascending: false })
+        .limit(50);
+      const tryIds: string[] = (uploadRows || []).map((r: any) => r.id);
+      const candidates = new Set<string>(tryIds);
+      // Also discover top-level folder names in the bucket as a fallback
+      const { data: rootList } = await supabase.storage.from(bucket).list('', { limit: 1000 });
+      for (const ent of (rootList || [])) {
+        const name = (ent as any)?.name;
+        if (typeof name === 'string' && name.length >= 10) candidates.add(name);
+      }
+      // Validate candidates by checking for required files; pick the most recent by flows.csv updated_at when available
+      let picked: { id: string; ts: number } | null = null;
+      for (const id of candidates) {
+        // Quick list inside this folder
+        const { data: inner } = await supabase.storage.from(bucket).list(id, { limit: 100 });
+        const present = new Set((inner || []).map((f: any) => f.name));
+        const hasAll = required.every(r => present.has(r));
+        if (!hasAll) continue;
+        // Use flows.csv updated time as tiebreaker if available
+        const flowMeta = (inner || []).find((f: any) => f.name === 'flows.csv');
+        const ts = flowMeta?.updated_at ? Date.parse(flowMeta.updated_at) : Date.now();
+        if (!picked || ts > picked.ts) picked = { id, ts };
+      }
+      if (picked) uploadId = picked.id;
+    }
+
+    if (!uploadId) {
+      return NextResponse.json({ error: 'uploadId not provided and no suitable upload discovered in bucket' }, { status: 400 });
+    }
+
+    // Validate required files exist under the chosen uploadId
+    const miss: string[] = [];
     for (const f of required) {
       const { data } = await supabase.storage.from(bucket).download(`${uploadId}/${f}`);
-      if (!data) missing.push(f);
+      if (!data) miss.push(f);
     }
-    if (missing.length) {
-      return NextResponse.json({ error: 'Missing CSVs', missing, hint: `Expecting ${required.join(', ')} under ${uploadId}/ in bucket ${bucket}` }, { status: 400 });
+    if (miss.length) {
+      return NextResponse.json({ error: 'Missing CSVs', missing: miss, hint: `Expecting ${required.join(', ')} under ${uploadId}/ in bucket ${bucket}` }, { status: 400 });
     }
 
     // Bind upload to account
@@ -66,7 +104,7 @@ export async function POST(request: Request) {
       } catch {}
     }
 
-    return NextResponse.json({ ok: true, snapshotId: snap?.id, uploadId, bucket, processed });
+  return NextResponse.json({ ok: true, snapshotId: snap?.id, uploadId, bucket, processed });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed to create snapshot from upload' }, { status: 500 });
   }
