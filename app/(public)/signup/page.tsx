@@ -63,6 +63,20 @@ function SignupInner() {
         })();
     }, [router]);
 
+    // If already signed in (e.g., from a previous session), redirect to dashboard
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const { data } = await supabase.auth.getSession();
+                if (!cancelled && data?.session) {
+                    router.replace('/dashboard');
+                }
+            } catch {}
+        })();
+        return () => { cancelled = true; };
+    }, [router]);
+
     useEffect(() => {
         let mounted = true;
         const fetchCountry = async () => {

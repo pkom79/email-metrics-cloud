@@ -1299,13 +1299,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 )} />
                             </h2>
                         </div>
-                        <div className="flex items-center justify-end mb-2 gap-2">
-                            {syncMsg && <span className="text-xs text-gray-600 dark:text-gray-300">{syncMsg}</span>}
-                            <button onClick={checkKeyAndSync} disabled={syncBusy} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded border border-gray-300 dark:border-gray-700 ${syncBusy ? 'opacity-60' : 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'} text-sm`}>
-                                <RefreshCcw className="w-4 h-4 text-purple-600" />
-                                <span>Refresh from Klaviyo</span>
-                            </button>
-                        </div>
+                        {/* Refresh button moved to header; keep section clean */}
                         {/* Overview Timeseries Chart */}
                         <TimeSeriesChart
                             title="Email Performance Overview"
@@ -1466,21 +1460,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                         <div className="flex items-center gap-3 mb-1.5"><h4 className="font-medium text-gray-900 dark:text-gray-100 truncate">{c.subject}</h4></div>
                                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-1 truncate">{c.campaignName}</p>
                                         <p className="text-sm text-gray-500 dark:text-gray-400">Sent on {c.sentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                                        {Array.isArray((c as any).segmentsUsed) && (c as any).segmentsUsed.length > 0 && (
-                                            <div className="mt-0.5">
-                                                <TooltipPortal placement="top" content={(
-                                                    <div className="max-h-48 overflow-auto pr-1">
-                                                        {((c as any).segmentsUsed as string[]).map((s: string, idx: number) => (
-                                                            <div key={idx} className="py-0.5">{s}</div>
-                                                        ))}
-                                                    </div>
-                                                )}>
-                                                    <button type="button" className="text-purple-600 hover:text-purple-700 focus:outline-none text-xs">
-                                                        Segments ({(c as any).segmentsUsed.length})
-                                                    </button>
-                                                </TooltipPortal>
-                                            </div>
-                                        )}
+                                        {/* Segments removed per requirements */}
                                     </div>
 
                                     {/* Details (col 2 on md+, below on mobile) */}

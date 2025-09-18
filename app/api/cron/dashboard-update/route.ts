@@ -60,8 +60,8 @@ export async function GET(req: NextRequest) {
       const ageDays = Math.floor((Date.now() - last.getTime()) / 86400000);
       if (ageDays > 7) { results.push({ accountId, ran: false, skipped: 'stale_over_7_days' }); continue; }
 
-      // Compute start/end window (cap 30 days)
-      const start = new Date(last.getTime() + 86400000); // next day
+      // Compute start/end window (cap 30 days). Overlap last 7 days to refresh attribution changes.
+      const start = new Date(last.getTime() - (6 * 86400000));
       const end = new Date();
       const spanDays = Math.max(1, Math.min(Math.floor((end.getTime() - start.getTime()) / 86400000) + 1, 30));
       const startStr = start.toISOString().slice(0,10);

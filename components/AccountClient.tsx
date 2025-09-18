@@ -123,6 +123,11 @@ export default function AccountClient({ initial }: Props) {
     const [accountsError, setAccountsError] = useState<string | null>(null);
     const [selectedAccountId, setSelectedAccountId] = useState<string>('admin-self');
     const [isAdmin, setIsAdmin] = useState(false);
+    // Klaviyo integration (owner)
+    const [hasKlaviyoKey, setHasKlaviyoKey] = useState<boolean | null>(null);
+    const [keyInput, setKeyInput] = useState('');
+    const [keyBusy, setKeyBusy] = useState(false);
+    const [keyMsg, setKeyMsg] = useState<string | null>(null);
 
     // Detect admin & fetch accounts list
     useEffect(() => {
@@ -144,6 +149,21 @@ export default function AccountClient({ initial }: Props) {
         })();
         return () => { cancelled = true; };
     }, []);
+
+    useEffect(() => {
+        // Load integration status for owner accounts
+        let cancelled = false;
+        (async () => {
+            if (isAdmin) return; // only for owner self view
+            try {
+                const res = await fetch('/api/integrations/klaviyo/status', { cache: 'no-store' });
+                if (!res.ok) { setHasKlaviyoKey(false); return; }
+                const j = await res.json().catch(() => ({}));
+                if (!cancelled) setHasKlaviyoKey(!!j?.hasKey);
+            } catch { if (!cancelled) setHasKlaviyoKey(false); }
+        })();
+        return () => { cancelled = true; };
+    }, [isAdmin]);
 
     return (
         <div className="max-w-2xl mx-auto space-y-8">
@@ -225,6 +245,51 @@ export default function AccountClient({ initial }: Props) {
                     </div>
                 )}
             </section>
+
+            {!isAdmin && (
+                <section className="space-y-3">
+                    <h2 className="font-semibold">Integrations</h2>
+                    <div className="rounded-2xl border border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-900">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <div className="font-medium">Klaviyo</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">{hasKlaviyoKey ? 'Connected' : 'Not connected'}</div>
+                            </div>
+                        </div>
+                        <div className="mt-3 space-y-2">
+                            <input type="password" value={keyInput} onChange={e => setKeyInput(e.target.value)} placeholder="Enter Klaviyo Private API Key (pk_…)" className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700" />
+                            <div className="flex items-center gap-2">
+                                <button disabled={keyBusy || !keyInput.trim()} onClick={async () => {
+                                    setKeyBusy(true); setKeyMsg(null);
+                                    try {
+                                        const res = await fetch('/api/integrations/klaviyo/connect', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ apiKey: keyInput.trim() }) });
+                                        const j = await res.json().catch(() => ({}));
+                                        if (!res.ok) throw new Error(j?.details || j?.error || `(${res.status})`);
+                                        setHasKlaviyoKey(true);
+                                        setKeyInput('');
+                                        setKeyMsg('Saved.');
+                                    } catch (e: any) { setKeyMsg(e?.message || 'Failed to save'); }
+                                    finally { setKeyBusy(false); }
+                                }} className={`inline-flex items-center px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm disabled:opacity-50`}>Save</button>
+                                {hasKlaviyoKey && (
+                                    <button disabled={keyBusy} onClick={async () => {
+                                        setKeyBusy(true); setKeyMsg(null);
+                                        try {
+                                            const res = await fetch('/api/integrations/klaviyo/disconnect', { method: 'POST' });
+                                            const j = await res.json().catch(() => ({}));
+                                            if (!res.ok) throw new Error(j?.details || j?.error || `(${res.status})`);
+                                            setHasKlaviyoKey(false);
+                                            setKeyMsg('Removed.');
+                                        } catch (e: any) { setKeyMsg(e?.message || 'Failed to remove'); }
+                                        finally { setKeyBusy(false); }
+                                    }} className="inline-flex items-center px-3 py-1.5 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm">Remove</button>
+                                )}
+                                {keyMsg && <span className="text-xs text-gray-600 dark:text-gray-300">{keyMsg}</span>}
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            )}
 
             <section className="space-y-3">
                 <h2 className="font-semibold">Password</h2>
