@@ -147,17 +147,17 @@ export class CSVParser {
         };
         data.forEach((row, i) => {
             // Campaign name
-            if (!hasAnyNormalized(row, ['Campaign Name', 'Name'])) {
+            if (!hasAnyNormalized(row, ['Campaign name', 'Campaign Name', 'Name'])) {
                 rejected.push({ idx: i, reason: 'missing name' });
                 return;
             }
             // Send time/date: accept several variants
-            if (!hasAnyNormalized(row, ['Send Time', 'Send Date', 'Sent At', 'Send Date (UTC)', 'Send Date (GMT)', 'Date'])) {
+            if (!hasAnyNormalized(row, ['Message send date time', 'Send Time', 'Send Date', 'Sent At', 'Send Date (UTC)', 'Send Date (GMT)', 'Date'])) {
                 rejected.push({ idx: i, reason: 'missing send date' });
                 return;
             }
             // Exclude pure-SMS campaigns; include if channel mentions email or is missing/unknown
-            const channelRaw = findAnyFieldNormalized(row, ['Campaign Channel', 'Channel', 'Message Channel']);
+            const channelRaw = findAnyFieldNormalized(row, ['Send channel', 'Campaign Channel', 'Channel', 'Message Channel']);
             if (typeof channelRaw === 'string') {
                 const ch = channelRaw.toLowerCase();
                 const mentionsEmail = ch.includes('email');

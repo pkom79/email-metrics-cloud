@@ -52,10 +52,10 @@ export class CampaignTransformer {
     }
 
     private transformSingle(raw: RawCampaignCSV, id: number): ProcessedCampaign | null {
-        const name = (this.findAnyField(raw, ['Campaign Name', 'Name']) ?? (raw as any)['Campaign Name'] ?? (raw as any)['Name'] ?? '') as string;
-        const subject = (this.findField(raw, 'Subject') ?? (raw as any)['Subject'] ?? name) as string;
+        const name = (this.findAnyField(raw, ['Campaign name', 'Campaign Name', 'Name']) ?? (raw as any)['Campaign name'] ?? (raw as any)['Campaign Name'] ?? (raw as any)['Name'] ?? '') as string;
+        const subject = (this.findAnyField(raw, ['Subject line', 'Subject']) ?? (raw as any)['Subject line'] ?? (raw as any)['Subject'] ?? name) as string;
         // Segments/lists: tolerate "List", "Lists", case/dup variations. Split by comma (and defensively semicolon), trim, dedupe preserving first occurrence.
-        const listsRaw = (this.findAnyField(raw, ['Lists', 'List']) ?? (raw as any)['Lists'] ?? (raw as any)['List'] ?? '') as any;
+        const listsRaw = (this.findAnyField(raw, ['Audiences list', 'Lists', 'List']) ?? (raw as any)['Audiences list'] ?? (raw as any)['Lists'] ?? (raw as any)['List'] ?? '') as any;
         const segmentsUsed: string[] = (() => {
             if (listsRaw === undefined || listsRaw === null) return [];
             const s = String(listsRaw);
@@ -71,18 +71,18 @@ export class CampaignTransformer {
             }
             return out;
         })();
-        const sendVal = this.findAnyField(raw, ['Send Time', 'Send Time (UTC)', 'Send Date', 'Sent At', 'Send Date (UTC)', 'Send Date (GMT)', 'Date']);
+        const sendVal = this.findAnyField(raw, ['Message send date time', 'Send Time', 'Send Time (UTC)', 'Send Date', 'Sent At', 'Send Date (UTC)', 'Send Date (GMT)', 'Date']);
         const sentDate = this.parseDateStrict(sendVal);
         if (!sentDate) return null; // skip if date unparseable
 
-        const emailsSent = this.parseNumber(this.findAnyField(raw, ['Total Recipients', 'Recipients']));
-        const uniqueOpens = this.parseNumber(this.findField(raw, 'Unique Opens'));
-        const uniqueClicks = this.parseNumber(this.findField(raw, 'Unique Clicks'));
-        const totalOrders = this.parseNumber(this.findAnyField(raw, ['Unique Placed Order', 'Total Placed Orders', 'Placed Orders']));
-        const revenue = this.parseNumber(this.findField(raw, 'Revenue'));
-        const unsubscribesCount = this.parseNumber(this.findField(raw, 'Unsubscribes'));
-        const spamComplaintsCount = this.parseNumber(this.findField(raw, 'Spam Complaints'));
-        const bouncesCount = this.parseNumber(this.findField(raw, 'Bounces'));
+        const emailsSent = this.parseNumber(this.findAnyField(raw, ['Total recipients', 'Total Recipients', 'Recipients']));
+        const uniqueOpens = this.parseNumber(this.findAnyField(raw, ['Unique opens', 'Unique Opens']));
+        const uniqueClicks = this.parseNumber(this.findAnyField(raw, ['Unique clicks', 'Unique Clicks']));
+        const totalOrders = this.parseNumber(this.findAnyField(raw, ['Count of unique conversions', 'Unique Placed Order', 'Total Placed Orders', 'Placed Orders']));
+        const revenue = this.parseNumber(this.findAnyField(raw, ['Conversion value', 'Revenue']));
+        const unsubscribesCount = this.parseNumber(this.findAnyField(raw, ['Unique unsubscribes', 'Unsubscribes']));
+        const spamComplaintsCount = this.parseNumber(this.findAnyField(raw, ['Total spam complaints', 'Spam Complaints']));
+        const bouncesCount = this.parseNumber(this.findAnyField(raw, ['Total bounced', 'Bounces']));
 
         const openRate = emailsSent > 0 ? (uniqueOpens / emailsSent) * 100 : 0;
         const clickRate = emailsSent > 0 ? (uniqueClicks / emailsSent) * 100 : 0;
@@ -124,7 +124,7 @@ export class CampaignTransformer {
     }
 
     private extractSendVal(raw: RawCampaignCSV): any {
-        return this.findAnyField(raw, ['Send Time', 'Send Time (UTC)', 'Send Date', 'Sent At', 'Send Date (UTC)', 'Send Date (GMT)', 'Date']);
+        return this.findAnyField(raw, ['Message send date time', 'Send Time', 'Send Time (UTC)', 'Send Date', 'Sent At', 'Send Date (UTC)', 'Send Date (GMT)', 'Date']);
     }
 
     private parseDateStrict(value: any): Date | null {
