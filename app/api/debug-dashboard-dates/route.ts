@@ -63,8 +63,11 @@ async function analyzeCsv(text: string, type: 'campaigns' | 'flows' | 'subscribe
   ] : ['profilecreated', 'created', 'date'];
   let idx = -1;
   for (let i = 0; i < lower.length; i++) {
-    if (dateCandidates.includes(lower[i])) { idx = i; break; }
+    const cell = lower[i].replace(/^\"|\"$/g, '').trim();
+    if (dateCandidates.includes(cell)) { idx = i; break; }
   }
+  // Fallback: many flow exports have date as first column labelled variably; if we still didn't find, assume column 0
+  if (idx === -1 && (type === 'flows' || type === 'campaigns')) idx = 0;
   let minT = Infinity; let maxT = -Infinity;
   for (let i = 1; i < lines.length; i++) {
     const cols = splitCsvLine(lines[i]);

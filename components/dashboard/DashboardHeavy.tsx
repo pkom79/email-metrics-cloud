@@ -205,7 +205,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             const sj = await st.json().catch(() => ({}));
             if (!sj?.hasKey) { setShowKeyModal(true); return; }
             setSyncMsg('Sync started… preparing data');
-            const res = await fetch('/api/dashboard/update/self?debug=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'live', debug: true }) });
+            let res: Response | null = null;
+            try {
+                res = await fetch('/api/dashboard/update/self?debug=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'live', debug: true }) });
+            } catch (e) {
+                // Transient network issue (e.g., ERR_NETWORK_CHANGED); retry once after short delay
+                await new Promise(r => setTimeout(r, 800));
+                res = await fetch('/api/dashboard/update/self?debug=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'live', debug: true }) });
+            }
             if (res.status === 409) {
                 const j = await res.json().catch(() => ({}));
                 if (j?.reason === 'stale_data') { setSyncMsg('Data is older than 7 days. Please upload CSVs.'); return; }

@@ -433,6 +433,20 @@ export class DataManager {
                 const res = await this.csvParser.parseFlows(files.flows, (p) => { this.loadProgress.flows.progress = p * 0.5; onProgress?.(this.loadProgress); });
                 if (res.success && res.data) {
                     this.flowEmails = this.flowTransformer.transform(res.data);
+                    // Diagnostics: summarize flows by date bounds after transform
+                    try {
+                        const enabled = (typeof process !== 'undefined' && process.env && (process.env.NEXT_PUBLIC_EM_DIAG === '1' || process.env.NEXT_PUBLIC_EM_DIAG === 'true')) ||
+                                        (typeof window !== 'undefined' && (((window as any).__EM_DIAG__) || ((window as any).EM_DIAG) || (function(){ try { return typeof localStorage !== 'undefined' && (localStorage.getItem('EM_DIAG') === '1' || localStorage.getItem('EM_DIAG') === 'true'); } catch { return false; } })()));
+                        if (enabled && this.flowEmails?.length) {
+                            let minT = Number.POSITIVE_INFINITY; let maxT = 0;
+                            for (const f of this.flowEmails) { const t = f.sentDate?.getTime?.() ?? new Date(f.sentDate as any).getTime(); if (!isNaN(t)) { if (t < minT) minT = t; if (t > maxT) maxT = t; } }
+                            // eslint-disable-next-line no-console
+                            console.info('[DataManager] Flows loaded: count=%d, range=%s..%s',
+                                this.flowEmails.length,
+                                isFinite(minT)? new Date(minT).toISOString().slice(0,10) : 'n/a',
+                                maxT? new Date(maxT).toISOString().slice(0,10) : 'n/a');
+                        }
+                    } catch { /* ignore */ }
                     this.loadProgress.flows.loaded = true; this.loadProgress.flows.progress = 100;
                 } else { errors.push(`Flows: ${res.error || 'Unknown error'}`); this.loadProgress.flows.error = res.error; }
             }
