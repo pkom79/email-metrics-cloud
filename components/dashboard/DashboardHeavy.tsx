@@ -99,6 +99,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         if (typeof window === 'undefined') return;
         const qp = new URLSearchParams(window.location.search);
         if (qp.get('empty') === '1') setForceEmpty(true);
+        // Load latest snapshot metadata for last-update
+        (async () => { try { const r = await fetch('/api/snapshots/last/self', { cache: 'no-store' }); const j = await r.json().catch(() => ({})); if (j?.latest) setLastUpdate({ at: j.latest.created_at, source: j.latest.label }); } catch {} })();
     }, []);
     const [dataVersion, setDataVersion] = useState(0);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -122,6 +124,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [stickyBar, setStickyBar] = useState(false);
     const [showCustomDateModal, setShowCustomDateModal] = useState(false);
     const [exportBusy, setExportBusy] = useState(false);
+    const [lastUpdate, setLastUpdate] = useState<{ at?: string; source?: string } | null>(null);
+    const [syncMsg, setSyncMsg] = useState<string | null>(null);
+    const [syncBusy, setSyncBusy] = useState(false);
     // Mobile Filters drawer state
     const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
     const [mfDateRange, setMfDateRange] = useState<typeof dateRange>(dateRange);
@@ -188,8 +193,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [selectedAccountId, setSelectedAccountId] = useState<string>('');
     // Human readable label for currently selected admin account
     const [selectedAccountLabel, setSelectedAccountLabel] = useState<string>('');
-    const [syncBusy, setSyncBusy] = useState(false);
-    const [syncMsg, setSyncMsg] = useState<string | null>(null);
     const [showKeyModal, setShowKeyModal] = useState(false);
     const [keyInput, setKeyInput] = useState('');
 
@@ -201,6 +204,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             if (st.status === 401) { setSyncMsg('Please sign in again.'); return; }
             const sj = await st.json().catch(() => ({}));
             if (!sj?.hasKey) { setShowKeyModal(true); return; }
+            setSyncMsg('Sync started… preparing data');
             const res = await fetch('/api/dashboard/update/self', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'live' }) });
             if (res.status === 409) {
                 const j = await res.json().catch(() => ({}));
@@ -208,8 +212,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 setSyncMsg('Update blocked. Please upload CSVs.');
                 return;
             }
-            if (!res.ok) { setSyncMsg('Sync failed. Please try again.'); return; }
-            setSyncMsg('Sync started. Processing…');
+            if (!res.ok) { const t = await res.text().catch(() => ''); setSyncMsg(`Sync failed (${res.status}).`); console.error('Refresh error', t); return; }
+            setSyncMsg('Processing snapshot…');
+            setTimeout(async () => {
+                try { const r = await fetch('/api/snapshots/last/self', { cache: 'no-store' }); const j = await r.json().catch(() => ({})); if (j?.latest) setLastUpdate({ at: j.latest.created_at, source: j.latest.label }); } catch {}
+            }, 1200);
         } finally { setSyncBusy(false); }
     }, []);
     const handleExportJson = useCallback(async () => {
@@ -954,6 +961,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     </span>
                                     {/* Replace with Refresh from Klaviyo */}
                                     <button onClick={checkKeyAndSync} disabled={syncBusy} className={`inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none ${syncBusy ? 'opacity-60 cursor-wait' : ''}`}><RefreshCcw className="h-4 w-4 text-purple-600" />Refresh from Klaviyo</button>
+                                    {(() => { if (!lastUpdate?.at) return null; const tz = Intl.DateTimeFormat().resolvedOptions().timeZone; const d = new Date(lastUpdate.at); const formatted = d.toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: tz }); const source = (lastUpdate.source || '').toLowerCase().includes('orchestrated') ? 'API' : ((lastUpdate.source || '').toLowerCase().includes('self') ? 'Upload' : 'Update'); return <div className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">Last update: {formatted} ({tz}) via {source}</div>; })()}
+                                    {syncMsg && <div className="text-[11px] text-gray-600 dark:text-gray-300 leading-snug">{syncMsg}</div>}
                                 </>)}
                                 {isAdmin && (<>
                                     <div className="relative">
