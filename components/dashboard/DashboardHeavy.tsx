@@ -374,8 +374,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         if (isAdmin && !selectedAccountId) { setIsInitialLoading(false); return; }
         // Non-admin path OR admin + selected account (account-specific hydration handled in separate effect already)
         if (isAdmin) return; // Avoid double-hydration; admin account hydration is in another effect.
-        const onCreated = () => { setDataVersion(v => v + 1); setShowUploadModal(false); };
-        const onHydrated = () => { setDataVersion(v => v + 1); setIsInitialLoading(false); };
+        const refreshLastUpdate = async () => {
+            try { const r = await fetch('/api/snapshots/last/self', { cache: 'no-store' }); const j = await r.json().catch(() => ({})); if (j?.latest) setLastUpdate({ at: j.latest.created_at, source: j.latest.label }); } catch {}
+        };
+        const onCreated = () => { setDataVersion(v => v + 1); setShowUploadModal(false); refreshLastUpdate(); };
+        const onHydrated = () => { setDataVersion(v => v + 1); setIsInitialLoading(false); refreshLastUpdate(); };
         window.addEventListener('em:snapshot-created', onCreated as EventListener);
         window.addEventListener('em:dataset-hydrated', onHydrated as EventListener);
         let active = true;
@@ -559,23 +562,26 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const allowedMaxEnd = useMemo(() => { const d = new Date(ALLOWED_MAX_DATE); d.setHours(23, 59, 59, 999); return d; }, [ALLOWED_MAX_DATE]);
     const isDisabled = (d: Date) => d < allowedMinStart || d > allowedMaxEnd;
     const isInRange = (d: Date) => (tempFrom && tempTo && d >= new Date(tempFrom.setHours(0, 0, 0, 0)) && d <= new Date(tempTo.setHours(0, 0, 0, 0)));
-    const onDayClick = (day: number) => {
-        const d = new Date(popoverYear, popoverMonth, day);
+    const onDayClick = (day: number, year?: number, month?: number) => {
+        const d = new Date(year ?? popoverYear, month ?? popoverMonth, day);
         if (isDisabled(d)) return;
         if (!tempFrom || (tempFrom && tempTo)) { setTempFrom(d); setTempTo(null); }
         else if (tempFrom && !tempTo) {
             if (d < tempFrom) { setTempFrom(d); setTempTo(null); } else { setTempTo(d); }
         }
     };
+    const [dateError, setDateError] = useState<string | null>(null);
     const applyTempRange = () => {
         const start = tempFrom ? tempFrom : new Date(popoverYear, popoverMonth, 1);
         const end = tempTo ? tempTo : start;
+        if (start > end) { setDateError('Start date must be on or before End date'); return; }
         const startISO = toISO(start);
         const endISO = toISO(end);
         setCustomFrom(startISO);
         setCustomTo(endISO);
         setDateRange('custom');
         setShowDatePopover(false);
+        setDateError(null);
     };
     useEffect(() => {
         // Initialize temp from current custom values for better continuity
@@ -1083,7 +1089,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         {customActive && <button onClick={() => { setCustomFrom(undefined); setCustomTo(undefined); setDateRange('30d'); }} className="ml-1 px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700">Clear</button>}
                         {/* Popover calendar */}
                         {showDatePopover && (
-                            <div ref={calendarRef} className="absolute left-0 top-full mt-2 z-50 w-[320px] rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-3">
+                            <div ref={calendarRef} className="absolute left-0 top-full mt-2 z-50 w-[660px] rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-3">
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
                                         <label className="text-xs text-gray-600 dark:text-gray-300">Year</label>
@@ -1096,30 +1102,60 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                         <button onClick={() => { let m = popoverMonth + 1, y = popoverYear; if (m > 11) { m = 0; y++; } setPopoverYear(y); setPopoverMonth(m); }} className="px-2 py-1 text-xs rounded border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Next</button>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-7 gap-1 text-[10px] text-gray-500 mb-1">
-                                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => <div key={d} className="text-center">{d}</div>)}
+                                <div className="grid grid-cols-2 gap-6">
+                                    {/* Month A */}
+                                    <div>
+                                        <div className="grid grid-cols-7 gap-1 text-[10px] text-gray-500 mb-1">
+                                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => <div key={d} className="text-center">{d}</div>)}
+                                        </div>
+                                        {(() => {
+                                            const first = firstDayOfMonth(popoverYear, popoverMonth);
+                                            const startDay = first.getDay();
+                                            const total = daysInMonth(popoverYear, popoverMonth);
+                                            const cells: React.ReactNode[] = [];
+                                            for (let i = 0; i < startDay; i++) cells.push(<div key={`a-e${i}`} className="h-8" />);
+                                            for (let d = 1; d <= total; d++) {
+                                                const cur = new Date(popoverYear, popoverMonth, d);
+                                                const disabled = isDisabled(cur);
+                                                const selected = (tempFrom && cur.toDateString() === tempFrom.toDateString()) || (tempTo && cur.toDateString() === tempTo.toDateString());
+                                                const inRange = !selected && isInRange(cur);
+                                                cells.push(
+                                                    <button key={`a-${d}`} onClick={() => onDayClick(d, popoverYear, popoverMonth)} disabled={disabled} className={`h-8 w-8 text-xs rounded mx-auto flex items-center justify-center border ${disabled ? 'text-gray-300 dark:text-gray-600 border-transparent' : inRange ? 'bg-purple-100 text-purple-900 border-purple-200' : selected ? 'bg-purple-600 text-white border-purple-600' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}>{d}</button>
+                                                );
+                                            }
+                                            return <div className="grid grid-cols-7 gap-1">{cells}</div>;
+                                        })()}
+                                    </div>
+                                    {/* Month B (next month) */}
+                                    <div>
+                                        <div className="grid grid-cols-7 gap-1 text-[10px] text-gray-500 mb-1">
+                                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => <div key={d} className="text-center">{d}</div>)}
+                                        </div>
+                                        {(() => {
+                                            let y = popoverYear; let m = popoverMonth + 1; if (m > 11) { m = 0; y += 1; }
+                                            const first = firstDayOfMonth(y, m);
+                                            const startDay = first.getDay();
+                                            const total = daysInMonth(y, m);
+                                            const cells: React.ReactNode[] = [];
+                                            for (let i = 0; i < startDay; i++) cells.push(<div key={`b-e${i}`} className="h-8" />);
+                                            for (let d = 1; d <= total; d++) {
+                                                const cur = new Date(y, m, d);
+                                                const disabled = isDisabled(cur);
+                                                const selected = (tempFrom && cur.toDateString() === tempFrom.toDateString()) || (tempTo && cur.toDateString() === tempTo.toDateString());
+                                                const inRange = !selected && isInRange(cur);
+                                                cells.push(
+                                                    <button key={`b-${d}`} onClick={() => onDayClick(d, y, m)} disabled={disabled} className={`h-8 w-8 text-xs rounded mx-auto flex items-center justify-center border ${disabled ? 'text-gray-300 dark:text-gray-600 border-transparent' : inRange ? 'bg-purple-100 text-purple-900 border-purple-200' : selected ? 'bg-purple-600 text-white border-purple-600' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}>{d}</button>
+                                                );
+                                            }
+                                            return <div className="grid grid-cols-7 gap-1">{cells}</div>;
+                                        })()}
+                                    </div>
                                 </div>
-                                {(() => {
-                                    const first = firstDayOfMonth(popoverYear, popoverMonth);
-                                    const startDay = first.getDay();
-                                    const total = daysInMonth(popoverYear, popoverMonth);
-                                    const cells: React.ReactNode[] = [];
-                                    for (let i = 0; i < startDay; i++) cells.push(<div key={`e${i}`} className="h-8" />);
-                                    for (let d = 1; d <= total; d++) {
-                                        const cur = new Date(popoverYear, popoverMonth, d);
-                                        const disabled = isDisabled(cur);
-                                        const selected = (tempFrom && cur.toDateString() === tempFrom.toDateString()) || (tempTo && cur.toDateString() === tempTo.toDateString());
-                                        const inRange = !selected && isInRange(cur);
-                                        cells.push(
-                                            <button key={d} onClick={() => onDayClick(d)} disabled={disabled} className={`h-8 w-8 text-xs rounded mx-auto flex items-center justify-center border ${disabled ? 'text-gray-300 dark:text-gray-600 border-transparent' : inRange ? 'bg-purple-100 text-purple-900 border-purple-200' : selected ? 'bg-purple-600 text-white border-purple-600' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}>{d}</button>
-                                        );
-                                    }
-                                    return <div className="grid grid-cols-7 gap-1">{cells}</div>;
-                                })()}
                                 <div className="flex items-center justify-end gap-2 mt-3">
                                     <button onClick={() => { setTempFrom(null); setTempTo(null); }} className="px-3 py-1.5 text-xs rounded border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Clear</button>
                                     <button onClick={applyTempRange} className="px-3 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-700">Apply</button>
                                 </div>
+                                {dateError && <div className="mt-2 text-[11px] text-rose-600">{dateError}</div>}
                                 <div className="mt-2 text-[10px] text-gray-500">
                                     Allowed: {ALLOWED_MIN_DATE.toLocaleDateString()} – {ALLOWED_MAX_DATE.toLocaleDateString()}
                                 </div>
