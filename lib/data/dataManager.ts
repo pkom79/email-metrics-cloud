@@ -185,7 +185,7 @@ export class DataManager {
             rec!.bouncesCount += e.bouncesCount;
             rec!.emailCount += 1;
         }
-        this._dailyAggVersion = `${this.campaigns.length}:${this.flowEmails.length}`;
+        this._dailyAggVersion = this._datasetSignature();
         this._timeSeriesCache.clear();
         this._seriesBaseCache.clear();
     }
@@ -260,6 +260,15 @@ export class DataManager {
             }
         }[]
     }> = new Map();
+
+    private _datasetSignature(): string {
+        try {
+            let maxC = 0; let maxF = 0;
+            for (const c of this.campaigns) { const t = (c as any)?.sentDate?.getTime?.(); if (Number.isFinite(t as number) && (t as number) > maxC) maxC = t as number; }
+            for (const f of this.flowEmails) { const t = (f as any)?.sentDate?.getTime?.(); if (Number.isFinite(t as number) && (t as number) > maxF) maxF = t as number; }
+            return `${this.campaigns.length}:${this.flowEmails.length}:${maxC}:${maxF}`;
+        } catch { return `${this.campaigns.length}:${this.flowEmails.length}:0:0`; }
+    }
 
     constructor() {
         if (typeof window !== 'undefined') {
@@ -491,8 +500,8 @@ export class DataManager {
 
     getLastEmailDate(): Date {
         try {
-            // Lazy cache invalidation based on counts reference (fast heuristic)
-            const countsSignature = `${this.campaigns.length}:${this.flowEmails.length}`;
+            // Lazy cache invalidation based on counts + latest timestamps (prevents stale end dates)
+            const countsSignature = this._datasetSignature();
             // @ts-ignore - internal symbol
             if ((this as any)._lastEmailDateCache && (this as any)._lastEmailDateCache.sig === countsSignature) {
                 return (this as any)._lastEmailDateCache.value;
@@ -572,7 +581,7 @@ export class DataManager {
             const { startDate, endDate } = range;
 
             // Dataset signature (for invalidation when base data changes)
-            const dataSig = `${this.campaigns.length}:${this.flowEmails.length}`;
+            const dataSig = this._datasetSignature();
             if (this._dailyAggVersion !== dataSig) this._rebuildDailyAggregates();
 
             // Subset signature (accounts for caller-provided filtered arrays)

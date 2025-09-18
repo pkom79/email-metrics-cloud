@@ -6,6 +6,9 @@
         "app/api/dashboard/update/route.ts": {
             "maxDuration": 800
         },
+        "app/api/dashboard/update/self/route.ts": {
+            "maxDuration": 800
+        },
         "app/api/snapshots/process/route.ts": {
             "maxDuration": 800
         },
