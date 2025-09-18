@@ -77,87 +77,26 @@ export async function POST(req: NextRequest) {
     const klaviyoApiKey = (await getAccountKlaviyoApiKey(accountId)) || process.env.KLAVIYO_API_KEY || '';
     log('key_resolved', { hasKey: !!klaviyoApiKey, keySource: (await getAccountKlaviyoApiKey(accountId)) ? 'account' : (process.env.KLAVIYO_API_KEY ? 'env' : 'none') });
 
-    // Flow CSV
-    const tFlow0 = Date.now();
-    const flowRes = await fetch(`${origin}/api/klaviyo/flow-sync`, {
-      method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': process.env.ADMIN_JOB_SECRET || '' }, body: JSON.stringify({
-        mode: 'dry-run', format: 'csv', days, limitFlows: body.flow?.limitFlows ?? 20, limitMessages: body.flow?.limitMessages ?? 50, enrichMessageNames: body.flow?.enrichMessageNames ?? true,
+    // Forward to orchestrator to avoid inconsistencies and ensure full CSVs
+    const fwd = await fetch(`${origin}/api/dashboard/update`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-admin-job-secret': process.env.ADMIN_JOB_SECRET || '' },
+      body: JSON.stringify({
+        mode: 'live',
+        accountId,
+        days,
         klaviyoApiKey,
+        flow: { enrichMessageNames: true },
+        audience: { schema: 'required' }
       })
     });
-    if (!flowRes.ok) { const err = await flowRes.text().catch(() => ''); log('flow_sync_error', { status: flowRes.status, err }); return http502('FlowSyncFailed', err); }
-    const flowsCsv = await flowRes.text();
-    log('flow_sync_ok', { ms: Date.now() - tFlow0, bytes: flowsCsv.length });
-
-    // Campaign CSV (from preview lines)
-    const tCamp0 = Date.now();
-    const campRes = await fetch(`${origin}/api/klaviyo/campaign-sync`, {
-      method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': process.env.ADMIN_JOB_SECRET || '' }, body: JSON.stringify({
-        mode: 'dry-run', format: 'csv', timeframeKey: body.campaign?.timeframeKey || (days <= 30 ? 'last_30_days' : undefined),
-        klaviyoApiKey,
-      })
-    });
-    if (!campRes.ok) { const err = await campRes.text().catch(() => ''); log('campaign_sync_error', { status: campRes.status, err }); return http502('CampaignSyncFailed', err); }
-    const campJson = await campRes.json().catch(() => ({}));
-    const campPreview: string[] = Array.isArray(campJson?.preview) ? campJson.preview : [];
-    const campCsv = [campPreview[0] || '', campPreview[1] || '', campPreview[2] || '', campPreview[3] || ''].join('\n');
-    log('campaign_sync_ok', { ms: Date.now() - tCamp0, previewLines: campPreview.length, bytes: campCsv.length });
-
-    // Audience CSV
-    const tAud0 = Date.now();
-    const audRes = await fetch(`${origin}/api/klaviyo/audience-sync`, {
-      method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': process.env.ADMIN_JOB_SECRET || '' }, body: JSON.stringify({
-        mode: 'dry-run', format: 'csv', source: 'profiles', schema: body.audience?.schema || 'required', profiles: [],
-        klaviyoApiKey,
-      })
-    });
-    // If profiles source returns 400 (no profiles), fallback to klaviyo source (staging key must be configured for this workspace)
-    let audienceCsv = audRes.ok ? await audRes.text() : '';
-    if (!audienceCsv || !audienceCsv.trim()) {
-      audienceCsv = 'Email,Klaviyo ID,First Name,Last Name,Email Marketing Consent\n';
+    const text = await fwd.text().catch(() => '');
+    let json: any = null; try { json = JSON.parse(text); } catch {}
+    log('forwarded_to_orchestrator', { status: fwd.status });
+    if (!fwd.ok) {
+      return new Response(JSON.stringify({ error: 'OrchestratorFailed', status: fwd.status, details: text, logs }), { status: 502, headers: { 'content-type': 'application/json' } });
     }
-    log('audience_sync_done', { ms: Date.now() - tAud0, bytes: (audienceCsv || '').length, status: audRes.status });
-
-    if (mode === 'dry-run') {
-      return new Response(JSON.stringify({
-        mode,
-        rows: {
-          flows: Math.max(0, flowsCsv.split('\n').length - 1),
-          campaigns: Math.max(0, campCsv ? campCsv.split('\n').length - 1 : 0),
-          subscribers: Math.max(0, audienceCsv ? audienceCsv.split('\n').length - 1 : 0)
-        },
-        ms: Date.now() - t0,
-        logs
-      }), { status: 200, headers: { 'content-type': 'application/json' } });
-    }
-
-    // Live write
-    const bucket = ingestBucketName();
-    const idemp = (req.headers.get('x-idempotency-key') || '').trim();
-    const uploadId = idemp ? stableUuid(`${accountId}:${idemp}`) : (crypto.randomUUID ? crypto.randomUUID() : stableUuid(`${accountId}:${Date.now()}`));
-    const up = async (name: string, content: string) => {
-      const { error } = await supabase.storage
-        .from(bucket)
-        .upload(`${uploadId}/${name}`, new Blob([content], { type: 'text/csv' }), { upsert: true, contentType: 'text/csv' });
-      if (error) throw new Error(error.message);
-    };
-    log('upload_begin', { bucket });
-    await up('flows.csv', flowsCsv);
-    if (campCsv) await up('campaigns.csv', campCsv);
-    if (audienceCsv) await up('subscribers.csv', audienceCsv);
-    log('upload_done', { uploadId });
-
-    await supabase.from('uploads').upsert({ id: uploadId, account_id: accountId, status: 'bound', updated_at: new Date().toISOString() } as any, { onConflict: 'id' });
-    const { data: snapRow, error: snapErr } = await supabase
-      .from('snapshots')
-      .insert({ account_id: accountId, upload_id: uploadId, label: 'Self-Serve Update', status: 'ready' } as any)
-      .select('id')
-      .single();
-    if (snapErr) return new Response(JSON.stringify({ error: 'CreateSnapshotFailed', details: snapErr.message, logs }), { status: 500 });
-
-    await fetch(`${origin}/api/snapshots/process`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': process.env.ADMIN_JOB_SECRET || '' }, body: JSON.stringify({ uploadId }) }).then(r => log('process_triggered', { status: r.status })).catch(e => log('process_trigger_error', { err: String(e) }));
-
-    return new Response(JSON.stringify({ mode, accountId, uploadId, snapshotId: (snapRow as any)?.id, wrote: { bucket }, ms: Date.now() - t0, logs }), { status: 200, headers: { 'content-type': 'application/json' } });
+    return new Response(JSON.stringify({ ...json, logs, forwarded: true }), { status: 200, headers: { 'content-type': 'application/json' } });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: 'Unexpected error', details: String(err?.message || err) }), { status: 500 });
   }
