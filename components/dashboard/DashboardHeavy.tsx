@@ -205,14 +205,22 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             const sj = await st.json().catch(() => ({}));
             if (!sj?.hasKey) { setShowKeyModal(true); return; }
             setSyncMsg('Sync started… preparing data');
-            const res = await fetch('/api/dashboard/update/self', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'live' }) });
+            const res = await fetch('/api/dashboard/update/self?debug=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'live', debug: true }) });
             if (res.status === 409) {
                 const j = await res.json().catch(() => ({}));
                 if (j?.reason === 'stale_data') { setSyncMsg('Data is older than 7 days. Please upload CSVs.'); return; }
                 setSyncMsg('Update blocked. Please upload CSVs.');
+                try { console.warn('Update via API: 409', j); } catch {}
                 return;
             }
-            if (!res.ok) { const t = await res.text().catch(() => ''); setSyncMsg(`Sync failed (${res.status}).`); console.error('Refresh error', t); return; }
+            if (!res.ok) {
+                const t = await res.text().catch(() => '');
+                setSyncMsg(`Sync failed (${res.status}).`);
+                try { console.error('Update via API error', res.status, t); } catch {}
+                return;
+            }
+            const out = await res.json().catch(() => ({}));
+            try { if (out?.logs) console.log('Update via API logs:', out.logs); } catch {}
             setSyncMsg('Processing snapshot…');
             setTimeout(async () => {
                 try { const r = await fetch('/api/snapshots/last/self', { cache: 'no-store' }); const j = await r.json().catch(() => ({})); if (j?.latest) setLastUpdate({ at: j.latest.created_at, source: j.latest.label }); } catch {}
