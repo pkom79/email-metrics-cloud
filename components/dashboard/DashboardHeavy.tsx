@@ -18,7 +18,7 @@ import CampaignSendFrequency from './CampaignSendFrequency';
 import AudienceSizePerformance from './AudienceSizePerformance';
 import CampaignGapsAndLosses from './CampaignGapsAndLosses';
 import SubjectAnalysis from './SubjectAnalysis';
-import { BarChart3, Calendar, GitCompare, Mail, Send, Zap, MailSearch, Upload as UploadIcon, X, Share2 } from 'lucide-react';
+import { BarChart3, Calendar, GitCompare, Mail, Send, Zap, MailSearch, Upload as UploadIcon, X, Share2, RefreshCcw, Key } from 'lucide-react';
 import { buildLlmExportJson } from '../../lib/export/exportBuilder';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import TooltipPortal from '../TooltipPortal';
@@ -188,6 +188,30 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [selectedAccountId, setSelectedAccountId] = useState<string>('');
     // Human readable label for currently selected admin account
     const [selectedAccountLabel, setSelectedAccountLabel] = useState<string>('');
+    const [syncBusy, setSyncBusy] = useState(false);
+    const [syncMsg, setSyncMsg] = useState<string | null>(null);
+    const [showKeyModal, setShowKeyModal] = useState(false);
+    const [keyInput, setKeyInput] = useState('');
+
+    const checkKeyAndSync = useCallback(async () => {
+        setSyncMsg(null);
+        setSyncBusy(true);
+        try {
+            const st = await fetch('/api/integrations/klaviyo/status', { cache: 'no-store' });
+            if (st.status === 401) { setSyncMsg('Please sign in again.'); return; }
+            const sj = await st.json().catch(() => ({}));
+            if (!sj?.hasKey) { setShowKeyModal(true); return; }
+            const res = await fetch('/api/dashboard/update/self', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'live' }) });
+            if (res.status === 409) {
+                const j = await res.json().catch(() => ({}));
+                if (j?.reason === 'stale_data') { setSyncMsg('Data is older than 7 days. Please upload CSVs.'); return; }
+                setSyncMsg('Update blocked. Please upload CSVs.');
+                return;
+            }
+            if (!res.ok) { setSyncMsg('Sync failed. Please try again.'); return; }
+            setSyncMsg('Sync started. Processing…');
+        } finally { setSyncBusy(false); }
+    }, []);
     const handleExportJson = useCallback(async () => {
         try {
             setExportBusy(true);
@@ -972,6 +996,33 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     </div>
                 </div>
             )}
+            {showKeyModal && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/50" onClick={() => setShowKeyModal(false)} />
+                    <div className="relative z-[61] w-[min(100%,480px)] rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl p-6">
+                        <div className="flex items-center gap-2 mb-3">
+                            <Key className="w-5 h-5 text-purple-600" />
+                            <h3 className="text-lg font-semibold">Connect Klaviyo</h3>
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">Enter your Klaviyo Private API Key to enable syncing. Stored encrypted.</p>
+                        <input type="password" value={keyInput} onChange={e => setKeyInput(e.target.value)} placeholder="pk_…" className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 mb-3" />
+                        <div className="flex items-center justify-end gap-2">
+                            <button onClick={() => setShowKeyModal(false)} className="px-3 py-1.5 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm">Cancel</button>
+                            <button onClick={async () => {
+                                if (!keyInput.trim()) { setSyncMsg('Enter a valid key'); return; }
+                                try {
+                                    setSyncBusy(true);
+                                    await fetch('/api/integrations/klaviyo/connect', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ apiKey: keyInput.trim() }) });
+                                    setShowKeyModal(false);
+                                    setKeyInput('');
+                                    setSyncMsg('Key saved. Starting sync…');
+                                    await checkKeyAndSync();
+                                } finally { setSyncBusy(false); }
+                            }} className="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Connect & Sync</button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {/* Filters bar (sticky) */}
             {/* Mobile filters trigger (visible only on small screens) */}
             <div className="sm:hidden pt-2">
@@ -1241,6 +1292,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     </div>
                                 )} />
                             </h2>
+                        </div>
+                        <div className="flex items-center justify-end mb-2 gap-2">
+                            {syncMsg && <span className="text-xs text-gray-600 dark:text-gray-300">{syncMsg}</span>}
+                            <button onClick={checkKeyAndSync} disabled={syncBusy} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded border border-gray-300 dark:border-gray-700 ${syncBusy ? 'opacity-60' : 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'} text-sm`}>
+                                <RefreshCcw className="w-4 h-4 text-purple-600" />
+                                <span>Refresh from Klaviyo</span>
+                            </button>
                         </div>
                         {/* Overview Timeseries Chart */}
                         <TimeSeriesChart
