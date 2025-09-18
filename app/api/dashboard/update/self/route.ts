@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { getServerUser } from '../../../../../lib/supabase/auth';
 import { createServiceClient } from '../../../../../lib/supabase/server';
 import { ingestBucketName } from '../../../../../lib/storage/ingest';
+import { getAccountKlaviyoApiKey } from '../../../../../lib/integrations/klaviyoKey';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -63,10 +64,14 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
+    // Resolve per-account Klaviyo key (self-serve uses owner account)
+    const klaviyoApiKey = (await getAccountKlaviyoApiKey(accountId)) || process.env.KLAVIYO_API_KEY || '';
+
     // Flow CSV
     const flowRes = await fetch(`${origin}/api/klaviyo/flow-sync`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': process.env.ADMIN_JOB_SECRET || '' }, body: JSON.stringify({
         mode: 'dry-run', format: 'csv', days, limitFlows: body.flow?.limitFlows ?? 20, limitMessages: body.flow?.limitMessages ?? 50, enrichMessageNames: body.flow?.enrichMessageNames ?? true,
+        klaviyoApiKey,
       })
     });
     if (!flowRes.ok) return http502('FlowSyncFailed', await flowRes.text().catch(() => ''));
@@ -75,7 +80,8 @@ export async function POST(req: NextRequest) {
     // Campaign CSV (from preview lines)
     const campRes = await fetch(`${origin}/api/klaviyo/campaign-sync`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': process.env.ADMIN_JOB_SECRET || '' }, body: JSON.stringify({
-        mode: 'dry-run', format: 'csv', timeframeKey: body.campaign?.timeframeKey || (days <= 30 ? 'last_30_days' : undefined)
+        mode: 'dry-run', format: 'csv', timeframeKey: body.campaign?.timeframeKey || (days <= 30 ? 'last_30_days' : undefined),
+        klaviyoApiKey,
       })
     });
     if (!campRes.ok) return http502('CampaignSyncFailed', await campRes.text().catch(() => ''));
@@ -86,7 +92,8 @@ export async function POST(req: NextRequest) {
     // Audience CSV
     const audRes = await fetch(`${origin}/api/klaviyo/audience-sync`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': process.env.ADMIN_JOB_SECRET || '' }, body: JSON.stringify({
-        mode: 'dry-run', format: 'csv', source: 'profiles', schema: body.audience?.schema || 'required', profiles: []
+        mode: 'dry-run', format: 'csv', source: 'profiles', schema: body.audience?.schema || 'required', profiles: [],
+        klaviyoApiKey,
       })
     });
     // If profiles source returns 400 (no profiles), fallback to klaviyo source (staging key must be configured for this workspace)

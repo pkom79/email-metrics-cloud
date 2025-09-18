@@ -9,9 +9,11 @@ export const runtime = 'nodejs';
 // POST body: { accountId: string, uploadId: string, label?: string, process?: boolean }
 export async function POST(request: Request) {
   try {
-  const ADMIN_SECRET = (globalThis as any).process?.env?.ADMIN_JOB_SECRET || process.env.ADMIN_JOB_SECRET;
+    const ADMIN_SECRET = (globalThis as any).process?.env?.ADMIN_JOB_SECRET || process.env.ADMIN_JOB_SECRET;
     const provided = (request.headers.get('x-admin-job-secret') || '').trim();
-    if (!ADMIN_SECRET || provided !== ADMIN_SECRET) {
+    const url = new URL(request.url);
+    const token = url.searchParams.get('token') || '';
+    if (!ADMIN_SECRET || (provided !== ADMIN_SECRET && token !== ADMIN_SECRET)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

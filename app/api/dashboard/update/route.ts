@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { createServiceClient } from '../../../../lib/supabase/server';
 import { ingestBucketName } from '../../../../lib/storage/ingest';
+import { getAccountKlaviyoApiKey } from '../../../../lib/integrations/klaviyoKey';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -43,7 +44,12 @@ export async function POST(req: NextRequest) {
     const days = Math.max(1, Math.min(body.days ?? 7, 30));
     const start = body.start || '';
     const end = body.end || '';
-    const apiKey = body.klaviyoApiKey || process.env.KLAVIYO_API_KEY_PRIVATE || process.env.KLAVIYO_API_KEY || '';
+    // Resolve API key: prefer explicit body, then per-account integration, then env fallbacks
+    let apiKey = body.klaviyoApiKey || '';
+    if (!apiKey && accountId) {
+      try { apiKey = (await getAccountKlaviyoApiKey(accountId)) || ''; } catch {}
+    }
+    if (!apiKey) apiKey = process.env.KLAVIYO_API_KEY_PRIVATE || process.env.KLAVIYO_API_KEY || '';
     if (!apiKey) return new Response(JSON.stringify({ error: 'Missing klaviyoApiKey' }), { status: 400 });
 
     // Build URLs to call internal APIs (reuse server base from incoming req)
@@ -59,8 +65,9 @@ export async function POST(req: NextRequest) {
       days,
       start: start || undefined,
       end: end || undefined,
-      limitFlows: body.flow?.limitFlows ?? 20,
-      limitMessages: body.flow?.limitMessages ?? 50,
+      // Use higher defaults in live mode to capture more flows/messages
+      limitFlows: body.flow?.limitFlows ?? (mode === 'live' ? 100 : 20),
+      limitMessages: body.flow?.limitMessages ?? (mode === 'live' ? 100 : 50),
       // Default to enriching names in live runs so UI shows message names instead of IDs
       enrichMessageNames: body.flow?.enrichMessageNames ?? (mode === 'live'),
       klaviyoApiKey: apiKey,
