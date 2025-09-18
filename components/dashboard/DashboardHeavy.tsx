@@ -478,22 +478,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const ALL_FLOWS = useMemo(() => dm.getFlowEmails(), [dm, dataVersion]);
     const hasData = ALL_CAMPAIGNS.length > 0 || ALL_FLOWS.length > 0;
-    const REFERENCE_DATE = useMemo(() => {
-        // Always anchor to ALL campaigns + ALL flows for global reference date
-        const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime());
-        const flowTs = ALL_FLOWS.map(f => f.sentDate.getTime());
-        const all = [...campTs, ...flowTs].filter(n => Number.isFinite(n));
-
-        if (!all.length) return new Date();
-
-        // Find max efficiently without spread operator
-        let maxTime = 0;
-        for (const time of all) {
-            if (time > maxTime) maxTime = time;
-        }
-
-        return new Date(maxTime);
-    }, [ALL_CAMPAIGNS, ALL_FLOWS]);
+    // Reference/end date for presets and bounds —
+    // align with DataCoverageNotice by using DataManager's helper.
+    const REFERENCE_DATE = useMemo(() => dm.getLastEmailDate(), [dm, dataVersion]);
     // Global earliest date in dataset
     const GLOBAL_MIN_DATE = useMemo(() => {
         const all = [...ALL_CAMPAIGNS.map(c => c.sentDate.getTime()), ...ALL_FLOWS.map(f => f.sentDate.getTime())].filter(n => Number.isFinite(n));
@@ -561,7 +548,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const allowedMinStart = useMemo(() => { const d = new Date(ALLOWED_MIN_DATE); d.setHours(0, 0, 0, 0); return d; }, [ALLOWED_MIN_DATE]);
     const allowedMaxEnd = useMemo(() => { const d = new Date(ALLOWED_MAX_DATE); d.setHours(23, 59, 59, 999); return d; }, [ALLOWED_MAX_DATE]);
     const isDisabled = (d: Date) => d < allowedMinStart || d > allowedMaxEnd;
-    const isInRange = (d: Date) => (tempFrom && tempTo && d >= new Date(tempFrom.setHours(0, 0, 0, 0)) && d <= new Date(tempTo.setHours(0, 0, 0, 0)));
+    const isInRange = (d: Date) => {
+        if (!tempFrom || !tempTo) return false;
+        // Clone to avoid mutating state objects via setHours
+        const from = new Date(tempFrom.getFullYear(), tempFrom.getMonth(), tempFrom.getDate());
+        const to = new Date(tempTo.getFullYear(), tempTo.getMonth(), tempTo.getDate());
+        return d >= from && d <= to;
+    };
     const onDayClick = (day: number, year?: number, month?: number) => {
         const d = new Date(year ?? popoverYear, month ?? popoverMonth, day);
         if (isDisabled(d)) return;
@@ -993,6 +986,23 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 </>)}
                             </div>
                         </div>
+                        {/* Status line under buttons (always visible for owner view) */}
+                        {!isAdmin && (
+                            <div className="mt-2">
+                                <div className="text-[11px] text-gray-600 dark:text-gray-300">
+                                    {(() => {
+                                        if (syncMsg) return <span>{syncMsg}</span>;
+                                        if (!lastUpdate?.at) return null;
+                                        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                                        const d = new Date(lastUpdate.at);
+                                        const formatted = d.toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: tz });
+                                        const s = (lastUpdate.source || '').toLowerCase();
+                                        const source = (s.includes('orchestrated') || s.includes('self-serve') || s.includes('api')) ? 'API' : (s.includes('imported') || s.includes('upload')) ? 'Upload' : 'Update';
+                                        return <span>Last update: {formatted} ({tz}) via {source}</span>;
+                                    })()}
+                                </div>
+                            </div>
+                        )}
                     </div>
                     {/* Data Coverage (always visible) */}
                     <DataCoverageNotice dataManager={dm} />
