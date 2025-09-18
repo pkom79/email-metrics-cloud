@@ -11,10 +11,20 @@ export class FlowTransformer {
 
         const transformed: ProcessedFlowEmail[] = [];
         let id = 1;
+        let badDateCount = 0;
+        const badSamples: any[] = [];
         emailFlows.forEach((raw) => {
             const sequencePosition = sequenceMap.get(`${(raw as any)['Flow ID']}_${(raw as any)['Flow Message ID']}`) || 1;
-            transformed.push(this.transformSingle(raw, id++, sequencePosition));
+            const rec = this.transformSingle(raw, id + transformed.length, sequencePosition);
+            if (rec) transformed.push(rec);
+            else {
+                badDateCount++;
+                try { const v = (raw as any)['Day']; if (badSamples.length < 5) badSamples.push(v); } catch {}
+            }
         });
+        if (badDateCount) {
+            try { console.warn(`[FlowTransformer] Skipped ${badDateCount} flow rows due to invalid Day. Samples:`, badSamples); } catch {}
+        }
         return transformed;
     }
 
@@ -37,8 +47,9 @@ export class FlowTransformer {
         return sequenceMap;
     }
 
-    private transformSingle(raw: RawFlowCSV, id: number, sequencePosition: number): ProcessedFlowEmail {
-        const sentDate = this.parseDate((raw as any)['Day']);
+    private transformSingle(raw: RawFlowCSV, id: number, sequencePosition: number): ProcessedFlowEmail | null {
+        const sentDate = this.parseDateStrict((raw as any)['Day']);
+        if (!sentDate) return null; // skip rows with invalid date
 
         const emailsSent = this.parseNumber((raw as any)['Delivered']);
         const uniqueOpens = this.parseNumber((raw as any)['Unique Opens']);
@@ -93,8 +104,25 @@ export class FlowTransformer {
         };
     }
 
-    private parseDate(dateStr: string): Date {
-        try { const d = new Date(dateStr); return isNaN(d.getTime()) ? new Date() : d; } catch { return new Date(); }
+    // Strict date parsing: return null if unparseable (do not substitute with "now")
+    private parseDateStrict(value: any): Date | null {
+        if (value === undefined || value === null || value === '') return null;
+        try {
+            if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+            if (typeof value === 'number') { const ms = value > 1e12 ? value : (value > 1e10 ? value * 100 : value * 1000); const d = new Date(ms); return isNaN(d.getTime()) ? null : d; }
+            let s = String(value).trim(); if (!s) return null;
+            s = s.replace(/,/g, ' ').replace(/\bat\b/ig, ' ').replace(/\s+/g, ' ').trim();
+            s = s.replace(/\b(UTC|GMT|EST|EDT|CST|CDT|PST|PDT)\b/ig, '').trim();
+            s = s.replace(/\([^)]+\)/g, '').trim();
+            s = s.replace(/([+-]\d{2}:?\d{2})$/, '').trim();
+            // Common YYYY-MM-DD or MM/DD/YYYY
+            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) { const d = new Date(s + 'T00:00:00Z'); return isNaN(d.getTime()) ? null : d; }
+            const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+            if (mdy) { const mm = +mdy[1], dd = +mdy[2], yy = +mdy[3]; const year = mdy[3].length === 2 ? (yy > 70 ? 1900 + yy : 2000 + yy) : yy; const d = new Date(Date.UTC(year, mm - 1, dd)); return isNaN(d.getTime()) ? null : d; }
+            const d1 = new Date(s); if (!isNaN(d1.getTime())) return d1;
+            const dz = new Date(s + 'Z'); if (!isNaN(dz.getTime())) return dz;
+            return null;
+        } catch { return null; }
     }
 
     private parseNumber(value: any): number {

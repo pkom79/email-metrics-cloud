@@ -968,7 +968,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>
                                 {businessName && <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>}
                             </div>
-                            <div className="flex flex-col sm:items-end sm:flex-row items-stretch gap-2 sm:gap-3 relative">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 relative">
                                 {!isAdmin && (<>
                                     <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none"><UploadIcon className="h-4 w-4" />Upload New Reports</button>
                                     {/* Export JSON hidden for now */}
@@ -976,8 +976,19 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                         <button onClick={handleExportJson} disabled={exportBusy} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button>
                                     </span>
                                     <button onClick={checkKeyAndSync} disabled={syncBusy} className={`inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none ${syncBusy ? 'opacity-60 cursor-wait' : ''}`}><RefreshCcw className="h-4 w-4 text-purple-600" />Update via API</button>
-                                    {/* Status line under Update (owner view) */}
-                                    <div className="sm:text-right text-[11px] text-gray-600 dark:text-gray-300 mt-1">
+                                </>)}
+                                {isAdmin && (<>
+                                    <div className="relative">
+                                        <SelectBase value={selectedAccountId} onChange={e => { const val = (e.target as HTMLSelectElement).value; setSelectedAccountId(val); const a = (allAccounts || []).find(x => x.id === val); setSelectedAccountLabel(a?.label || a?.businessName || a?.id || ''); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="w-full sm:w-auto text-sm" minWidthClass="sm:min-w-[240px]">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</SelectBase>
+                                    </div>
+                                    {/* Export JSON hidden for now (admin) */}
+                                    <span className="hidden"><button onClick={handleExportJson} disabled={exportBusy || !selectedAccountId} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button></span>
+                                </>)}
+                            </div>
+                            {/* Status line under actions, right-aligned (owner view) */}
+                            {!isAdmin && (
+                                <div className="mt-1 text-right">
+                                    <div className="text-[11px] text-gray-600 dark:text-gray-300">
                                         {(() => {
                                             if (syncMsg) return <span>{syncMsg}</span>;
                                             if (!lastUpdate?.at) return null;
@@ -989,15 +1000,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                             return <span>Last update: {formatted} ({tz}) via {source}</span>;
                                         })()}
                                     </div>
-                                </>)}
-                                {isAdmin && (<>
-                                    <div className="relative">
-                                        <SelectBase value={selectedAccountId} onChange={e => { const val = (e.target as HTMLSelectElement).value; setSelectedAccountId(val); const a = (allAccounts || []).find(x => x.id === val); setSelectedAccountLabel(a?.label || a?.businessName || a?.id || ''); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="w-full sm:w-auto text-sm" minWidthClass="sm:min-w-[240px]">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</SelectBase>
-                                    </div>
-                                    {/* Export JSON hidden for now (admin) */}
-                                    <span className="hidden"><button onClick={handleExportJson} disabled={exportBusy || !selectedAccountId} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button></span>
-                                </>)}
-                            </div>
+                                </div>
+                            )}
                         </div>
                         
                     </div>
