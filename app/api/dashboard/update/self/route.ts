@@ -67,7 +67,8 @@ export async function POST(req: NextRequest) {
             reason: 'stale_data',
             lastUpdateDays: diffDays,
             message: `API updates are disabled because your data is ${diffDays} days old. Please upload fresh CSV reports to re-enable API updates.`,
-          , logs }), { status: 409, headers: { 'content-type': 'application/json' } });
+            logs
+          }), { status: 409, headers: { 'content-type': 'application/json' } });
         }
       } catch {}
     }
