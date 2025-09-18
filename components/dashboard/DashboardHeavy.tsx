@@ -558,9 +558,28 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const onDayClick = (day: number, year?: number, month?: number) => {
         const d = new Date(year ?? popoverYear, month ?? popoverMonth, day);
         if (isDisabled(d)) return;
-        if (!tempFrom || (tempFrom && tempTo)) { setTempFrom(d); setTempTo(null); }
-        else if (tempFrom && !tempTo) {
-            if (d < tempFrom) { setTempFrom(d); setTempTo(null); } else { setTempTo(d); }
+        if (!tempFrom || (tempFrom && tempTo)) {
+            setTempFrom(d);
+            setTempTo(null);
+            setDateError(null);
+        } else if (tempFrom && !tempTo) {
+            if (d < tempFrom) {
+                setTempFrom(d);
+                setTempTo(null);
+                setDateError(null);
+            } else {
+                setTempTo(d);
+                // Auto-apply when second date selected
+                const start = new Date(tempFrom.getFullYear(), tempFrom.getMonth(), tempFrom.getDate());
+                const end = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                const startISO = toISO(start);
+                const endISO = toISO(end);
+                setCustomFrom(startISO);
+                setCustomTo(endISO);
+                setDateRange('custom');
+                setShowDatePopover(false);
+                setDateError(null);
+            }
         }
     };
     const [dateError, setDateError] = useState<string | null>(null);
