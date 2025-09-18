@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { getServerUser } from '../../../../../lib/supabase/auth';
 import { createServiceClient } from '../../../../../lib/supabase/server';
 import { ingestBucketName } from '../../../../../lib/storage/ingest';
+import crypto from 'crypto';
 import { getAccountKlaviyoApiKey } from '../../../../../lib/integrations/klaviyoKey';
 
 export const runtime = 'nodejs';
@@ -117,7 +118,7 @@ export async function POST(req: NextRequest) {
     // Live write
     const bucket = ingestBucketName();
     const idemp = (req.headers.get('x-idempotency-key') || '').trim();
-    const uploadId = idemp ? stableId(`${accountId}:${idemp}`) : new Date().toISOString().replace(/[:.]/g, '-');
+    const uploadId = idemp ? stableUuid(`${accountId}:${idemp}`) : (crypto.randomUUID ? crypto.randomUUID() : stableUuid(`${accountId}:${Date.now()}`));
     const up = async (name: string, content: string) => {
       const { error } = await supabase.storage
         .from(bucket)
@@ -136,7 +137,7 @@ export async function POST(req: NextRequest) {
       .single();
     if (snapErr) return new Response(JSON.stringify({ error: 'CreateSnapshotFailed', details: snapErr.message }), { status: 500 });
 
-    await fetch(`${origin}/api/snapshots/process`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ uploadId }) }).catch(() => {});
+    await fetch(`${origin}/api/snapshots/process`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-job-secret': process.env.ADMIN_JOB_SECRET || '' }, body: JSON.stringify({ uploadId }) }).catch(() => {});
 
     return new Response(JSON.stringify({ mode, accountId, uploadId, snapshotId: (snapRow as any)?.id, wrote: { bucket }, ms: Date.now() - t0 }), { status: 200, headers: { 'content-type': 'application/json' } });
   } catch (err: any) {
@@ -148,4 +149,14 @@ function http502(code: string, details: string) {
   return new Response(JSON.stringify({ error: code, details }), { status: 502, headers: { 'content-type': 'application/json' } });
 }
 
-function stableId(s: string) { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return 'id_' + (h >>> 0).toString(16); }
+// Deterministic UUID (v5-like) using SHA-1 over a fixed namespace and the provided name
+function stableUuid(name: string) {
+  const ns = crypto.createHash('sha1').update('email-metrics-orchestrator').digest();
+  const hash = crypto.createHash('sha1').update(ns).update(name).digest();
+  const bytes = Uint8Array.from(hash.slice(0, 16));
+  // Set version 5 (SHA-1) and variant RFC 4122
+  bytes[6] = (bytes[6] & 0x0f) | 0x50;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.substr(0,8)}-${hex.substr(8,4)}-${hex.substr(12,4)}-${hex.substr(16,4)}-${hex.substr(20,12)}`;
+}
