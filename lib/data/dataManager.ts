@@ -46,11 +46,11 @@ export class DataManager {
     // Dynamic storage keys based on user
     private get storageKey() {
         const userId = DataManager.currentUserId || 'anonymous';
-        return `em:dataset:${userId}:v1`;
+        return `em:dataset:${userId}:v2`;
     }
     private get idbKey() {
         const userId = DataManager.currentUserId || 'anonymous';
-        return `dataset:${userId}:v1`;
+        return `dataset:${userId}:v2`;
     }
 
     private _subsetSignature(campaigns: ProcessedCampaign[], flows: ProcessedFlowEmail[]): string {
