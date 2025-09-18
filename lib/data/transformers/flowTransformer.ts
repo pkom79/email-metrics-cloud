@@ -33,7 +33,9 @@ export class FlowTransformer {
         flows.forEach((flow) => {
             const flowId = (flow as any)['Flow ID'];
             const messageId = (flow as any)['Flow Message ID'];
-            const ts = this.parseDate((flow as any)['Day']).getTime();
+            const d = this.parseDateStrict((flow as any)['Day']);
+            if (!d) return; // skip invalid dates when computing sequence order
+            const ts = d.getTime();
             if (!earliestByFlow.has(flowId)) earliestByFlow.set(flowId, new Map());
             const inner = earliestByFlow.get(flowId)!;
             const prev = inner.get(messageId);
