@@ -16,7 +16,9 @@ export default function AgenciesClient() {
 
   const [newAgencyName, setNewAgencyName] = useState('');
   const [newBrandName, setNewBrandName] = useState('');
-  const [linkAccountId, setLinkAccountId] = useState('');
+  const [ownerEmail, setOwnerEmail] = useState('');
+  const [ownerAccounts, setOwnerAccounts] = useState<{ id: string; name: string | null; company: string | null }[]>([]);
+  const [selectedOwnerAccountId, setSelectedOwnerAccountId] = useState('');
   const [linkToken, setLinkToken] = useState<string | null>(null);
 
   useEffect(() => {
@@ -73,14 +75,25 @@ export default function AgenciesClient() {
     finally { setBusy(false); }
   };
 
-  const onRequestLink = async () => {
-    if (!selected) return; setBusy(true); setErr(null); setMsg(null); setLinkToken(null);
+  const onFindBrands = async () => {
+    setBusy(true); setErr(null); setMsg(null); setOwnerAccounts([]); setSelectedOwnerAccountId(''); setLinkToken(null);
     try {
-      const res = await fetch('/api/agencies/links/request', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agencyId: selected, accountId: linkAccountId }) });
+      const res = await fetch('/api/agencies/owner-accounts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ownerEmail }) });
+      const j = await res.json(); if (!res.ok) throw new Error(j?.error || 'Failed');
+      setOwnerAccounts(j.accounts || []);
+      if ((j.accounts || []).length === 1) setSelectedOwnerAccountId(j.accounts[0].id);
+      setMsg(j.accounts?.length ? `Found ${j.accounts.length} brand(s).` : 'No brands found for that email.');
+    } catch (e: any) { setErr(e?.message || 'Lookup failed'); }
+    finally { setBusy(false); }
+  };
+
+  const onRequestLink = async () => {
+    if (!selected || !selectedOwnerAccountId) return; setBusy(true); setErr(null); setMsg(null); setLinkToken(null);
+    try {
+      const res = await fetch('/api/agencies/links/request', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agencyId: selected, accountId: selectedOwnerAccountId }) });
       const j = await res.json(); if (!res.ok) throw new Error(j?.error || 'Failed');
       setLinkToken(j.rawToken || j.token || null);
       setMsg('Link request created. Share this token with the brand owner.');
-      setLinkAccountId('');
     } catch (e: any) { setErr(e?.message || 'Failed to request link'); }
     finally { setBusy(false); }
   };
@@ -133,8 +146,17 @@ export default function AgenciesClient() {
 
             <div className="text-sm font-medium text-gray-800 dark:text-gray-200">Request Access to Existing Brand</div>
             <div className="flex flex-wrap items-center gap-3">
-              <input value={linkAccountId} onChange={e => setLinkAccountId(e.target.value)} placeholder="Brand account UUID" className="flex-1 min-w-[220px] h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm" />
-              <button disabled={busy || !linkAccountId} onClick={onRequestLink} className="h-9 px-4 rounded bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 inline-flex items-center gap-2"><Link2 className="w-4 h-4" />Request Link</button>
+              <input value={ownerEmail} onChange={e => setOwnerEmail(e.target.value)} placeholder="Brand owner's email" className="flex-1 min-w-[220px] h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm" />
+              <button disabled={busy || !ownerEmail} onClick={onFindBrands} className="h-9 px-4 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 disabled:opacity-50">Find Brands</button>
+              {ownerAccounts.length > 0 && (
+                <>
+                  <select value={selectedOwnerAccountId} onChange={e => setSelectedOwnerAccountId(e.target.value)} className="h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm">
+                    <option value="">Select brand</option>
+                    {ownerAccounts.map(a => <option key={a.id} value={a.id}>{a.company || a.name || a.id}</option>)}
+                  </select>
+                  <button disabled={busy || !selectedOwnerAccountId} onClick={onRequestLink} className="h-9 px-4 rounded bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 inline-flex items-center gap-2"><Link2 className="w-4 h-4" />Request Link</button>
+                </>
+              )}
             </div>
             {linkToken && (
               <div className="text-xs text-gray-600 dark:text-gray-400">Share this token with the brand owner. They can approve at <code className="px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">/agency/approve</code>.</div>
@@ -147,4 +169,3 @@ export default function AgenciesClient() {
     </div>
   );
 }
-

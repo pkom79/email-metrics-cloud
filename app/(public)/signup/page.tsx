@@ -25,7 +25,6 @@ function SignupInner() {
     const [storeUrl, setStoreUrl] = useState('');
     const [country, setCountry] = useState('');
     const [mode, setMode] = useState<'signin' | 'signup'>(qpMode);
-    const [klaviyoKey, setKlaviyoKey] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [ok, setOk] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -120,12 +119,7 @@ function SignupInner() {
                 });
                 if (error) throw error;
 
-                // Optionally save Klaviyo key immediately
-                if (klaviyoKey.trim()) {
-                    try {
-                        await fetch('/api/integrations/klaviyo/connect', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ apiKey: klaviyoKey.trim() }) });
-                    } catch {}
-                }
+                // Klaviyo integration removed (CSV-only ingestion)
 
                 // User is now immediately authenticated! Link uploads using server-side cookie mechanism
                 setOk('Account created! Setting up your data...');
@@ -219,8 +213,7 @@ function SignupInner() {
                         <input type="text" placeholder="Business Name" value={businessName} onChange={e => setBusinessName(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
                         {/* Store URL */}
                         <input type="text" inputMode="url" placeholder="Store URL (e.g. yourstore.com)" value={storeUrl} onChange={e => setStoreUrl(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
-                        {/* Optional Klaviyo API Key (stored securely) */}
-                        <input type="password" placeholder="Klaviyo API Key (optional)" value={klaviyoKey} onChange={e => setKlaviyoKey(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
+                        {/* Klaviyo API Key removed */}
                         {/* Country dropdown styled like other selects */}
                         <div className="relative">
                             <SelectBase
