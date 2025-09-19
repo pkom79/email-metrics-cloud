@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { supabaseAdmin } from '../../../../lib/supabaseAdmin';
 import { ServerClient } from 'postmark';
 
 export const runtime = 'nodejs';
@@ -104,4 +104,3 @@ async function resolveUserEmail(userId?: string | null) {
   if (error) return null;
   return data.user?.email ?? null;
 }
-
