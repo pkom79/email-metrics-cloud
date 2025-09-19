@@ -37,17 +37,18 @@ export async function POST(request: Request) {
     if (error) throw error;
 
     // Audit (non-fatal)
-    await supabase.rpc('audit_log_event', {
-      p_action: 'member_invited',
-      p_target_table: 'invitations',
-      p_target_id: inv.id,
-      p_account_id: accountId,
-      p_details: { email }
-    }).catch(() => {});
+    try {
+      await supabase.rpc('audit_log_event', {
+        p_action: 'member_invited',
+        p_target_table: 'invitations',
+        p_target_id: inv.id,
+        p_account_id: accountId,
+        p_details: { email }
+      });
+    } catch {}
 
     return NextResponse.json({ ok: true, token: rawToken });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'Failed to create invitation' }, { status: 500 });
   }
 }
-

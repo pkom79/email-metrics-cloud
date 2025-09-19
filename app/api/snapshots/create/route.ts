@@ -115,13 +115,15 @@ export async function POST(request: Request) {
           } as any);
         }
       }
-      await supabase.rpc('audit_log_event', {
-        p_action: 'csv_uploaded',
-        p_target_table: 'csv_files',
-        p_target_id: snap.id,
-        p_account_id: accountId,
-        p_details: { upload_id: uploadId, files: fileMeta.map(f => f.filename) }
-      }).catch(() => {});
+      try {
+        await supabase.rpc('audit_log_event', {
+          p_action: 'csv_uploaded',
+          p_target_table: 'csv_files',
+          p_target_id: snap.id,
+          p_account_id: accountId,
+          p_details: { upload_id: uploadId, files: fileMeta.map(f => f.filename) }
+        });
+      } catch {}
     } catch {}
 
     let processed = false;

@@ -38,17 +38,18 @@ export async function POST(request: Request) {
     if (error) throw error;
 
     // Audit (non-fatal)
-    await supabase.rpc('audit_log_event', {
-      p_action: 'agency_link_requested',
-      p_target_table: 'link_requests',
-      p_target_id: lr.id,
-      p_account_id: lr.account_id,
-      p_details: { agency_id: agencyId }
-    }).catch(() => {});
+    try {
+      await supabase.rpc('audit_log_event', {
+        p_action: 'agency_link_requested',
+        p_target_table: 'link_requests',
+        p_target_id: lr.id,
+        p_account_id: lr.account_id,
+        p_details: { agency_id: agencyId }
+      });
+    } catch {}
 
     return NextResponse.json({ ok: true, token: rawToken });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'Failed to request link' }, { status: 500 });
   }
 }
-

@@ -41,17 +41,18 @@ export async function POST(request: Request) {
       .insert({ agency_id: agencyId, account_id: acc.id });
     if (e2) throw e2;
 
-    await supabase.rpc('audit_log_event', {
-      p_action: 'agency_link_approved',
-      p_target_table: 'agency_accounts',
-      p_target_id: acc.id,
-      p_account_id: acc.id,
-      p_details: { agency_id: agencyId }
-    }).catch(() => {});
+    try {
+      await supabase.rpc('audit_log_event', {
+        p_action: 'agency_link_approved',
+        p_target_table: 'agency_accounts',
+        p_target_id: acc.id,
+        p_account_id: acc.id,
+        p_details: { agency_id: agencyId }
+      });
+    } catch {}
 
     return NextResponse.json({ ok: true, accountId: acc.id });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'Failed to create brand' }, { status: 500 });
   }
 }
-

@@ -78,9 +78,6 @@ export default function InvitationsManager() {
           <select aria-label="Select brand account" value={accountId} onChange={e => setAccountId(e.target.value)} className="h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm">
             {accounts.map(a => <option key={a.id} value={a.id}>{a.company || a.name || a.id}</option>)}
           </select>
-          {accountId && (
-            <a href={`/dashboard?account=${accountId}`} className="text-sm text-purple-600 hover:underline">Open</a>
-          )}
           <input value={email} onChange={e => setEmail(e.target.value)} placeholder="member@example.com" className="flex-1 min-w-[220px] h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm" />
           <button disabled={creating} onClick={onCreate} className="inline-flex items-center gap-2 h-9 px-3 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm disabled:opacity-50">Invite</button>
         </div>

@@ -35,17 +35,18 @@ export async function POST(request: Request) {
       .update({ status: 'approved', acted_at: new Date().toISOString() })
       .eq('id', req.id);
 
-    await supabaseAdmin.rpc('audit_log_event', {
-      p_action: 'agency_link_approved',
-      p_target_table: 'link_requests',
-      p_target_id: req.id,
-      p_account_id: req.account_id,
-      p_details: { agency_id: req.agency_id }
-    }).catch(() => {});
+    try {
+      await supabaseAdmin.rpc('audit_log_event', {
+        p_action: 'agency_link_approved',
+        p_target_table: 'link_requests',
+        p_target_id: req.id,
+        p_account_id: req.account_id,
+        p_details: { agency_id: req.agency_id }
+      });
+    } catch {}
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'Approval failed' }, { status: 500 });
   }
 }
-
