@@ -16,8 +16,10 @@ export default function BrandsManager() {
 
   const normalizeStoreUrl = (v: string) => v.trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/,'').toLowerCase();
 
+  const [isAgency, setIsAgency] = useState(false);
   const load = async () => {
     const uid = (await supabase.auth.getUser()).data.user?.id || '';
+    setIsAgency(((await supabase.auth.getUser()).data.user?.user_metadata as any)?.signup_type === 'agency');
     const { data } = await supabase.from('accounts').select('id,name,company,store_url').eq('owner_user_id', uid).order('created_at', { ascending: true });
     setBrands((data || []) as any);
   };
@@ -34,6 +36,16 @@ export default function BrandsManager() {
     } catch (e: any) { setErr(e?.message || 'Failed to create brand'); }
     finally { setBusy(false); }
   };
+
+  if (isAgency) {
+    return (
+      <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-10 bg-white dark:bg-gray-900 text-center">
+        <div className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Brands are created by owners</div>
+        <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">This page is for brand accounts. Use the Agency Console to create a brand linked to your agency.</div>
+        <a href="/agencies" className="inline-flex items-center h-9 px-4 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Open Agency Console</a>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -72,4 +84,3 @@ export default function BrandsManager() {
     </div>
   );
 }
-

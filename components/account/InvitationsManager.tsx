@@ -16,6 +16,7 @@ export default function InvitationsManager() {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  const [isAgency, setIsAgency] = useState(false);
   useEffect(() => {
     (async () => {
       // List accessible accounts (RLS restricts to member/owner/agency)
@@ -23,6 +24,8 @@ export default function InvitationsManager() {
       const list = (data || []) as any as Account[];
       setAccounts(list);
       if (!accountId && list.length) setAccountId(list[0].id);
+      const me = await supabase.auth.getUser();
+      setIsAgency(((me.data.user?.user_metadata as any)?.signup_type) === 'agency');
     })();
   }, []);
 
@@ -47,6 +50,16 @@ export default function InvitationsManager() {
     } catch (e: any) { setErr(e?.message || 'Failed to create invitation'); }
     finally { setCreating(false); }
   };
+
+  if (isAgency) {
+    return (
+      <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-10 bg-white dark:bg-gray-900 text-center">
+        <div className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Member invites are managed by brand owners</div>
+        <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">This page is for brand accounts. Agencies cannot add brand members.</div>
+        <a href="/agencies" className="inline-flex items-center h-9 px-4 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Open Agency Console</a>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

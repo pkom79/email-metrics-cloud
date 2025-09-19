@@ -16,6 +16,7 @@ function SignupInner() {
     const search = useSearchParams();
     const router = useRouter();
     const qpModeParam = search.get('mode');
+    const qpTypeParam = search.get('type');
     const qpErrorParam = search.get('error');
     const qpMode = (qpModeParam as 'signin' | 'signup') || 'signup';
 
@@ -25,6 +26,7 @@ function SignupInner() {
     const [storeUrl, setStoreUrl] = useState('');
     const [country, setCountry] = useState('');
     const [mode, setMode] = useState<'signin' | 'signup'>(qpMode);
+    const [accountType, setAccountType] = useState<'brand' | 'agency'>(qpTypeParam === 'agency' ? 'agency' : 'brand');
     const [error, setError] = useState<string | null>(null);
     const [ok, setOk] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -108,54 +110,64 @@ function SignupInner() {
         try {
             if (mode === 'signup') {
                 if (isGdprCountry) return; // guard in UI layer
-
-                const { error } = await supabase.auth.signUp({
-                    email,
-                    password,
-                    options: {
-                        // Email confirmation disabled - user is immediately authenticated
-                        data: { businessName, storeUrl: normalizeStoreUrl(storeUrl), country }
-                    }
-                });
-                if (error) throw error;
-
-                // Klaviyo integration removed (CSV-only ingestion)
-
-                // User is now immediately authenticated! Link uploads using server-side cookie mechanism
-                setOk('Account created! Setting up your data...');
-
-                try {
-                    const linkResponse = await fetch('/api/auth/link-pending-uploads', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({})
+                if (accountType === 'agency') {
+                    const { error } = await supabase.auth.signUp({
+                        email,
+                        password,
+                        options: {
+                            data: { signup_type: 'agency', agencyName: businessName }
+                        }
                     });
+                    if (error) throw error;
+                    setOk('Agency account created! Redirecting…');
+                    setTimeout(() => router.replace('/agencies'), 800);
+                } else {
+                    const { error } = await supabase.auth.signUp({
+                        email,
+                        password,
+                        options: {
+                            // Email confirmation disabled - user is immediately authenticated
+                            data: { businessName, storeUrl: normalizeStoreUrl(storeUrl), country }
+                        }
+                    });
+                    if (error) throw error;
 
-                    if (linkResponse.ok) {
-                        const result = await linkResponse.json();
-                        console.log('Successfully linked uploads during signup:', result);
-                        if (result.processedCount > 0) {
-                            setOk(`Account created! Linked ${result.processedCount} upload(s). Redirecting...`);
+                    // User is now immediately authenticated! Link uploads using server-side cookie mechanism
+                    setOk('Account created! Setting up your data...');
+
+                    try {
+                        const linkResponse = await fetch('/api/auth/link-pending-uploads', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({})
+                        });
+
+                        if (linkResponse.ok) {
+                            const result = await linkResponse.json();
+                            console.log('Successfully linked uploads during signup:', result);
+                            if (result.processedCount > 0) {
+                                setOk(`Account created! Linked ${result.processedCount} upload(s). Redirecting...`);
+                            } else {
+                                setOk('Account created! Redirecting...');
+                            }
                         } else {
+                            console.warn('Upload linking failed, but account created successfully');
                             setOk('Account created! Redirecting...');
                         }
-                    } else {
-                        console.warn('Upload linking failed, but account created successfully');
+                    } catch (error) {
+                        console.warn('Upload linking error:', error);
                         setOk('Account created! Redirecting...');
                     }
-                } catch (error) {
-                    console.warn('Upload linking error:', error);
-                    setOk('Account created! Redirecting...');
+
+                    // Clean up localStorage since we've processed the uploads
+                    localStorage.removeItem('pending-upload-ids');
+                    localStorage.removeItem('pending-upload-id');
+
+                    // Brief delay then redirect to dashboard
+                    setTimeout(() => {
+                        router.replace('/dashboard');
+                    }, 2000);
                 }
-
-                // Clean up localStorage since we've processed the uploads
-                localStorage.removeItem('pending-upload-ids');
-                localStorage.removeItem('pending-upload-id');
-
-                // Brief delay then redirect to dashboard  
-                setTimeout(() => {
-                    router.replace('/dashboard');
-                }, 2000);
             } else {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
@@ -209,10 +221,17 @@ function SignupInner() {
             <form onSubmit={onSubmit} className="space-y-3">
                 {mode === 'signup' && (
                     <>
+                        {/* Account type */}
+                        <div className="flex gap-2 text-sm">
+                            <button type="button" className={`px-3 py-1 rounded ${accountType === 'brand' ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-800'}`} onClick={() => setAccountType('brand')}>Brand</button>
+                            <button type="button" className={`px-3 py-1 rounded ${accountType === 'agency' ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-800'}`} onClick={() => setAccountType('agency')}>Agency</button>
+                        </div>
                         {/* Business Name */}
-                        <input type="text" placeholder="Business Name" value={businessName} onChange={e => setBusinessName(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
+                        <input type="text" placeholder={accountType === 'agency' ? 'Agency Name' : 'Business Name'} value={businessName} onChange={e => setBusinessName(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
                         {/* Store URL */}
-                        <input type="text" inputMode="url" placeholder="Store URL (e.g. yourstore.com)" value={storeUrl} onChange={e => setStoreUrl(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
+                        {accountType === 'brand' && (
+                            <input type="text" inputMode="url" placeholder="Store URL (e.g. yourstore.com)" value={storeUrl} onChange={e => setStoreUrl(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
+                        )}
                         {/* Klaviyo API Key removed */}
                         {/* Country dropdown styled like other selects */}
                         <div className="relative">

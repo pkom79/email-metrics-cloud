@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import SelectBase from "./ui/SelectBase";
 import { supabase } from '../lib/supabase/client';
 
@@ -28,6 +29,11 @@ export default function AccountClient({ initial }: Props) {
     const [emailChangeRequested, setEmailChangeRequested] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState('');
     const [deleting, setDeleting] = useState(false);
+    const [isAgency, setIsAgency] = useState(false);
+    useEffect(() => { (async () => {
+        const { data } = await supabase.auth.getUser();
+        setIsAgency(((data.user?.user_metadata as any)?.signup_type) === 'agency');
+    })(); }, []);
 
     const onDeleteAccount = async () => {
         if (deleting) return;
@@ -151,6 +157,44 @@ export default function AccountClient({ initial }: Props) {
     return (
         <div className="max-w-2xl mx-auto space-y-8">
             <h1 className="text-2xl font-bold">Account</h1>
+
+            {/* Management hub */}
+            <section className="space-y-3">
+                <h2 className="font-semibold">Management</h2>
+                {isAgency ? (
+                    <div className="rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900 flex items-center justify-between">
+                        <div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">Agency Console</div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400">Manage brands linked to your agency.</div>
+                        </div>
+                        <Link href="/agencies" className="inline-flex items-center px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Open</Link>
+                    </div>
+                ) : (
+                    <div className="grid gap-3">
+                        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900 flex items-center justify-between">
+                            <div>
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">Members</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">Invite and manage brand members.</div>
+                            </div>
+                            <Link href="/account/members" className="inline-flex items-center px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Open</Link>
+                        </div>
+                        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900 flex items-center justify-between">
+                            <div>
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">Notifications</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">Manage per-brand recipients.</div>
+                            </div>
+                            <Link href="/account/notifications" className="inline-flex items-center px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Open</Link>
+                        </div>
+                        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900 flex items-center justify-between">
+                            <div>
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">Brands</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">Create and switch between your brands.</div>
+                            </div>
+                            <Link href="/account/brands" className="inline-flex items-center px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Open</Link>
+                        </div>
+                    </div>
+                )}
+            </section>
 
             {isAdmin && (
                 <section className="space-y-3">

@@ -37,10 +37,6 @@ export default function HeaderLinks({ isAuthed }: { isAuthed: boolean }) {
                     {!onAccount && (
                         <Link href="/account" className="text-sm text-purple-600 dark:text-purple-400">Account</Link>
                     )}
-                    <Link href="/account/members" className="text-sm text-purple-600 dark:text-purple-400">Members</Link>
-                    <Link href="/account/notifications" className="text-sm text-purple-600 dark:text-purple-400">Notifications</Link>
-                    <Link href="/account/brands" className="text-sm text-purple-600 dark:text-purple-400">Brands</Link>
-                    <Link href="/agencies" className="text-sm text-purple-600 dark:text-purple-400">Agencies</Link>
                     <button onClick={signOut} className="text-sm text-gray-600 dark:text-gray-300 hover:underline">Sign out</button>
                 </>
             ) : (
