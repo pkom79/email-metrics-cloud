@@ -1,9 +1,15 @@
 import AuthGate from '../../../components/AuthGate';
 import AgenciesClient from '../../../components/agencies/AgenciesClient';
+import { getServerUser } from '../../../lib/supabase/auth';
+import { redirect } from 'next/navigation';
 
 export const metadata = { title: 'Agencies' };
 
-export default function AgenciesPage() {
+export default async function AgenciesPage() {
+  const user = await getServerUser();
+  if (!user) redirect('/signup?mode=signin');
+  const isAgency = ((user.user_metadata as any)?.signup_type) === 'agency';
+  if (!isAgency) redirect('/account');
   return (
     <AuthGate>
       <div className="max-w-4xl mx-auto p-6">
@@ -13,4 +19,3 @@ export default function AgenciesPage() {
     </AuthGate>
   );
 }
-
