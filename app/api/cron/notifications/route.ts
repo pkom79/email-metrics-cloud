@@ -56,7 +56,11 @@ export async function GET() {
           .eq('id', row.account_id)
           .single();
         const brandName = acc?.company || acc?.name || 'Brand';
-        const ctaUrl = `${SITE_URL}/dashboard?account=${row.account_id}`;
+        // Build CTA URL; for member_invited include the acceptance token when available
+        const tokenFromPayload = (row as any)?.payload?.token as string | undefined;
+        const ctaUrl = row.topic === 'member_invited' && tokenFromPayload
+          ? `${SITE_URL}/invitations/accept?token=${encodeURIComponent(tokenFromPayload)}`
+          : `${SITE_URL}/dashboard?account=${row.account_id}`;
 
         // Resolve recipient email (prefer explicit email)
         const to = row.recipient_email || (await resolveUserEmail(row.recipient_user_id));

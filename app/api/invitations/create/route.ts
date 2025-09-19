@@ -36,6 +36,16 @@ export async function POST(request: Request) {
       .single();
     if (error) throw error;
 
+    // Enqueue an email invitation directly to the recipient
+    try {
+      await supabase.from('notifications_outbox').insert({
+        topic: 'member_invited',
+        account_id: accountId,
+        recipient_email: email,
+        payload: { token: rawToken }
+      } as any);
+    } catch {}
+
     // Audit (non-fatal)
     try {
       await supabase.rpc('audit_log_event', {
