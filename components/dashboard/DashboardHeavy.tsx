@@ -952,9 +952,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
                                     const d = new Date(lastUpdate.at);
                                     const formatted = d.toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: tz });
-                                    const s = (lastUpdate.source || '').toLowerCase();
-                                    const source = (s.includes('orchestrated') || s.includes('self-serve')) ? 'API' : (s.includes('imported') ? 'Upload' : 'Update');
-                                    return <span>Last update: {formatted} ({tz}) via {source}</span>;
+                                    // CSV-only: always present as Upload source for clarity
+                                    return <span>Last update: {formatted} ({tz}) via Upload</span>;
                                 })()}
                             </div>
                         </div>
@@ -977,7 +976,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     <span className="hidden">
                                         <button onClick={handleExportJson} disabled={exportBusy} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button>
                                     </span>
-                                    <button onClick={checkKeyAndSync} disabled={syncBusy} className={`inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none ${syncBusy ? 'opacity-60 cursor-wait' : ''}`}><RefreshCcw className="h-4 w-4 text-purple-600" />Update via API</button>
+                                    {/* API-based update removed (CSV-only). Button omitted intentionally. */}
                                 </>)}
                                 {isAdmin && (<>
                                     <div className="relative">
@@ -997,9 +996,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                             const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
                                             const d = new Date(lastUpdate.at);
                                             const formatted = d.toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: tz });
-                                            const s = (lastUpdate.source || '').toLowerCase();
-                                            const source = (s.includes('orchestrated') || s.includes('self-serve') || s.includes('api')) ? 'API' : (s.includes('imported') || s.includes('upload')) ? 'Upload' : 'Update';
-                                            return <span>Last update: {formatted} ({tz}) via {source}</span>;
+                                            return <span>Last update: {formatted} ({tz}) via Upload</span>;
                                         })()}
                                     </div>
                                 </div>
