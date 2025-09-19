@@ -59,6 +59,25 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
   - Weekly-only module for 90+ day ranges: Title “Weekly view and 90+ days required”, body “This module is available only in the Weekly view for ranges 90 days or longer.” Icon: `CalendarRange`.
   - Zero full weeks in range: Title “Not enough data in this period”, body “We didn’t find any complete weeks inside this range. Try a longer date range.” Icon: `MailX`.
 
+### Settings and management pages (new)
+- Use the same section-card pattern with compact controls.
+- Forms:
+  - Inputs `h-9`/`h-10`, rounded, bordered; dark variants.
+  - Primary actions: purple filled buttons, compact (`h-9`/`h-10`).
+  - Secondary actions: bordered neutral buttons.
+- Notifications Settings UI:
+  - Header with `Bell` icon, account selector, topic dropdown, recipient input, add button.
+  - List recipients in a simple divided list with enable/disable control and delete icon button.
+- Agencies UI:
+  - Empty state card with `Building2` icon, dashed border, clear CTA to create agency.
+  - Brands list as simple text list inside a section card.
+  - Actions: Create Brand and Request Access rows with inputs + purple buttons.
+- Invitations UI:
+  - Invite form with account selector + email input + primary button.
+  - Show newly created token in a bordered code chip with a copy button.
+  - Pending list with subtle status pill.
+
+
 ## Actionable notice cards (segments)
 
 - Use dashed bordered cards for informational notices that may include a single secondary action.

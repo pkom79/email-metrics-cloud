@@ -1,0 +1,150 @@
+"use client";
+import { useEffect, useState } from 'react';
+import { supabase } from '../../lib/supabase/client';
+import { Building2, Link2, Plus } from 'lucide-react';
+
+type AgencyRow = { agencies: { id: string; name: string; brand_limit: number; seat_limit: number } | null; role: string };
+type BrandRow = { accounts: { id: string; name: string | null; company: string | null } | null };
+
+export default function AgenciesClient() {
+  const [agencies, setAgencies] = useState<AgencyRow[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [brands, setBrands] = useState<BrandRow[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const [newAgencyName, setNewAgencyName] = useState('');
+  const [newBrandName, setNewBrandName] = useState('');
+  const [linkAccountId, setLinkAccountId] = useState('');
+  const [linkToken, setLinkToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      // Load agencies I belong to
+      const { data } = await supabase
+        .from('agency_users')
+        .select('role, agencies(id, name, brand_limit, seat_limit)')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id || '');
+      const list = (data || []) as any as AgencyRow[];
+      setAgencies(list);
+      const first = list.find(a => a.agencies)?.agencies?.id || null;
+      setSelected(first);
+    })();
+  }, []);
+
+  useEffect(() => { (async () => {
+    if (!selected) { setBrands([]); return; }
+    const { data } = await supabase
+      .from('agency_accounts')
+      .select('accounts(id, name, company)')
+      .eq('agency_id', selected);
+    setBrands((data || []) as any);
+  })(); }, [selected]);
+
+  const onCreateAgency = async () => {
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      const res = await fetch('/api/agencies/create', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: newAgencyName }) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || 'Failed');
+      setMsg('Agency created'); setNewAgencyName('');
+      // reload
+      const { data } = await supabase
+        .from('agency_users')
+        .select('role, agencies(id, name, brand_limit, seat_limit)')
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id || '');
+      const list = (data || []) as any as AgencyRow[];
+      setAgencies(list); setSelected(list.find(a => a.agencies)?.agencies?.id || null);
+    } catch (e: any) { setErr(e?.message || 'Failed to create agency'); }
+    finally { setBusy(false); }
+  };
+
+  const onCreateBrand = async () => {
+    if (!selected) return; setBusy(true); setErr(null); setMsg(null);
+    try {
+      const res = await fetch('/api/agencies/brands/create', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agencyId: selected, brandName: newBrandName }) });
+      const j = await res.json(); if (!res.ok) throw new Error(j?.error || 'Failed');
+      setMsg('Brand created and linked'); setNewBrandName('');
+      // reload brands
+      const { data } = await supabase.from('agency_accounts').select('accounts(id, name, company)').eq('agency_id', selected);
+      setBrands((data || []) as any);
+    } catch (e: any) { setErr(e?.message || 'Failed to create brand'); }
+    finally { setBusy(false); }
+  };
+
+  const onRequestLink = async () => {
+    if (!selected) return; setBusy(true); setErr(null); setMsg(null); setLinkToken(null);
+    try {
+      const res = await fetch('/api/agencies/links/request', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agencyId: selected, accountId: linkAccountId }) });
+      const j = await res.json(); if (!res.ok) throw new Error(j?.error || 'Failed');
+      setLinkToken(j.rawToken || j.token || null);
+      setMsg('Link request created. Share this token with the brand owner.');
+      setLinkAccountId('');
+    } catch (e: any) { setErr(e?.message || 'Failed to request link'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="space-y-6">
+      {agencies.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-10 bg-white dark:bg-gray-900 text-center">
+          <Building2 className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+          <div className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">No Agency Yet</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">Create an agency to manage multiple brands.</div>
+          <div className="max-w-md mx-auto flex flex-col sm:flex-row gap-3 items-center justify-center">
+            <input value={newAgencyName} onChange={e => setNewAgencyName(e.target.value)} placeholder="Agency name" className="w-full sm:w-auto flex-1 h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm" />
+            <button disabled={busy || !newAgencyName} onClick={onCreateAgency} className="h-9 px-4 rounded bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 inline-flex items-center gap-2"><Plus className="w-4 h-4" />Create Agency</button>
+          </div>
+          {err && <div className="text-sm text-rose-600 mt-2">{err}</div>}
+          {msg && <div className="text-sm text-emerald-600 mt-2">{msg}</div>}
+        </div>
+      )}
+
+      {agencies.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-gray-700 dark:text-gray-300">Agency</label>
+            <select value={selected || ''} onChange={e => setSelected(e.target.value)} className="h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm">
+              {agencies.filter(a => a.agencies).map(a => <option key={a.agencies!.id} value={a.agencies!.id}>{a.agencies!.name}</option>)}
+            </select>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5">
+            <div className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-3">Linked Brands</div>
+            {brands.length === 0 && (
+              <div className="text-sm text-gray-600 dark:text-gray-400">No brands linked yet.</div>
+            )}
+            {brands.length > 0 && (
+              <ul className="space-y-2">
+                {brands.map((b, i) => (
+                  <li key={i} className="text-sm text-gray-800 dark:text-gray-200">{b.accounts?.company || b.accounts?.name || b.accounts?.id}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 space-y-4">
+            <div className="text-sm font-medium text-gray-800 dark:text-gray-200">Create Brand</div>
+            <div className="flex flex-wrap items-center gap-3">
+              <input value={newBrandName} onChange={e => setNewBrandName(e.target.value)} placeholder="Brand name" className="flex-1 min-w-[220px] h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm" />
+              <button disabled={busy || !newBrandName} onClick={onCreateBrand} className="h-9 px-4 rounded bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 inline-flex items-center gap-2"><Plus className="w-4 h-4" />Create</button>
+            </div>
+
+            <div className="text-sm font-medium text-gray-800 dark:text-gray-200">Request Access to Existing Brand</div>
+            <div className="flex flex-wrap items-center gap-3">
+              <input value={linkAccountId} onChange={e => setLinkAccountId(e.target.value)} placeholder="Brand account UUID" className="flex-1 min-w-[220px] h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm" />
+              <button disabled={busy || !linkAccountId} onClick={onRequestLink} className="h-9 px-4 rounded bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 inline-flex items-center gap-2"><Link2 className="w-4 h-4" />Request Link</button>
+            </div>
+            {linkToken && (
+              <div className="text-xs text-gray-600 dark:text-gray-400">Share this token with the brand owner. They can approve at <code className="px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">/agency/approve</code>.</div>
+            )}
+            {err && <div className="text-sm text-rose-600">{err}</div>}
+            {msg && <div className="text-sm text-emerald-600">{msg}</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
