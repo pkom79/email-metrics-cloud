@@ -218,32 +218,48 @@ function SignupInner() {
                 <button type="button" className={`px-3 py-1.5 ${mode === 'signup' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200'}`} onClick={() => setMode('signup')}>Sign up</button>
                 <button type="button" className={`px-3 py-1.5 border-l border-gray-300 dark:border-gray-700 ${mode === 'signin' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200'}`} onClick={() => setMode('signin')}>Sign in</button>
             </div>
-            <form onSubmit={onSubmit} className="space-y-3">
+            {mode === 'signup' && (
+                <div className="mt-3 flex items-center gap-3 text-sm">
+                    <label className="text-sm text-gray-700 dark:text-gray-300">Account type</label>
+                    <select value={accountType} onChange={e => setAccountType((e.target as HTMLSelectElement).value as any)} className="h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700">
+                        <option value="brand">Brand</option>
+                        <option value="agency">Agency</option>
+                    </select>
+                </div>
+            )}
+            <form onSubmit={onSubmit} className="space-y-4">
                 {mode === 'signup' && (
                     <>
-                        {/* Account type */}
-                        <div className="inline-flex rounded border border-gray-300 dark:border-gray-700 overflow-hidden text-sm">
-                            <button type="button" className={`px-3 py-1.5 ${accountType === 'brand' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200'}`} onClick={() => setAccountType('brand')}>Brand</button>
-                            <button type="button" className={`px-3 py-1.5 border-l border-gray-300 dark:border-gray-700 ${accountType === 'agency' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200'}`} onClick={() => setAccountType('agency')}>Agency</button>
-                        </div>
-                        {/* Business Name */}
-                        <input type="text" placeholder={accountType === 'agency' ? 'Agency Name' : 'Business Name'} value={businessName} onChange={e => setBusinessName(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
-                        {/* Store URL */}
-                        {accountType === 'brand' && (
-                            <input type="text" inputMode="url" placeholder="Store URL (e.g. yourstore.com)" value={storeUrl} onChange={e => setStoreUrl(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
+                        {accountType === 'brand' ? (
+                            <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 space-y-2">
+                                <div className="space-y-1">
+                                    <label className="text-sm text-gray-700 dark:text-gray-300">Business name</label>
+                                    <input type="text" value={businessName} onChange={e => setBusinessName(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm text-gray-700 dark:text-gray-300">Store URL</label>
+                                    <input type="text" inputMode="url" placeholder="e.g. yourstore.com" value={storeUrl} onChange={e => setStoreUrl(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm text-gray-700 dark:text-gray-300">Country</label>
+                                    <div className="relative">
+                                        <SelectBase
+                                            value={country}
+                                            onChange={e => setCountry((e.target as HTMLSelectElement).value)}
+                                            className="w-full px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        >
+                                            <option value="">Select Country</option>
+                                            {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                        </SelectBase>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-1">
+                                <label className="text-sm text-gray-700 dark:text-gray-300">Agency name</label>
+                                <input type="text" value={businessName} onChange={e => setBusinessName(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
+                            </div>
                         )}
-                        {/* Klaviyo API Key removed */}
-                        {/* Country dropdown styled like other selects */}
-                        <div className="relative">
-                            <SelectBase
-                                value={country}
-                                onChange={e => setCountry((e.target as HTMLSelectElement).value)}
-                                className="w-full px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                            >
-                                <option value="">Select Country</option>
-                                {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                            </SelectBase>
-                        </div>
                     </>
                 )}
 
@@ -252,7 +268,7 @@ function SignupInner() {
                 <input type="password" autoComplete={mode==='signup' ? 'new-password' : 'current-password'} required placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
 
                 {/* GDPR restriction notice (signup only) */}
-                {mode === 'signup' && isGdprCountry && (
+                {mode === 'signup' && accountType==='brand' && isGdprCountry && (
                     <div className="mt-2 p-3 rounded-lg border bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800 text-amber-900 dark:text-amber-300">
                         <div className="flex items-start gap-2">
                             <AlertCircle className="w-4 h-4 mt-0.5" />
@@ -262,14 +278,14 @@ function SignupInner() {
                         </div>
                     </div>
                 )}
-                {mode === 'signup' && !country && (
+                {mode === 'signup' && accountType==='brand' && !country && (
                     <div className="mt-2 p-2 rounded border border-amber-300 bg-amber-50 text-amber-900 text-xs">Select your country to continue.</div>
                 )}
 
                 <button
                     type="submit"
                     disabled={(mode === 'signup' && isGdprCountry) || submitting}
-                    className={`w-full py-2 rounded ${(mode === 'signup' && (isGdprCountry || !country)) ? 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'} ${submitting ? 'opacity-70 cursor-wait' : ''}`}
+                    className={`w-full py-2 rounded ${(mode === 'signup' && ( (accountType==='brand' && (isGdprCountry || !country)) )) ? 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'} ${submitting ? 'opacity-70 cursor-wait' : ''}`}
                 >
                     {submitting ? 'Please wait…' : (mode === 'signup' ? 'Create account' : 'Sign in')}
                 </button>
