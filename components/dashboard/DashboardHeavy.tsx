@@ -956,7 +956,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             </div>
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 relative ml-auto">
                                 {!isAdmin && (
-                                    <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none"><UploadIcon className=\"h-4 w-4\" />Upload New Reports</button>
+                                    <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none"><UploadIcon className="h-4 w-4" />Upload New Reports</button>
                                 )}
                                 {isAdmin && (<>
                                     <div className="relative">
