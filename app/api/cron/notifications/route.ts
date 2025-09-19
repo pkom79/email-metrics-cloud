@@ -13,7 +13,11 @@ export async function GET() {
     // Basic config validation
     const POSTMARK_SERVER_TOKEN = process.env.POSTMARK_SERVER_TOKEN;
     const POSTMARK_FROM = process.env.POSTMARK_FROM;
-    const POSTMARK_TEMPLATE_NOTIFICATION_ID = process.env.POSTMARK_TEMPLATE_NOTIFICATION_ID;
+    const POSTMARK_TEMPLATE_NOTIFICATION_ID = process.env.POSTMARK_TEMPLATE_NOTIFICATION_ID; // generic fallback
+    const POSTMARK_TEMPLATE_DATA_UPDATED_ID = process.env.POSTMARK_TEMPLATE_DATA_UPDATED_ID || POSTMARK_TEMPLATE_NOTIFICATION_ID;
+    const POSTMARK_TEMPLATE_MEMBER_INVITED_ID = process.env.POSTMARK_TEMPLATE_MEMBER_INVITED_ID || POSTMARK_TEMPLATE_NOTIFICATION_ID;
+    const POSTMARK_TEMPLATE_AGENCY_REQUESTED_ID = process.env.POSTMARK_TEMPLATE_AGENCY_REQUESTED_ID || POSTMARK_TEMPLATE_NOTIFICATION_ID;
+    const POSTMARK_TEMPLATE_AGENCY_APPROVED_ID = process.env.POSTMARK_TEMPLATE_AGENCY_APPROVED_ID || POSTMARK_TEMPLATE_NOTIFICATION_ID;
     const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://emailmetrics.io';
 
     if (!POSTMARK_SERVER_TOKEN || !POSTMARK_FROM || !POSTMARK_TEMPLATE_NOTIFICATION_ID) {
@@ -61,20 +65,34 @@ export async function GET() {
         const ctaUrl = row.topic === 'member_invited' && tokenFromPayload
           ? `${SITE_URL}/invitations/accept?token=${encodeURIComponent(tokenFromPayload)}`
           : `${SITE_URL}/dashboard?account=${row.account_id}`;
-
         // Resolve recipient email (prefer explicit email)
         const to = row.recipient_email || (await resolveUserEmail(row.recipient_user_id));
         if (!to) throw new Error('No recipient');
 
+        // Pick template + model copy by topic
+        const topic = String(row.topic);
+        let TemplateId = Number(POSTMARK_TEMPLATE_NOTIFICATION_ID);
+        let model: any = { brand_name: brandName, cta_url: ctaUrl };
+        if (topic === 'csv_uploaded') {
+          TemplateId = Number(POSTMARK_TEMPLATE_DATA_UPDATED_ID);
+          model = { brand_name: brandName, cta_url: ctaUrl, headline: `New data available for ${brandName}`, cta_label: 'View dashboard' };
+        } else if (topic === 'member_invited') {
+          TemplateId = Number(POSTMARK_TEMPLATE_MEMBER_INVITED_ID);
+          model = { brand_name: brandName, cta_url: ctaUrl, headline: `You’re invited to join ${brandName}`, cta_label: 'Accept invite' };
+        } else if (topic === 'agency_link_requested') {
+          TemplateId = Number(POSTMARK_TEMPLATE_AGENCY_REQUESTED_ID);
+          model = { brand_name: brandName, cta_url: ctaUrl, headline: `Agency access requested for ${brandName}`, cta_label: 'Review in dashboard' };
+        } else if (topic === 'agency_link_approved') {
+          TemplateId = Number(POSTMARK_TEMPLATE_AGENCY_APPROVED_ID);
+          model = { brand_name: brandName, cta_url: ctaUrl, headline: `Agency linked to ${brandName}`, cta_label: 'View brand' };
+        }
+
         await postmark.sendEmailWithTemplate({
           From: POSTMARK_FROM,
           To: to,
-          TemplateId: Number(POSTMARK_TEMPLATE_NOTIFICATION_ID),
+          TemplateId,
           MessageStream: process.env.POSTMARK_STREAM || 'outbound',
-          TemplateModel: {
-            brand_name: brandName,
-            cta_url: ctaUrl,
-          },
+          TemplateModel: model,
         });
 
         await supabaseAdmin
