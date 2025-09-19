@@ -51,10 +51,10 @@ export async function GET() {
         // Resolve dynamic variables
         const { data: acc } = await supabaseAdmin
           .from('accounts')
-          .select('name')
+          .select('name, company')
           .eq('id', row.account_id)
           .single();
-        const brandName = acc?.name ?? 'Brand';
+        const brandName = acc?.company || acc?.name || 'Brand';
         const ctaUrl = `${SITE_URL}/dashboard?account=${row.account_id}`;
 
         // Resolve recipient email (prefer explicit email)
