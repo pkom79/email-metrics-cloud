@@ -4,6 +4,7 @@
         "app/api/snapshots/process/route.ts": { "maxDuration": 800 }
     },
     "crons": [
-        { "path": "/api/cleanup", "schedule": "0 2 * * *" }
+        { "path": "/api/cleanup", "schedule": "0 2 * * *" },
+        { "path": "/api/cron/notifications", "schedule": "*/1 * * * *" }
     ]
 }
