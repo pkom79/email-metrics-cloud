@@ -942,22 +942,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full" />
                         <span className="text-gray-900 dark:text-gray-100 font-medium text-sm">Loading data…</span>
                     </div>
-                    {/* Status line under buttons (owner view) */}
-                    {!isAdmin && (
-                        <div className="px-6 sm:px-8 -mt-2 mb-2">
-                            <div className="text-[11px] text-gray-600 dark:text-gray-300">
-                                {(() => {
-                                    if (syncMsg) return <span>{syncMsg}</span>;
-                                    if (!lastUpdate?.at) return null;
-                                    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                                    const d = new Date(lastUpdate.at);
-                                    const formatted = d.toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: tz });
-                                    // CSV-only: always present as Upload source for clarity
-                                    return <span>Last update: {formatted} ({tz}) via Upload</span>;
-                                })()}
-                            </div>
-                        </div>
-                    )}
+                    {/* Status line removed per spec */}
                 </div>
             )}
             {/* Header */}
@@ -969,15 +954,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>
                                 {businessName && <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>}
                             </div>
-                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 relative">
-                                {!isAdmin && (<>
-                                    <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none"><UploadIcon className="h-4 w-4" />Upload New Reports</button>
-                                    {/* Export JSON hidden for now */}
-                                    <span className="hidden">
-                                        <button onClick={handleExportJson} disabled={exportBusy} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button>
-                                    </span>
-                                    {/* API-based update removed (CSV-only). Button omitted intentionally. */}
-                                </>)}
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 relative ml-auto">
+                                {!isAdmin && (
+                                    <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none"><UploadIcon className=\"h-4 w-4\" />Upload New Reports</button>
+                                )}
                                 {isAdmin && (<>
                                     <div className="relative">
                                         <SelectBase value={selectedAccountId} onChange={e => { const val = (e.target as HTMLSelectElement).value; setSelectedAccountId(val); const a = (allAccounts || []).find(x => x.id === val); setSelectedAccountLabel(a?.label || a?.businessName || a?.id || ''); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="w-full sm:w-auto text-sm" minWidthClass="sm:min-w-[240px]">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</SelectBase>
@@ -986,21 +966,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     <span className="hidden"><button onClick={handleExportJson} disabled={exportBusy || !selectedAccountId} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button></span>
                                 </>)}
                             </div>
-                            {/* Status line under actions, right-aligned (owner view) */}
-                            {!isAdmin && (
-                                <div className="mt-1 text-right">
-                                    <div className="text-[11px] text-gray-600 dark:text-gray-300">
-                                        {(() => {
-                                            if (syncMsg) return <span>{syncMsg}</span>;
-                                            if (!lastUpdate?.at) return null;
-                                            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                                            const d = new Date(lastUpdate.at);
-                                            const formatted = d.toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: tz });
-                                            return <span>Last update: {formatted} ({tz}) via Upload</span>;
-                                        })()}
-                                    </div>
-                                </div>
-                            )}
+                            {/* Status line removed per spec */}
                         </div>
                         
                     </div>
