@@ -12,6 +12,7 @@ export const runtime = 'nodejs';
 // Idempotent: existing totals/series for snapshot are replaced
 export async function POST(request: Request) {
     try {
+        const startedAt = Date.now();
         const ADMIN_SECRET = process.env.ADMIN_JOB_SECRET;
         const providedSecret = (request.headers.get('x-admin-job-secret') || '').trim();
         const adminBypass = !!ADMIN_SECRET && providedSecret === ADMIN_SECRET;
@@ -68,6 +69,8 @@ export async function POST(request: Request) {
         }
 
         const bucket = ingestBucketName();
+        // Mark snapshot as processing
+        try { await supabase.from('snapshots').update({ status: 'processing', last_error: null }).eq('id', snapshotId!); } catch {}
         const requiredFiles = ['campaigns.csv', 'flows.csv', 'subscribers.csv'] as const;
         const texts: Record<string, string> = {};
         for (const fname of requiredFiles) {
@@ -240,10 +243,15 @@ export async function POST(request: Request) {
             if (!finalLastEmailDate || priorLastEmailDate > finalLastEmailDate) finalLastEmailDate = priorLastEmailDate;
         }
         if (!finalLastEmailDate) finalLastEmailDate = new Date().toISOString().slice(0, 10);
-        await supabase.from('snapshots').update({ last_email_date: finalLastEmailDate }).eq('id', snapshotId);
+        await supabase.from('snapshots').update({ last_email_date: finalLastEmailDate, status: 'processed', last_error: null, updated_at: new Date().toISOString() as any }).eq('id', snapshotId);
 
-        return NextResponse.json({ ok: true, processed: true, snapshotId });
+        return NextResponse.json({ ok: true, processed: true, snapshotId, ms: Date.now() - startedAt });
     } catch (e: any) {
+        try {
+            const supabase = createServiceClient();
+            const { snapshotId } = await (async () => { try { const j = await request.json(); return j || {}; } catch { return {}; } })();
+            if (snapshotId) await supabase.from('snapshots').update({ status: 'failed', last_error: String(e?.message || e) }).eq('id', snapshotId);
+        } catch {}
         return NextResponse.json({ error: e?.message || 'Processing failed' }, { status: 500 });
     }
 }

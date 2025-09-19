@@ -70,10 +70,11 @@ export async function GET(request: Request) {
 
         // Download the CSV file from storage (probe buckets & path variations)
         const fileName = `${type}.csv`;
+        // Prefer ingest bucket first (source of truth for new uploads), then legacy paths
         const probe = [
+            { bucket: ingestBucketName(), path: `${snap.upload_id}/${fileName}` },
             { bucket: 'uploads', path: `${snap.account_id}/${snap.upload_id}/${fileName}` },
             { bucket: 'csv-uploads', path: `${snap.account_id}/${snap.upload_id}/${fileName}` },
-            { bucket: ingestBucketName(), path: `${snap.upload_id}/${fileName}` },
         ];
         let csvText: string | null = null;
         for (const p of probe) {

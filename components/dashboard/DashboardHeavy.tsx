@@ -229,9 +229,26 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             const out = await res.json().catch(() => ({}));
             try { if (out?.logs) console.log('Update via API logs:', out.logs); } catch {}
             setSyncMsg('Processing snapshot…');
-            setTimeout(async () => {
-                try { const r = await fetch('/api/snapshots/last/self', { cache: 'no-store' }); const j = await r.json().catch(() => ({})); if (j?.latest) setLastUpdate({ at: j.latest.created_at, source: j.latest.label }); } catch {}
-            }, 1200);
+            // Poll latest snapshot until it changes or a max timeout
+            (async () => {
+                const deadline = Date.now() + 120000; // 2 minutes
+                let attempts = 0;
+                const initial = await (async () => { try { const rr = await fetch('/api/snapshots/last/self', { cache: 'no-store' }); return await rr.json(); } catch { return {}; } })();
+                const initialId = initial?.latest?.id;
+                while (Date.now() < deadline) {
+                    await new Promise(r => setTimeout(r, Math.min(1000 + attempts * 500, 5000)));
+                    attempts++;
+                    try {
+                        const r2 = await fetch('/api/snapshots/last/self', { cache: 'no-store' });
+                        const j2 = await r2.json();
+                        if (j2?.latest?.id && j2.latest.id !== initialId) {
+                            setLastUpdate({ at: j2.latest.created_at, source: j2.latest.label });
+                            setSyncMsg(null);
+                            break;
+                        }
+                    } catch {}
+                }
+            })();
         } finally { setSyncBusy(false); }
     }, []);
     const handleExportJson = useCallback(async () => {
