@@ -20,16 +20,48 @@ export async function GET(request: Request) {
             if (/^[0-9a-fA-F-]{36}$/.test(overrideAccountId)) targetAccountId = overrideAccountId;
         }
 
-        // Find the user's account
+        // Find an accessible account for the user (owner, member, or via agency)
         if (!targetAccountId) {
-            const { data: acct, error: acctErr } = await supabase
-                .from('accounts')
-                .select('id')
-                .eq('owner_user_id', user.id)
-                .maybeSingle();
-            if (acctErr) throw acctErr;
-            if (!acct) return NextResponse.json({ snapshots: [] });
-            targetAccountId = acct.id;
+            // 1) Owner brands
+            const { data: own } = await supabase.from('accounts').select('id').eq('owner_user_id', user.id).limit(1);
+            if (own && own.length) targetAccountId = own[0].id;
+            // 2) Member brands
+            if (!targetAccountId) {
+                const { data: mem } = await supabase
+                    .from('account_users')
+                    .select('account_id')
+                    .eq('user_id', user.id)
+                    .limit(1);
+                if (mem && mem.length) targetAccountId = (mem[0] as any).account_id;
+            }
+            // 3) Agency-entitled brands
+            if (!targetAccountId) {
+                const { data: ag } = await supabase
+                    .from('agency_users')
+                    .select('agency_id, all_accounts')
+                    .eq('user_id', user.id)
+                    .limit(5);
+                for (const au of ag || []) {
+                    if (targetAccountId) break;
+                    if (au.all_accounts) {
+                        const { data: accs } = await supabase
+                            .from('agency_accounts')
+                            .select('account_id')
+                            .eq('agency_id', au.agency_id)
+                            .limit(1);
+                        if (accs && accs.length) { targetAccountId = (accs[0] as any).account_id; break; }
+                    } else {
+                        const { data: scoped } = await supabase
+                            .from('agency_user_accounts')
+                            .select('account_id')
+                            .eq('agency_id', au.agency_id)
+                            .eq('user_id', user.id)
+                            .limit(1);
+                        if (scoped && scoped.length) { targetAccountId = (scoped[0] as any).account_id; break; }
+                    }
+                }
+            }
+            if (!targetAccountId) return NextResponse.json({ snapshots: [] });
         }
 
         const { data: snaps, error: snapsErr } = await supabase

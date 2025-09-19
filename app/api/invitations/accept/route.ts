@@ -49,9 +49,8 @@ export async function POST(request: Request) {
       .eq('id', inv.id);
 
     // No audit event here (invitation creation already logged). Optionally log acceptance.
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, accountId: inv.account_id });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'Failed to accept invitation' }, { status: 500 });
   }
 }
-

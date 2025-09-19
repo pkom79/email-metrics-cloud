@@ -46,7 +46,8 @@ export default function AcceptInvitationPage() {
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j?.error || 'Failed');
       setMsg('Invitation accepted');
-      setTimeout(() => router.replace('/dashboard'), 800);
+      const target = j?.accountId ? `/dashboard?account=${j.accountId}` : '/dashboard';
+      setTimeout(() => { window.location.assign(target); }, 600);
     } catch (e: any) { setErr(e?.message || 'Failed'); }
     finally { setBusy(false); }
   };
