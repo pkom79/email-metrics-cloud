@@ -36,7 +36,8 @@ export async function POST(req: NextRequest) {
     const debug = url.searchParams.get('debug') === '1' || (body as any).debug === true;
     log('start', { mode: body.mode, debug, vercelEnv: process.env.VERCEL_ENV || null });
     const mode: Mode = body.mode || 'dry-run';
-    const days = Math.max(1, Math.min(body.days ?? 7, 30));
+    // Default to the smallest effective window. If the last_email_date is recent, use 1 day; otherwise use min(diffDays+1, 7).
+    let days = Math.max(1, Math.min(body.days ?? 7, 30));
 
     const base = new URL(req.url); base.pathname = ''; base.search = '';
     // Robust origin resolution for internal forwarding on Vercel/Prod
@@ -60,12 +61,18 @@ export async function POST(req: NextRequest) {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
+    let diffDaysFromLast: number | null = null;
     if (latest?.last_email_date) {
       try {
         const last = new Date(String(latest.last_email_date) + 'T00:00:00Z');
         const today = new Date();
         const diffDays = Math.floor((today.getTime() - last.getTime()) / 86400000);
+        diffDaysFromLast = diffDays;
         log('staleness_check', { last_email_date: latest.last_email_date, diffDays });
+        // Adjust default days window if caller did not specify
+        if (body.days == null) {
+          days = Math.max(1, Math.min(diffDays <= 1 ? 1 : (diffDays + 1), 7));
+        }
         if (diffDays > 7) {
           return new Response(JSON.stringify({
             error: 'ApiUpdateDisabled',
@@ -94,7 +101,8 @@ export async function POST(req: NextRequest) {
           accountId,
           days,
           klaviyoApiKey,
-          flow: { enrichMessageNames: true },
+          // Keep live run efficient: restrict concurrently fetched flows/messages
+          flow: { enrichMessageNames: true, limitFlows: 50, limitMessages: 50 },
           audience: { schema: 'required' }
         })
       })
