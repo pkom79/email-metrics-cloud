@@ -214,17 +214,17 @@ function SignupInner() {
                     ? 'Create your account to access your email metrics analysis.'
                     : 'Sign in to access your dashboard.'}
             </p>
-            <div className="flex gap-2 text-sm">
-                <button className={`px-3 py-1 rounded ${mode === 'signup' ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-800'}`} onClick={() => setMode('signup')}>Sign up</button>
-                <button className={`px-3 py-1 rounded ${mode === 'signin' ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-800'}`} onClick={() => setMode('signin')}>Sign in</button>
+            <div className="inline-flex rounded border border-gray-300 dark:border-gray-700 overflow-hidden text-sm">
+                <button type="button" className={`px-3 py-1.5 ${mode === 'signup' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200'}`} onClick={() => setMode('signup')}>Sign up</button>
+                <button type="button" className={`px-3 py-1.5 border-l border-gray-300 dark:border-gray-700 ${mode === 'signin' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200'}`} onClick={() => setMode('signin')}>Sign in</button>
             </div>
             <form onSubmit={onSubmit} className="space-y-3">
                 {mode === 'signup' && (
                     <>
                         {/* Account type */}
-                        <div className="flex gap-2 text-sm">
-                            <button type="button" className={`px-3 py-1 rounded ${accountType === 'brand' ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-800'}`} onClick={() => setAccountType('brand')}>Brand</button>
-                            <button type="button" className={`px-3 py-1 rounded ${accountType === 'agency' ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-800'}`} onClick={() => setAccountType('agency')}>Agency</button>
+                        <div className="inline-flex rounded border border-gray-300 dark:border-gray-700 overflow-hidden text-sm">
+                            <button type="button" className={`px-3 py-1.5 ${accountType === 'brand' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200'}`} onClick={() => setAccountType('brand')}>Brand</button>
+                            <button type="button" className={`px-3 py-1.5 border-l border-gray-300 dark:border-gray-700 ${accountType === 'agency' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200'}`} onClick={() => setAccountType('agency')}>Agency</button>
                         </div>
                         {/* Business Name */}
                         <input type="text" placeholder={accountType === 'agency' ? 'Agency Name' : 'Business Name'} value={businessName} onChange={e => setBusinessName(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
