@@ -19,11 +19,13 @@ export default function InvitationsManager() {
   const [isAgency, setIsAgency] = useState(false);
   useEffect(() => {
     (async () => {
-      // List accessible accounts (RLS restricts to member/owner/agency)
-      const { data } = await supabase.from('accounts').select('id, name, company').order('created_at', { ascending: true });
-      const list = (data || []) as any as Account[];
-      setAccounts(list);
-      if (!accountId && list.length) setAccountId(list[0].id);
+      try {
+        const res = await fetch('/api/account/my-brands', { cache: 'no-store' });
+        const j = await res.json();
+        const list = (j.accounts || []) as Account[];
+        setAccounts(list);
+        if (!accountId && list.length) setAccountId(list[0].id);
+      } catch {}
       const me = await supabase.auth.getUser();
       setIsAgency(((me.data.user?.user_metadata as any)?.signup_type) === 'agency');
     })();

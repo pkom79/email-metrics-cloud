@@ -25,9 +25,10 @@ export default function NotificationsSettings() {
   const [msg, setMsg] = useState<string | null>(null);
 
   const loadAccounts = async () => {
-    const { data, error } = await supabase.from('accounts').select('id, name, company').order('created_at', { ascending: true });
-    if (!error) {
-      const rows = (data || []) as any as Account[];
+    try {
+      const res = await fetch('/api/account/my-brands', { cache: 'no-store' });
+      const j = await res.json();
+      const rows = (j.accounts || []) as Account[];
       setAccounts(rows);
       // Prefer ?account=... from URL if present
       try {
@@ -39,7 +40,7 @@ export default function NotificationsSettings() {
         }
       } catch {}
       if (!accountId && rows.length) setAccountId(rows[0].id);
-    }
+    } catch {}
   };
   const loadSubs = async (acc: string) => {
     setLoading(true);
@@ -116,7 +117,7 @@ export default function NotificationsSettings() {
               <option key={a.id} value={a.id}>{a.company || a.name || a.id}</option>
             ))}
           </select>
-          <span className="text-sm text-gray-500">Selected: {accountLabel}</span>
+          <span className="text-sm text-gray-500">Selected: {accountLabel || '(none)'}</span>
         </div>
 
         <div className="mt-6 grid gap-3">
