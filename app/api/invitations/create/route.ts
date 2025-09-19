@@ -36,15 +36,21 @@ export async function POST(request: Request) {
       .single();
     if (error) throw error;
 
-    // Enqueue an email invitation directly to the recipient
+    // Send via Supabase Auth invite (uses configured Postmark template). Redirect carries our brand token.
     try {
-      await supabase.from('notifications_outbox').insert({
-        topic: 'member_invited',
-        account_id: accountId,
-        recipient_email: email,
-        payload: { token: rawToken }
-      } as any);
-    } catch {}
+      const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://emailmetrics.io';
+      await (supabase as any).auth.admin.inviteUserByEmail(email, { redirectTo: `${SITE_URL}/invitations/accept?token=${encodeURIComponent(rawToken)}` });
+    } catch (e) {
+      // Fallback to our outbox if admin invite fails for any reason
+      try {
+        await supabase.from('notifications_outbox').insert({
+          topic: 'member_invited',
+          account_id: accountId,
+          recipient_email: email,
+          payload: { token: rawToken }
+        } as any);
+      } catch {}
+    }
 
     // Audit (non-fatal)
     try {

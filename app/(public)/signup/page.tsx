@@ -96,7 +96,7 @@ function SignupInner() {
         return () => { mounted = false; controller.abort(); };
     }, [country]);
 
-    const isGdprCountry = useMemo(() => GDPR_COUNTRIES.has(country), [country]);
+    const isGdprCountry = useMemo(() => GDPR_COUNTRIES.has(country), [country]); // informational only, no blocking
 
     const normalizeStoreUrl = (value: string) => {
         if (!value) return '';
@@ -113,7 +113,6 @@ function SignupInner() {
         setSubmitting(true);
         try {
             if (mode === 'signup') {
-                if (isGdprCountry) return; // guard in UI layer
                 if (accountType === 'agency') {
                     const { error } = await supabase.auth.signUp({
                         email,
@@ -268,24 +267,12 @@ function SignupInner() {
                 <input type="password" autoComplete={mode==='signup' ? 'new-password' : 'current-password'} required placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
 
                 {/* GDPR restriction notice (signup only) */}
-                {mode === 'signup' && accountType==='brand' && isGdprCountry && (
-                    <div className="mt-2 p-3 rounded-lg border bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800 text-amber-900 dark:text-amber-300">
-                        <div className="flex items-start gap-2">
-                            <AlertCircle className="w-4 h-4 mt-0.5" />
-                            <p className="text-sm">
-                                Due to regional data protection requirements, we’re not able to create new accounts in your selected country at this time.
-                            </p>
-                        </div>
-                    </div>
-                )}
-                {mode === 'signup' && accountType==='brand' && !country && (
-                    <div className="mt-2 p-2 rounded border border-amber-300 bg-amber-50 text-amber-900 text-xs">Select your country to continue.</div>
-                )}
+                {/* GDPR notices removed (we’re compliant). Country is optional. */}
 
                 <button
                     type="submit"
                     disabled={(mode === 'signup' && isGdprCountry) || submitting}
-                    className={`w-full py-2 rounded ${(mode === 'signup' && ( (accountType==='brand' && (isGdprCountry || !country)) )) ? 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'} ${submitting ? 'opacity-70 cursor-wait' : ''}`}
+                    className={`w-full py-2 rounded ${'bg-purple-600 text-white hover:bg-purple-700'} ${submitting ? 'opacity-70 cursor-wait' : ''}`}
                 >
                     {submitting ? 'Please wait…' : (mode === 'signup' ? 'Create account' : 'Sign in')}
                 </button>
