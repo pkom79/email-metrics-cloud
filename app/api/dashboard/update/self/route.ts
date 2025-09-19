@@ -84,10 +84,9 @@ export async function POST(req: NextRequest) {
 
     // Forward to orchestrator to avoid inconsistencies and ensure full CSVs
     try {
-      // Fire-and-forget dispatch to orchestrator; abort local wait shortly to avoid 5m fetch timeouts
-      const ac = new AbortController();
-      const timeout = setTimeout(() => ac.abort(new Error('launch-ok-timeout')), 1500);
-      fetch(`${origin}/api/dashboard/update`, {
+      // Fire-and-forget dispatch to orchestrator; do not abort the HTTP call so the function can run to completion
+      // We intentionally do not await this fetch to avoid 5m route timeouts.
+      void fetch(`${origin}/api/dashboard/update`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-admin-job-secret': process.env.ADMIN_JOB_SECRET || '' },
         body: JSON.stringify({
@@ -97,12 +96,10 @@ export async function POST(req: NextRequest) {
           klaviyoApiKey,
           flow: { enrichMessageNames: true },
           audience: { schema: 'required' }
-        }),
-        signal: ac.signal
+        })
       })
         .then(r => { try { log('orchestrator_http_status', { status: r.status }); } catch {} })
-        .catch(e => { try { log('orchestrator_launch_note', { note: String(e?.message || e) }); } catch {} })
-        .finally(() => clearTimeout(timeout));
+        .catch(e => { try { log('orchestrator_launch_note', { note: String(e?.message || e) }); } catch {} });
       log('orchestrator_dispatched', { origin });
       return new Response(JSON.stringify({ ok: true, started: true, logs, forwarded: true }), { status: 202, headers: { 'content-type': 'application/json' } });
     } catch (e: any) {
