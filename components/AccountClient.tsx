@@ -34,11 +34,11 @@ export default function AccountClient({ initial }: Props) {
     useEffect(() => { (async () => {
         const { data } = await supabase.auth.getUser();
         setIsAgency(((data.user?.user_metadata as any)?.signup_type) === 'agency');
-        const uid = data.user?.id;
-        if (uid) {
-            const { data: own } = await supabase.from('accounts').select('id').eq('owner_user_id', uid).limit(1);
-            setIsOwner(Boolean(own && own.length));
-        }
+        try {
+            const r = await fetch('/api/account/is-owner', { cache: 'no-store' });
+            const j = await r.json().catch(() => ({}));
+            setIsOwner(Boolean(j?.isOwnerAny));
+        } catch { setIsOwner(false); }
     })(); }, []);
 
     const onDeleteAccount = async () => {

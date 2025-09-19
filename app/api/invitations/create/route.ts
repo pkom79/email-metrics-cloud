@@ -37,12 +37,13 @@ export async function POST(request: Request) {
     if (error) throw error;
 
     // Send via Supabase Auth invite (uses configured Postmark template). Redirect carries our brand token.
+    const SUPABASE_ONLY = process.env.INVITES_SUPABASE_ONLY === '1';
     try {
       const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://emailmetrics.io';
       await (supabase as any).auth.admin.inviteUserByEmail(email, { redirectTo: `${SITE_URL}/invitations/accept?token=${encodeURIComponent(rawToken)}` });
     } catch (e) {
       // Fallback to our outbox if admin invite fails for any reason
-      try {
+      if (!SUPABASE_ONLY) try {
         await supabase.from('notifications_outbox').insert({
           topic: 'member_invited',
           account_id: accountId,

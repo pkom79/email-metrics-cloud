@@ -193,6 +193,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [selectedAccountId, setSelectedAccountId] = useState<string>('');
     // Human readable label for currently selected admin account
     const [selectedAccountLabel, setSelectedAccountLabel] = useState<string>('');
+    // Member brand switcher
+    const [memberAccounts, setMemberAccounts] = useState<Array<{ id: string; label: string }>>([]);
+    const [memberSelectedId, setMemberSelectedId] = useState<string>('');
     // Removed API integration modal/state (CSV-only ingestion)
     const [showKeyModal, setShowKeyModal] = useState(false);
     const [keyInput, setKeyInput] = useState('');
@@ -381,6 +384,27 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         };
     }, [userId, isAdmin, selectedAccountId, adminCheckComplete]);
 
+    // Load accessible brands for members/agency and default-select
+    useEffect(() => {
+        if (!adminCheckComplete || isAdmin) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const r = await fetch('/api/account/my-brands', { cache: 'no-store' });
+                if (!r.ok) return;
+                const j = await r.json();
+                const list: Array<{ id: string; label: string }> = (j.accounts || []).map((a: any) => ({ id: String(a.id), label: String(a.company || a.name || a.id) }));
+                if (cancelled) return;
+                setMemberAccounts(list);
+                const qp = new URLSearchParams(window.location.search);
+                const qId = qp.get('account');
+                const initial = (qId && list.some((ac: { id: string }) => ac.id === qId)) ? qId : (list[0]?.id || '');
+                setMemberSelectedId(initial);
+            } catch {}
+        })();
+        return () => { cancelled = true; };
+    }, [adminCheckComplete, isAdmin]);
+
     // Server snapshot CSV fallback
     useEffect(() => {
         // Wait for admin check; only for non-admin users (user auto-load of latest snapshot)
@@ -388,6 +412,16 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         if (isAdmin) return;
         let cancelled = false;
         (async () => {
+            // If user picked a brand, load that specific account
+            if (memberSelectedId) {
+                try {
+                    try { (dm as any).clearAllData?.(); } catch {}
+                    const ok = await loadAccountData(dm, memberSelectedId);
+                    if (!cancelled) setIsInitialLoading(false);
+                    if (!cancelled && ok) setDataVersion(v => v + 1);
+                    return;
+                } catch {}
+            }
             try {
                 if (dm.getCampaigns().length || dm.getFlowEmails().length || dm.getSubscribers().length) { setIsInitialLoading(false); return; }
                 const list = await fetch('/api/snapshots/list', { cache: 'no-store' });
@@ -429,7 +463,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             }
         })();
         return () => { cancelled = true };
-    }, [dm, isAdmin, adminCheckComplete]);
+    }, [dm, isAdmin, adminCheckComplete, memberSelectedId]);
 
     // Safe granularity
     const safeGranularity = useMemo(() => { try { if (dm.getCampaigns().length === 0 && dm.getFlowEmails().length === 0) return 'daily'; if (customActive && customDays > 0) return dm.getGranularityForDateRange(`${customDays}d`); if (dateRange === 'all') return dm.getGranularityForDateRange('all'); return dm.getGranularityForDateRange(dateRange === 'custom' ? '30d' : dateRange); } catch { return 'daily'; } }, [dateRange, customActive, customDays, dm]);
@@ -956,7 +990,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             </div>
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 relative ml-auto">
                                 {!isAdmin && (
-                                    <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none"><UploadIcon className="h-4 w-4" />Upload New Reports</button>
+                                    <>
+                                        {memberAccounts.length > 1 && (
+                                            <SelectBase value={memberSelectedId} onChange={e => { const v = (e.target as HTMLSelectElement).value; setMemberSelectedId(v); const url = new URL(window.location.href); if (v) url.searchParams.set('account', v); else url.searchParams.delete('account'); window.history.replaceState(null, '', url.toString()); }} className="w-full sm:w-auto text-sm" minWidthClass="sm:min-w-[240px]">
+                                                {memberAccounts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+                                            </SelectBase>
+                                        )}
+                                        <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none"><UploadIcon className="h-4 w-4" />Upload New Reports</button>
+                                    </>
                                 )}
                                 {isAdmin && (<>
                                     <div className="relative">
