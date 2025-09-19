@@ -84,7 +84,10 @@ export async function POST(req: NextRequest) {
 
     // Forward to orchestrator to avoid inconsistencies and ensure full CSVs
     try {
-      const fwd = await fetch(`${origin}/api/dashboard/update`, {
+      // Fire-and-forget dispatch to orchestrator; abort local wait shortly to avoid 5m fetch timeouts
+      const ac = new AbortController();
+      const timeout = setTimeout(() => ac.abort(new Error('launch-ok-timeout')), 1500);
+      fetch(`${origin}/api/dashboard/update`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-admin-job-secret': process.env.ADMIN_JOB_SECRET || '' },
         body: JSON.stringify({
@@ -94,15 +97,14 @@ export async function POST(req: NextRequest) {
           klaviyoApiKey,
           flow: { enrichMessageNames: true },
           audience: { schema: 'required' }
-        })
-      });
-      const text = await fwd.text().catch(() => '');
-      let json: any = null; try { json = JSON.parse(text); } catch {}
-      log('forwarded_to_orchestrator', { status: fwd.status });
-      if (!fwd.ok) {
-        return new Response(JSON.stringify({ error: 'OrchestratorFailed', status: fwd.status, details: text, logs }), { status: 502, headers: { 'content-type': 'application/json' } });
-      }
-      return new Response(JSON.stringify({ ...json, logs, forwarded: true }), { status: 200, headers: { 'content-type': 'application/json' } });
+        }),
+        signal: ac.signal
+      })
+        .then(r => { try { log('orchestrator_http_status', { status: r.status }); } catch {} })
+        .catch(e => { try { log('orchestrator_launch_note', { note: String(e?.message || e) }); } catch {} })
+        .finally(() => clearTimeout(timeout));
+      log('orchestrator_dispatched', { origin });
+      return new Response(JSON.stringify({ ok: true, started: true, logs, forwarded: true }), { status: 202, headers: { 'content-type': 'application/json' } });
     } catch (e: any) {
       log('forward_error', { message: String(e?.message || e), origin });
       return new Response(JSON.stringify({ error: 'ForwardFetchFailed', details: String(e?.message || e), origin, logs }), { status: 500, headers: { 'content-type': 'application/json' } });
