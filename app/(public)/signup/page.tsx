@@ -80,17 +80,21 @@ function SignupInner() {
 
     useEffect(() => {
         let mounted = true;
+        const controller = new AbortController();
         const fetchCountry = async () => {
             try {
-                const res = await fetch('/api/geo');
+                // Debounce + abort-safe to avoid spamming on flaky networks
+                await new Promise(r => setTimeout(r, 300));
+                const res = await fetch('/api/geo', { signal: controller.signal });
+                if (!res.ok) return;
                 const data = await res.json();
                 const name = data?.country ? ISO_TO_NAME[data.country] : undefined;
                 if (mounted && name) setCountry(name);
-            } catch { }
+            } catch { /* ignore */ }
         };
-        fetchCountry();
-        return () => { mounted = false; };
-    }, []);
+        if (!country) fetchCountry();
+        return () => { mounted = false; controller.abort(); };
+    }, [country]);
 
     const isGdprCountry = useMemo(() => GDPR_COUNTRIES.has(country), [country]);
 
@@ -163,10 +167,8 @@ function SignupInner() {
                     localStorage.removeItem('pending-upload-ids');
                     localStorage.removeItem('pending-upload-id');
 
-                    // Brief delay then redirect to dashboard
-                    setTimeout(() => {
-                        router.replace('/dashboard');
-                    }, 2000);
+                    // Hard navigation to avoid RSC caching discrepancies
+                    setTimeout(() => { window.location.assign('/dashboard'); }, 800);
                 }
             } else {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -174,10 +176,8 @@ function SignupInner() {
                 if (!data?.session) {
                     setError('Sign in failed. Please verify your credentials or confirm your email.');
                 } else {
-                    // give cookies a moment to persist before navigating to SSR-protected route
-                    await new Promise(r => setTimeout(r, 300));
-                    router.replace('/dashboard');
-                    router.refresh();
+                    // Hard navigation to ensure SSR picks up fresh cookie
+                    setTimeout(() => { window.location.assign('/dashboard'); }, 200);
                 }
             }
         } catch (e: any) {
@@ -248,8 +248,8 @@ function SignupInner() {
                 )}
 
                 {/* Email / Password */}
-                <input type="email" required placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
-                <input type="password" required placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
+                <input type="email" autoComplete="email" required placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
+                <input type="password" autoComplete={mode==='signup' ? 'new-password' : 'current-password'} required placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
 
                 {/* GDPR restriction notice (signup only) */}
                 {mode === 'signup' && isGdprCountry && (

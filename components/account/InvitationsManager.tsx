@@ -32,8 +32,11 @@ export default function InvitationsManager() {
   }, []);
 
   const loadInvites = async (acc: string) => {
-    const { data } = await supabase.from('invitations').select('id,email,status,created_at').eq('account_id', acc).eq('status', 'pending').order('created_at', { ascending: false });
-    setPending((data || []) as any);
+    try {
+      const res = await fetch(`/api/invitations/list?accountId=${encodeURIComponent(acc)}`, { cache: 'no-store' });
+      const j = await res.json();
+      setPending((j.invitations || []) as any);
+    } catch { setPending([]); }
   };
   useEffect(() => { if (accountId) loadInvites(accountId); }, [accountId]);
 
