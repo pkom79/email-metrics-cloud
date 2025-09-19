@@ -108,9 +108,8 @@ export default function InvitationsManager() {
             <div key={inv.id} className="p-3 flex items-center justify-between">
               <div className="text-sm text-gray-800 dark:text-gray-200">{inv.email} <span className="text-gray-400">•</span> {new Date(inv.created_at).toLocaleString()}</div>
               <div className="flex items-center gap-2">
-                <span className="text-xs px-2 py-0.5 rounded bg-yellow-50 text-yellow-700 border border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800">Pending</span>
-                {/* Future: revoke */}
-                <button className="hidden h-7 px-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 inline-flex items-center"><XCircle className="w-4 h-4" /></button>
+                <button onClick={async () => { await fetch('/api/invitations/resend', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accountId, invitationId: inv.id }) }); await loadInvites(accountId); }} className="h-7 px-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">Resend</button>
+                <button onClick={async () => { await fetch('/api/invitations/remove', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accountId, invitationId: inv.id }) }); await loadInvites(accountId); }} className="h-7 px-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 inline-flex items-center"><XCircle className="w-4 h-4 mr-1" />Remove</button>
               </div>
             </div>
           ))}

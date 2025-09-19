@@ -262,13 +262,16 @@ function SignupInner() {
                         </div>
                     </div>
                 )}
+                {mode === 'signup' && !country && (
+                    <div className="mt-2 p-2 rounded border border-amber-300 bg-amber-50 text-amber-900 text-xs">Select your country to continue.</div>
+                )}
 
                 <button
                     type="submit"
                     disabled={(mode === 'signup' && isGdprCountry) || submitting}
-                    className={`w-full py-2 rounded ${mode === 'signup' && isGdprCountry ? 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'} ${submitting ? 'opacity-70 cursor-wait' : ''}`}
+                    className={`w-full py-2 rounded ${(mode === 'signup' && (isGdprCountry || !country)) ? 'bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed' : 'bg-purple-600 text-white hover:bg-purple-700'} ${submitting ? 'opacity-70 cursor-wait' : ''}`}
                 >
-                    {submitting ? 'Please wait…' : (mode === 'signup' ? 'Sign up' : 'Sign in')}
+                    {submitting ? 'Please wait…' : (mode === 'signup' ? 'Create account' : 'Sign in')}
                 </button>
             </form>
             {mode === 'signin' && (
