@@ -38,7 +38,12 @@ export async function POST(req: NextRequest) {
     const mode: Mode = body.mode || 'dry-run';
     const days = Math.max(1, Math.min(body.days ?? 7, 30));
 
-    const base = new URL(req.url); base.pathname = ''; base.search = ''; const origin = base.origin;
+    const base = new URL(req.url); base.pathname = ''; base.search = '';
+    // Robust origin resolution for internal forwarding on Vercel/Prod
+    const host = process.env.NEXT_PUBLIC_SITE_URL
+      ? process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, '')
+      : (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : base.origin);
+    const origin = host;
     const supabase = createServiceClient();
 
     // Resolve user's account
@@ -78,25 +83,30 @@ export async function POST(req: NextRequest) {
     log('key_resolved', { hasKey: !!klaviyoApiKey, keySource: (await getAccountKlaviyoApiKey(accountId)) ? 'account' : (process.env.KLAVIYO_API_KEY ? 'env' : 'none') });
 
     // Forward to orchestrator to avoid inconsistencies and ensure full CSVs
-    const fwd = await fetch(`${origin}/api/dashboard/update`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-admin-job-secret': process.env.ADMIN_JOB_SECRET || '' },
-      body: JSON.stringify({
-        mode: 'live',
-        accountId,
-        days,
-        klaviyoApiKey,
-        flow: { enrichMessageNames: true },
-        audience: { schema: 'required' }
-      })
-    });
-    const text = await fwd.text().catch(() => '');
-    let json: any = null; try { json = JSON.parse(text); } catch {}
-    log('forwarded_to_orchestrator', { status: fwd.status });
-    if (!fwd.ok) {
-      return new Response(JSON.stringify({ error: 'OrchestratorFailed', status: fwd.status, details: text, logs }), { status: 502, headers: { 'content-type': 'application/json' } });
+    try {
+      const fwd = await fetch(`${origin}/api/dashboard/update`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-admin-job-secret': process.env.ADMIN_JOB_SECRET || '' },
+        body: JSON.stringify({
+          mode: 'live',
+          accountId,
+          days,
+          klaviyoApiKey,
+          flow: { enrichMessageNames: true },
+          audience: { schema: 'required' }
+        })
+      });
+      const text = await fwd.text().catch(() => '');
+      let json: any = null; try { json = JSON.parse(text); } catch {}
+      log('forwarded_to_orchestrator', { status: fwd.status });
+      if (!fwd.ok) {
+        return new Response(JSON.stringify({ error: 'OrchestratorFailed', status: fwd.status, details: text, logs }), { status: 502, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ ...json, logs, forwarded: true }), { status: 200, headers: { 'content-type': 'application/json' } });
+    } catch (e: any) {
+      log('forward_error', { message: String(e?.message || e), origin });
+      return new Response(JSON.stringify({ error: 'ForwardFetchFailed', details: String(e?.message || e), origin, logs }), { status: 500, headers: { 'content-type': 'application/json' } });
     }
-    return new Response(JSON.stringify({ ...json, logs, forwarded: true }), { status: 200, headers: { 'content-type': 'application/json' } });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: 'Unexpected error', details: String(err?.message || err) }), { status: 500 });
   }
