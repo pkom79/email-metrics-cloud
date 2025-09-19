@@ -35,6 +35,7 @@ export async function GET() {
     if (error) throw error;
 
     let processed = 0;
+    const found = (rows ?? []).length;
 
     for (const row of rows ?? []) {
       // Claim row (avoid double-send)
@@ -92,7 +93,7 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ ok: true, processed });
+    return NextResponse.json({ ok: true, found, processed });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'Worker error' }, { status: 500 });
   }
