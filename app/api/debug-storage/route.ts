@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '../../../lib/supabase/server';
+import { ingestBucketName } from '../../../lib/storage/ingest';
 
 export async function GET() {
     try {
         const supabase = createServiceClient();
         
-        // List files in csv-uploads bucket
+        // List files in the configured ingest bucket
+        const bucket = ingestBucketName();
         const { data: files, error } = await supabase.storage
-            .from('csv-uploads')
+            .from(bucket)
             .list('', {
                 limit: 100,
                 offset: 0
@@ -18,6 +20,7 @@ export async function GET() {
         }
 
         return NextResponse.json({ 
+            bucket,
             files: files || [],
             count: files?.length || 0
         });

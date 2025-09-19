@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '../../../lib/supabase/server';
+import { ingestBucketName } from '../../../lib/storage/ingest';
 
 export async function POST() {
     try {
@@ -13,8 +14,9 @@ export async function POST() {
         console.log('📄 CSV content length:', testCsv.length);
         
         // Try to upload test file
+        const bucket = ingestBucketName();
         const { data, error } = await supabase.storage
-            .from('csv-uploads')
+            .from(bucket)
             .upload(testPath, testCsv, {
                 contentType: 'text/csv',
                 upsert: true
@@ -33,7 +35,7 @@ export async function POST() {
         
         // Try to download it back
         const { data: downloadData, error: downloadError } = await supabase.storage
-            .from('csv-uploads')
+            .from(bucket)
             .download(testPath);
             
         if (downloadError) {
@@ -50,7 +52,8 @@ export async function POST() {
             success: true, 
             upload: data,
             downloadedContent: downloadedText,
-            matches: downloadedText === testCsv
+            matches: downloadedText === testCsv,
+            bucket
         });
         
     } catch (error: any) {

@@ -193,63 +193,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [selectedAccountId, setSelectedAccountId] = useState<string>('');
     // Human readable label for currently selected admin account
     const [selectedAccountLabel, setSelectedAccountLabel] = useState<string>('');
+    // Removed API integration modal/state (CSV-only ingestion)
     const [showKeyModal, setShowKeyModal] = useState(false);
     const [keyInput, setKeyInput] = useState('');
 
     const checkKeyAndSync = useCallback(async () => {
-        setSyncMsg(null);
-        setSyncBusy(true);
-        try {
-            const st = await fetch('/api/integrations/klaviyo/status', { cache: 'no-store' });
-            if (st.status === 401) { setSyncMsg('Please sign in again.'); return; }
-            const sj = await st.json().catch(() => ({}));
-            if (!sj?.hasKey) { setShowKeyModal(true); return; }
-            setSyncMsg('Sync started… preparing data');
-            let res: Response | null = null;
-            try {
-                res = await fetch('/api/dashboard/update/self?debug=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'live', debug: true }) });
-            } catch (e) {
-                // Transient network issue (e.g., ERR_NETWORK_CHANGED); retry once after short delay
-                await new Promise(r => setTimeout(r, 800));
-                res = await fetch('/api/dashboard/update/self?debug=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'live', debug: true }) });
-            }
-            if (res.status === 409) {
-                const j = await res.json().catch(() => ({}));
-                if (j?.reason === 'stale_data') { setSyncMsg('Data is older than 7 days. Please upload CSVs.'); return; }
-                setSyncMsg('Update blocked. Please upload CSVs.');
-                try { console.warn('Update via API: 409', j); } catch {}
-                return;
-            }
-            if (!res.ok) {
-                const t = await res.text().catch(() => '');
-                setSyncMsg(`Sync failed (${res.status}).`);
-                try { console.error('Update via API error', res.status, t); } catch {}
-                return;
-            }
-            const out = await res.json().catch(() => ({}));
-            try { if (out?.logs) console.log('Update via API logs:', out.logs); } catch {}
-            setSyncMsg('Processing snapshot…');
-            // Poll latest snapshot until it changes or a max timeout
-            (async () => {
-                const deadline = Date.now() + 120000; // 2 minutes
-                let attempts = 0;
-                const initial = await (async () => { try { const rr = await fetch('/api/snapshots/last/self', { cache: 'no-store' }); return await rr.json(); } catch { return {}; } })();
-                const initialId = initial?.latest?.id;
-                while (Date.now() < deadline) {
-                    await new Promise(r => setTimeout(r, Math.min(1000 + attempts * 500, 5000)));
-                    attempts++;
-                    try {
-                        const r2 = await fetch('/api/snapshots/last/self', { cache: 'no-store' });
-                        const j2 = await r2.json();
-                        if (j2?.latest?.id && j2.latest.id !== initialId) {
-                            setLastUpdate({ at: j2.latest.created_at, source: j2.latest.label });
-                            setSyncMsg(null);
-                            break;
-                        }
-                    } catch {}
-                }
-            })();
-        } finally { setSyncBusy(false); }
+        // API sync removed; guide user to upload CSVs instead
+        setSyncMsg('Please upload CSV reports to refresh data.');
+        setSyncBusy(false);
     }, []);
     const handleExportJson = useCallback(async () => {
         try {
@@ -1093,33 +1044,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     </div>
                 </div>
             )}
-            {showKeyModal && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center">
-                    <div className="absolute inset-0 bg-black/50" onClick={() => setShowKeyModal(false)} />
-                    <div className="relative z-[61] w-[min(100%,480px)] rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl p-6">
-                        <div className="flex items-center gap-2 mb-3">
-                            <Key className="w-5 h-5 text-purple-600" />
-                            <h3 className="text-lg font-semibold">Connect Klaviyo</h3>
-                        </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">Enter your Klaviyo Private API Key to enable syncing. Stored encrypted.</p>
-                        <input type="password" value={keyInput} onChange={e => setKeyInput(e.target.value)} placeholder="pk_…" className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 mb-3" />
-                        <div className="flex items-center justify-end gap-2">
-                            <button onClick={() => setShowKeyModal(false)} className="px-3 py-1.5 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm">Cancel</button>
-                            <button onClick={async () => {
-                                if (!keyInput.trim()) { setSyncMsg('Enter a valid key'); return; }
-                                try {
-                                    setSyncBusy(true);
-                                    await fetch('/api/integrations/klaviyo/connect', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ apiKey: keyInput.trim() }) });
-                                    setShowKeyModal(false);
-                                    setKeyInput('');
-                                    setSyncMsg('Key saved. Starting sync…');
-                                    await checkKeyAndSync();
-                                } finally { setSyncBusy(false); }
-                            }} className="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Connect & Sync</button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Klaviyo connect modal removed (CSV-only ingestion) */}
             {/* Filters bar (sticky) */}
             {/* Mobile filters trigger (visible only on small screens) */}
             <div className="sm:hidden pt-2">

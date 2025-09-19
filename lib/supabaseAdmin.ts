@@ -17,8 +17,9 @@ export const supabaseAdmin = hasAdminEnv()
     }) as any);
 
 // Preferred order when probing buckets for canonical CSVs
-export const CSV_BUCKETS = ['uploads', 'csv-uploads', 'preauth-uploads'] as const;
+// CSV source buckets to probe for canonical files; streamlined to the single
+// ingest bucket now that legacy paths are no longer used.
+export const CSV_BUCKETS = ['preauth-uploads'] as const;
 export type CsvBucket = typeof CSV_BUCKETS[number];
 
 // (Legacy sharing helpers removed – new snapshot approach does not expose per-file CSV fetching)
-

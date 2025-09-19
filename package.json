@@ -7,9 +7,7 @@
         "build": "next build",
         "start": "next start",
         "lint": "next lint",
-        "typecheck": "tsc --noEmit",
-        "campaigns:live": "tsx scripts/run-campaigns-live.ts",
-        "discover:limits": "tsx scripts/discover-rate-limits.ts"
+        "typecheck": "tsc --noEmit"
     },
     "dependencies": {
         "@popperjs/core": "^2.11.8",

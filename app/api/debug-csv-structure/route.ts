@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '../../../lib/supabase/server';
+import { ingestBucketName } from '../../../lib/storage/ingest';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,8 +9,9 @@ export async function GET() {
         const supabase = createServiceClient();
         
         // List all files in csv-uploads with detailed info
+        const bucket = ingestBucketName();
         const { data: files, error } = await supabase.storage
-            .from('csv-uploads')
+            .from(bucket)
             .list('', { 
                 limit: 100, 
                 sortBy: { column: 'name', order: 'asc' },
@@ -30,7 +32,7 @@ export async function GET() {
             if (file.name) {
                 // Try to list subdirectories
                 const { data: subFiles, error: subError } = await supabase.storage
-                    .from('csv-uploads')
+                    .from(bucket)
                     .list(file.name, { limit: 100 });
                     
                 structure[file.name] = {
@@ -52,6 +54,7 @@ export async function GET() {
                 lastModified: f.updated_at,
                 isFolder: !f.name.includes('.')
             })),
+            bucket,
             detailedStructure: structure
         });
         
