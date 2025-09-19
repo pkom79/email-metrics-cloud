@@ -178,15 +178,43 @@ create policy "snapshot_series_select_owner_or_admin" on public.snapshot_series 
 drop policy if exists "snapshot_series_delete_owner_or_admin" on public.snapshot_series;
 create policy "snapshot_series_delete_owner_or_admin" on public.snapshot_series for delete using (public.is_admin() OR EXISTS (SELECT 1 FROM public.snapshots s JOIN public.accounts a ON a.id = s.account_id WHERE s.id = snapshot_series.snapshot_id AND a.owner_user_id = auth.uid()));
 
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+-- Enable RLS on storage.objects if possible; ignore if lacking privileges or already enabled
+do $$ begin
+  begin
+    execute 'alter table storage.objects enable row level security';
+  exception when insufficient_privilege then
+    -- Hosted environments may restrict altering storage.objects; it's typically already enabled.
+    null;
+  end;
+end $$;
 DROP POLICY IF EXISTS "service_role_csv_uploads_access" ON storage.objects;
 CREATE POLICY "service_role_csv_uploads_access" ON storage.objects FOR ALL TO service_role USING (bucket_id = 'csv-uploads') WITH CHECK (bucket_id = 'csv-uploads');
 DROP POLICY IF EXISTS "service_role_uploads_access" ON storage.objects;
 CREATE POLICY "service_role_uploads_access" ON storage.objects FOR ALL TO service_role USING (bucket_id = 'uploads') WITH CHECK (bucket_id = 'uploads');
 DROP POLICY IF EXISTS "authenticated_csv_uploads_access" ON storage.objects;
-CREATE POLICY "authenticated_csv_uploads_access" ON storage.objects FOR ALL TO authenticated USING (bucket_id = 'csv-uploads' AND (storage.foldername(name))[1] IN (SELECT account_id::text FROM accounts WHERE owner_user_id = auth.uid())) WITH CHECK (bucket_id = 'csv-uploads' AND (storage.foldername(name))[1] IN (SELECT account_id::text FROM accounts WHERE owner_user_id = auth.uid()));
+CREATE POLICY "authenticated_csv_uploads_access" ON storage.objects FOR ALL TO authenticated USING (
+  bucket_id = 'csv-uploads'
+  AND (storage.foldername(name))[1] IN (
+    SELECT id::text FROM accounts WHERE owner_user_id = auth.uid()
+  )
+) WITH CHECK (
+  bucket_id = 'csv-uploads'
+  AND (storage.foldername(name))[1] IN (
+    SELECT id::text FROM accounts WHERE owner_user_id = auth.uid()
+  )
+);
 DROP POLICY IF EXISTS "authenticated_uploads_access" ON storage.objects;
-CREATE POLICY "authenticated_uploads_access" ON storage.objects FOR ALL TO authenticated USING (bucket_id = 'uploads' AND (storage.foldername(name))[1] IN (SELECT account_id::text FROM accounts WHERE owner_user_id = auth.uid())) WITH CHECK (bucket_id = 'uploads' AND (storage.foldername(name))[1] IN (SELECT account_id::text FROM accounts WHERE owner_user_id = auth.uid()));
+CREATE POLICY "authenticated_uploads_access" ON storage.objects FOR ALL TO authenticated USING (
+  bucket_id = 'uploads'
+  AND (storage.foldername(name))[1] IN (
+    SELECT id::text FROM accounts WHERE owner_user_id = auth.uid()
+  )
+) WITH CHECK (
+  bucket_id = 'uploads'
+  AND (storage.foldername(name))[1] IN (
+    SELECT id::text FROM accounts WHERE owner_user_id = auth.uid()
+  )
+);
 
 -- Defensive cleanup (old sharing artifacts)
 DO $$

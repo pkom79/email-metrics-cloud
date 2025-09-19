@@ -66,15 +66,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'uploadId not provided and no suitable upload discovered in bucket' }, { status: 400 });
     }
 
-    // Validate required files exist under the chosen uploadId
+    // Validate required files exist under the chosen uploadId and collect sizes
     const miss: string[] = [];
+    const fileMeta: Array<{ filename: string; bytes: number }> = [];
     for (const f of required) {
       const { data } = await supabase.storage.from(bucket).download(`${uploadId}/${f}`);
-      if (!data) miss.push(f);
+      if (!data) {
+        miss.push(f);
+      } else {
+        const blob = data as Blob;
+        fileMeta.push({ filename: f, bytes: (blob as any).size ?? blob.size ?? 0 });
+      }
     }
     if (miss.length) {
       return NextResponse.json({ error: 'Missing CSVs', missing: miss, hint: `Expecting ${required.join(', ')} under ${uploadId}/ in bucket ${bucket}` }, { status: 400 });
     }
+
+    // Resolve a default uploader (account owner)
+    const { data: accRow } = await supabase.from('accounts').select('owner_user_id').eq('id', accountId).single();
+    const uploader = accRow?.owner_user_id || null;
 
     // Bind upload to account
     const nowIso = new Date().toISOString();
@@ -90,6 +100,29 @@ export async function POST(request: Request) {
       .select('id')
       .single();
     if (snapErr) return NextResponse.json({ error: 'CreateSnapshotFailed', details: snapErr.message }, { status: 500 });
+
+    // Record CSV metadata (best-effort)
+    try {
+      const userIdFallback = () => uploader || '00000000-0000-0000-0000-000000000000';
+      if (uploader) {
+        for (const m of fileMeta) {
+          await supabase.from('csv_files').insert({
+            account_id: accountId,
+            storage_path: `${bucket}/${uploadId}/${m.filename}`,
+            filename: m.filename,
+            byte_size: Number(m.bytes) || 0,
+            uploaded_by: uploader
+          } as any);
+        }
+      }
+      await supabase.rpc('audit_log_event', {
+        p_action: 'csv_uploaded',
+        p_target_table: 'csv_files',
+        p_target_id: snap.id,
+        p_account_id: accountId,
+        p_details: { upload_id: uploadId, files: fileMeta.map(f => f.filename) }
+      }).catch(() => {});
+    } catch {}
 
     let processed = false;
   if (doProcess !== false) {

@@ -21,7 +21,7 @@ begin
   ) then
     -- Drop policies first
     for r in (
-      select polname from pg_policies where schemaname='public' and tablename='snapshot_shares'
+      select policyname as polname from pg_policies where schemaname='public' and tablename='snapshot_shares'
     ) loop
       execute format('drop policy if exists %I on public.snapshot_shares', r.polname);
     end loop;
@@ -64,9 +64,9 @@ declare
   p record;
 begin
   for p in (
-    select polname from pg_policies
+    select policyname as polname from pg_policies
     where schemaname='storage' and tablename='objects'
-      and polname ilike '%public%csv%uploads%'
+      and policyname ilike '%public%csv%uploads%'
   ) loop
     execute format('drop policy if exists %I on storage.objects', p.polname);
   end loop;

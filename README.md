@@ -28,6 +28,18 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_key
 SUPABASE_JWT_SECRET=your_jwt_secret
 ```
 
+### Multi-tenant Accounts and Agencies
+
+The app supports multi-tenant brand accounts with Owners and Members, plus Agencies that can manage multiple brands.
+
+- Brand accounts: `accounts.owner_user_id` + `account_users` for members (DB-enforced limit of 5 members).
+- Agencies: `agencies`, `agency_users`, `agency_accounts`, and optional `agency_user_accounts`.
+- Invitations: `invitations` (hashed tokens) for brand member invites (brand Owner only).
+- Notifications: Postmark outbox processed by `/api/cron/notifications` (Vercel Cron every minute).
+- Storage: Private `csv-uploads` bucket with RLS aligned to `is_account_member()`; agency users inherit access for linked brands.
+
+See `docs/multi-tenant-accounts-plan.md` for full details.
+
 ## Deployment (Vercel)
 
 ### Environment Variables Setup

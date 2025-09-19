@@ -22,7 +22,12 @@ begin
   return out_id;
 end $$;
 
-alter table storage.objects enable row level security;
+-- Enable RLS if possible; ignore insufficient privilege
+do $$ begin
+  begin
+    execute 'alter table storage.objects enable row level security';
+  exception when insufficient_privilege then null; end;
+end $$;
 
 -- Authenticated users: allow read/write in csv-uploads for brand owners/members OR agency-entitled users
 drop policy if exists "authenticated_csv_uploads_member_or_agency" on storage.objects;
@@ -50,8 +55,8 @@ begin
     select 1 from pg_policies
     where schemaname = 'storage' and tablename = 'objects' and policyname = 'service_role_csv_uploads_access'
   ) then
-    execute $$create policy "service_role_csv_uploads_access" on storage.objects
-      for all to service_role using (bucket_id = 'csv-uploads') with check (bucket_id = 'csv-uploads')$$;
+    execute $p$create policy "service_role_csv_uploads_access" on storage.objects
+      for all to service_role using (bucket_id = 'csv-uploads') with check (bucket_id = 'csv-uploads')$p$;
   end if;
 end $$;
 
@@ -64,4 +69,3 @@ begin
 end $$;
 
 commit;
-

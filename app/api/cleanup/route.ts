@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerUser } from '../../../lib/supabase/auth';
+import { supabaseAdmin } from '../../../lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
 
@@ -130,12 +131,27 @@ export async function POST(request: Request) {
             }
         }
 
+        // 5. Admin diagnostics and notifications outbox cleanup (server RPCs)
+        try {
+            const DIAG_DAYS = Number(process.env.DIAG_RETENTION_DAYS || 90);
+            const OUTBOX_DAYS = Number(process.env.OUTBOX_RETENTION_DAYS || 30);
+            const { data: d1, error: e1 } = await supabaseAdmin.rpc('purge_admin_diagnostics', { retention_days: DIAG_DAYS });
+            const { data: d2, error: e2 } = await supabaseAdmin.rpc('purge_notifications_outbox', { retention_days: OUTBOX_DAYS });
+            results.operations.diagnosticsPurge = e1 ? { error: e1.message } : { deleted: d1 ?? 0 };
+            results.operations.outboxPurge = e2 ? { error: e2.message } : { deleted: d2 ?? 0 };
+        } catch (error: any) {
+            results.operations.diagnosticsPurge = { error: error?.message || 'RPC failed' };
+            results.operations.outboxPurge = { error: error?.message || 'RPC failed' };
+        }
+
         // Calculate summary
         const summary = {
             totalExpiredPreauth: results.operations.expiredPreauth?.orphanedPreauth || 0,
             totalOldUploads: results.operations.oldUploads?.removedUploads || 0,
             totalDeletedAccounts: results.operations.deletedAccounts?.removedAccounts || 0,
             totalExpiredShares: results.operations.expiredShares?.cleaned || 0,
+            totalDiagnosticsPurged: results.operations.diagnosticsPurge?.deleted || 0,
+            totalOutboxPurged: results.operations.outboxPurge?.deleted || 0,
             totalOrphanedSnapshots: results.operations.expiredPreauth?.orphanedSnapshots || 0,
             totalProtected: (results.operations.expiredPreauth?.protected || 0) + 
                            (results.operations.oldUploads?.protected || 0),
@@ -143,7 +159,9 @@ export async function POST(request: Request) {
                 ...(results.operations.expiredPreauth?.errors || []),
                 ...(results.operations.oldUploads?.errors || []),
                 ...(results.operations.deletedAccounts?.errors || []),
-                ...(results.operations.expiredShares?.error ? [results.operations.expiredShares.error] : [])
+                ...(results.operations.expiredShares?.error ? [results.operations.expiredShares.error] : []),
+                ...(results.operations.diagnosticsPurge?.error ? [results.operations.diagnosticsPurge.error] : []),
+                ...(results.operations.outboxPurge?.error ? [results.operations.outboxPurge.error] : [])
             ]
         };
 

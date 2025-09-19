@@ -210,14 +210,14 @@ create policy "account_users_insert_owner_or_admin" on public.account_users
     public.is_admin()
     or (
       -- Allow inserting yourself as owner (optional future path) if no owner row exists
-      new.user_id = auth.uid() and new.role = 'owner'
+      user_id = auth.uid() and role = 'owner'
       and not exists (
-        select 1 from public.account_users ou where ou.account_id = new.account_id and ou.role = 'owner'
+        select 1 from public.account_users ou where ou.account_id = account_id and ou.role = 'owner'
       )
     )
     or (
       -- Owner adds a member (commonly via invite acceptance handled server-side)
-      public.is_account_owner(new.account_id) and new.role = 'member'
+      public.is_account_owner(account_id) and role = 'member'
     )
   );
 
@@ -265,4 +265,3 @@ create policy "audit_log_insert_actor_matches" on public.audit_log
   for insert to authenticated with check (auth.uid() is not null and actor_user_id = auth.uid());
 
 commit;
-
