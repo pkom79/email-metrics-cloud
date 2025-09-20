@@ -35,12 +35,12 @@ export default function AccountClient({ initial }: Props) {
         const { data } = await supabase.auth.getUser();
         setIsAgency(((data.user?.user_metadata as any)?.signup_type) === 'agency');
         try {
-            // Only show Management when you are owner of the current brand context
+            // Show Management when owner of current brand if provided, otherwise when owner of any brand
             const sp = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
             const accountId = sp.get('account');
             const r = await fetch(`/api/account/is-owner${accountId ? `?accountId=${encodeURIComponent(accountId)}` : ''}`, { cache: 'no-store' });
             const j = await r.json().catch(() => ({}));
-            const isOwnerCurrent = accountId ? Boolean(j?.isOwnerOf) : false;
+            const isOwnerCurrent = accountId ? Boolean(j?.isOwnerOf) : Boolean(j?.isOwnerAny);
             setIsOwner(isOwnerCurrent);
         } catch { setIsOwner(false); }
     })(); }, []);
@@ -254,6 +254,12 @@ export default function AccountClient({ initial }: Props) {
                             })()}
                         </div>
                     )}
+
+                    {/* Agencies overview for global admin */}
+                    <div className="mt-4 space-y-2">
+                        <h3 className="font-semibold">Agencies</h3>
+                        <AdminAgenciesPanel />
+                    </div>
                 </section>
             )}
 
@@ -360,6 +366,68 @@ export default function AccountClient({ initial }: Props) {
                     >{deleting ? 'Deleting…' : 'Delete Account'}</button>
                 </section>
             )}
+        </div>
+    );
+}
+
+// Lightweight admin panel to list agencies with details
+function AdminAgenciesPanel() {
+    const [loading, setLoading] = useState(true);
+    const [err, setErr] = useState<string | null>(null);
+    const [agencies, setAgencies] = useState<any[]>([]);
+    const [selId, setSelId] = useState<string>('');
+
+    useEffect(() => { (async () => {
+        try {
+            const res = await fetch('/api/agencies', { cache: 'no-store' });
+            const j = await res.json();
+            if (!res.ok) throw new Error(j?.error || 'Failed');
+            setAgencies(j.agencies || []);
+            if ((j.agencies || []).length) setSelId(j.agencies[0].id);
+        } catch (e: any) { setErr(e?.message || 'Failed to load agencies'); }
+        finally { setLoading(false); }
+    })(); }, []);
+
+    if (loading) return <div className="text-xs text-gray-500">Loading…</div>;
+    if (err) return <div className="text-xs text-rose-600">{err}</div>;
+    if (agencies.length === 0) return <div className="text-xs text-gray-500">No agencies found.</div>;
+
+    const ag = agencies.find(a => a.id === selId) || agencies[0];
+    return (
+        <div className="text-xs space-y-2">
+            <select value={selId} onChange={e => setSelId(e.target.value)} className="h-8 px-2 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700">
+                {agencies.map(a => <option key={a.id} value={a.id}>{a.name || a.id}</option>)}
+            </select>
+            <div className="border rounded p-3 bg-gray-50 dark:bg-gray-800/40 space-y-2">
+                <div className="grid sm:grid-cols-2 gap-2">
+                    <div><span className="font-medium">Owner Email:</span> {ag.ownerEmail || '—'}</div>
+                    <div><span className="font-medium">Created:</span> {ag.createdAt ? new Date(ag.createdAt).toLocaleString() : '—'}</div>
+                    <div><span className="font-medium">Brand Limit:</span> {ag.brandLimit}</div>
+                    <div><span className="font-medium">Seat Limit:</span> {ag.seatLimit}</div>
+                </div>
+                <div>
+                    <div className="font-medium mb-1">Linked Brands</div>
+                    <div className="divide-y divide-gray-200 dark:divide-gray-700 border rounded">
+                        {(ag.brands || []).length === 0 && <div className="p-2">None</div>}
+                        {(ag.brands || []).map((b: any) => <div key={b.id} className="p-2">{b.label}</div>)}
+                    </div>
+                </div>
+                <div>
+                    <div className="font-medium mb-1">Users</div>
+                    <div className="divide-y divide-gray-200 dark:divide-gray-700 border rounded">
+                        {(ag.users || []).length === 0 && <div className="p-2">None</div>}
+                        {(ag.users || []).map((u: any) => (
+                            <div key={u.userId} className="p-2 flex items-center justify-between">
+                                <div>{u.email || u.userId}</div>
+                                <div className="flex items-center gap-2">
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide ${u.role==='owner' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-700' : u.role==='admin' ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700' : 'bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-700'}`}>{u.role}</span>
+                                    {!u.allAccounts && <span className="px-2 py-0.5 rounded text-[10px] bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-700">{(u.brandIds || []).length} brand(s)</span>}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

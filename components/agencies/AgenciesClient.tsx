@@ -21,6 +21,12 @@ export default function AgenciesClient() {
   const [selectedOwnerAccountId, setSelectedOwnerAccountId] = useState('');
   const [linkToken, setLinkToken] = useState<string | null>(null);
 
+  // Manage user access
+  const [memberEmail, setMemberEmail] = useState('');
+  const [memberRole, setMemberRole] = useState<'admin' | 'member'>('member');
+  const [scopeAllBrands, setScopeAllBrands] = useState(true);
+  const [selectedBrandIds, setSelectedBrandIds] = useState<string[]>([]);
+
   useEffect(() => {
     (async () => {
       // Load agencies I belong to
@@ -98,6 +104,23 @@ export default function AgenciesClient() {
     finally { setBusy(false); }
   };
 
+  const toggleBrand = (id: string) => {
+    setSelectedBrandIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const onApplyAccess = async () => {
+    if (!selected) return; setBusy(true); setErr(null); setMsg(null);
+    try {
+      const res = await fetch('/api/agencies/users/upsert', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ agencyId: selected, userEmail: memberEmail, role: memberRole, allAccounts: scopeAllBrands, accountIds: selectedBrandIds })
+      });
+      const j = await res.json(); if (!res.ok) throw new Error(j?.error || 'Failed');
+      setMsg('Access updated'); setMemberEmail(''); setSelectedBrandIds([]); setScopeAllBrands(true); setMemberRole('member');
+    } catch (e: any) { setErr(e?.message || 'Failed to update access'); }
+    finally { setBusy(false); }
+  };
+
   return (
     <div className="space-y-6">
       {agencies.length === 0 && (
@@ -111,6 +134,48 @@ export default function AgenciesClient() {
           </div>
           {err && <div className="text-sm text-rose-600 mt-2">{err}</div>}
           {msg && <div className="text-sm text-emerald-600 mt-2">{msg}</div>}
+        </div>
+      )}
+      {selected && (
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 space-y-4">
+          <div className="text-sm font-medium text-gray-800 dark:text-gray-200">Manage User Access</div>
+          <div className="grid gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <input value={memberEmail} onChange={e => setMemberEmail(e.target.value)} placeholder="Member email" className="flex-1 min-w-[220px] h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm" />
+              <select value={memberRole} onChange={e => setMemberRole(e.target.value as any)} className="h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm">
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-4 text-sm">
+              <label className="inline-flex items-center gap-2">
+                <input type="radio" name="scope" checked={scopeAllBrands} onChange={() => setScopeAllBrands(true)} /> All brands
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input type="radio" name="scope" checked={!scopeAllBrands} onChange={() => setScopeAllBrands(false)} /> Select brands
+              </label>
+            </div>
+            {!scopeAllBrands && (
+              <div className="grid sm:grid-cols-2 gap-2">
+                {brands.map((b, i) => {
+                  const id = b.accounts?.id || `b${i}`;
+                  const label = b.accounts?.company || b.accounts?.name || id;
+                  const checked = selectedBrandIds.includes(id);
+                  return (
+                    <label key={id} className={`flex items-center gap-2 border rounded px-3 py-2 ${checked ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-700' : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700'}`}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleBrand(id)} />
+                      <span>{label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+            <div>
+              <button disabled={busy || !memberEmail || (!scopeAllBrands && selectedBrandIds.length === 0)} onClick={onApplyAccess} className="h-9 px-4 rounded bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 inline-flex items-center gap-2"><Plus className="w-4 h-4" />Apply Access</button>
+            </div>
+            {err && <div className="text-sm text-rose-600">{err}</div>}
+            {msg && <div className="text-sm text-emerald-600">{msg}</div>}
+          </div>
         </div>
       )}
 
