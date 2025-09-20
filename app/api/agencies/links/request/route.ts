@@ -67,7 +67,7 @@ export async function POST(request: Request) {
           topic: 'agency_link_requested',
           account_id: accountId,
           recipient_user_id: acc.owner_user_id,
-          payload: { agency_id: agencyId }
+          payload: { agency_id: agencyId, token: rawToken }
         } as any);
       }
     } catch {}

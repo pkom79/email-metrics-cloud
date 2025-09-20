@@ -61,11 +61,14 @@ export async function GET() {
           .eq('id', row.account_id)
           .single();
         const brandName = acc?.company || acc?.name || 'Brand';
-        // Build CTA URL; for member_invited include the acceptance token when available
+        // Build CTA URL; for member_invited and agency_link_requested include tokens when available
         const tokenFromPayload = (row as any)?.payload?.token as string | undefined;
-        const ctaUrl = row.topic === 'member_invited' && tokenFromPayload
-          ? `${SITE_URL}/invitations/accept?token=${encodeURIComponent(tokenFromPayload)}`
-          : `${SITE_URL}/dashboard?account=${row.account_id}`;
+        let ctaUrl = `${SITE_URL}/dashboard?account=${row.account_id}`;
+        if (row.topic === 'member_invited' && tokenFromPayload) {
+          ctaUrl = `${SITE_URL}/invitations/accept?token=${encodeURIComponent(tokenFromPayload)}`;
+        } else if (row.topic === 'agency_link_requested' && tokenFromPayload) {
+          ctaUrl = `${SITE_URL}/agency/approve?token=${encodeURIComponent(tokenFromPayload)}`;
+        }
         // Resolve recipient email (prefer explicit email)
         const to = row.recipient_email || (await resolveUserEmail(row.recipient_user_id));
         if (!to) throw new Error('No recipient');
