@@ -13,48 +13,43 @@ function ChangeEmailInner() {
     useEffect(() => {
         const init = async () => {
             try {
-                // Check for URL hash parameters (Supabase default format)
+                // Handle both hash-based and token_hash-based redirects
                 const hash = typeof window !== 'undefined' ? window.location.hash : '';
                 let token_hash = search.get('token_hash');
                 let type = search.get('type');
 
-                // Parse hash parameters if query parameters are not present
-                if (!token_hash && hash) {
-                    const hashParams = new URLSearchParams(hash.replace(/^#/, ''));
-                    token_hash = hashParams.get('token_hash') || hashParams.get('access_token');
-                    type = hashParams.get('type') || 'email_change';
+                if (hash && hash.includes('access_token')) {
+                    const params = new URLSearchParams(hash.replace(/^#/, ''));
+                    const access_token = params.get('access_token');
+                    const refresh_token = params.get('refresh_token');
+                    const hType = params.get('type');
+                    if (access_token && refresh_token && hType === 'email_change') {
+                        const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+                        if (error) {
+                            setError(`Failed to apply email change: ${error.message}`);
+                        } else {
+                            setSuccess(true);
+                            history.replaceState(null, '', window.location.pathname + window.location.search);
+                            setTimeout(() => router.replace('/account'), 1500);
+                        }
+                        return;
+                    }
                 }
 
-                console.log('Email change verification:', { token_hash: !!token_hash, type });
-
-                if (token_hash && type === 'email_change') {
-                    const { data, error } = await supabase.auth.verifyOtp({
-                        token_hash,
-                        type: 'email_change'
-                    });
-
+                // Fallback: verify token_hash (legacy)
+                const tokenHash = token_hash || undefined;
+                if (tokenHash && (type === 'email_change' || !type)) {
+                    const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'email_change' as any });
                     if (error) {
-                        console.error('Email change verification error:', error);
                         setError(`Failed to verify email change: ${error.message}`);
                     } else if (data?.user) {
-                        console.log('Email change successful:', data.user.email);
-
-                        // Refresh the session to get updated user data
-                        const { error: refreshError } = await supabase.auth.refreshSession();
-                        if (refreshError) {
-                            console.warn('Session refresh warning:', refreshError);
-                        }
-
                         setSuccess(true);
-                        setTimeout(() => router.replace('/account'), 2000);
+                        setTimeout(() => router.replace('/account'), 1500);
                     } else {
                         setError('Email verification succeeded but user data is missing');
                     }
-                } else if (hash.includes('message=Confirmation+link+accepted')) {
-                    // Handle Supabase confirmation message
-                    setError('Email change confirmation received. Please check your new email for the verification link.');
                 } else {
-                    setError('Invalid or missing verification parameters');
+                    setError('Invalid or expired link');
                 }
             } catch (err: any) {
                 console.error('Email change error:', err);

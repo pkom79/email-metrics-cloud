@@ -14,11 +14,31 @@ function ResetPasswordInner() {
     // Ensure we have an active session (generated via recovery link)
     useEffect(() => {
         const init = async () => {
-            const token_hash = search.get('token_hash');
-            const type = search.get('type');
-            if (token_hash && type === 'recovery') {
-                const { error } = await supabase.auth.verifyOtp({ token_hash, type: 'recovery' });
-                if (error) setError(error.message);
+            // Supabase recovery links usually come with tokens in the URL hash
+            const hash = typeof window !== 'undefined' ? window.location.hash : '';
+            const qsTokenHash = search.get('token_hash');
+            const qsType = search.get('type');
+            try {
+                if (hash && hash.includes('access_token')) {
+                    const params = new URLSearchParams(hash.replace(/^#/, ''));
+                    const access_token = params.get('access_token');
+                    const refresh_token = params.get('refresh_token');
+                    const type = params.get('type');
+                    if (access_token && refresh_token && type === 'recovery') {
+                        const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+                        if (error) setError(error.message);
+                        // Clean hash to avoid re-processing
+                        history.replaceState(null, '', window.location.pathname + window.location.search);
+                        return;
+                    }
+                }
+                // Legacy/alternate flow: verify token_hash if present
+                if (qsTokenHash && qsType === 'recovery') {
+                    const { error } = await supabase.auth.verifyOtp({ token_hash: qsTokenHash, type: 'recovery' as any });
+                    if (error) setError(error.message);
+                }
+            } catch (e: any) {
+                setError(e?.message || 'Failed to establish session from recovery link');
             }
         };
         init();
@@ -31,6 +51,8 @@ function ResetPasswordInner() {
             setError('Passwords do not match.');
             return;
         }
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) { setError('Auth session missing!'); return; }
         const { error } = await supabase.auth.updateUser({ password });
         if (error) {
             setError(error.message);

@@ -60,8 +60,17 @@ export default function AcceptInvitationPage() {
           const { error } = await supabase.auth.signInWithPassword({ email: invitedEmail, password });
           if (error) throw error;
         } else {
+          // Try sign up first; if Supabase reports the user already exists, fall back to sign-in
           const { error } = await supabase.auth.signUp({ email: invitedEmail, password });
-          if (error) throw error;
+          if (error) {
+            const msg = String(error.message || '').toLowerCase();
+            if (msg.includes('registered') || msg.includes('exists')) {
+              const { error: e2 } = await supabase.auth.signInWithPassword({ email: invitedEmail, password });
+              if (e2) throw e2;
+            } else {
+              throw error;
+            }
+          }
         }
         // refresh session
         u = (await supabase.auth.getUser()).data;
@@ -105,7 +114,6 @@ export default function AcceptInvitationPage() {
         {err && <div className="text-sm text-rose-600">{err}</div>}
         {msg && <div className="text-sm text-emerald-600">{msg}</div>}
         <button disabled={busy || !token} className="h-10 px-4 rounded bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50">Accept</button>
-        <div className="text-xs text-gray-500">You won’t need the token or email; just confirm your password if asked.</div>
       </form>
     </div>
   );
