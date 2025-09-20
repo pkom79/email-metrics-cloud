@@ -21,14 +21,16 @@ class AuthManager {
       return;
     }
 
-    // Create client with minimal auth features
+    // Create client with auth features suitable for account management flows
     this.client = createClient(url, anon, {
       storage: { useNewHostname: true },
       auth: {
         debug: false,
         persistSession: true,
-        autoRefreshToken: false, // Completely disable auto refresh
-        detectSessionInUrl: false // Disable URL detection
+        // Enable refresh so sensitive operations (update email/password) work reliably
+        autoRefreshToken: true,
+        // We explicitly handle OTP flows via verifyOtp, so leave URL detection off
+        detectSessionInUrl: false
       }
     } as any);
   }

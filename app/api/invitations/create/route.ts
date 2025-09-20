@@ -61,7 +61,8 @@ export async function POST(request: Request) {
         const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://emailmetrics.io';
         await (supabase as any).auth.admin.inviteUserByEmail(email, { redirectTo: `${SITE_URL}/invitations/accept?token=${encodeURIComponent(rawToken)}` });
       } catch (e) {
-        if (!SUPABASE_ONLY) try {
+        // Always fallback to outbox on failure so invites don't get stuck when Supabase email is unavailable
+        try {
           await supabase.from('notifications_outbox').insert({
             topic: 'member_invited',
             account_id: accountId,
