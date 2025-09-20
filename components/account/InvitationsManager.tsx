@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase/client';
-import { UserPlus, Copy, XCircle } from 'lucide-react';
+import { UserPlus, XCircle } from 'lucide-react';
 
 type Account = { id: string; name: string | null; company: string | null };
 type Invitation = { id: string; email: string; status: 'pending' | 'accepted' | 'revoked' | 'expired'; created_at: string };
@@ -12,9 +12,10 @@ export default function InvitationsManager() {
   const [email, setEmail] = useState('');
   const [pending, setPending] = useState<Invitation[]>([]);
   const [creating, setCreating] = useState(false);
-  const [createdToken, setCreatedToken] = useState<string | null>(null);
+  // No longer surface raw tokens in the UI
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   const [isAgency, setIsAgency] = useState(false);
   useEffect(() => {
@@ -41,15 +42,14 @@ export default function InvitationsManager() {
   useEffect(() => { if (accountId) loadInvites(accountId); }, [accountId]);
 
   const onCreate = async () => {
-    setErr(null); setMsg(null); setCreatedToken(null);
+    setErr(null); setMsg(null);
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setErr('Enter a valid email'); return; }
     setCreating(true);
     try {
       const res = await fetch('/api/invitations/create', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accountId, email: email.trim() }) });
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || 'Failed');
-      setCreatedToken(j.token);
-      setMsg('Invitation created');
+      setMsg('Invitation created and email queued');
       setEmail('');
       await loadInvites(accountId);
     } catch (e: any) { setErr(e?.message || 'Failed to create invitation'); }
@@ -86,16 +86,6 @@ export default function InvitationsManager() {
         </div>
         {err && <div className="text-sm text-rose-600">{err}</div>}
         {msg && <div className="text-sm text-emerald-600">{msg}</div>}
-        {createdToken && (
-          <div className="mt-3 p-3 rounded border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
-            <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">Share this token with the invitee to accept:</div>
-            <div className="flex items-center gap-2">
-              <code className="text-xs bg-white dark:bg-gray-900 px-2 py-1 rounded border border-gray-200 dark:border-gray-700">{createdToken}</code>
-              <button className="h-7 px-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 inline-flex items-center" onClick={() => navigator.clipboard.writeText(createdToken)}><Copy className="w-4 h-4" /></button>
-            </div>
-            <div className="text-xs text-gray-500 mt-1">Invitees can accept at /invitations/accept</div>
-          </div>
-        )}
       </div>
 
       <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5">
@@ -108,7 +98,23 @@ export default function InvitationsManager() {
             <div key={inv.id} className="p-3 flex items-center justify-between">
               <div className="text-sm text-gray-800 dark:text-gray-200">{inv.email} <span className="text-gray-400">•</span> {new Date(inv.created_at).toLocaleString()}</div>
               <div className="flex items-center gap-2">
-                <button onClick={async () => { await fetch('/api/invitations/resend', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accountId, invitationId: inv.id }) }); await loadInvites(accountId); }} className="h-7 px-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">Resend</button>
+                <button
+                  disabled={resendingId === inv.id}
+                  onClick={async () => {
+                    setErr(null); setMsg(null); setResendingId(inv.id);
+                    try {
+                      const res = await fetch('/api/invitations/resend', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accountId, invitationId: inv.id }) });
+                      const j = await res.json().catch(() => ({}));
+                      if (!res.ok) throw new Error(j?.error || 'Failed');
+                      setMsg(`Invitation re-sent to ${inv.email}`);
+                      setTimeout(() => setMsg(null), 3000);
+                      await loadInvites(accountId);
+                    } catch (e: any) { setErr(e?.message || 'Failed to resend'); }
+                    finally { setResendingId(null); }
+                  }}
+                  className="h-7 px-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">
+                  {resendingId === inv.id ? 'Resending…' : 'Resend'}
+                </button>
                 <button onClick={async () => { await fetch('/api/invitations/remove', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accountId, invitationId: inv.id }) }); await loadInvites(accountId); }} className="h-7 px-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 inline-flex items-center"><XCircle className="w-4 h-4 mr-1" />Remove</button>
               </div>
             </div>

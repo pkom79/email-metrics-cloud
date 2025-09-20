@@ -36,14 +36,18 @@ export async function POST(request: Request) {
       .single();
     if (error) throw error;
 
-    // Send via Supabase Auth invite (uses configured Postmark template). Redirect carries our brand token.
+    // If the user already exists in Auth, skip Supabase invite (avoids 422) and email via outbox.
     const SUPABASE_ONLY = process.env.INVITES_SUPABASE_ONLY === '1';
+    let existingUser = false;
     try {
-      const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://emailmetrics.io';
-      await (supabase as any).auth.admin.inviteUserByEmail(email, { redirectTo: `${SITE_URL}/invitations/accept?token=${encodeURIComponent(rawToken)}` });
-    } catch (e) {
-      // Fallback to our outbox if admin invite fails for any reason
-      if (!SUPABASE_ONLY) try {
+      const { data } = await (supabase as any).auth.admin.getUserByEmail(email);
+      existingUser = !!data?.user?.id;
+    } catch {}
+
+    // Send invite
+    if (existingUser) {
+      // Existing user: always use our outbox path
+      try {
         await supabase.from('notifications_outbox').insert({
           topic: 'member_invited',
           account_id: accountId,
@@ -51,6 +55,21 @@ export async function POST(request: Request) {
           payload: { token: rawToken }
         } as any);
       } catch {}
+    } else {
+      // New user: attempt Supabase admin invite first; fallback to outbox
+      try {
+        const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://emailmetrics.io';
+        await (supabase as any).auth.admin.inviteUserByEmail(email, { redirectTo: `${SITE_URL}/invitations/accept?token=${encodeURIComponent(rawToken)}` });
+      } catch (e) {
+        if (!SUPABASE_ONLY) try {
+          await supabase.from('notifications_outbox').insert({
+            topic: 'member_invited',
+            account_id: accountId,
+            recipient_email: email,
+            payload: { token: rawToken }
+          } as any);
+        } catch {}
+      }
     }
 
     // Audit (non-fatal)
@@ -64,7 +83,8 @@ export async function POST(request: Request) {
       });
     } catch {}
 
-    return NextResponse.json({ ok: true, token: rawToken });
+    // Do not return the token to the client UI
+    return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'Failed to create invitation' }, { status: 500 });
   }

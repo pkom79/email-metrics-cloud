@@ -8,23 +8,23 @@ interface DataCoverageNoticeProps {
 }
 
 export default function DataCoverageNotice({ dataManager }: DataCoverageNoticeProps) {
-    try {
-        // Re-render when dataset hydrates/persists
-        const [, setTick] = React.useState(0);
-        React.useEffect(() => {
-            const onHydrated = () => setTick(t => t + 1);
+    // Re-render when dataset hydrates/persists
+    const [, setTick] = React.useState(0);
+    React.useEffect(() => {
+        const onHydrated = () => setTick(t => t + 1);
+        if (typeof window !== 'undefined') {
+            window.addEventListener('em:dataset-hydrated', onHydrated as any);
+            window.addEventListener('em:dataset-persisted', onHydrated as any);
+        }
+        return () => {
             if (typeof window !== 'undefined') {
-                window.addEventListener('em:dataset-hydrated', onHydrated as any);
-                window.addEventListener('em:dataset-persisted', onHydrated as any);
+                window.removeEventListener('em:dataset-hydrated', onHydrated as any);
+                window.removeEventListener('em:dataset-persisted', onHydrated as any);
             }
-            return () => {
-                if (typeof window !== 'undefined') {
-                    window.removeEventListener('em:dataset-hydrated', onHydrated as any);
-                    window.removeEventListener('em:dataset-persisted', onHydrated as any);
-                }
-            };
-        }, []);
+        };
+    }, []);
 
+    try {
         const last = dataManager.getLastEmailDate();
         if (!last) return null;
         const lastStr = last.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
