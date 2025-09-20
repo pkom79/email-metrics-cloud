@@ -18,15 +18,34 @@ export default function AcceptInvitationPage() {
     (async () => {
       const t = sp?.get('token');
       if (t && !token) setToken(t);
-      if (!t) return;
-      // Load invitation info
+
+      // First, if this page was opened from a Supabase invite email, the URL contains hash tokens; set session so we don't need a password
       try {
-        const res = await fetch(`/api/invitations/info?token=${encodeURIComponent(t)}`, { cache: 'no-store' });
-        const j = await res.json();
-        if (!res.ok) throw new Error(j?.error || 'Invalid or expired invitation');
-        setInv(j);
-      } catch (e: any) {
-        setErr(e?.message || 'Invalid or expired invitation');
+        const hash = typeof window !== 'undefined' ? window.location.hash : '';
+        if (hash && hash.includes('access_token')) {
+          const params = new URLSearchParams(hash.replace(/^#/, ''));
+          const access_token = params.get('access_token');
+          const refresh_token = params.get('refresh_token');
+          if (access_token && refresh_token) {
+            const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+            if (!error) {
+              // Clean the hash so we don't re-process it
+              history.replaceState(null, '', window.location.pathname + window.location.search);
+            }
+          }
+        }
+      } catch {}
+
+      // Load invitation info
+      if (t) {
+        try {
+          const res = await fetch(`/api/invitations/info?token=${encodeURIComponent(t)}`, { cache: 'no-store' });
+          const j = await res.json();
+          if (!res.ok) throw new Error(j?.error || 'Invalid or expired invitation');
+          setInv(j);
+        } catch (e: any) {
+          setErr(e?.message || 'Invalid or expired invitation');
+        }
       }
       // Get current session email (if any)
       try {
@@ -94,7 +113,6 @@ export default function AcceptInvitationPage() {
         {inv && (
           <div className="space-y-1">
             <div className="text-sm text-gray-700 dark:text-gray-300">You’re invited to join <span className="font-medium">{inv.brand}</span></div>
-            <div className="text-xs text-gray-500">Email: {inv.email}</div>
           </div>
         )}
 
