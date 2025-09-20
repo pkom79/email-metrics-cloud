@@ -419,17 +419,25 @@ function AdminAgenciesPanel() {
                 </div>
                 <div>
                     <div className="font-medium mb-1">Users</div>
-                    <div className="divide-y divide-gray-200 dark:divide-gray-700 border rounded">
+                                        <div className="divide-y divide-gray-200 dark:divide-gray-700 border rounded">
                         {(ag.users || []).length === 0 && <div className="p-2">None</div>}
-                        {(ag.users || []).map((u: any) => (
-                            <div key={u.userId} className="p-2 flex items-center justify-between">
+                        {(ag.users || []).map((u: any) => {
+                            const roleLabel = u.role==='owner' ? 'Agency Owner' : u.role==='admin' ? 'Agency Admin' : 'Agency Member';
+                            const roleClass = u.role==='owner'
+                                ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-700'
+                                : u.role==='admin'
+                                  ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700'
+                                  : 'bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-700';
+                            return (
+                              <div key={u.userId} className="p-2 flex items-center justify-between">
                                 <div>{u.email || u.userId}</div>
                                 <div className="flex items-center gap-2">
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide ${u.role==='owner' ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-700' : u.role==='admin' ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700' : 'bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-700'}`}>{u.role}</span>
-                                    {!u.allAccounts && <span className="px-2 py-0.5 rounded text-[10px] bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-700">{(u.brandIds || []).length} brand(s)</span>}
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide ${roleClass}`}>{roleLabel}</span>
+                                  {!u.allAccounts && <span className="px-2 py-0.5 rounded text-[10px] bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-700">{(u.brandIds || []).length} brand(s)</span>}
                                 </div>
-                            </div>
-                        ))}
+                              </div>
+                            );
+                        })}
                     </div>
                 </div>
             </div>

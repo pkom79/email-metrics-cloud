@@ -72,6 +72,12 @@ export async function POST(request: Request) {
       }
     } catch {}
 
+    // Opportunistically trigger the notifications worker now to avoid delays
+    try {
+      const url = new URL(request.url);
+      await fetch(`${url.origin}/api/cron/notifications`).catch(() => {});
+    } catch {}
+
     return NextResponse.json({ ok: true, token: rawToken });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'Failed to request link' }, { status: 500 });
