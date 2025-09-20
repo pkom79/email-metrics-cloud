@@ -136,6 +136,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [mfCompareMode, setMfCompareMode] = useState<typeof compareMode>(compareMode);
     const [mfSelectedFlow, setMfSelectedFlow] = useState<string>(selectedFlow);
 
+    // Role badge (set after admin detection)
+    const [roleBadge, setRoleBadge] = useState<{ label: 'Admin' | 'Owner' | 'Member'; className: string } | null>(null);
+
     // Granularity validation logic
     const totalDays = useMemo(() => {
         if (dateRange === 'custom' && customActive) {
@@ -199,6 +202,27 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // Removed API integration modal/state (CSV-only ingestion)
     const [showKeyModal, setShowKeyModal] = useState(false);
     const [keyInput, setKeyInput] = useState('');
+
+    // Resolve role badge now that isAdmin and account selections exist
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            if (isAdmin) { if (!cancelled) setRoleBadge({ label: 'Admin', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200' }); return; }
+            const accId = memberSelectedId || selectedAccountId || '';
+            if (!accId) { setRoleBadge(null); return; }
+            try {
+                const r = await fetch(`/api/account/is-owner?accountId=${encodeURIComponent(accId)}`, { cache: 'no-store' });
+                const j = await r.json().catch(() => ({}));
+                const isOwner = Boolean(j?.isOwnerOf);
+                if (cancelled) return;
+                setRoleBadge(isOwner
+                    ? { label: 'Owner', className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200' }
+                    : { label: 'Member', className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200' }
+                );
+            } catch { if (!cancelled) setRoleBadge({ label: 'Member', className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200' }); }
+        })();
+        return () => { cancelled = true; };
+    }, [isAdmin, memberSelectedId, selectedAccountId]);
 
     const checkKeyAndSync = useCallback(async () => {
         // API sync removed; guide user to upload CSVs instead
@@ -998,7 +1022,15 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                             label = sel?.label;
                                         }
                                     }
-                                    return label ? <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{label}</p> : null;
+                                    // Resolve role tag: Admin/Owner/Member with colors similar to Admin badge
+                                    const roleLabel = roleBadge?.label;
+                                    const roleClass = roleBadge?.className || '';
+                                    return label ? (
+                                        <div className="mt-1 flex items-center gap-2">
+                                            <p className="text-sm text-gray-600 dark:text-gray-300">{label}</p>
+                                            {roleLabel && <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded ${roleClass}`}>{roleLabel}</span>}
+                                        </div>
+                                    ) : null;
                                 })()}
                             </div>
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 relative ml-auto">

@@ -16,6 +16,7 @@ export async function GET() {
     const POSTMARK_TEMPLATE_NOTIFICATION_ID = process.env.POSTMARK_TEMPLATE_NOTIFICATION_ID; // generic fallback
     const POSTMARK_TEMPLATE_DATA_UPDATED_ID = process.env.POSTMARK_TEMPLATE_DATA_UPDATED_ID || POSTMARK_TEMPLATE_NOTIFICATION_ID;
     const POSTMARK_TEMPLATE_MEMBER_INVITED_ID = process.env.POSTMARK_TEMPLATE_MEMBER_INVITED_ID || POSTMARK_TEMPLATE_NOTIFICATION_ID;
+    const POSTMARK_TEMPLATE_MEMBER_REVOKED_ID = process.env.POSTMARK_TEMPLATE_MEMBER_REVOKED_ID || POSTMARK_TEMPLATE_NOTIFICATION_ID;
     const POSTMARK_TEMPLATE_AGENCY_REQUESTED_ID = process.env.POSTMARK_TEMPLATE_AGENCY_REQUESTED_ID || POSTMARK_TEMPLATE_NOTIFICATION_ID;
     const POSTMARK_TEMPLATE_AGENCY_APPROVED_ID = process.env.POSTMARK_TEMPLATE_AGENCY_APPROVED_ID || POSTMARK_TEMPLATE_NOTIFICATION_ID;
     const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://emailmetrics.io';
@@ -79,6 +80,9 @@ export async function GET() {
         } else if (topic === 'member_invited') {
           TemplateId = Number(POSTMARK_TEMPLATE_MEMBER_INVITED_ID);
           model = { brand_name: brandName, cta_url: ctaUrl, headline: `You’re invited to join ${brandName}`, cta_label: 'Accept invite' };
+        } else if (topic === 'member_revoked') {
+          TemplateId = Number(POSTMARK_TEMPLATE_MEMBER_REVOKED_ID);
+          model = { brand_name: brandName, cta_url: ctaUrl, headline: `Access removed for ${brandName}`, cta_label: 'Open dashboard' };
         } else if (topic === 'agency_link_requested') {
           TemplateId = Number(POSTMARK_TEMPLATE_AGENCY_REQUESTED_ID);
           model = { brand_name: brandName, cta_url: ctaUrl, headline: `Agency access requested for ${brandName}`, cta_label: 'Review in dashboard' };

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, Suspense } from 'react';
+import { useEffect, useMemo, useState, useRef, Suspense } from 'react';
 import { supabase } from '../../../lib/supabase/client';
 import { AlertCircle } from 'lucide-react';
 import SelectBase from '../../../components/ui/SelectBase';
@@ -40,6 +40,9 @@ function SignupInner() {
     }, [qpMode, qpErrorParam]);
 
     // Handle hash token redirects like: /signup#access_token=...&refresh_token=...
+    const hasNavigatedRef = useRef(false);
+    const processedHashRef = useRef(false);
+
     useEffect(() => {
         const urlHash = typeof window !== 'undefined' ? window.location.hash : '';
         if (!urlHash || !urlHash.includes('access_token')) return;
@@ -53,10 +56,13 @@ function SignupInner() {
                     const { error } = await supabase.auth.setSession({ access_token, refresh_token });
                     if (error) throw error;
                     // cleanup hash to avoid re-processing
-                    history.replaceState(null, '', window.location.pathname + window.location.search);
-                    await new Promise(r => setTimeout(r, 200));
-                    router.replace(type === 'signup' ? '/dashboard' : '/dashboard');
-                    router.refresh();
+                    try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch {}
+                    processedHashRef.current = true;
+                    if (!hasNavigatedRef.current) {
+                        hasNavigatedRef.current = true;
+                        // Hard navigation avoids double-renders and throttled replaceState loops
+                        window.location.assign('/dashboard');
+                    }
                 }
             } catch (e) {
                 // fall back to signin
@@ -70,7 +76,8 @@ function SignupInner() {
         (async () => {
             try {
                 const { data } = await supabase.auth.getSession();
-                if (!cancelled && data?.session) {
+                if (!cancelled && data?.session && !processedHashRef.current && !hasNavigatedRef.current) {
+                    hasNavigatedRef.current = true;
                     router.replace('/dashboard');
                 }
             } catch {}

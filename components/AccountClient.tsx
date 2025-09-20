@@ -228,12 +228,27 @@ export default function AccountClient({ initial }: Props) {
                         </SelectBase>
                     </div>
                     {selectedAccountId !== 'admin-self' && selectedAccountId && (
-                        <div className="text-xs text-gray-600 dark:text-gray-300 space-y-1 border rounded p-3 bg-gray-50 dark:bg-gray-800/40">
+                        <div className="text-xs text-gray-600 dark:text-gray-300 space-y-2 border rounded p-3 bg-gray-50 dark:bg-gray-800/40">
                             {(() => {
                                 const a = (allAccounts || []).find(x => x.id === selectedAccountId); if (!a) return null; return (
                                     <>
-                                        <div><span className="font-medium">Owner Email:</span> {a.ownerEmail || '—'}</div>
-                                        <div><span className="font-medium">Store URL:</span> {a.storeUrl ? `https://${a.storeUrl}` : '—'}</div>
+                                        <div className="grid sm:grid-cols-2 gap-2">
+                                            <div><span className="font-medium">Owner Email:</span> {a.ownerEmail || '—'}</div>
+                                            <div><span className="font-medium">Country:</span> {a.country || '—'}</div>
+                                            <div className="sm:col-span-2"><span className="font-medium">Store URL:</span> {a.storeUrl ? `https://${a.storeUrl}` : '—'}</div>
+                                        </div>
+                                        <div className="mt-2">
+                                            <div className="font-medium mb-1">Members</div>
+                                            <div className="divide-y divide-gray-200 dark:divide-gray-700 rounded border border-gray-200 dark:border-gray-700">
+                                                {(a.members || []).length === 0 && <div className="p-2">None</div>}
+                                                {(a.members || []).map((m: any) => (
+                                                    <div key={m.userId} className="p-2 flex items-center justify-between">
+                                                        <div>{m.email || m.userId}</div>
+                                                        <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded ${m.role==='owner' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'}`}>{m.role}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </>
                                 );
                             })()}
@@ -286,6 +301,32 @@ export default function AccountClient({ initial }: Props) {
                     </div>
                 )}
             </section>
+
+            {/* Leave brand (members only) */}
+            {!isAdmin && !isOwner && (() => {
+                try {
+                    const sp = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+                    const acc = sp.get('account');
+                    if (!acc) return null;
+                    return (
+                        <section className="space-y-2 border-t pt-6">
+                            <h2 className="font-semibold">Membership</h2>
+                            <button
+                                onClick={async () => {
+                                    if (!window.confirm('Are you sure you want to leave this brand? You will lose access to its data.')) return;
+                                    try {
+                                        const res = await fetch('/api/account/members/leave', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accountId: acc }) });
+                                        const j = await res.json().catch(() => ({}));
+                                        if (!res.ok) throw new Error(j?.error || 'Failed');
+                                        window.location.assign('/dashboard');
+                                    } catch (e: any) { alert(e?.message || 'Failed'); }
+                                }}
+                                className="inline-flex items-center px-3 py-1.5 rounded bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-800 dark:text-gray-200 text-sm"
+                            >Leave Brand</button>
+                        </section>
+                    );
+                } catch { return null; }
+            })()}
 
             {/* Integrations section removed (CSV-only) */}
 

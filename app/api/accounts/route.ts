@@ -15,7 +15,7 @@ export async function GET() {
     const service = createServiceClient();
     const { data, error } = await service
         .from('accounts')
-        .select('id,name,company,store_url,deleted_at,created_at,owner_user_id')
+        .select('id,name,company,country,store_url,deleted_at,created_at,owner_user_id')
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -35,16 +35,36 @@ export async function GET() {
         id: (a as any).id as string,
         ownerUserId: (a as any).owner_user_id as string | null,
         company: trimmed((a as any).company as string | null),
+        country: trimmed((a as any).country as string | null),
         name: trimmed((a as any).name as string | null),
         storeUrl: (a as any).store_url || null,
     }));
 
-    let derived = rawAccounts.map((a: any) => {
+    // Build derived list including country and members (owner + account_users)
+    const derived: Array<{ id: string; businessName: string | null; storeUrl: string | null; ownerEmail: string | null; country: string | null; members: Array<{ userId: string; email: string | null; role: string }> }> = [];
+    for (const a of rawAccounts) {
         let businessName: string | null = null;
         if (a.company && !looksLikeEmail(a.company)) businessName = a.company;
         else if (a.name && !looksLikeEmail(a.name)) businessName = a.name;
-        return { id: a.id, businessName, storeUrl: a.storeUrl, ownerEmail: a.ownerUserId ? emailMap[a.ownerUserId] || null : null };
-    });
+
+        const members: Array<{ userId: string; email: string | null; role: string }> = [];
+        if (a.ownerUserId) {
+            members.push({ userId: a.ownerUserId, email: emailMap[a.ownerUserId] || null, role: 'owner' });
+        }
+        try {
+            const { data: aus } = await service.from('account_users').select('user_id, role').eq('account_id', a.id);
+            for (const r of (aus as any) || []) {
+                const uid = r.user_id as string;
+                let email = emailMap[uid];
+                if (!email) {
+                    try { const { data: u2 } = await (service as any).auth.admin.getUserById(uid); email = u2?.user?.email || null; } catch {}
+                }
+                members.push({ userId: uid, email: email || null, role: r.role });
+            }
+        } catch {}
+
+        derived.push({ id: a.id, businessName, storeUrl: a.storeUrl, ownerEmail: a.ownerUserId ? emailMap[a.ownerUserId] || null : null, country: a.country || null, members });
+    }
 
     // Keep only those with a businessName initially
     let withNames = derived.filter((a: any) => a.businessName);
