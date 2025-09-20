@@ -106,7 +106,7 @@ export default function InvitationsManager() {
           )}
           {members.map(m => (
             <div key={m.user_id} className="p-3 flex items-center justify-between">
-              <div className="text-sm text-gray-800 dark:text-gray-200">{m.email || m.user_id} <span className="text-gray-400">•</span> {m.role}</div>
+              <div className="text-sm text-gray-800 dark:text-gray-200">{m.email || m.user_id} <span className="text-gray-400">•</span> {m.role === 'owner' ? 'Owner' : 'Member'}</div>
               {m.role === 'member' && (
                 <button onClick={async () => { await fetch('/api/account/members/remove', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accountId, userId: m.user_id }) }); await loadMembers(accountId); }} className="h-7 px-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 inline-flex items-center"><XCircle className="w-4 h-4 mr-1" />Remove</button>
               )}

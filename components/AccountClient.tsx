@@ -244,7 +244,7 @@ export default function AccountClient({ initial }: Props) {
                                                 {(a.members || []).map((m: any) => (
                                                     <div key={m.userId} className="p-2 flex items-center justify-between">
                                                         <div>{m.email || m.userId}</div>
-                                                        <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded ${m.role==='owner' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'}`}>{m.role}</span>
+                                                        <span className={`text-[10px] tracking-wide px-2 py-0.5 rounded ${m.role==='owner' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'}`}>{m.role==='owner' ? 'Owner' : 'Member'}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -259,6 +259,11 @@ export default function AccountClient({ initial }: Props) {
                     <div className="mt-4 space-y-2">
                         <h3 className="font-semibold">Agencies</h3>
                         <AdminAgenciesPanel />
+                    </div>
+
+                    <div className="mt-6 space-y-2">
+                        <h3 className="font-semibold">Email Logs</h3>
+                        <AdminEmailLogsPanel />
                     </div>
                 </section>
             )}
@@ -428,6 +433,69 @@ function AdminAgenciesPanel() {
                     </div>
                 </div>
             </div>
+        </div>
+    );
+}
+
+function AdminEmailLogsPanel() {
+    const [status, setStatus] = useState<'all' | 'pending' | 'processing' | 'sent' | 'error' | 'dead'>('all');
+    const [limit, setLimit] = useState(50);
+    const [loading, setLoading] = useState(false);
+    const [err, setErr] = useState<string | null>(null);
+    const [rows, setRows] = useState<any[]>([]);
+
+    const load = async () => {
+        setLoading(true); setErr(null);
+        try {
+            const res = await fetch(`/api/notifications/logs?status=${encodeURIComponent(status)}&limit=${limit}`, { cache: 'no-store' });
+            const j = await res.json();
+            if (!res.ok) throw new Error(j?.error || 'Failed');
+            setRows(j.logs || []);
+        } catch (e: any) { setErr(e?.message || 'Failed'); }
+        finally { setLoading(false); }
+    };
+
+    useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+    return (
+        <div className="text-xs border rounded p-3 bg-gray-50 dark:bg-gray-800/40">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+                <select value={status} onChange={e => setStatus(e.target.value as any)} className="h-7 px-2 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700">
+                    <option value="all">All</option>
+                    <option value="pending">Pending</option>
+                    <option value="processing">Processing</option>
+                    <option value="sent">Sent</option>
+                    <option value="error">Error</option>
+                    <option value="dead">Dead</option>
+                </select>
+                <select value={limit} onChange={e => setLimit(parseInt(e.target.value, 10))} className="h-7 px-2 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700">
+                    {[25,50,100,200].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <button onClick={load} className="h-7 px-3 rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700">Refresh</button>
+            </div>
+            {loading && <div>Loading…</div>}
+            {err && <div className="text-rose-600">{err}</div>}
+            {!loading && !err && (
+                <div className="overflow-auto max-h-[320px]">
+                    <table className="w-full text-left">
+                        <thead>
+                            <tr className="text-gray-500"><th className="py-1 pr-2">Time</th><th className="py-1 pr-2">Topic</th><th className="py-1 pr-2">Recipient</th><th className="py-1 pr-2">Status</th><th className="py-1 pr-2">Attempts</th><th className="py-1">Last Error</th></tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((r, i) => (
+                                <tr key={r.id || i} className="border-t border-gray-200 dark:border-gray-700">
+                                    <td className="py-1 pr-2 whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
+                                    <td className="py-1 pr-2 whitespace-nowrap">{r.topic}</td>
+                                    <td className="py-1 pr-2 whitespace-nowrap">{r.recipient_email || r.recipient_user_id || '—'}</td>
+                                    <td className="py-1 pr-2 whitespace-nowrap">{String(r.status)}</td>
+                                    <td className="py-1 pr-2 whitespace-nowrap">{r.attempts ?? 0}</td>
+                                    <td className="py-1 truncate max-w-[380px]" title={r.last_error || ''}>{r.last_error || ''}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </div>
     );
 }

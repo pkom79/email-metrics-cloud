@@ -1023,14 +1023,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                         }
                                     }
                                     // Resolve role tag: Admin/Owner/Member with colors similar to Admin badge
-                                    const roleLabel = roleBadge?.label;
-                                    const roleClass = roleBadge?.className || '';
-                                    return label ? (
-                                        <div className="mt-1 flex items-center gap-2">
-                                            <p className="text-sm text-gray-600 dark:text-gray-300">{label}</p>
-                                            {roleLabel && <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded ${roleClass}`}>{roleLabel}</span>}
-                                        </div>
-                                    ) : null;
+                                    return label ? (<p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{label}</p>) : null;
                                 })()}
                             </div>
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 relative ml-auto">

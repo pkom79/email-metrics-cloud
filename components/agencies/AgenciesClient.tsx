@@ -181,12 +181,19 @@ export default function AgenciesClient() {
 
       {agencies.length > 0 && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-gray-700 dark:text-gray-300">Agency</label>
-            <select value={selected || ''} onChange={e => setSelected(e.target.value)} className="h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm">
-              {agencies.filter(a => a.agencies).map(a => <option key={a.agencies!.id} value={a.agencies!.id}>{a.agencies!.name}</option>)}
-            </select>
-          </div>
+          {agencies.filter(a => a.agencies).length === 1 ? (
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-gray-700 dark:text-gray-300">Agency</label>
+              <div className="text-sm text-gray-900 dark:text-gray-100">{agencies[0].agencies!.name}</div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-gray-700 dark:text-gray-300">Agency</label>
+              <select value={selected || ''} onChange={e => setSelected(e.target.value)} className="h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm">
+                {agencies.filter(a => a.agencies).map(a => <option key={a.agencies!.id} value={a.agencies!.id}>{a.agencies!.name}</option>)}
+              </select>
+            </div>
+          )}
 
           <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5">
             <div className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-3">Linked Brands</div>

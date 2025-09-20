@@ -29,9 +29,22 @@ export async function POST(request: Request) {
 
     // Resolve target user by email
     const email = String(userEmail).trim().toLowerCase();
-    const { data: u } = await (svc as any).auth.admin.getUserByEmail(email);
-    const targetId: string | null = u?.user?.id || null;
-    if (!targetId) return NextResponse.json({ error: 'User not found; ask them to sign up first' }, { status: 400 });
+    // Look up by email (list and filter)
+    let targetId: string | null = null;
+    try {
+      for (let page = 1; page <= 10 && !targetId; page++) {
+        const { data: list, error: listErr } = await (svc as any).auth.admin.listUsers({ page, perPage: 200 });
+        if (listErr) break;
+        const hit = (list?.users || []).find((u: any) => (u.email || '').toLowerCase() === email);
+        if (hit) { targetId = hit.id; break; }
+        if ((list?.users || []).length < 200) break;
+      }
+    } catch {}
+    if (!targetId) {
+      // Auto-invite user and return
+      try { await (svc as any).auth.admin.inviteUserByEmail(email, { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || ''}/signup?mode=signin` }); } catch {}
+      return NextResponse.json({ ok: true, invited: true });
+    }
 
     // Upsert agency_users
     await svc.from('agency_users').upsert({ agency_id: agencyId, user_id: targetId, role, all_accounts: !!allAccounts } as any);
@@ -56,4 +69,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 });
   }
 }
-
