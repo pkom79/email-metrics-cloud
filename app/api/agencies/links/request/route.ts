@@ -29,10 +29,21 @@ export async function POST(request: Request) {
 
     const rawToken = crypto.randomBytes(24).toString('base64url');
     const token_hash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
+    // Upsert: if a request for (agency_id, account_id) already exists, refresh token and reset status
     const { data: lr, error } = await supabase
       .from('link_requests')
-      .insert({ agency_id: agencyId, account_id: accountId, token_hash, requested_by: user.id })
+      .upsert({
+        agency_id: agencyId,
+        account_id: accountId,
+        token_hash,
+        requested_by: user.id,
+        status: 'pending',
+        expires_at,
+        acted_by: null,
+        acted_at: null,
+      } as any, { onConflict: 'agency_id,account_id' })
       .select('id, account_id')
       .single();
     if (error) throw error;

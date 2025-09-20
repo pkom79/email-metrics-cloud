@@ -11,8 +11,10 @@ export default function AgenciesClient() {
   const [selected, setSelected] = useState<string | null>(null);
   const [brands, setBrands] = useState<BrandRow[]>([]);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [accessErr, setAccessErr] = useState<string | null>(null);
+  const [accessMsg, setAccessMsg] = useState<string | null>(null);
+  const [linkErr, setLinkErr] = useState<string | null>(null);
+  const [linkMsg, setLinkMsg] = useState<string | null>(null);
 
   const [newAgencyName, setNewAgencyName] = useState('');
   const [newBrandName, setNewBrandName] = useState('');
@@ -51,12 +53,12 @@ export default function AgenciesClient() {
   })(); }, [selected]);
 
   const onCreateAgency = async () => {
-    setBusy(true); setErr(null); setMsg(null);
+    setBusy(true); setLinkErr(null); setLinkMsg(null);
     try {
       const res = await fetch('/api/agencies/create', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: newAgencyName }) });
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || 'Failed');
-      setMsg('Agency created'); setNewAgencyName('');
+      setLinkMsg('Agency created'); setNewAgencyName('');
       // reload
       const { data } = await supabase
         .from('agency_users')
@@ -64,43 +66,43 @@ export default function AgenciesClient() {
         .eq('user_id', (await supabase.auth.getUser()).data.user?.id || '');
       const list = (data || []) as any as AgencyRow[];
       setAgencies(list); setSelected(list.find(a => a.agencies)?.agencies?.id || null);
-    } catch (e: any) { setErr(e?.message || 'Failed to create agency'); }
+    } catch (e: any) { setLinkErr(e?.message || 'Failed to create agency'); }
     finally { setBusy(false); }
   };
 
   const onCreateBrand = async () => {
-    if (!selected) return; setBusy(true); setErr(null); setMsg(null);
+    if (!selected) return; setBusy(true); setLinkErr(null); setLinkMsg(null);
     try {
       const res = await fetch('/api/agencies/brands/create', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agencyId: selected, brandName: newBrandName }) });
       const j = await res.json(); if (!res.ok) throw new Error(j?.error || 'Failed');
-      setMsg('Brand created and linked'); setNewBrandName('');
+      setLinkMsg('Brand created and linked'); setNewBrandName('');
       // reload brands
       const { data } = await supabase.from('agency_accounts').select('accounts(id, name, company)').eq('agency_id', selected);
       setBrands((data || []) as any);
-    } catch (e: any) { setErr(e?.message || 'Failed to create brand'); }
+    } catch (e: any) { setLinkErr(e?.message || 'Failed to create brand'); }
     finally { setBusy(false); }
   };
 
   const onFindBrands = async () => {
-    setBusy(true); setErr(null); setMsg(null); setOwnerAccounts([]); setSelectedOwnerAccountId(''); setLinkToken(null);
+    setBusy(true); setLinkErr(null); setLinkMsg(null); setOwnerAccounts([]); setSelectedOwnerAccountId(''); setLinkToken(null);
     try {
       const res = await fetch('/api/agencies/owner-accounts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ownerEmail }) });
       const j = await res.json(); if (!res.ok) throw new Error(j?.error || 'Failed');
       setOwnerAccounts(j.accounts || []);
       if ((j.accounts || []).length === 1) setSelectedOwnerAccountId(j.accounts[0].id);
-      setMsg(j.accounts?.length ? `Found ${j.accounts.length} brand(s).` : 'No brands found for that email.');
-    } catch (e: any) { setErr(e?.message || 'Lookup failed'); }
+      setLinkMsg(j.accounts?.length ? `Found ${j.accounts.length} brand(s).` : 'No brands found for that email.');
+    } catch (e: any) { setLinkErr(e?.message || 'Lookup failed'); }
     finally { setBusy(false); }
   };
 
   const onRequestLink = async () => {
-    if (!selected || !selectedOwnerAccountId) return; setBusy(true); setErr(null); setMsg(null); setLinkToken(null);
+    if (!selected || !selectedOwnerAccountId) return; setBusy(true); setLinkErr(null); setLinkMsg(null); setLinkToken(null);
     try {
       const res = await fetch('/api/agencies/links/request', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agencyId: selected, accountId: selectedOwnerAccountId }) });
       const j = await res.json(); if (!res.ok) throw new Error(j?.error || 'Failed');
       setLinkToken(j.rawToken || j.token || null);
-      setMsg('Link request created. Share this token with the brand owner.');
-    } catch (e: any) { setErr(e?.message || 'Failed to request link'); }
+      setLinkMsg('Link request created. Share this token with the brand owner.');
+    } catch (e: any) { setLinkErr(e?.message || 'Failed to request link'); }
     finally { setBusy(false); }
   };
 
@@ -109,15 +111,15 @@ export default function AgenciesClient() {
   };
 
   const onApplyAccess = async () => {
-    if (!selected) return; setBusy(true); setErr(null); setMsg(null);
+    if (!selected) return; setBusy(true); setAccessErr(null); setAccessMsg(null);
     try {
       const res = await fetch('/api/agencies/users/upsert', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ agencyId: selected, userEmail: memberEmail, role: memberRole, allAccounts: scopeAllBrands, accountIds: selectedBrandIds })
       });
       const j = await res.json(); if (!res.ok) throw new Error(j?.error || 'Failed');
-      setMsg('Access updated'); setMemberEmail(''); setSelectedBrandIds([]); setScopeAllBrands(true); setMemberRole('member');
-    } catch (e: any) { setErr(e?.message || 'Failed to update access'); }
+      setAccessMsg(j.invited ? 'User invited; they will receive an email.' : 'Access updated'); setMemberEmail(''); setSelectedBrandIds([]); setScopeAllBrands(true); setMemberRole('member');
+    } catch (e: any) { setAccessErr(e?.message || 'Failed to update access'); }
     finally { setBusy(false); }
   };
 
@@ -132,8 +134,8 @@ export default function AgenciesClient() {
             <input value={newAgencyName} onChange={e => setNewAgencyName(e.target.value)} placeholder="Agency name" className="w-full sm:w-auto flex-1 h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm" />
             <button disabled={busy || !newAgencyName} onClick={onCreateAgency} className="h-9 px-4 rounded bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 inline-flex items-center gap-2"><Plus className="w-4 h-4" />Create Agency</button>
           </div>
-          {err && <div className="text-sm text-rose-600 mt-2">{err}</div>}
-          {msg && <div className="text-sm text-emerald-600 mt-2">{msg}</div>}
+          {linkErr && <div className="text-sm text-rose-600 mt-2">{linkErr}</div>}
+          {linkMsg && <div className="text-sm text-emerald-600 mt-2">{linkMsg}</div>}
         </div>
       )}
       {selected && (
@@ -173,8 +175,8 @@ export default function AgenciesClient() {
             <div>
               <button disabled={busy || !memberEmail || (!scopeAllBrands && selectedBrandIds.length === 0)} onClick={onApplyAccess} className="h-9 px-4 rounded bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 inline-flex items-center gap-2"><Plus className="w-4 h-4" />Apply Access</button>
             </div>
-            {err && <div className="text-sm text-rose-600">{err}</div>}
-            {msg && <div className="text-sm text-emerald-600">{msg}</div>}
+            {accessErr && <div className="text-sm text-rose-600">{accessErr}</div>}
+            {accessMsg && <div className="text-sm text-emerald-600">{accessMsg}</div>}
           </div>
         </div>
       )}
@@ -233,8 +235,8 @@ export default function AgenciesClient() {
             {linkToken && (
               <div className="text-xs text-gray-600 dark:text-gray-400">Share this token with the brand owner. They can approve at <code className="px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">/agency/approve</code>.</div>
             )}
-            {err && <div className="text-sm text-rose-600">{err}</div>}
-            {msg && <div className="text-sm text-emerald-600">{msg}</div>}
+            {linkErr && <div className="text-sm text-rose-600">{linkErr}</div>}
+            {linkMsg && <div className="text-sm text-emerald-600">{linkMsg}</div>}
           </div>
         </div>
       )}
