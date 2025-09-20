@@ -5,15 +5,15 @@ import { createServiceClient } from '../../../lib/supabase/server';
 
 // Returns list of all accounts with owner email & metadata (admin only)
 export async function GET() {
-    const supabase = createRouteHandlerClient({ cookies });
-    const { data: { user } } = await supabase.auth.getUser();
+    const userClient = createRouteHandlerClient({ cookies });
+    const { data: { user } } = await userClient.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const isAdmin = user.app_metadata?.role === 'admin';
     if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     // Use service client to also fetch owner emails via Auth Admin API
     const service = createServiceClient();
-    const { data, error } = await supabase
+    const { data, error } = await service
         .from('accounts')
         .select('id,name,company,store_url,deleted_at,created_at,owner_user_id')
         .is('deleted_at', null)
@@ -21,9 +21,9 @@ export async function GET() {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     // Collect unique owner user IDs
-    const ownerIds = Array.from(new Set((data || []).map(r => (r as any).owner_user_id).filter(Boolean)));
+    const ownerIds = Array.from(new Set((data || []).map((r: any) => (r as any).owner_user_id).filter(Boolean)));
     const emailMap: Record<string, string> = {};
-    for (const oid of ownerIds) {
+    for (const oid of ownerIds as string[]) {
         try {
             const { data: usr } = await (service as any).auth.admin.getUserById(oid);
             if (usr?.user?.email) emailMap[oid] = usr.user.email;
@@ -31,7 +31,7 @@ export async function GET() {
     }
     const looksLikeEmail = (s: string | null) => !!s && /@/.test(s);
     const trimmed = (s: string | null) => (s && s.trim()) || null;
-    const rawAccounts = (data || []).map(a => ({
+    const rawAccounts = (data || []).map((a: any) => ({
         id: (a as any).id as string,
         ownerUserId: (a as any).owner_user_id as string | null,
         company: trimmed((a as any).company as string | null),
@@ -39,7 +39,7 @@ export async function GET() {
         storeUrl: (a as any).store_url || null,
     }));
 
-    let derived = rawAccounts.map(a => {
+    let derived = rawAccounts.map((a: any) => {
         let businessName: string | null = null;
         if (a.company && !looksLikeEmail(a.company)) businessName = a.company;
         else if (a.name && !looksLikeEmail(a.name)) businessName = a.name;
@@ -47,18 +47,18 @@ export async function GET() {
     });
 
     // Keep only those with a businessName initially
-    let withNames = derived.filter(a => a.businessName);
+    let withNames = derived.filter((a: any) => a.businessName);
 
     if (withNames.length === 0) {
         // Fallback: synthesize labels from id fragments to avoid blank dropdown
-        withNames = derived.map(a => ({
+        withNames = derived.map((a: any) => ({
             ...a,
             businessName: a.businessName || `Account-${a.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8)}`
         }));
     } else {
         // Ensure admin's own account appears even if lacks business name
-        if (!withNames.find(a => a.id === user.id)) {
-            const self = derived.find(a => a.id === user.id);
+        if (!withNames.find((a: any) => a.id === user.id)) {
+            const self = derived.find((a: any) => a.id === user.id);
             if (self) withNames.unshift({ ...self, businessName: 'Your Account' });
         }
     }

@@ -11,6 +11,7 @@ export default function AcceptInvitationPage() {
   const [password, setPassword] = useState('');
   const [inv, setInv] = useState<{ email: string; brand: string; status: string; expiresAt?: string; userExists?: boolean; accountId?: string } | null>(null);
   const [authedEmail, setAuthedEmail] = useState<string | null>(null);
+  const [requirePassword, setRequirePassword] = useState(false);
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -31,6 +32,9 @@ export default function AcceptInvitationPage() {
             if (!error) {
               // Clean the hash so we don't re-process it
               history.replaceState(null, '', window.location.pathname + window.location.search);
+              // Users coming from email invite via magic link won't have a password yet.
+              // Require them to set one before accepting the invite.
+              setRequirePassword(true);
             }
           }
         }
@@ -94,6 +98,14 @@ export default function AcceptInvitationPage() {
         // refresh session
         u = (await supabase.auth.getUser()).data;
         if (!u?.user) { setErr('Authentication failed.'); setBusy(false); return; }
+      } else {
+        // Already signed in as invited user via magic link: require them to set a password now
+        if (requirePassword) {
+          if (!password) { setErr('Create a password to continue.'); setBusy(false); return; }
+          const { error } = await supabase.auth.updateUser({ password });
+          if (error) throw error;
+          setRequirePassword(false);
+        }
       }
       const res = await fetch('/api/invitations/accept', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }) });
       const j = await res.json().catch(() => ({}));
@@ -121,10 +133,13 @@ export default function AcceptInvitationPage() {
           <div className="text-xs text-amber-600">Currently signed in as {authedEmail}. Please sign out and continue as {inv.email}.</div>
         )}
 
-        {/* Ask only for password when needed; email is taken from the invitation */}
-        {inv && (!authedEmail || authedEmail !== inv.email) && (
+        {/* Ask for password in two situations:
+            1) Not signed in as invited user (we will sign in/up using this password)
+            2) Signed in via magic link (require setting a new password before accepting)
+        */}
+        {inv && ((!authedEmail || authedEmail !== inv.email) || requirePassword) && (
           <div className="space-y-2">
-            <label className="block text-xs text-gray-500">Set or enter password for {inv.email}</label>
+            <label className="block text-xs text-gray-500">{requirePassword ? 'Create a password for your new account' : `Set or enter password for ${inv.email}`}</label>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" className="w-full h-10 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm" />
           </div>
         )}
