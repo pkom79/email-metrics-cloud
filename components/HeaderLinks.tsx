@@ -1,7 +1,7 @@
 "use client";
 import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../lib/supabase/client';
 import { useAuth } from './AuthProvider';
 
@@ -12,6 +12,8 @@ export default function HeaderLinks({ isAuthed }: { isAuthed: boolean }) {
     const [signingOut, setSigningOut] = useState(false);
     const onDashboard = pathname?.startsWith('/dashboard');
     const onAccount = pathname?.startsWith('/account');
+    const sp = useSearchParams();
+    const accountId = sp?.get('account') || '';
 
     const signOut = async () => {
         if (signingOut) return;
@@ -35,7 +37,7 @@ export default function HeaderLinks({ isAuthed }: { isAuthed: boolean }) {
                         <Link href="/dashboard" className="text-sm text-purple-600 dark:text-purple-400">Dashboard</Link>
                     )}
                     {!onAccount && (
-                        <Link href="/account" className="text-sm text-purple-600 dark:text-purple-400">Account</Link>
+                        <Link href={`/account${accountId ? `?account=${accountId}` : ''}`} className="text-sm text-purple-600 dark:text-purple-400">Account</Link>
                     )}
                     <button onClick={signOut} className="text-sm text-gray-600 dark:text-gray-300 hover:underline">Sign out</button>
                 </>

@@ -11,7 +11,7 @@ export async function GET() {
     const uid = user.id;
     const supabase = createServiceClient();
 
-    const out: Array<{ id: string; name: string | null; company: string | null }> = [];
+    let out: Array<{ id: string; name: string | null; company: string | null }> = [];
     const seen = new Set<string>();
 
     // 1) Owner brands
@@ -58,9 +58,15 @@ export async function GET() {
       }
     }
 
+    // If user has multiple entries and one of them looks like a personal placeholder account (name looks like an email and no company), hide it
+    if (out.length > 1) {
+      const looksLikeEmail = (s: string | null) => !!s && /@/.test(s);
+      out = out.filter(a => !(looksLikeEmail(a.name) && !a.company));
+      // If we filtered everything by mistake, fall back to original
+      if (out.length === 0) out = [];
+    }
     return NextResponse.json({ accounts: out });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 });
   }
 }
-

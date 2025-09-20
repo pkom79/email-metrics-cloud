@@ -35,9 +35,13 @@ export default function AccountClient({ initial }: Props) {
         const { data } = await supabase.auth.getUser();
         setIsAgency(((data.user?.user_metadata as any)?.signup_type) === 'agency');
         try {
-            const r = await fetch('/api/account/is-owner', { cache: 'no-store' });
+            // Respect current account context if provided in URL
+            const sp = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+            const accountId = sp.get('account');
+            const r = await fetch(`/api/account/is-owner${accountId ? `?accountId=${encodeURIComponent(accountId)}` : ''}`, { cache: 'no-store' });
             const j = await r.json().catch(() => ({}));
-            setIsOwner(Boolean(j?.isOwnerAny));
+            const isOwnerCurrent = accountId && typeof j?.isOwnerOf === 'boolean' ? j.isOwnerOf : Boolean(j?.isOwnerAny);
+            setIsOwner(Boolean(isOwnerCurrent));
         } catch { setIsOwner(false); }
     })(); }, []);
 
