@@ -100,8 +100,9 @@ export default function AgenciesClient() {
     try {
       const res = await fetch('/api/agencies/links/request', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agencyId: selected, accountId: selectedOwnerAccountId }) });
       const j = await res.json(); if (!res.ok) throw new Error(j?.error || 'Failed');
-      setLinkToken(j.rawToken || j.token || null);
-      setLinkMsg('Link request created. Share this token with the brand owner.');
+      // We no longer surface the raw token; brand owner is notified by email
+      setLinkToken(null);
+      setLinkMsg('Request sent. The brand owner will receive an email to approve.');
     } catch (e: any) { setLinkErr(e?.message || 'Failed to request link'); }
     finally { setBusy(false); }
   };
@@ -232,9 +233,7 @@ export default function AgenciesClient() {
                 </>
               )}
             </div>
-            {linkToken && (
-              <div className="text-xs text-gray-600 dark:text-gray-400">Share this token with the brand owner. They can approve at <code className="px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">/agency/approve</code>.</div>
-            )}
+            {/* We no longer show raw tokens; owner is notified by email automatically */}
             {linkErr && <div className="text-sm text-rose-600">{linkErr}</div>}
             {linkMsg && <div className="text-sm text-emerald-600">{linkMsg}</div>}
           </div>

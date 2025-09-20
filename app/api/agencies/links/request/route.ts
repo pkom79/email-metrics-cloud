@@ -59,6 +59,19 @@ export async function POST(request: Request) {
       });
     } catch {}
 
+    // Notify the brand owner directly via outbox (even if they didn't configure subscriptions)
+    try {
+      const { data: acc } = await supabase.from('accounts').select('owner_user_id').eq('id', accountId).single();
+      if (acc?.owner_user_id) {
+        await supabase.from('notifications_outbox').insert({
+          topic: 'agency_link_requested',
+          account_id: accountId,
+          recipient_user_id: acc.owner_user_id,
+          payload: { agency_id: agencyId }
+        } as any);
+      }
+    } catch {}
+
     return NextResponse.json({ ok: true, token: rawToken });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'Failed to request link' }, { status: 500 });
