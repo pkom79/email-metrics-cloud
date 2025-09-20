@@ -59,6 +59,11 @@ export default function NotificationsSettings() {
     setIsAgency(((data.user?.user_metadata as any)?.signup_type) === 'agency');
   })(); }, []);
 
+  // Brand users shouldn’t see agency-specific topics
+  const AVAILABLE_TOPICS = useMemo(() => {
+    return isAgency ? TOPICS : TOPICS.filter(t => t.key !== 'agency_link_requested' && t.key !== 'agency_link_approved');
+  }, [isAgency]);
+
   const onAdd = async () => {
     setErr(null); setMsg(null);
     if (!accountId || !email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setErr('Enter a valid recipient email'); return; }
@@ -123,7 +128,7 @@ export default function NotificationsSettings() {
         <div className="mt-6 grid gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <select value={topic} onChange={e => setTopic(e.target.value)} className="h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm">
-              {TOPICS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+              {AVAILABLE_TOPICS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
             </select>
             <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Recipient email" className="flex-1 min-w-[220px] h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm" />
             <button disabled={adding} onClick={onAdd} className="inline-flex items-center gap-2 h-9 px-3 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm disabled:opacity-50"><Plus className="w-4 h-4" />Add</button>
@@ -144,7 +149,7 @@ export default function NotificationsSettings() {
             {!loading && subs.map(row => (
               <div key={row.id} className="p-3 flex items-center justify-between">
                 <div className="text-sm text-gray-800 dark:text-gray-200">
-                  <span className="font-medium">{TOPICS.find(t => t.key === row.topic)?.label || row.topic}</span>
+                  <span className="font-medium">{AVAILABLE_TOPICS.find(t => t.key === row.topic)?.label || row.topic}</span>
                   <span className="mx-2 text-gray-400">•</span>
                   {row.recipient_email || `User ${row.recipient_user_id}`}
                 </div>

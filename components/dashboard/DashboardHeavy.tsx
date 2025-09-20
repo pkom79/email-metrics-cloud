@@ -986,7 +986,20 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                             <div>
                                 <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>
-                                {businessName && <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{businessName}</p>}
+                                {(() => {
+                                    // Show brand label below the title. Prefer explicit prop, otherwise
+                                    // fall back to the currently selected account label for admin or member.
+                                    let label: string | undefined = businessName;
+                                    if (!label) {
+                                        if (isAdmin) {
+                                            label = selectedAccountLabel || undefined;
+                                        } else {
+                                            const sel = memberAccounts.find(a => a.id === memberSelectedId);
+                                            label = sel?.label;
+                                        }
+                                    }
+                                    return label ? <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{label}</p> : null;
+                                })()}
                             </div>
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 relative ml-auto">
                                 {!isAdmin && (

@@ -5,12 +5,14 @@ import { UserPlus, XCircle } from 'lucide-react';
 
 type Account = { id: string; name: string | null; company: string | null };
 type Invitation = { id: string; email: string; status: 'pending' | 'accepted' | 'revoked' | 'expired'; created_at: string };
+type Member = { user_id: string; email: string | null; role: 'owner' | 'member' };
 
 export default function InvitationsManager() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountId, setAccountId] = useState<string>('');
   const [email, setEmail] = useState('');
   const [pending, setPending] = useState<Invitation[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
   const [creating, setCreating] = useState(false);
   // No longer surface raw tokens in the UI
   const [msg, setMsg] = useState<string | null>(null);
@@ -39,7 +41,14 @@ export default function InvitationsManager() {
       setPending((j.invitations || []) as any);
     } catch { setPending([]); }
   };
-  useEffect(() => { if (accountId) loadInvites(accountId); }, [accountId]);
+  const loadMembers = async (acc: string) => {
+    try {
+      const res = await fetch(`/api/account/members/list?accountId=${encodeURIComponent(acc)}`, { cache: 'no-store' });
+      const j = await res.json();
+      setMembers((j.members || []) as any);
+    } catch { setMembers([]); }
+  };
+  useEffect(() => { if (accountId) { loadInvites(accountId); loadMembers(accountId); } }, [accountId]);
 
   const onCreate = async () => {
     setErr(null); setMsg(null);
@@ -52,6 +61,7 @@ export default function InvitationsManager() {
       setMsg('Invitation created and email queued');
       setEmail('');
       await loadInvites(accountId);
+      await loadMembers(accountId);
     } catch (e: any) { setErr(e?.message || 'Failed to create invitation'); }
     finally { setCreating(false); }
   };
@@ -86,6 +96,23 @@ export default function InvitationsManager() {
         </div>
         {err && <div className="text-sm text-rose-600">{err}</div>}
         {msg && <div className="text-sm text-emerald-600">{msg}</div>}
+      </div>
+
+      <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5">
+        <div className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Current members</div>
+        <div className="divide-y divide-gray-200 dark:divide-gray-800 rounded border border-gray-200 dark:border-gray-800">
+          {members.length === 0 && (
+            <div className="p-6 text-center text-sm text-gray-600 dark:text-gray-400">No members yet.</div>
+          )}
+          {members.map(m => (
+            <div key={m.user_id} className="p-3 flex items-center justify-between">
+              <div className="text-sm text-gray-800 dark:text-gray-200">{m.email || m.user_id} <span className="text-gray-400">•</span> {m.role}</div>
+              {m.role === 'member' && (
+                <button onClick={async () => { await fetch('/api/account/members/remove', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accountId, userId: m.user_id }) }); await loadMembers(accountId); }} className="h-7 px-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 inline-flex items-center"><XCircle className="w-4 h-4 mr-1" />Remove</button>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5">
