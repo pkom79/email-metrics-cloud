@@ -531,7 +531,15 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const ALL_FLOWS = useMemo(() => dm.getFlowEmails(), [dm, dataVersion]);
     const hasData = ALL_CAMPAIGNS.length > 0 || ALL_FLOWS.length > 0;
-    const EFFECTIVE_ACCOUNT_ID = useMemo(() => (isAdmin ? (selectedAccountId || '') : (memberSelectedId || '')), [isAdmin, selectedAccountId, memberSelectedId]);
+    // Active account resolution
+    const EFFECTIVE_ACCOUNT_ID = useMemo(
+        () => (isAdmin ? (selectedAccountId || '') : (memberSelectedId || '')),
+        [isAdmin, selectedAccountId, memberSelectedId]
+    );
+    const HAS_ACTIVE_ACCOUNT = useMemo(
+        () => (isAdmin ? Boolean(selectedAccountId) : Boolean(memberSelectedId && (memberAccounts?.length || 0) > 0)),
+        [isAdmin, selectedAccountId, memberSelectedId, memberAccounts]
+    );
     useEffect(() => { try { DataManager.setAccountId(EFFECTIVE_ACCOUNT_ID || null); } catch {} }, [EFFECTIVE_ACCOUNT_ID]);
     // Reference/end date for presets and bounds —
     // align with DataCoverageNotice by using DataManager's helper.
@@ -1075,7 +1083,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         
                     </div>
                     {/* Data Coverage & Age — only when an account is active */}
-                    {(((isAdmin && selectedAccountId) || (!isAdmin && EFFECTIVE_ACCOUNT_ID))) && (
+                    {HAS_ACTIVE_ACCOUNT && (
                         <>
                             <DataCoverageNotice dataManager={dm} referenceDate={REFERENCE_DATE} />
                             <DataAgeNotice dataManager={dm} onUploadClick={() => setShowUploadModal(true)} />
@@ -1117,7 +1125,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             {/* Klaviyo connect modal removed (CSV-only ingestion) */}
             {/* Filters bar (sticky) — hide when no active account */}
             {/* Mobile filters trigger (visible only on small screens) — hide when no active account */}
-            {(((isAdmin && selectedAccountId) || (!isAdmin && EFFECTIVE_ACCOUNT_ID))) && (
+            {HAS_ACTIVE_ACCOUNT && (
             <div className="sm:hidden pt-2">
                 <div className="max-w-7xl mx-auto px-4">
                     <div className="flex items-center justify-end">
@@ -1134,7 +1142,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             </div>
             )}
 
-            {(((isAdmin && selectedAccountId) || (!isAdmin && EFFECTIVE_ACCOUNT_ID))) && (
+            {HAS_ACTIVE_ACCOUNT && (
             <div className={`hidden sm:block sm:pt-2 ${stickyBar ? 'sm:sticky sm:top-0 sm:z-50' : ''}`}> <div className="max-w-7xl mx-auto px-4"><div className={`rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${stickyBar ? 'shadow-lg' : 'shadow-sm'} px-3 py-2 sm:mx-[-30px]`}>
                 <div className="hidden sm:flex items-center justify-center gap-3 flex-nowrap whitespace-nowrap">
                     {/* Custom date inputs */}
@@ -1284,7 +1292,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             )}
 
             {/* Mobile Filters Bottom Sheet — hide when no active account */}
-            {(((isAdmin && selectedAccountId) || (!isAdmin && EFFECTIVE_ACCOUNT_ID))) && mobileFiltersOpen && (
+            {HAS_ACTIVE_ACCOUNT && mobileFiltersOpen && (
                 <div className="sm:hidden fixed inset-0 z-50" role="dialog" aria-modal="true">
                     {/* Backdrop */}
                     <div className="absolute inset-0 bg-black/40" onClick={() => setMobileFiltersOpen(false)} aria-hidden="true" />
@@ -1390,10 +1398,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             )}
             {/* Main content */}
             <div className="p-6"><div className="max-w-7xl mx-auto space-y-8">
-                {(!isAdmin && !EFFECTIVE_ACCOUNT_ID) && (
+                {(!isAdmin && !HAS_ACTIVE_ACCOUNT) && (
                     <EmptyStateCard title="No account access yet" body="You don’t have access to any account. Ask an Admin to invite you." />
                 )}
-                {(isAdmin && !selectedAccountId) && (
+                {(isAdmin && !HAS_ACTIVE_ACCOUNT) && (
                     <EmptyStateCard title="Select an account" body="Choose an account from the selector above to view its dashboard." />
                 )}
                 {overviewMetrics && (
@@ -1670,7 +1678,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     </section>
                 )}
                 {/* Flow Step Analysis — only when an account is active */}
-                {(((isAdmin && selectedAccountId) || (!isAdmin && EFFECTIVE_ACCOUNT_ID))) && (
+                {HAS_ACTIVE_ACCOUNT && (
                     <section>
                         {showFlowAnalysis ? (
                             <FlowStepAnalysis dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
@@ -1686,12 +1694,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         )}
                     </section>
                 )}
-                {(((isAdmin && selectedAccountId) || (!isAdmin && EFFECTIVE_ACCOUNT_ID))) && (
+                {HAS_ACTIVE_ACCOUNT && (
                     <AudienceCharts dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} referenceDate={REFERENCE_DATE} />
                 )}
                 {/* Sticky end sentinel (1px spacer) */}
                 <div ref={el => setStickyEndRef(el)} style={{ height: 1 }} />
-                {(((isAdmin && selectedAccountId) || (!isAdmin && EFFECTIVE_ACCOUNT_ID))) && (
+                {HAS_ACTIVE_ACCOUNT && (
                     <section>
                         <CustomSegmentBlock
                             dateRange={dateRange}
