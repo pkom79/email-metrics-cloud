@@ -175,7 +175,7 @@ export default function AccountClient({ initial }: Props) {
                     <div className="grid gap-3">
                         <div className="rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900 flex items-center justify-between">
                             <div>
-                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">Members</div>
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">Managers</div>
                                 <div className="text-sm text-gray-600 dark:text-gray-400">Invite and manage brand members.</div>
                             </div>
                             <Link href="/account/members" className="inline-flex items-center px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Open</Link>
@@ -238,13 +238,13 @@ export default function AccountClient({ initial }: Props) {
                                             <div className="sm:col-span-2"><span className="font-medium">Store URL:</span> {a.storeUrl ? `https://${a.storeUrl}` : '—'}</div>
                                         </div>
                                         <div className="mt-2">
-                                            <div className="font-medium mb-1">Members</div>
+                                            <div className="font-medium mb-1">Managers</div>
                                             <div className="divide-y divide-gray-200 dark:divide-gray-700 rounded border border-gray-200 dark:border-gray-700">
                                                 {(a.members || []).length === 0 && <div className="p-2">None</div>}
                                                 {(a.members || []).map((m: any) => (
                                                     <div key={m.userId} className="p-2 flex items-center justify-between">
                                                         <div>{m.email || m.userId}</div>
-                                                        <span className={`text-[10px] tracking-wide px-2 py-0.5 rounded ${m.role==='owner' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'}`}>{m.role==='owner' ? 'Owner' : 'Member'}</span>
+                                                        <span className={`text-[10px] tracking-wide px-2 py-0.5 rounded ${m.role==='owner' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'}`}>{m.role==='owner' ? 'Owner' : 'Manager'}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -321,7 +321,7 @@ export default function AccountClient({ initial }: Props) {
                     if (!acc) return null;
                     return (
                         <section className="space-y-2 border-t pt-6">
-                            <h2 className="font-semibold">Membership</h2>
+                            <h2 className="font-semibold">Management</h2>
                             <button
                                 onClick={async () => {
                                     if (!window.confirm('Are you sure you want to leave this brand? You will lose access to its data.')) return;
@@ -422,7 +422,7 @@ function AdminAgenciesPanel() {
                                         <div className="divide-y divide-gray-200 dark:divide-gray-700 border rounded">
                         {(ag.users || []).length === 0 && <div className="p-2">None</div>}
                         {(ag.users || []).map((u: any) => {
-                            const roleLabel = u.role==='owner' ? 'Agency Owner' : u.role==='admin' ? 'Agency Admin' : 'Agency Member';
+                            const roleLabel = u.role==='owner' ? 'Agency Owner' : u.role==='admin' ? 'Agency Admin' : 'Agency Manager';
                             const roleClass = u.role==='owner'
                                 ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-700'
                                 : u.role==='admin'

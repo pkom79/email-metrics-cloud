@@ -5,7 +5,7 @@ import { createServiceClient } from '../../../../../lib/supabase/server';
 export const runtime = 'nodejs';
 
 // GET /api/account/members/list?accountId=...
-// Returns owner and member emails for a brand account (owner-only; admin allowed).
+// Returns owner and manager emails for a brand account (owner-only; admin allowed).
 export async function GET(request: Request) {
   try {
     const user = await getServerUser();
@@ -23,8 +23,8 @@ export async function GET(request: Request) {
     const isAdmin = roles?.data?.user?.app_metadata?.role === 'admin' || roles?.data?.user?.app_metadata?.app_role === 'admin';
     if (!isOwner && !isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    // Collect members
-    const members: Array<{ user_id: string; role: 'owner' | 'member' }> = [];
+    // Collect managers
+    const members: Array<{ user_id: string; role: 'owner' | 'manager' }> = [];
     if (acc?.owner_user_id) members.push({ user_id: acc.owner_user_id, role: 'owner' });
     const { data: aus } = await svc.from('account_users').select('user_id, role').eq('account_id', accountId);
     for (const r of aus || []) members.push({ user_id: (r as any).user_id, role: (r as any).role });
@@ -44,4 +44,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 });
   }
 }
-

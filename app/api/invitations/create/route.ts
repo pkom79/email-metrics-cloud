@@ -36,42 +36,15 @@ export async function POST(request: Request) {
       .single();
     if (error) throw error;
 
-    // If the user already exists in Auth, skip Supabase invite (avoids 422) and email via outbox.
-    const SUPABASE_ONLY = process.env.INVITES_SUPABASE_ONLY === '1';
-    let existingUser = false;
+    // Outbox-only delivery: always enqueue a notification email with our token link
     try {
-      const { data } = await (supabase as any).auth.admin.getUserByEmail(email);
-      existingUser = !!data?.user?.id;
+      await supabase.from('notifications_outbox').insert({
+        topic: 'member_invited',
+        account_id: accountId,
+        recipient_email: email,
+        payload: { token: rawToken }
+      } as any);
     } catch {}
-
-    // Send invite
-    if (existingUser) {
-      // Existing user: always use our outbox path
-      try {
-        await supabase.from('notifications_outbox').insert({
-          topic: 'member_invited',
-          account_id: accountId,
-          recipient_email: email,
-          payload: { token: rawToken }
-        } as any);
-      } catch {}
-    } else {
-      // New user: attempt Supabase admin invite first; fallback to outbox
-      try {
-        const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://emailmetrics.io';
-        await (supabase as any).auth.admin.inviteUserByEmail(email, { redirectTo: `${SITE_URL}/invitations/accept?token=${encodeURIComponent(rawToken)}` });
-      } catch (e) {
-        // Always fallback to outbox on failure so invites don't get stuck when Supabase email is unavailable
-        try {
-          await supabase.from('notifications_outbox').insert({
-            topic: 'member_invited',
-            account_id: accountId,
-            recipient_email: email,
-            payload: { token: rawToken }
-          } as any);
-        } catch {}
-      }
-    }
 
     // Audit (non-fatal)
     try {

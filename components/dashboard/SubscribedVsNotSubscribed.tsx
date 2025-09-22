@@ -6,9 +6,9 @@ import SelectBase from "../ui/SelectBase";
 import { DataManager } from "../../lib/data/dataManager";
 import { getConsentSplitMetrics, formatConsentMetricValue, ConsentSplitMetric } from "../../lib/analytics/consentSplitMetrics";
 
-interface Props { dateRange: string; customFrom?: string; customTo?: string; }
+interface Props { dateRange: string; customFrom?: string; customTo?: string; referenceDate?: Date }
 
-export default function SubscribedVsNotSubscribed({ dateRange, customFrom, customTo }: Props) {
+export default function SubscribedVsNotSubscribed({ dateRange, customFrom, customTo, referenceDate }: Props) {
     const dm = DataManager.getInstance();
     const [metric, setMetric] = useState<ConsentSplitMetric>("count");
     const [hovered, setHovered] = useState<{
@@ -31,12 +31,12 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
                 return { start: new Date(min), end: new Date(max) };
             }
             const days = parseInt(String(dateRange).replace('d', '')) || 30;
-            const anchor = dm.getLastEmailDate();
+            const anchor = referenceDate ? new Date(referenceDate) : dm.getLastEmailDate();
             const end = new Date(anchor); end.setHours(23, 59, 59, 999);
             const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0);
             return { start, end };
         } catch { return null; }
-    }, [dateRange, customFrom, customTo, dm]);
+    }, [dateRange, customFrom, customTo, dm, referenceDate]);
 
     const filteredSubs = useMemo(() => {
         const all = dm.getSubscribers();
@@ -45,7 +45,7 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
         return all.filter(s => s.profileCreated >= range.start && s.profileCreated <= range.end);
     }, [dm, range]);
 
-    const anchor = useMemo(() => dm.getLastEmailDate() || new Date(), [dm]);
+    const anchor = useMemo(() => (referenceDate ? new Date(referenceDate) : (dm.getLastEmailDate() || new Date())), [dm, referenceDate]);
     const split = useMemo(() => getConsentSplitMetrics(filteredSubs, metric, anchor), [filteredSubs, metric, anchor]);
 
     const periodLabel = useMemo(() => {

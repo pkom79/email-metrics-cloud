@@ -36,10 +36,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Email mismatch' }, { status: 403 });
     }
 
-    // Add as member (quota enforced by trigger)
+    // Add as manager (quota enforced by trigger)
     const { error: addErr } = await supabase
       .from('account_users')
-      .insert({ account_id: inv.account_id, user_id: user.id, role: 'member' });
+      .insert({ account_id: inv.account_id, user_id: user.id, role: 'manager' });
     if (addErr) return NextResponse.json({ error: addErr.message }, { status: 400 });
 
     // Mark invitation accepted

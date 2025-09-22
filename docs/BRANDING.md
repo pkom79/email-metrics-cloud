@@ -74,6 +74,7 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
   - Actions: Create Brand and Request Access rows with inputs + purple buttons.
 - Invitations UI:
   - Invite form with account selector + email input + primary button.
+  - Uses “Manager” terminology (formerly “Member”) consistently in labels and copy.
   - Show newly created token in a bordered code chip with a copy button.
   - Pending list with subtle status pill.
 

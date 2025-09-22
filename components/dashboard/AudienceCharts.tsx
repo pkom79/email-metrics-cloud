@@ -6,7 +6,7 @@ import InactivityRevenueDrain from './InactivityRevenueDrain';
 import EngagementByTenure from './EngagementByTenure';
 import { DataManager } from '../../lib/data/dataManager';
 
-export default function AudienceCharts({ dateRange, granularity, customFrom, customTo }: { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string }) {
+export default function AudienceCharts({ dateRange, granularity, customFrom, customTo, referenceDate }: { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; referenceDate?: Date }) {
     const dataManager = DataManager.getInstance();
     const audienceInsights = dataManager.getAudienceInsights();
     const subscribers = dataManager.getSubscribers();
@@ -101,7 +101,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             annualSavings: number | null;
         };
 
-        const anchor = dataManager.getLastEmailDate();
+        const anchor = referenceDate ? new Date(referenceDate) : dataManager.getLastEmailDate();
         const daysDiff = (a: Date, b: Date) => Math.floor((a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24));
 
         // Pricing tiers (min, max, price)
@@ -263,7 +263,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             </div>
             <div className="mb-6">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Snapshot data collected through {dataManager.getLastEmailDate().toLocaleDateString('en-US', {
+                    Snapshot data collected through {(referenceDate ? new Date(referenceDate) : dataManager.getLastEmailDate()).toLocaleDateString('en-US', {
                         year: 'numeric',
                         month: 'long',
                         day: 'numeric'
@@ -310,7 +310,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             </div>
             {/* Subscribed vs Not Subscribed module (below Audience Growth) */}
             <div className="mb-8">
-                {React.createElement(require('./SubscribedVsNotSubscribed').default, { dateRange, customFrom, customTo })}
+                {React.createElement(require('./SubscribedVsNotSubscribed').default, { dateRange, customFrom, customTo, referenceDate })}
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">

@@ -137,7 +137,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [mfSelectedFlow, setMfSelectedFlow] = useState<string>(selectedFlow);
 
     // Role badge (set after admin detection)
-    const [roleBadge, setRoleBadge] = useState<{ label: 'Admin' | 'Owner' | 'Member'; className: string } | null>(null);
+    const [roleBadge, setRoleBadge] = useState<{ label: 'Admin' | 'Owner' | 'Manager'; className: string } | null>(null);
 
     // Granularity validation logic
     const totalDays = useMemo(() => {
@@ -217,9 +217,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 if (cancelled) return;
                 setRoleBadge(isOwner
                     ? { label: 'Owner', className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200' }
-                    : { label: 'Member', className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200' }
+                    : { label: 'Manager', className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200' }
                 );
-            } catch { if (!cancelled) setRoleBadge({ label: 'Member', className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200' }); }
+            } catch { if (!cancelled) setRoleBadge({ label: 'Manager', className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200' }); }
         })();
         return () => { cancelled = true; };
     }, [isAdmin, memberSelectedId, selectedAccountId]);
@@ -1658,7 +1658,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         </div>
                     )}
                 </section>
-                <AudienceCharts dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} />
+                <AudienceCharts dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} referenceDate={REFERENCE_DATE} />
                 {/* Sticky end sentinel (1px spacer) */}
                 <div ref={el => setStickyEndRef(el)} style={{ height: 1 }} />
                 <section>
