@@ -309,31 +309,7 @@ export default function AccountClient({ initial }: Props) {
                 )}
             </section>
 
-            {/* Leave brand (members only) */}
-            {!isAdmin && !isOwner && (() => {
-                try {
-                    const sp = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
-                    const acc = sp.get('account');
-                    if (!acc) return null;
-                    return (
-                        <section className="space-y-2 border-t pt-6">
-                            <h2 className="font-semibold">Management</h2>
-                            <button
-                                onClick={async () => {
-                                    if (!window.confirm('Are you sure you want to leave this account? You will lose access to its data.')) return;
-                                    try {
-                                        const res = await fetch('/api/account/members/leave', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accountId: acc }) });
-                                        const j = await res.json().catch(() => ({}));
-                                        if (!res.ok) throw new Error(j?.error || 'Failed');
-                                        window.location.assign('/dashboard');
-                                    } catch (e: any) { alert(e?.message || 'Failed'); }
-                                }}
-                                className="inline-flex items-center px-3 py-1.5 rounded bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-800 dark:text-gray-200 text-sm"
-                            >Leave Account</button>
-                        </section>
-                    );
-                } catch { return null; }
-            })()}
+            {/* Removed single-account Management section; manager actions live in "Your Accounts" list */}
 
             {/* Manager: list all accounts with Leave Account action */}
             {(!isAdmin && !isOwner && !isAgency) && (
