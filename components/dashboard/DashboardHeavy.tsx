@@ -521,7 +521,19 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const hasData = ALL_CAMPAIGNS.length > 0 || ALL_FLOWS.length > 0;
     // Reference/end date for presets and bounds —
     // align with DataCoverageNotice by using DataManager's helper.
-    const REFERENCE_DATE = useMemo(() => dm.getLastEmailDate(), [dm, dataVersion]);
+    const REFERENCE_DATE = useMemo(() => {
+        try {
+            const campTs = ALL_CAMPAIGNS.map(c => c.sentDate.getTime()).filter(n => Number.isFinite(n));
+            const flowTs = ALL_FLOWS.map(f => f.sentDate.getTime()).filter(n => Number.isFinite(n));
+            const all = [...campTs, ...flowTs];
+            if (all.length) {
+                const max = all.reduce((a, b) => (b > a ? b : a), all[0]);
+                return new Date(max);
+            }
+        } catch {}
+        // Fallback to DataManager helper
+        return dm.getLastEmailDate();
+    }, [ALL_CAMPAIGNS, ALL_FLOWS, dm, dataVersion]);
     // Global earliest date in dataset
     const GLOBAL_MIN_DATE = useMemo(() => {
         const all = [...ALL_CAMPAIGNS.map(c => c.sentDate.getTime()), ...ALL_FLOWS.map(f => f.sentDate.getTime())].filter(n => Number.isFinite(n));

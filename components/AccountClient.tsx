@@ -255,11 +255,7 @@ export default function AccountClient({ initial }: Props) {
                         </div>
                     )}
 
-                    {/* Agencies overview for global admin */}
-                    <div className="mt-4 space-y-2">
-                        <h3 className="font-semibold">Agencies</h3>
-                        <AdminAgenciesPanel />
-                    </div>
+                    {/* Agencies retired: hide admin overview */}
 
                     <div className="mt-6 space-y-2">
                         <h3 className="font-semibold">Email Logs</h3>
