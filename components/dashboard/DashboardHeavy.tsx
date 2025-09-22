@@ -1074,10 +1074,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         </div>
                         
                     </div>
-                    {/* Data Coverage (always visible) */}
-                    <DataCoverageNotice dataManager={dm} referenceDate={REFERENCE_DATE} />
-                    {/* Data Age Notice (7+ days stale) */}
-                    <DataAgeNotice dataManager={dm} onUploadClick={() => setShowUploadModal(true)} />
+                    {/* Data Coverage & Age — only when an account is active */}
+                    {(((isAdmin && selectedAccountId) || (!isAdmin && EFFECTIVE_ACCOUNT_ID))) && (
+                        <>
+                            <DataCoverageNotice dataManager={dm} referenceDate={REFERENCE_DATE} />
+                            <DataAgeNotice dataManager={dm} onUploadClick={() => setShowUploadModal(true)} />
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -1112,8 +1115,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 </div>
             )}
             {/* Klaviyo connect modal removed (CSV-only ingestion) */}
-            {/* Filters bar (sticky) */}
-            {/* Mobile filters trigger (visible only on small screens) */}
+            {/* Filters bar (sticky) — hide when no active account */}
+            {/* Mobile filters trigger (visible only on small screens) — hide when no active account */}
+            {(((isAdmin && selectedAccountId) || (!isAdmin && EFFECTIVE_ACCOUNT_ID))) && (
             <div className="sm:hidden pt-2">
                 <div className="max-w-7xl mx-auto px-4">
                     <div className="flex items-center justify-end">
@@ -1128,7 +1132,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     </div>
                 </div>
             </div>
+            )}
 
+            {(((isAdmin && selectedAccountId) || (!isAdmin && EFFECTIVE_ACCOUNT_ID))) && (
             <div className={`hidden sm:block sm:pt-2 ${stickyBar ? 'sm:sticky sm:top-0 sm:z-50' : ''}`}> <div className="max-w-7xl mx-auto px-4"><div className={`rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${stickyBar ? 'shadow-lg' : 'shadow-sm'} px-3 py-2 sm:mx-[-30px]`}>
                 <div className="hidden sm:flex items-center justify-center gap-3 flex-nowrap whitespace-nowrap">
                     {/* Custom date inputs */}
@@ -1275,9 +1281,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         );
                     })()}
                 </div></div></div></div>
+            )}
 
-            {/* Mobile Filters Bottom Sheet */}
-            {mobileFiltersOpen && (
+            {/* Mobile Filters Bottom Sheet — hide when no active account */}
+            {(((isAdmin && selectedAccountId) || (!isAdmin && EFFECTIVE_ACCOUNT_ID))) && mobileFiltersOpen && (
                 <div className="sm:hidden fixed inset-0 z-50" role="dialog" aria-modal="true">
                     {/* Backdrop */}
                     <div className="absolute inset-0 bg-black/40" onClick={() => setMobileFiltersOpen(false)} aria-hidden="true" />
@@ -1662,21 +1669,23 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         </div>
                     </section>
                 )}
-                {/* Flow Step Analysis */}
-                <section>
-                    {showFlowAnalysis ? (
-                        <FlowStepAnalysis dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
-                    ) : (
-                        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
-                            <div className="flex items-center justify-center h-32">
-                                <div className="flex items-center gap-3">
-                                    <div className="animate-spin w-5 h-5 border-2 border-purple-600 border-t-transparent rounded-full"></div>
-                                    <span className="text-gray-600 dark:text-gray-400">Loading flow analysis...</span>
+                {/* Flow Step Analysis — only when an account is active */}
+                {(((isAdmin && selectedAccountId) || (!isAdmin && EFFECTIVE_ACCOUNT_ID))) && (
+                    <section>
+                        {showFlowAnalysis ? (
+                            <FlowStepAnalysis dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
+                        ) : (
+                            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+                                <div className="flex items-center justify-center h-32">
+                                    <div className="flex items-center gap-3">
+                                        <div className="animate-spin w-5 h-5 border-2 border-purple-600 border-t-transparent rounded-full"></div>
+                                        <span className="text-gray-600 dark:text-gray-400">Loading flow analysis...</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    )}
-                </section>
+                        )}
+                    </section>
+                )}
                 {(((isAdmin && selectedAccountId) || (!isAdmin && EFFECTIVE_ACCOUNT_ID))) && (
                     <AudienceCharts dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} referenceDate={REFERENCE_DATE} />
                 )}
