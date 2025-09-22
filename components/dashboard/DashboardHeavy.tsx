@@ -424,6 +424,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 const qId = qp.get('account');
                 const initial = (qId && list.some((ac: { id: string }) => ac.id === qId)) ? qId : (list[0]?.id || '');
                 setMemberSelectedId(initial);
+                // If user has no accessible accounts, clear any cached dataset immediately
+                if (!initial) {
+                    try { (dm as any).clearAllData?.(); } catch {}
+                    setDataVersion(v => v + 1);
+                }
             } catch {}
         })();
         return () => { cancelled = true; };
@@ -447,7 +452,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 } catch {}
             }
             try {
-                if (dm.getCampaigns().length || dm.getFlowEmails().length || dm.getSubscribers().length) { setIsInitialLoading(false); return; }
+                // If there is no selected account and we still have cached data, clear it
+                if (!memberSelectedId && (dm.getCampaigns().length || dm.getFlowEmails().length || dm.getSubscribers().length)) {
+                    try { (dm as any).clearAllData?.(); } catch {}
+                    setDataVersion(v => v + 1);
+                    setIsInitialLoading(false);
+                    return;
+                }
                 const list = await fetch('/api/snapshots/list', { cache: 'no-store' });
                 if (!list.ok) { setIsInitialLoading(false); return; }
                 const j = await list.json().catch(() => ({}));
