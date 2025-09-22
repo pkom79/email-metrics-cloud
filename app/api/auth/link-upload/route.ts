@@ -75,6 +75,89 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Missing required files for main upload' }, { status: 400 });
         }
 
+        // 2b) Continuity Gate (compare with recent fingerprints when available)
+        try {
+            // Load CSVs text for sampling
+            const bucket = ingestBucketName();
+            const dl = async (path: string) => {
+                const { data } = await supabase.storage.from(bucket).download(`${uploadId}/${path}`);
+                return data ? await (data as Blob).text() : '';
+            };
+            const [csvSubs, csvFlows, csvCamps] = await Promise.all([
+                dl('subscribers.csv'), dl('flows.csv'), dl('campaigns.csv')
+            ]);
+            const parseCsv = (csv: string): any[] => {
+                try { const rows = (csv || '').split(/\r?\n/); if (!rows.length) return []; const header = rows[0].split(',').map(s => s.trim()); const out: any[] = []; for (let i = 1; i < rows.length; i++) { const r = rows[i]; if (!r) continue; const cols = r.split(','); const obj: any = {}; header.forEach((h, idx) => obj[h] = cols[idx]); out.push(obj); } return out; } catch { return []; }
+            };
+            const subs = parseCsv(csvSubs);
+            const flows = (() => {
+                // flows are not headered reliably; fallback to Papa-like header probing
+                const lines = (csvFlows || '').split(/\r?\n/).filter(Boolean);
+                if (lines.length < 4) return [] as any[];
+                let headerIdx = 2; // default to row 3
+                for (let i = 0; i < Math.min(10, lines.length); i++) { if (lines[i].startsWith('Day,')) { headerIdx = i; break; } }
+                const header = lines[headerIdx].split(',');
+                const out: any[] = [];
+                for (let i = headerIdx + 1; i < lines.length; i++) { const cols = lines[i].split(','); const obj: any = {}; header.forEach((h, idx) => obj[h] = cols[idx]); out.push(obj); }
+                return out;
+            })();
+            const camps = parseCsv(csvCamps);
+
+            const pickLast10 = (arr: string[]) => Array.from(new Set(arr.filter(Boolean))).slice(-10);
+            const normDate = (s?: string) => { try { const d = new Date(String(s)); return isNaN(d.getTime()) ? '' : d.toISOString().slice(0,10); } catch { return ''; } };
+            const profiles10 = pickLast10(subs.map(r => String(r['Klaviyo ID'] || r['KlaviyoID'] || r['Klaviyo_Id'] || '').trim()).filter(Boolean));
+            const campaigns10 = (() => {
+                const id = (r: any) => String(r['Campaign ID'] || r['CampaignId'] || '').trim();
+                const name = (r: any) => String(r['Campaign Name'] || r['Campaign name'] || r['Name'] || '').trim();
+                const when = (r: any) => normDate(String(r['Send Time'] || r['Send Date'] || r['Sent At'] || ''));
+                const keys = camps.map(r => (id(r) || `${name(r)}@${when(r)}`)).filter(Boolean);
+                return pickLast10(keys);
+            })();
+            const flows10 = (() => {
+                const fid = (r: any) => String(r['Flow ID'] || '').trim();
+                const mid = (r: any) => String(r['Flow Message ID'] || '').trim();
+                const keys = flows.map(r => (fid(r) && mid(r)) ? `${fid(r)}_${mid(r)}` : '').filter(Boolean);
+                return pickLast10(keys);
+            })();
+
+            // Load fingerprint if exists
+            const { data: fpRow } = await supabase
+                .from('accounts_fingerprint')
+                .select('last10_profiles,last10_campaigns,last10_flows')
+                .eq('account_id', accountId)
+                .maybeSingle();
+            if (fpRow) {
+                const set = (a: any) => new Set<string>(Array.isArray(a) ? a : []);
+                const profSet = set(fpRow.last10_profiles);
+                const campSet = set(fpRow.last10_campaigns);
+                const flowSet = set(fpRow.last10_flows);
+                const count = (arr: string[], s: Set<string>) => arr.reduce((n, x) => n + (s.has(x) ? 1 : 0), 0);
+                const matches = {
+                    profiles: count(profiles10, profSet),
+                    campaigns: count(campaigns10, campSet),
+                    flows: count(flows10, flowSet)
+                };
+
+                const pass = (() => {
+                    const cats = ['profiles','campaigns','flows'] as const;
+                    const atLeast5 = cats.filter(k => (matches as any)[k] >= 5);
+                    if (atLeast5.length >= 2) return true;
+                    const one5 = atLeast5.length === 1;
+                    const near4 = (k: string) => (matches as any)[k] >= 4;
+                    if (one5 && (near4('campaigns') || near4('flows'))) return true;
+                    return false;
+                })();
+
+                if (!pass) {
+                    // Log and fail
+                    try { await supabase.from('account_ingests').insert({ account_id: accountId, result: 'fail', matches, reason: 'continuity_gate' } as any); } catch {}
+                    return NextResponse.json({ error: "CSVs don’t match this account’s recent history.", matches }, { status: 409 });
+                }
+            }
+
+            // If no fingerprint row, accept silently (first import)
+        } catch { /* ignore gating errors */ }
+
         // 3) Bind core upload row to account and mark bound
         const { error: updErr } = await supabase
             .from('uploads')

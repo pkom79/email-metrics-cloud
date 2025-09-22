@@ -82,8 +82,8 @@ export default function InvitationsManager() {
         <div className="flex items-center gap-3 mb-3">
           <UserPlus className="w-5 h-5 text-purple-600" />
           <div>
-            <div className="text-base font-semibold text-gray-900 dark:text-gray-100">Invite Managers</div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Owners can invite up to 5 managers per brand.</div>
+            <div className="text-base font-semibold text-gray-900 dark:text-gray-100">Invite Users</div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Admins can invite up to 5 managers per brand.</div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -91,7 +91,7 @@ export default function InvitationsManager() {
           <select aria-label="Select brand account" value={accountId} onChange={e => setAccountId(e.target.value)} className="h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm">
             {accounts.map(a => <option key={a.id} value={a.id}>{a.company || a.name || a.id}</option>)}
           </select>
-          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="manager@example.com" className="flex-1 min-w-[220px] h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm" />
+          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="user@example.com" className="flex-1 min-w-[220px] h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm" />
           <button disabled={creating} onClick={onCreate} className="inline-flex items-center gap-2 h-9 px-3 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm disabled:opacity-50">Invite</button>
         </div>
         {err && <div className="text-sm text-rose-600">{err}</div>}
@@ -99,14 +99,14 @@ export default function InvitationsManager() {
       </div>
 
       <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5">
-        <div className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Current managers</div>
+        <div className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Current users</div>
         <div className="divide-y divide-gray-200 dark:divide-gray-800 rounded border border-gray-200 dark:border-gray-800">
           {members.length === 0 && (
-            <div className="p-6 text-center text-sm text-gray-600 dark:text-gray-400">No managers yet.</div>
+            <div className="p-6 text-center text-sm text-gray-600 dark:text-gray-400">No users yet.</div>
           )}
           {members.map(m => (
             <div key={m.user_id} className="p-3 flex items-center justify-between">
-              <div className="text-sm text-gray-800 dark:text-gray-200">{m.email || m.user_id} <span className="text-gray-400">•</span> {m.role === 'owner' ? 'Owner' : 'Manager'}</div>
+              <div className="text-sm text-gray-800 dark:text-gray-200">{m.email || m.user_id} <span className="text-gray-400">•</span> {m.role === 'owner' ? 'Admin' : 'Manager'}</div>
               {m.role === 'manager' && (
                 <button onClick={async () => { await fetch('/api/account/members/remove', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accountId, userId: m.user_id }) }); await loadMembers(accountId); }} className="h-7 px-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 inline-flex items-center"><XCircle className="w-4 h-4 mr-1" />Remove</button>
               )}

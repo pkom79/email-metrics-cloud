@@ -9,6 +9,23 @@ interface DataAgeNoticeProps {
 }
 
 export default function DataAgeNotice({ dataManager, onUploadClick }: DataAgeNoticeProps) {
+    const [, setTick] = React.useState(0);
+    React.useEffect(() => {
+        const onHydrated = () => setTick(t => t + 1);
+        if (typeof window !== 'undefined') {
+            window.addEventListener('em:dataset-hydrated', onHydrated as any);
+            window.addEventListener('em:dataset-persisted', onHydrated as any);
+            window.addEventListener('em:snapshot-created', onHydrated as any);
+        }
+        return () => {
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('em:dataset-hydrated', onHydrated as any);
+                window.removeEventListener('em:dataset-persisted', onHydrated as any);
+                window.removeEventListener('em:snapshot-created', onHydrated as any);
+            }
+        };
+    }, []);
+
     const lastEmailDate = dataManager.getLastEmailDate();
     const today = new Date();
     const daysDiff = Math.floor((today.getTime() - lastEmailDate.getTime()) / (1000 * 60 * 60 * 24));

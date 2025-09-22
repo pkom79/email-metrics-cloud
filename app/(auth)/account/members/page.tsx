@@ -1,7 +1,7 @@
 import AuthGate from '../../../../components/AuthGate';
 import InvitationsManager from '../../../../components/account/InvitationsManager';
 
-export const metadata = { title: 'Managers' };
+export const metadata = { title: 'Users' };
 
 export default function MembersPage() {
   return (

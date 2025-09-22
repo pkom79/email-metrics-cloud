@@ -245,6 +245,33 @@ export async function POST(request: Request) {
         if (!finalLastEmailDate) finalLastEmailDate = new Date().toISOString().slice(0, 10);
         await supabase.from('snapshots').update({ last_email_date: finalLastEmailDate, status: 'processed', last_error: null, updated_at: new Date().toISOString() as any }).eq('id', snapshotId);
 
+        // Refresh continuity fingerprint with latest 10 keys on success
+        try {
+            // Build last10 arrays
+            const byDateAsc = [...allEmails].sort((a, b) => a.sentDate.getTime() - b.sentDate.getTime());
+            const last10Campaigns: string[] = [];
+            const last10Flows: string[] = [];
+            for (const e of byDateAsc) {
+                const any: any = e as any;
+                if (any.campaignName) {
+                    const k = `${any.campaignName}@${new Date(any.sentDate).toISOString().slice(0,10)}`;
+                    last10Campaigns.push(k);
+                } else if (any.flowId && any.flowMessageId) {
+                    const k = `${any.flowId}_${any.flowMessageId}`;
+                    last10Flows.push(k);
+                }
+            }
+            const uniqTail = (arr: string[]) => Array.from(new Set(arr)).slice(-10);
+            const campaigns10 = uniqTail(last10Campaigns);
+            const flows10 = uniqTail(last10Flows);
+            // Profiles not available here; keep existing
+            const { data: fp } = await supabase.from('accounts_fingerprint').select('last10_profiles').eq('account_id', accountId!).maybeSingle();
+            const profiles10 = (fp?.last10_profiles as any) || [];
+            await supabase
+              .from('accounts_fingerprint')
+              .upsert({ account_id: accountId!, last10_profiles: profiles10, last10_campaigns: campaigns10, last10_flows: flows10, updated_at: new Date().toISOString() as any } as any, { onConflict: 'account_id' });
+        } catch { /* ignore fingerprint update errors */ }
+
         return NextResponse.json({ ok: true, processed: true, snapshotId, ms: Date.now() - startedAt });
     } catch (e: any) {
         try {

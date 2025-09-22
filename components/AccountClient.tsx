@@ -244,7 +244,7 @@ export default function AccountClient({ initial }: Props) {
                                                 {(a.members || []).map((m: any) => (
                                                     <div key={m.userId} className="p-2 flex items-center justify-between">
                                                         <div>{m.email || m.userId}</div>
-                                                        <span className={`text-[10px] tracking-wide px-2 py-0.5 rounded ${m.role==='owner' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'}`}>{m.role==='owner' ? 'Admin' : 'Manager'}</span>
+                                                        <span className={`text-[10px] tracking-wide px-2 py-0.5 rounded ${m.role==='owner' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'}`}>{m.role==='owner' ? 'Admin' : 'Manager'}</span>
                                                     </div>
                                                 ))}
                                             </div>

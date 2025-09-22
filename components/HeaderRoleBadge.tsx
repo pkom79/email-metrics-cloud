@@ -52,7 +52,7 @@ export default function HeaderRoleBadge() {
           isOwner = acc ? Boolean(j?.isOwnerOf) : Boolean(j?.isOwnerAny);
         } catch {}
         if (isOwner) {
-          if (!cancelled) setBadge({ label: 'Owner', className: 'bg-blue-50 dark:bg-blue-900/30 text-indigo-600 dark:text-indigo-300 border border-blue-200 dark:border-blue-800' });
+          if (!cancelled) setBadge({ label: 'Admin', className: 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800' });
         } else {
           if (!cancelled) setBadge({ label: 'Manager', className: 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-700' });
         }
