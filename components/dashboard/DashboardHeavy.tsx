@@ -1373,22 +1373,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     </div>
                 </div>
             )}
-            {/* Empty state (no data) */}
-            {!showOverlay && !hasData && (
+            {/* Empty state (no data) — admins only */}
+            {!showOverlay && !hasData && isAdmin && (
                 <div className="px-6 pb-4">
                     <div className="max-w-3xl mx-auto mt-8">
                         <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm p-10 text-center">
                             <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">
-                                {isAdmin ? (selectedAccountId ? 'No data for this account yet' : 'Select an account to view data') : 'Get started by uploading your reports'}
+                                {selectedAccountId ? 'No data for this account yet' : 'Select an account to view data'}
                             </h2>
-                            {!isAdmin && (
-                                <div className="mt-4 flex items-center justify-center gap-3">
-                                    <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">
-                                        <UploadIcon className="h-4 w-4" />
-                                        Upload New Reports
-                                    </button>
-                                </div>
-                            )}
                         </div>
                     </div>
                 </div>
@@ -1689,7 +1681,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         </div>
                     )}
                 </section>
-                <AudienceCharts dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} referenceDate={REFERENCE_DATE} />
+                {(((isAdmin && selectedAccountId) || (!isAdmin && EFFECTIVE_ACCOUNT_ID))) && (
+                    <AudienceCharts dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} referenceDate={REFERENCE_DATE} />
+                )}
                 {/* Sticky end sentinel (1px spacer) */}
                 <div ref={el => setStickyEndRef(el)} style={{ height: 1 }} />
                 <section>
