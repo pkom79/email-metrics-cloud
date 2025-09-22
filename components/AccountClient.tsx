@@ -40,7 +40,7 @@ export default function AccountClient({ initial }: Props) {
             const accountId = sp.get('account');
             const r = await fetch(`/api/account/is-owner${accountId ? `?accountId=${encodeURIComponent(accountId)}` : ''}`, { cache: 'no-store' });
             const j = await r.json().catch(() => ({}));
-            const isOwnerCurrent = accountId ? Boolean(j?.isOwnerOf) : Boolean(j?.isOwnerAny);
+            const isOwnerCurrent = accountId ? Boolean(j?.isOwnerOf) : false;
             setIsOwner(isOwnerCurrent);
         } catch { setIsOwner(false); }
     })(); }, []);
@@ -320,7 +320,7 @@ export default function AccountClient({ initial }: Props) {
                             <h2 className="font-semibold">Management</h2>
                             <button
                                 onClick={async () => {
-                                    if (!window.confirm('Are you sure you want to leave this brand? You will lose access to its data.')) return;
+                                    if (!window.confirm('Are you sure you want to leave this account? You will lose access to its data.')) return;
                                     try {
                                         const res = await fetch('/api/account/members/leave', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accountId: acc }) });
                                         const j = await res.json().catch(() => ({}));
@@ -329,11 +329,19 @@ export default function AccountClient({ initial }: Props) {
                                     } catch (e: any) { alert(e?.message || 'Failed'); }
                                 }}
                                 className="inline-flex items-center px-3 py-1.5 rounded bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-800 dark:text-gray-200 text-sm"
-                            >Leave Brand</button>
+                            >Leave Account</button>
                         </section>
                     );
                 } catch { return null; }
             })()}
+
+            {/* Manager: list all accounts with Leave Account action */}
+            {(!isAdmin && !isOwner && !isAgency) && (
+                <section className="space-y-3">
+                    <h2 className="font-semibold">Your Accounts</h2>
+                    <ManagerAccountsList />
+                </section>
+            )}
 
             {/* Integrations section removed (CSV-only) */}
 
@@ -367,6 +375,62 @@ export default function AccountClient({ initial }: Props) {
                     >{deleting ? 'Deleting…' : 'Delete Account'}</button>
                 </section>
             )}
+        </div>
+    );
+}
+
+// Lightweight admin panel to list agencies with details
+function ManagerAccountsList() {
+    const [rows, setRows] = useState<Array<{ id: string; label: string; isOwner: boolean }>>([]);
+    const [loading, setLoading] = useState(true);
+    const [err, setErr] = useState<string | null>(null);
+    useEffect(() => { (async () => {
+        try {
+            const res = await fetch('/api/account/my-brands', { cache: 'no-store' });
+            const j = await res.json();
+            const list: Array<{ id: string; name?: string | null; company?: string | null }> = j.accounts || [];
+            const labeled = await Promise.all(list.map(async (a) => {
+                let owned = false;
+                try {
+                    const r = await fetch(`/api/account/is-owner?accountId=${encodeURIComponent(a.id)}`, { cache: 'no-store' });
+                    const x = await r.json().catch(() => ({}));
+                    owned = Boolean(x?.isOwnerOf);
+                } catch {}
+                return { id: a.id, label: a.company || a.name || a.id, isOwner: owned };
+            }));
+            setRows(labeled);
+        } catch (e: any) { setErr(e?.message || 'Failed to load accounts'); }
+        finally { setLoading(false); }
+    })(); }, []);
+
+    if (loading) return <div className="text-sm text-gray-600 dark:text-gray-300">Loading…</div>;
+    if (err) return <div className="text-sm text-rose-600">{err}</div>;
+
+    if (rows.length === 0) return <div className="text-sm text-gray-600 dark:text-gray-400">No accounts.</div>;
+
+    return (
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+            <ul className="divide-y divide-gray-200 dark:divide-gray-800">
+                {rows.map(a => (
+                    <li key={a.id} className="p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-900 dark:text-gray-100">{a.label}</span>
+                            <a className="text-xs text-purple-600 hover:underline" href={`/dashboard?account=${a.id}`}>Open</a>
+                        </div>
+                        {!a.isOwner && (
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        const res = await fetch('/api/account/members/leave', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accountId: a.id }) });
+                                        if (res.ok) setRows(prev => prev.filter(x => x.id !== a.id));
+                                    } catch {}
+                                }}
+                                className="h-8 px-3 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                            >Leave Account</button>
+                        )}
+                    </li>
+                ))}
+            </ul>
         </div>
     );
 }
