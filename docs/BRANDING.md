@@ -58,6 +58,8 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Examples:
   - Weekly-only module for 90+ day ranges: Title “Weekly view and 90+ days required”, body “This module is available only in the Weekly view for ranges 90 days or longer.” Icon: `CalendarRange`.
   - Zero full weeks in range: Title “Not enough data in this period”, body “We didn’t find any complete weeks inside this range. Try a longer date range.” Icon: `MailX`.
+  - Dashboard: No Account Access (Manager) — Title “No account access yet”, body “You don’t have access to any account. Ask an Admin to invite you.” Icon: `Calendar` in gray-300. No CTAs.
+  - Dashboard: Admin (no account selected) — Title “Select an account”, body “Choose an account from the selector above to view its dashboard.” Icon: `Calendar` in gray-300. No CTAs.
 
 ### Settings and management pages (new)
 - Use the same section-card pattern with compact controls.

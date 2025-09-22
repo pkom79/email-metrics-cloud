@@ -24,6 +24,7 @@ export interface LoadProgress {
 export class DataManager {
     private static instance: DataManager;
     private static currentUserId: string | null = null;
+    private static currentAccountId: string | null = null;
 
     private campaigns: ProcessedCampaign[] = [];
     private flowEmails: ProcessedFlowEmail[] = [];
@@ -46,11 +47,13 @@ export class DataManager {
     // Dynamic storage keys based on user
     private get storageKey() {
         const userId = DataManager.currentUserId || 'anonymous';
-        return `em:dataset:${userId}:v2`;
+        const accountId = DataManager.currentAccountId || 'none';
+        return `em:dataset:${userId}:${accountId}:v2`;
     }
     private get idbKey() {
         const userId = DataManager.currentUserId || 'anonymous';
-        return `dataset:${userId}:v2`;
+        const accountId = DataManager.currentAccountId || 'none';
+        return `dataset:${userId}:${accountId}:v2`;
     }
 
     private _subsetSignature(campaigns: ProcessedCampaign[], flows: ProcessedFlowEmail[]): string {
@@ -358,6 +361,16 @@ export class DataManager {
         return DataManager.instance;
     }
 
+    static setAccountId(accountId: string | null) {
+        if (DataManager.currentAccountId !== accountId) {
+            DataManager.currentAccountId = accountId;
+            if (DataManager.instance) {
+                // Changing account context invalidates in-memory data
+                DataManager.instance.clearAllData();
+            }
+        }
+    }
+
     private clearData() {
         this.campaigns = [];
         this.flowEmails = [];
@@ -474,8 +487,10 @@ export class DataManager {
      * Clear all data and reset to empty state
      */
     clearAllData(): void {
+        try { if (typeof localStorage !== 'undefined') localStorage.removeItem(this.storageKey); } catch { }
         this.campaigns = []; this.flowEmails = []; this.subscribers = []; this.isRealDataLoaded = false;
         this.loadProgress = { campaigns: { loaded: false, progress: 0 }, flows: { loaded: false, progress: 0 }, subscribers: { loaded: false, progress: 0 } };
+        try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('em:dataset-hydrated')); } catch { }
     }
 
     getLoadProgress(): LoadProgress { return this.loadProgress; }

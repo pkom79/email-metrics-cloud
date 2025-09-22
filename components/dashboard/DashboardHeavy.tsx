@@ -24,6 +24,7 @@ import InfoTooltipIcon from '../InfoTooltipIcon';
 import TooltipPortal from '../TooltipPortal';
 import SelectBase from "../ui/SelectBase";
 import UploadWizard from '../../components/UploadWizard';
+import EmptyStateCard from '../EmptyStateCard';
 import { usePendingUploadsLinker } from '../../lib/utils/usePendingUploadsLinker';
 import { supabase } from '../../lib/supabase/client';
 
@@ -530,6 +531,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const ALL_FLOWS = useMemo(() => dm.getFlowEmails(), [dm, dataVersion]);
     const hasData = ALL_CAMPAIGNS.length > 0 || ALL_FLOWS.length > 0;
+    const EFFECTIVE_ACCOUNT_ID = useMemo(() => (isAdmin ? (selectedAccountId || '') : (memberSelectedId || '')), [isAdmin, selectedAccountId, memberSelectedId]);
+    useEffect(() => { try { DataManager.setAccountId(EFFECTIVE_ACCOUNT_ID || null); } catch {} }, [EFFECTIVE_ACCOUNT_ID]);
     // Reference/end date for presets and bounds —
     // align with DataCoverageNotice by using DataManager's helper.
     const REFERENCE_DATE = useMemo(() => {
@@ -1050,14 +1053,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 })()}
                             </div>
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 relative ml-auto">
-                                {!isAdmin && (
+                                {isAdmin ? null : (
                                     <>
                                         {memberAccounts.length > 1 && (
                                             <SelectBase value={memberSelectedId} onChange={e => { const v = (e.target as HTMLSelectElement).value; setMemberSelectedId(v); const url = new URL(window.location.href); if (v) url.searchParams.set('account', v); else url.searchParams.delete('account'); window.history.replaceState(null, '', url.toString()); }} className="w-full sm:w-auto text-sm" minWidthClass="sm:min-w-[240px]">
                                                 {memberAccounts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
                                             </SelectBase>
                                         )}
-                                        <button onClick={() => setShowUploadModal(true)} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none"><UploadIcon className="h-4 w-4" />Upload New Reports</button>
                                     </>
                                 )}
                                 {isAdmin && (<>
@@ -1393,6 +1395,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             )}
             {/* Main content */}
             <div className="p-6"><div className="max-w-7xl mx-auto space-y-8">
+                {(!isAdmin && !EFFECTIVE_ACCOUNT_ID) && (
+                    <EmptyStateCard title="No account access yet" body="You don’t have access to any account. Ask an Admin to invite you." />
+                )}
+                {(isAdmin && !selectedAccountId) && (
+                    <EmptyStateCard title="Select an account" body="Choose an account from the selector above to view its dashboard." />
+                )}
                 {overviewMetrics && (
                     <section>
                         <div className="flex items-center gap-2 mb-3">
