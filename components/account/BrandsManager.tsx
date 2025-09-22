@@ -64,8 +64,8 @@ export default function BrandsManager() {
         <div className="flex items-center gap-3 mb-3">
           <Building2 className="w-5 h-5 text-purple-600" />
           <div>
-            <div className="text-base font-semibold text-gray-900 dark:text-gray-100">Your Brands</div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Add additional brands you own. Each brand has its own members and data.</div>
+            <div className="text-base font-semibold text-gray-900 dark:text-gray-100">Your Accounts</div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Add additional accounts you own. Each account has its own users and data.</div>
           </div>
         </div>
         {brands.length === 0 && (
@@ -84,12 +84,12 @@ export default function BrandsManager() {
       </div>
 
       <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 space-y-3">
-        <div className="text-sm font-medium text-gray-800 dark:text-gray-200">Create New Brand</div>
+        <div className="text-sm font-medium text-gray-800 dark:text-gray-200">Create New Account</div>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="Business Name" className="w-full h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm" />
         <input value={storeUrl} onChange={e => setStoreUrl(e.target.value)} placeholder="Store URL (e.g. yourstore.com)" className="w-full h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-sm" />
         {err && <div className="text-sm text-rose-600">{err}</div>}
         {msg && <div className="text-sm text-emerald-600">{msg}</div>}
-        <button disabled={busy || !name || !storeUrl} onClick={onCreate} className="inline-flex items-center gap-2 h-9 px-3 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm disabled:opacity-50"><Plus className="w-4 h-4" />Create Brand</button>
+        <button disabled={busy || !name || !storeUrl} onClick={onCreate} className="inline-flex items-center gap-2 h-9 px-3 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm disabled:opacity-50"><Plus className="w-4 h-4" />Create Account</button>
       </div>
     </div>
   );

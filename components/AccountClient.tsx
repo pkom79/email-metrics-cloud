@@ -175,24 +175,24 @@ export default function AccountClient({ initial }: Props) {
                     <div className="grid gap-3">
                         <div className="rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900 flex items-center justify-between">
                             <div>
-                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">Managers</div>
-                                <div className="text-sm text-gray-600 dark:text-gray-400">Invite and manage brand members.</div>
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">Users</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">Invite and manage account users.</div>
                             </div>
-                            <Link href="/account/members" className="inline-flex items-center px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Open</Link>
+                        <Link href="/account/members" className="inline-flex items-center px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Open</Link>
                         </div>
                         <div className="rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900 flex items-center justify-between">
                             <div>
                                 <div className="text-sm font-medium text-gray-900 dark:text-gray-100">Notifications</div>
-                                <div className="text-sm text-gray-600 dark:text-gray-400">Manage per-brand recipients.</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">Manage per-account recipients.</div>
                             </div>
                             <Link href="/account/notifications" className="inline-flex items-center px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Open</Link>
                         </div>
                         <div className="rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900 flex items-center justify-between">
                             <div>
-                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">Brands</div>
-                                <div className="text-sm text-gray-600 dark:text-gray-400">Create and switch between your brands.</div>
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">Accounts</div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">Create and switch between your accounts.</div>
                             </div>
-                            <Link href="/account/brands" className="inline-flex items-center px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Open</Link>
+                        <Link href="/account/brands" className="inline-flex items-center px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Open</Link>
                         </div>
                     </div>
             </section>
@@ -476,6 +476,7 @@ function AdminEmailLogsPanel() {
                     {[25,50,100,200].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
                 <button onClick={load} className="h-7 px-3 rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700">Refresh</button>
+                <button onClick={async () => { try { const r = await fetch('/api/cron/notifications'); await load(); } catch {} }} className="h-7 px-3 rounded bg-purple-600 text-white">Run Now</button>
             </div>
             {loading && <div>Loading…</div>}
             {err && <div className="text-rose-600">{err}</div>}
