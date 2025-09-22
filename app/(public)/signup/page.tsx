@@ -16,7 +16,8 @@ function SignupInner() {
     const search = useSearchParams();
     const router = useRouter();
     const qpModeParam = search.get('mode');
-    const qpTypeParam = search.get('type');
+    // Agencies retired: force brand
+    const qpTypeParam = 'brand';
     const qpErrorParam = search.get('error');
     const qpMode = (qpModeParam as 'signin' | 'signup') || 'signup';
 
@@ -26,7 +27,7 @@ function SignupInner() {
     const [storeUrl, setStoreUrl] = useState('');
     const [country, setCountry] = useState('');
     const [mode, setMode] = useState<'signin' | 'signup'>(qpMode);
-    const [accountType, setAccountType] = useState<'brand' | 'agency'>(qpTypeParam === 'agency' ? 'agency' : 'brand');
+    const [accountType, setAccountType] = useState<'brand' | 'agency'>('brand');
     const [error, setError] = useState<string | null>(null);
     const [ok, setOk] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -120,18 +121,6 @@ function SignupInner() {
         setSubmitting(true);
         try {
             if (mode === 'signup') {
-                if (accountType === 'agency') {
-                    const { error } = await supabase.auth.signUp({
-                        email,
-                        password,
-                        options: {
-                            data: { signup_type: 'agency', agencyName: businessName }
-                        }
-                    });
-                    if (error) throw error;
-                    setOk('Agency account created! Redirecting…');
-                    setTimeout(() => router.replace('/agencies'), 800);
-                } else {
                     const { error } = await supabase.auth.signUp({
                         email,
                         password,
@@ -175,7 +164,6 @@ function SignupInner() {
 
                     // Hard navigation to avoid RSC caching discrepancies
                     setTimeout(() => { window.location.assign('/dashboard'); }, 800);
-                }
             } else {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
@@ -224,19 +212,11 @@ function SignupInner() {
                 <button type="button" className={`px-3 py-1.5 ${mode === 'signup' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200'}`} onClick={() => setMode('signup')}>Sign up</button>
                 <button type="button" className={`px-3 py-1.5 border-l border-gray-300 dark:border-gray-700 ${mode === 'signin' ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200'}`} onClick={() => setMode('signin')}>Sign in</button>
             </div>
-            {mode === 'signup' && (
-                <div className="mt-3 flex items-center gap-3 text-sm">
-                    <label className="text-sm text-gray-700 dark:text-gray-300">Account type</label>
-                    <select value={accountType} onChange={e => setAccountType((e.target as HTMLSelectElement).value as any)} className="h-9 px-3 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700">
-                        <option value="brand">Brand</option>
-                        <option value="agency">Agency</option>
-                    </select>
-                </div>
-            )}
+            {/* Account type selection removed (agencies retired) */}
             <form onSubmit={onSubmit} className="space-y-4">
                 {mode === 'signup' && (
                     <>
-                        {accountType === 'brand' ? (
+                        {
                             <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 space-y-2">
                                 <div className="space-y-1">
                                     <label className="text-sm text-gray-700 dark:text-gray-300">Business name</label>
@@ -260,12 +240,7 @@ function SignupInner() {
                                     </div>
                                 </div>
                             </div>
-                        ) : (
-                            <div className="space-y-1">
-                                <label className="text-sm text-gray-700 dark:text-gray-300">Agency name</label>
-                                <input type="text" value={businessName} onChange={e => setBusinessName(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
-                            </div>
-                        )}
+                        }
                     </>
                 )}
 

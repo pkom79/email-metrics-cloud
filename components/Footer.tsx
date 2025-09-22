@@ -10,7 +10,7 @@ export default function Footer() {
                     <Link href="/report-export-guide" className="hover:text-gray-900 dark:hover:text-gray-200 underline-offset-4 hover:underline transition-colors">Report Export Guide</Link>
                     <Link href="/terms" className="hover:text-gray-900 dark:hover:text-gray-200 underline-offset-4 hover:underline transition-colors">Terms & Conditions</Link>
                     <Link href="/privacy" className="hover:text-gray-900 dark:hover:text-gray-200 underline-offset-4 hover:underline transition-colors">Privacy Policy</Link>
-                    <Link href="/agencies" className="hover:text-gray-900 dark:hover:text-gray-200 underline-offset-4 hover:underline transition-colors">For Agencies</Link>
+                    {/* Agencies retired */}
                 </div>
                 <div className="text-xs opacity-75">
                     <span>All product names, logos, and brands are property of their respective owners.</span>
