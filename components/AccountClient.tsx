@@ -238,13 +238,13 @@ export default function AccountClient({ initial }: Props) {
                                             <div className="sm:col-span-2"><span className="font-medium">Store URL:</span> {a.storeUrl ? `https://${a.storeUrl}` : '—'}</div>
                                         </div>
                                         <div className="mt-2">
-                                            <div className="font-medium mb-1">Managers</div>
+                                            <div className="font-medium mb-1">Users</div>
                                             <div className="divide-y divide-gray-200 dark:divide-gray-700 rounded border border-gray-200 dark:border-gray-700">
                                                 {(a.members || []).length === 0 && <div className="p-2">None</div>}
                                                 {(a.members || []).map((m: any) => (
                                                     <div key={m.userId} className="p-2 flex items-center justify-between">
                                                         <div>{m.email || m.userId}</div>
-                                                        <span className={`text-[10px] tracking-wide px-2 py-0.5 rounded ${m.role==='owner' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'}`}>{m.role==='owner' ? 'Owner' : 'Manager'}</span>
+                                                        <span className={`text-[10px] tracking-wide px-2 py-0.5 rounded ${m.role==='owner' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'}`}>{m.role==='owner' ? 'Admin' : 'Manager'}</span>
                                                     </div>
                                                 ))}
                                             </div>

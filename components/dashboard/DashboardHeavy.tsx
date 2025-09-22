@@ -1062,7 +1062,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         
                     </div>
                     {/* Data Coverage (always visible) */}
-                    <DataCoverageNotice dataManager={dm} />
+                    <DataCoverageNotice dataManager={dm} referenceDate={REFERENCE_DATE} />
                     {/* Data Age Notice (7+ days stale) */}
                     <DataAgeNotice dataManager={dm} onUploadClick={() => setShowUploadModal(true)} />
                 </div>

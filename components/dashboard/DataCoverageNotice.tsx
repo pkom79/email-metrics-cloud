@@ -5,9 +5,10 @@ import { DataManager } from '../../lib/data/dataManager';
 
 interface DataCoverageNoticeProps {
     dataManager: DataManager;
+    referenceDate?: Date;
 }
 
-export default function DataCoverageNotice({ dataManager }: DataCoverageNoticeProps) {
+export default function DataCoverageNotice({ dataManager, referenceDate }: DataCoverageNoticeProps) {
     // Re-render when dataset hydrates/persists
     const [, setTick] = React.useState(0);
     React.useEffect(() => {
@@ -25,7 +26,7 @@ export default function DataCoverageNotice({ dataManager }: DataCoverageNoticePr
     }, []);
 
     try {
-        const last = dataManager.getLastEmailDate();
+        const last = referenceDate ? new Date(referenceDate) : dataManager.getLastEmailDate();
         if (!last) return null;
         const lastStr = last.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
         const capDays = 730; // 2 years
