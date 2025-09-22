@@ -1373,15 +1373,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     </div>
                 </div>
             )}
-            {/* Empty state (no data) — admins only */}
-            {!showOverlay && !hasData && isAdmin && (
+            {/* Empty state (no data) — Admin, only when an account is selected and has no data */}
+            {!showOverlay && !hasData && isAdmin && !!selectedAccountId && (
                 <div className="px-6 pb-4">
                     <div className="max-w-3xl mx-auto mt-8">
-                        <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm p-10 text-center">
-                            <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">
-                                {selectedAccountId ? 'No data for this account yet' : 'Select an account to view data'}
-                            </h2>
-                        </div>
+                        <EmptyStateCard title="No data for this account yet" body="Upload CSV reports to view metrics for this brand." />
                     </div>
                 </div>
             )}
@@ -1686,28 +1682,30 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 )}
                 {/* Sticky end sentinel (1px spacer) */}
                 <div ref={el => setStickyEndRef(el)} style={{ height: 1 }} />
-                <section>
-                    <CustomSegmentBlock
-                        dateRange={dateRange}
-                        customFrom={customFrom}
-                        customTo={customTo}
-                        referenceDate={REFERENCE_DATE}
-                        onSetMainDateRange={(fromISO, toISO) => {
-                            let from = fromISO;
-                            let to = toISO;
-                            // Clamp to allowed window
-                            if (from && from < allowedMinISO) from = allowedMinISO;
-                            if (to && to > allowedMaxISO) to = allowedMaxISO;
-                            // Ensure from <= to
-                            if (from && to && new Date(from) > new Date(to)) {
-                                to = from;
-                            }
-                            setCustomFrom(from);
-                            setCustomTo(to);
-                            setDateRange('custom');
-                        }}
-                    />
-                </section>
+                {(((isAdmin && selectedAccountId) || (!isAdmin && EFFECTIVE_ACCOUNT_ID))) && (
+                    <section>
+                        <CustomSegmentBlock
+                            dateRange={dateRange}
+                            customFrom={customFrom}
+                            customTo={customTo}
+                            referenceDate={REFERENCE_DATE}
+                            onSetMainDateRange={(fromISO, toISO) => {
+                                let from = fromISO;
+                                let to = toISO;
+                                // Clamp to allowed window
+                                if (from && from < allowedMinISO) from = allowedMinISO;
+                                if (to && to > allowedMaxISO) to = allowedMaxISO;
+                                // Ensure from <= to
+                                if (from && to && new Date(from) > new Date(to)) {
+                                    to = from;
+                                }
+                                setCustomFrom(from);
+                                setCustomTo(to);
+                                setDateRange('custom');
+                            }}
+                        />
+                    </section>
+                )}
             </div></div>
 
             {/* Sharing feature removed */}
