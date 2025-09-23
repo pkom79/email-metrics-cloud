@@ -72,6 +72,11 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
   - List recipients in a simple divided list with enable/disable control and delete icon button.
 - Multi-user invitations and agency management were retired in Sept 2025. Leave historical guidance here for context, but do not reintroduce those surfaces without a new review.
 
+### Loading states
+- Full-screen loading (e.g., dashboard hydration) keeps the background on brand neutrals (`bg-gray-50` / `dark:bg-gray-900`) with a centered spinner ring using `border-purple-600` accent.
+- Pair the spinner with concise copy: primary line `text-sm font-medium` in neutral 700/200, optional supporting line in `text-xs text-gray-500` to reinforce what’s happening.
+- Maintain minimum spacing (`gap-4`) and wrap content in a flex column to stay consistent with onboarding states.
+
 
 ## Actionable notice cards (segments)
 

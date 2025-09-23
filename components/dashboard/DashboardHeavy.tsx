@@ -1006,8 +1006,15 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // Unified loading gate: ensure initial hydration attempts (or fallback) ran
     if ((!initialLoadComplete && !isAdmin) || (isAdmin && isInitialLoading)) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="text-gray-500 dark:text-gray-400 text-sm">Loading your metrics...</div>
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+                <div className="flex flex-col items-center gap-4 text-center">
+                    <div className="relative h-12 w-12">
+                        <div className="absolute inset-0 rounded-full border-4 border-purple-200 border-t-purple-600 animate-spin" />
+                        <div className="absolute inset-2 rounded-full bg-white dark:bg-gray-900" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Preparing your dashboard…</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs">We’re loading your latest reports and metrics. This usually takes just a few moments.</p>
+                </div>
             </div>
         );
     }
@@ -1063,6 +1070,15 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     {/* Export JSON hidden for now (admin) */}
                                     <span className="hidden"><button onClick={handleExportJson} disabled={exportBusy || !selectedAccountId} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button></span>
                                 </>)}
+                                <button
+                                    type="button"
+                                    onClick={() => setShowUploadModal(true)}
+                                    disabled={!HAS_ACTIVE_ACCOUNT}
+                                    className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white w-full sm:w-auto ${HAS_ACTIVE_ACCOUNT ? 'bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900' : 'bg-purple-400 cursor-not-allowed opacity-70'}`}
+                                >
+                                    <UploadIcon className="h-4 w-4" />
+                                    Upload New Reports
+                                </button>
                             </div>
                             {/* Status line removed per spec */}
                         </div>
