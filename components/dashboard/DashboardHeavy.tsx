@@ -200,6 +200,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // Member brand switcher
     const [memberAccounts, setMemberAccounts] = useState<Array<{ id: string; label: string }>>([]);
     const [memberSelectedId, setMemberSelectedId] = useState<string>('');
+    const [memberBrandsLoaded, setMemberBrandsLoaded] = useState<boolean>(false);
     // Removed API integration modal/state (CSV-only ingestion)
     const [showKeyModal, setShowKeyModal] = useState(false);
     const [keyInput, setKeyInput] = useState('');
@@ -416,7 +417,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         (async () => {
             try {
                 const r = await fetch('/api/account/my-brands', { cache: 'no-store' });
-                if (!r.ok) return;
+                if (!r.ok) { return; }
                 const j = await r.json();
                 const list: Array<{ id: string; label: string }> = (j.accounts || []).map((a: any) => ({ id: String(a.id), label: String(a.company || a.name || a.id) }));
                 if (cancelled) return;
@@ -431,6 +432,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     setDataVersion(v => v + 1);
                 }
             } catch {}
+            finally { if (!cancelled) setMemberBrandsLoaded(true); }
         })();
         return () => { cancelled = true; };
     }, [adminCheckComplete, isAdmin]);
@@ -536,10 +538,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         () => (isAdmin ? (selectedAccountId || '') : (memberSelectedId || '')),
         [isAdmin, selectedAccountId, memberSelectedId]
     );
-    const HAS_ACTIVE_ACCOUNT = useMemo(
-        () => (isAdmin ? Boolean(selectedAccountId) : Boolean(memberSelectedId && (memberAccounts?.length || 0) > 0)),
-        [isAdmin, selectedAccountId, memberSelectedId, memberAccounts]
-    );
+    const HAS_ACTIVE_ACCOUNT = useMemo(() => {
+        if (isAdmin) return Boolean(selectedAccountId);
+        // For managers, wait for brand list to load and require a valid selection from that list
+        if (!memberBrandsLoaded) return false;
+        if (!memberSelectedId) return false;
+        return memberAccounts.some(a => a.id === memberSelectedId);
+    }, [isAdmin, selectedAccountId, memberBrandsLoaded, memberSelectedId, memberAccounts]);
     useEffect(() => { try { DataManager.setAccountId(EFFECTIVE_ACCOUNT_ID || null); } catch {} }, [EFFECTIVE_ACCOUNT_ID]);
     // Reference/end date for presets and bounds —
     // align with DataCoverageNotice by using DataManager's helper.
@@ -1398,7 +1403,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             )}
             {/* Main content */}
             <div className="p-6"><div className="max-w-7xl mx-auto space-y-8">
-                {(!isAdmin && !HAS_ACTIVE_ACCOUNT) && (
+                {(!isAdmin && memberBrandsLoaded && !HAS_ACTIVE_ACCOUNT) && (
                     <EmptyStateCard title="No account access yet" body="You don’t have access to any account. Ask an Admin to invite you." />
                 )}
                 {(isAdmin && !HAS_ACTIVE_ACCOUNT) && (
