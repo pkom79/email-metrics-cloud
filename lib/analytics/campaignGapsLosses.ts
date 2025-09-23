@@ -250,9 +250,21 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
     if (run.len >= 1 && run.len <= 4) {
       // Short gaps: original approach with trimming/winsorization and median
       let refs = collectRefs(run);
-      if (refs.length < 3) continue; // insufficient references for this short run
+      if (refs.length < 3) {
+        if (globalMedian > 0) {
+          const expected = Math.min(globalMedian, p75Cap);
+          estimatedLostRevenue += expected * run.len;
+        }
+        continue; // insufficient localized references
+      }
       refs = trimOrWinsorize(refs);
-      if (!refs.length) continue;
+      if (!refs.length) {
+        if (globalMedian > 0) {
+          const expected = Math.min(globalMedian, p75Cap);
+          estimatedLostRevenue += expected * run.len;
+        }
+        continue;
+      }
       let expected = median(refs);
       // Cap expected by 75th percentile cap within selected range
       expected = Math.min(expected, p75Cap);
