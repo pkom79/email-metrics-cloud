@@ -89,12 +89,23 @@ function SignupInner() {
         (async () => {
             try {
                 const { data } = await supabase.auth.getSession();
-                if (!cancelled && data?.session && !processedHashRef.current && !hasNavigatedRef.current) {
-                    diag('existing-session', { userId: data.session.user?.id });
-                    hasNavigatedRef.current = true;
-                    router.replace('/dashboard');
+                const existingSession = data?.session;
+                if (!existingSession || processedHashRef.current || hasNavigatedRef.current) return;
+
+                const serverCheck = await fetch('/api/account/is-owner', { cache: 'no-store', credentials: 'include' });
+                if (serverCheck.status === 401) {
+                    diag('existing-session-invalid');
+                    await supabase.auth.signOut();
+                    return;
                 }
-            } catch {}
+                if (!serverCheck.ok) return;
+                if (cancelled) return;
+                diag('existing-session', { userId: existingSession.user?.id });
+                hasNavigatedRef.current = true;
+                router.replace('/dashboard');
+            } catch (err) {
+                if (!cancelled) diag('existing-session-error', { error: (err as any)?.message });
+            }
         })();
         return () => { cancelled = true; };
     }, [diag, router]);
