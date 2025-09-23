@@ -8,8 +8,21 @@ export const runtime = 'nodejs';
 // - Reads pending rows from notifications_outbox
 // - Sends via Postmark using your generic notification template
 // - Updates status with retries and backoff
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    // Authorize: allow Vercel Cron header or ADMIN_JOB_SECRET
+    const url = new URL(request.url);
+    const ADMIN_SECRET = (globalThis as any).process?.env?.ADMIN_JOB_SECRET || process.env.ADMIN_JOB_SECRET;
+    const provided = (request.headers.get('x-admin-job-secret') || '').trim();
+    const bearer = (request.headers.get('authorization') || '').trim();
+    const bearerToken = bearer.toLowerCase().startsWith('bearer ')
+      ? bearer.slice(7).trim()
+      : '';
+    const token = url.searchParams.get('token') || '';
+    const isCron = request.headers.has('x-vercel-cron');
+    if (!isCron && (!ADMIN_SECRET || (provided !== ADMIN_SECRET && token !== ADMIN_SECRET && bearerToken !== ADMIN_SECRET))) {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+    }
     // Basic config validation
     const POSTMARK_SERVER_TOKEN = process.env.POSTMARK_SERVER_TOKEN;
     const POSTMARK_FROM = process.env.POSTMARK_FROM;

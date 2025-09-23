@@ -6,12 +6,19 @@ import { getServerUser } from '../../../../lib/supabase/auth';
 export const runtime = 'nodejs';
 
 // Clean up orphaned accounts (accounts in database without corresponding auth users)
-export async function POST() {
+export async function POST(request: Request) {
     try {
+        const url = new URL(request.url);
+        const ADMIN_SECRET = (globalThis as any).process?.env?.ADMIN_JOB_SECRET || process.env.ADMIN_JOB_SECRET;
+        const provided = (request.headers.get('x-admin-job-secret') || '').trim();
+        const bearer = (request.headers.get('authorization') || '').trim();
+        const bearerToken = bearer.toLowerCase().startsWith('bearer ') ? bearer.slice(7).trim() : '';
+        const token = url.searchParams.get('token') || '';
         const user = await getServerUser();
-        // Allow anonymous (cron) or admin; if user present and not admin -> forbid
-        if (user && user.app_metadata?.role !== 'admin') {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        const isAdmin = !!user && (user as any).app_metadata?.role === 'admin';
+        const hasSecret = !!ADMIN_SECRET && (provided === ADMIN_SECRET || token === ADMIN_SECRET || bearerToken === ADMIN_SECRET);
+        if (!isAdmin && !hasSecret) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const supabase = createServiceClient();

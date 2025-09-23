@@ -8,10 +8,17 @@ export const runtime = 'nodejs';
 // This can be called by a single cron job to handle all maintenance
 export async function POST(request: Request) {
     try {
+        const url = new URL(request.url);
+        const ADMIN_SECRET = (globalThis as any).process?.env?.ADMIN_JOB_SECRET || process.env.ADMIN_JOB_SECRET;
+        const provided = (request.headers.get('x-admin-job-secret') || '').trim();
+        const bearer = (request.headers.get('authorization') || '').trim();
+        const bearerToken = bearer.toLowerCase().startsWith('bearer ') ? bearer.slice(7).trim() : '';
+        const token = url.searchParams.get('token') || '';
         const user = await getServerUser();
-        // Allow anonymous (cron) or admin; if user present and not admin -> forbid
-        if (user && user.app_metadata?.role !== 'admin') {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        const isAdmin = !!user && (user as any).app_metadata?.role === 'admin';
+        const hasSecret = !!ADMIN_SECRET && (provided === ADMIN_SECRET || token === ADMIN_SECRET || bearerToken === ADMIN_SECRET);
+        if (!isAdmin && !hasSecret) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const body = await request.json().catch(() => ({}));
@@ -36,7 +43,7 @@ export async function POST(request: Request) {
                 console.log('cleanup-master: Running expired preauth cleanup');
                 const response = await fetch(new URL('/api/preauth/cleanup-batch', baseUrl), {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json', ...(ADMIN_SECRET ? { 'x-admin-job-secret': ADMIN_SECRET } : {}) }
                 });
                 
                 if (response.ok) {
@@ -61,7 +68,7 @@ export async function POST(request: Request) {
                 console.log('cleanup-master: Running old uploads cleanup');
                 const response = await fetch(new URL('/api/uploads/cleanup-old', baseUrl), {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json', ...(ADMIN_SECRET ? { 'x-admin-job-secret': ADMIN_SECRET } : {}) }
                 });
                 
                 if (response.ok) {
@@ -86,7 +93,7 @@ export async function POST(request: Request) {
                 console.log('cleanup-master: Running deleted accounts cleanup');
                 const response = await fetch(new URL('/api/accounts/cleanup-deleted', baseUrl), {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', ...(ADMIN_SECRET ? { 'x-admin-job-secret': ADMIN_SECRET } : {}) },
                     body: JSON.stringify({ retentionDays })
                 });
                 
@@ -112,7 +119,7 @@ export async function POST(request: Request) {
                 console.log('cleanup-master: Running expired shares cleanup');
                 const response = await fetch(new URL('/api/cleanup/expired-shares', baseUrl), {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json', ...(ADMIN_SECRET ? { 'x-admin-job-secret': ADMIN_SECRET } : {}) }
                 });
                 
                 if (response.ok) {

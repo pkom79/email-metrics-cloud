@@ -11,18 +11,25 @@ export const runtime = 'nodejs';
 // 2. NEVER delete bound/processing/processed uploads for active accounts
 // 3. ONLY delete truly orphaned data (expired preauth, deleted accounts past retention)
 // 4. Always verify relationships before deletion
-export async function POST() {
+export async function POST(request: Request) {
     try {
+        const url = new URL(request.url);
+        const ADMIN_SECRET = (globalThis as any).process?.env?.ADMIN_JOB_SECRET || process.env.ADMIN_JOB_SECRET;
+        const provided = (request.headers.get('x-admin-job-secret') || '').trim();
+        const bearer = (request.headers.get('authorization') || '').trim();
+        const bearerToken = bearer.toLowerCase().startsWith('bearer ') ? bearer.slice(7).trim() : '';
+        const token = url.searchParams.get('token') || '';
         const user = await getServerUser();
-        // Allow anonymous (cron) or admin; if user present and not admin -> forbid
-        if (user && user.app_metadata?.role !== 'admin') {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        const isAdmin = !!user && (user as any).app_metadata?.role === 'admin';
+        const hasSecret = !!ADMIN_SECRET && (provided === ADMIN_SECRET || token === ADMIN_SECRET || bearerToken === ADMIN_SECRET);
+        if (!isAdmin && !hasSecret) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const supabase = createServiceClient();
         const bucket = ingestBucketName();
         const now = new Date();
-        const retentionDays = parseInt(process.env.ACCOUNT_RETENTION_DAYS || '30');
+        const retentionDays = parseInt(process.env.DELETED_ACCOUNT_RETENTION_DAYS || '30');
         
         const results = {
             orphanedPreauth: 0,

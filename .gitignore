@@ -12,3 +12,6 @@ out
 # OS/Tooling
 .DS_Store
 .vercel
+dist/
+tsconfig.tsbuildinfo
+email-metrics-cloud-tmp/

@@ -4,7 +4,7 @@ Next.js 14 + Supabase application for email marketing analytics with automated d
 
 ## Runbooks
 
-- Campaign Sync: see `docs/CAMPAIGN_SYNC_RUNBOOK.md` for how we fetch Klaviyo campaign metrics under rate limits, how to run it, and troubleshooting tips.
+- (none at the moment)
 
 ## Setup
 
@@ -28,15 +28,14 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_key
 SUPABASE_JWT_SECRET=your_jwt_secret
 ```
 
-### Multi-tenant Accounts and Agencies
+### Multi-tenant Accounts
 
-The app supports multi-tenant brand accounts with Owners and Members, plus Agencies that can manage multiple brands.
+The app supports multi-tenant brand accounts with Owners and Members. Agencies have been retired for now.
 
 - Brand accounts: `accounts.owner_user_id` + `account_users` for members (DB-enforced limit of 5 members).
-- Agencies: `agencies`, `agency_users`, `agency_accounts`, and optional `agency_user_accounts`.
 - Invitations: `invitations` (hashed tokens) for brand member invites (brand Owner only).
 - Notifications: Postmark outbox processed by `/api/cron/notifications` (Vercel Cron every minute).
-- Storage: Private `csv-uploads` bucket with RLS aligned to `is_account_member()`; agency users inherit access for linked brands.
+- Storage: Private ingest bucket (default `preauth-uploads`) with RLS aligned to `is_account_member()`.
 
 See `docs/multi-tenant-accounts-plan.md` for full details.
 
@@ -64,7 +63,7 @@ See [Vercel Cron Documentation](https://vercel.com/docs/cron-jobs) for details.
 - **Preauth uploads**: Removed after 24 hours if not linked to account
 - **Active accounts**: Keep only most recent upload per account
 - **Deleted accounts**: 30-day retention before permanent deletion
-- **Cleanup endpoint**: `/api/cleanup` (runs via cron job)
+- **Cleanup**: `/api/cron/cleanup` is invoked by Vercel Cron (GET). It triggers the secured master cleanup.
 
 ### Manual Cleanup
 ```bash
