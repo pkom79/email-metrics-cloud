@@ -213,15 +213,18 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             const accId = memberSelectedId || selectedAccountId || '';
             if (!accId) { setRoleBadge(null); return; }
             try {
-                const r = await fetch(`/api/account/is-owner?accountId=${encodeURIComponent(accId)}`, { cache: 'no-store' });
+                const r = await fetch(`/api/account/my-role?accountId=${encodeURIComponent(accId)}`, { cache: 'no-store' });
                 const j = await r.json().catch(() => ({}));
-                const isOwner = Boolean(j?.isOwnerOf);
+                const role = j?.role as string | null;
                 if (cancelled) return;
-                setRoleBadge(isOwner
-                    ? { label: 'Owner', className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200' }
-                    : { label: 'Manager', className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200' }
-                );
-            } catch { if (!cancelled) setRoleBadge({ label: 'Manager', className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200' }); }
+                if (role === 'owner') {
+                    setRoleBadge({ label: 'Admin', className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200' });
+                } else if (role === 'manager') {
+                    setRoleBadge({ label: 'Manager', className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200' });
+                } else {
+                    setRoleBadge(null);
+                }
+            } catch { if (!cancelled) setRoleBadge(null); }
         })();
         return () => { cancelled = true; };
     }, [isAdmin, memberSelectedId, selectedAccountId]);

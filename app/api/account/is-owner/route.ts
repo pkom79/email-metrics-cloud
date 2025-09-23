@@ -18,13 +18,14 @@ export async function GET(req: NextRequest) {
     const svc = createServiceClient();
 
     if (accountId) {
-      const { data } = await svc
-        .from('accounts')
-        .select('id')
-        .eq('id', accountId)
-        .eq('owner_user_id', user.id)
-        .maybeSingle();
-      return NextResponse.json({ isOwnerOf: Boolean(data?.id) });
+      const { data, error } = await svc.rpc('account_role_for_user', {
+        p_account: accountId,
+        p_user: user.id,
+      });
+      if (error) {
+        return NextResponse.json({ error: error.message || 'Failed' }, { status: 500 });
+      }
+      return NextResponse.json({ isOwnerOf: data === 'owner' });
     }
 
     const { data } = await svc
@@ -38,4 +39,3 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 });
   }
 }
-

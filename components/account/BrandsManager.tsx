@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase/client';
 import { Building2, Plus } from 'lucide-react';
 
-type Brand = { id: string; name: string | null; company: string | null; store_url?: string | null };
+type Brand = { id: string; name: string | null; company: string | null; store_url?: string | null; role?: string | null };
 
 export default function BrandsManager() {
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -16,20 +16,18 @@ export default function BrandsManager() {
 
   const normalizeStoreUrl = (v: string) => v.trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/,'').toLowerCase();
 
-  const [isAgency, setIsAgency] = useState(false);
   const load = async () => {
-    const me = await supabase.auth.getUser();
-    const uid = me.data.user?.id || '';
-    setIsAgency(((me.data.user?.user_metadata as any)?.signup_type) === 'agency');
-    // Prefer service-backed list, then filter to owner-owned for display
     try {
       const res = await fetch('/api/account/my-brands', { cache: 'no-store' });
       const j = await res.json();
-      const list = ((j.accounts || []) as any[]).filter(a => a.owner_user_id ? a.owner_user_id === uid : true);
-      if (list.length) { setBrands(list as any); return; }
-    } catch {}
-    const { data } = await supabase.from('accounts').select('id,name,company,store_url').eq('owner_user_id', uid).order('created_at', { ascending: true });
-    setBrands((data || []) as any);
+      const list = ((j.accounts || []) as Brand[]).filter(a => (a.role || '').toLowerCase() === 'owner');
+      setBrands(list);
+    } catch {
+      const me = await supabase.auth.getUser();
+      const uid = me.data.user?.id || '';
+      const { data } = await supabase.from('accounts').select('id,name,company,store_url').eq('owner_user_id', uid).order('created_at', { ascending: true });
+      setBrands((data || []) as any);
+    }
   };
   useEffect(() => { load(); }, []);
 
@@ -47,16 +45,6 @@ export default function BrandsManager() {
     } catch (e: any) { setErr(e?.message || 'Failed to create brand'); }
     finally { setBusy(false); }
   };
-
-  if (isAgency) {
-    return (
-      <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-10 bg-white dark:bg-gray-900 text-center">
-        <div className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Brands are created by owners</div>
-        <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">This page is for brand accounts. Use the Agency Console to create a brand linked to your agency.</div>
-        <a href="/agencies" className="inline-flex items-center h-9 px-4 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Open Agency Console</a>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

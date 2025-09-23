@@ -3,14 +3,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase/client';
 import { Bell, Plus, Trash2 } from 'lucide-react';
 
-type Account = { id: string; name: string | null; company: string | null };
+type Account = { id: string; name: string | null; company: string | null; role?: string | null };
 type SubRow = { id: string; account_id: string; topic: string; recipient_user_id: string | null; recipient_email: string | null; enabled: boolean };
 
 const TOPICS = [
   { key: 'csv_uploaded', label: 'Data Updated' },
-  { key: 'member_invited', label: 'Member Invited' },
-  { key: 'agency_link_requested', label: 'Agency Link Requested' },
-  { key: 'agency_link_approved', label: 'Agency Link Approved' },
+  { key: 'member_invited', label: 'User Invited' },
+  { key: 'member_revoked', label: 'User Access Removed' },
 ];
 
 export default function NotificationsSettings() {
@@ -53,16 +52,11 @@ export default function NotificationsSettings() {
   useEffect(() => { if (accountId) loadSubs(accountId); }, [accountId]);
 
   // Gate for agency logins (UI only)
-  const [isAgency, setIsAgency] = useState(false);
   useEffect(() => { (async () => {
     const { data } = await supabase.auth.getUser();
-    setIsAgency(((data.user?.user_metadata as any)?.signup_type) === 'agency');
   })(); }, []);
 
-  // Brand users shouldn’t see agency-specific topics
-  const AVAILABLE_TOPICS = useMemo(() => {
-    return isAgency ? TOPICS : TOPICS.filter(t => t.key !== 'agency_link_requested' && t.key !== 'agency_link_approved');
-  }, [isAgency]);
+  const AVAILABLE_TOPICS = useMemo(() => TOPICS, []);
 
   const onAdd = async () => {
     setErr(null); setMsg(null);
@@ -91,16 +85,6 @@ export default function NotificationsSettings() {
     const a = accounts.find(x => x.id === accountId);
     return a ? (a.company || a.name || a.id) : '';
   }, [accounts, accountId]);
-
-  if (isAgency) {
-    return (
-      <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-10 bg-white dark:bg-gray-900 text-center">
-        <div className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Notifications are managed per brand</div>
-        <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">This page is for brand accounts. Use the Agency Console to manage brands you’ve linked.</div>
-        <a href="/agencies" className="inline-flex items-center h-9 px-4 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Open Agency Console</a>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

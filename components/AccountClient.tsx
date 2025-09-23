@@ -35,14 +35,12 @@ export default function AccountClient({ initial }: Props) {
         const { data } = await supabase.auth.getUser();
         setIsAgency(((data.user?.user_metadata as any)?.signup_type) === 'agency');
         try {
-            // Show Management when owner of the CURRENT brand (requires ?account=<id> context)
             const sp = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
             const accountId = sp.get('account');
             if (!accountId) { setIsOwner(false); return; }
-            const r = await fetch(`/api/account/is-owner?accountId=${encodeURIComponent(accountId)}`, { cache: 'no-store' });
+            const r = await fetch(`/api/account/my-role?accountId=${encodeURIComponent(accountId)}`, { cache: 'no-store' });
             const j = await r.json().catch(() => ({}));
-            const isOwnerCurrent = Boolean(j?.isOwnerOf);
-            setIsOwner(isOwnerCurrent);
+            setIsOwner(j?.role === 'owner');
         } catch { setIsOwner(false); }
     })(); }, []);
 
@@ -365,15 +363,11 @@ function ManagerAccountsList() {
         try {
             const res = await fetch('/api/account/my-brands', { cache: 'no-store' });
             const j = await res.json();
-            const list: Array<{ id: string; name?: string | null; company?: string | null }> = j.accounts || [];
-            const labeled = await Promise.all(list.map(async (a) => {
-                let owned = false;
-                try {
-                    const r = await fetch(`/api/account/is-owner?accountId=${encodeURIComponent(a.id)}`, { cache: 'no-store' });
-                    const x = await r.json().catch(() => ({}));
-                    owned = Boolean(x?.isOwnerOf);
-                } catch {}
-                return { id: a.id, label: a.company || a.name || a.id, isOwner: owned };
+            const list: Array<{ id: string; name?: string | null; company?: string | null; role?: string | null }> = j.accounts || [];
+            const labeled = list.map(a => ({
+                id: a.id,
+                label: a.company || a.name || a.id,
+                isOwner: (a.role || '').toLowerCase() === 'owner'
             }));
             setRows(labeled);
         } catch (e: any) { setErr(e?.message || 'Failed to load accounts'); }

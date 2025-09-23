@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase/client';
 import { UserPlus, XCircle } from 'lucide-react';
 
-type Account = { id: string; name: string | null; company: string | null };
+type Account = { id: string; name: string | null; company: string | null; role?: string | null };
 type Invitation = { id: string; email: string; status: 'pending' | 'accepted' | 'revoked' | 'expired'; created_at: string };
 type Member = { user_id: string; email: string | null; role: 'owner' | 'manager' };
 
@@ -19,18 +19,15 @@ export default function InvitationsManager() {
   const [err, setErr] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
 
-  const [isAgency, setIsAgency] = useState(false);
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch('/api/account/my-brands', { cache: 'no-store' });
         const j = await res.json();
-        const list = (j.accounts || []) as Account[];
+        const list = ((j.accounts || []) as Account[]).filter(a => (a.role || '').toLowerCase() === 'owner');
         setAccounts(list);
         if (!accountId && list.length) setAccountId(list[0].id);
       } catch {}
-      const me = await supabase.auth.getUser();
-      setIsAgency(((me.data.user?.user_metadata as any)?.signup_type) === 'agency');
     })();
   }, []);
 
@@ -66,24 +63,14 @@ export default function InvitationsManager() {
     finally { setCreating(false); }
   };
 
-  if (isAgency) {
-    return (
-      <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-10 bg-white dark:bg-gray-900 text-center">
-        <div className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Manager invites are managed by brand owners</div>
-        <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">This page is for brand accounts. Agencies cannot add brand managers.</div>
-        <a href="/agencies" className="inline-flex items-center h-9 px-4 rounded bg-purple-600 hover:bg-purple-700 text-white text-sm">Open Agency Console</a>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5">
         <div className="flex items-center gap-3 mb-3">
           <UserPlus className="w-5 h-5 text-purple-600" />
           <div>
-            <div className="text-base font-semibold text-gray-900 dark:text-gray-100">Invite Users</div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Admins can invite up to 5 users per brand.</div>
+          <div className="text-base font-semibold text-gray-900 dark:text-gray-100">Invite Users</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">Admins can invite up to 5 users per brand.</div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 mb-3">
