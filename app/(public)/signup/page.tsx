@@ -216,12 +216,24 @@ function SignupInner() {
                     diag('signin-error', { message: error.message, status: error.status });
                     throw error;
                 }
-                if (!data?.session) {
+                let session = data?.session ?? null;
+                if (!session) {
+                    const { data: refreshed } = await supabase.auth.getSession();
+                    session = refreshed.session ?? null;
+                }
+                if (!session) {
                     setError('Sign in failed. Please verify your credentials or confirm your email.');
                 } else {
-                    // Hard navigation to ensure SSR picks up fresh cookie
-                    diag('signin-success', { userId: data.session.user?.id });
-                    setTimeout(() => { window.location.assign('/dashboard'); }, 200);
+                    try {
+                        await fetch('/api/auth/session', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ event: 'SIGNED_IN', session }),
+                        });
+                    } catch {}
+                    diag('signin-success', { userId: session.user?.id });
+                    setTimeout(() => { window.location.assign('/dashboard'); }, 250);
                 }
             }
         } catch (e: any) {
