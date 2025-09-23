@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useMemo, useState, useRef, Suspense } from 'react';
+import { useEffect, useMemo, useState, useRef, Suspense, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase/client';
 import { AlertCircle } from 'lucide-react';
 import SelectBase from '../../../components/ui/SelectBase';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { isDiagEnabled, recordDiag } from '../../../lib/utils/diag';
 
 const COUNTRIES = ['United States', 'Canada', 'United Kingdom', 'Australia', 'Germany', 'France', 'Netherlands', 'Spain', 'Italy', 'Sweden', 'Norway', 'Denmark', 'Ireland', 'New Zealand', 'Mexico', 'Brazil', 'Japan', 'Singapore', 'India'];
 const ISO_TO_NAME: Record<string, string> = {
@@ -33,6 +34,13 @@ function SignupInner() {
     const [submitting, setSubmitting] = useState(false);
     const [resendBusy, setResendBusy] = useState(false);
     const [resendMsg, setResendMsg] = useState<string | null>(null);
+    const diagEnabled = isDiagEnabled();
+    const diag = useCallback((message: string, data?: any) => {
+        if (diagEnabled) recordDiag('signup', message, data);
+    }, [diagEnabled]);
+    useEffect(() => {
+        diag('render', { mode: qpMode });
+    }, [diag, qpMode]);
 
     useEffect(() => {
         setMode(qpMode);
@@ -51,6 +59,7 @@ function SignupInner() {
         const access_token = params.get('access_token');
         const refresh_token = params.get('refresh_token');
         const type = params.get('type');
+        diag('hash-detected', { type, hasAccess: Boolean(access_token), hasRefresh: Boolean(refresh_token) });
         (async () => {
             try {
                 if (access_token && refresh_token) {
@@ -59,17 +68,20 @@ function SignupInner() {
                     // cleanup hash to avoid re-processing
                     try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch {}
                     processedHashRef.current = true;
+                    diag('session-from-hash', { type });
                     if (!hasNavigatedRef.current) {
                         hasNavigatedRef.current = true;
                         // Hard navigation avoids double-renders and throttled replaceState loops
+                        diag('navigate-dashboard', { reason: 'hash-auth' });
                         window.location.assign('/dashboard');
                     }
                 }
             } catch (e) {
                 // fall back to signin
+                diag('hash-session-error', { error: (e as any)?.message });
             }
         })();
-    }, [router]);
+    }, [diag, router]);
 
     // If already signed in (e.g., from a previous session), redirect to dashboard
     useEffect(() => {
@@ -78,13 +90,14 @@ function SignupInner() {
             try {
                 const { data } = await supabase.auth.getSession();
                 if (!cancelled && data?.session && !processedHashRef.current && !hasNavigatedRef.current) {
+                    diag('existing-session', { userId: data.session.user?.id });
                     hasNavigatedRef.current = true;
                     router.replace('/dashboard');
                 }
             } catch {}
         })();
         return () => { cancelled = true; };
-    }, [router]);
+    }, [diag, router]);
 
     useEffect(() => {
         let mounted = true;
@@ -120,6 +133,7 @@ function SignupInner() {
         setResendMsg(null);
         setSubmitting(true);
         try {
+            diag('submit', { mode });
             if (mode === 'signup') {
                 const { data, error } = await supabase.auth.signUp({
                     email,
@@ -129,10 +143,14 @@ function SignupInner() {
                         data: { businessName, storeUrl: normalizeStoreUrl(storeUrl), country }
                     }
                 });
-                if (error) throw error;
+                if (error) {
+                    diag('signup-error', { message: error.message, status: error.status });
+                    throw error;
+                }
 
                 let session = data.session || null;
                 if (session) {
+                    diag('signup-session', { userId: session.user?.id });
                     try {
                         await fetch('/api/auth/session', {
                             method: 'POST',
@@ -155,8 +173,10 @@ function SignupInner() {
 
                 if (!session) {
                     setOk('Account created! Please sign in again to finish linking your data.');
+                    diag('signup-no-session');
                 } else {
                     setOk('Account created! Setting up your data...');
+                    diag('signup-session-ready', { userId: session.user?.id });
                     try {
                         const linkResponse = await fetch('/api/auth/link-pending-uploads', {
                             method: 'POST',
@@ -168,6 +188,7 @@ function SignupInner() {
                         if (linkResponse.ok) {
                             const result = await linkResponse.json();
                             console.log('Successfully linked uploads during signup:', result);
+                            diag('pending-link-success', result);
                             if (result.processedCount > 0) {
                                 setOk(`Account created! Linked ${result.processedCount} upload(s). Redirecting...`);
                             } else {
@@ -176,10 +197,12 @@ function SignupInner() {
                         } else {
                             console.warn('Upload linking failed, but account created successfully');
                             setOk('Account created! Redirecting...');
+                            diag('pending-link-failed', { status: linkResponse.status });
                         }
                     } catch (linkErr) {
                         console.warn('Upload linking error:', linkErr);
                         setOk('Account created! Redirecting...');
+                        diag('pending-link-error', { error: (linkErr as any)?.message });
                     }
                 }
 
@@ -189,16 +212,21 @@ function SignupInner() {
                 setTimeout(() => { window.location.assign('/dashboard'); }, 800);
             } else {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-                if (error) throw error;
+                if (error) {
+                    diag('signin-error', { message: error.message, status: error.status });
+                    throw error;
+                }
                 if (!data?.session) {
                     setError('Sign in failed. Please verify your credentials or confirm your email.');
                 } else {
                     // Hard navigation to ensure SSR picks up fresh cookie
+                    diag('signin-success', { userId: data.session.user?.id });
                     setTimeout(() => { window.location.assign('/dashboard'); }, 200);
                 }
             }
         } catch (e: any) {
             setError(e?.message || 'Failed');
+            diag('submit-error', { message: e?.message });
         } finally {
             setSubmitting(false);
         }
@@ -216,8 +244,10 @@ function SignupInner() {
             });
             if (error) throw error;
             setResendMsg('Confirmation email resent. Check your inbox and spam folder.');
+            diag('resend-success');
         } catch (e: any) {
             setResendMsg(e?.message || 'Failed to resend');
+            diag('resend-error', { message: e?.message });
         } finally { setResendBusy(false); }
     };
 

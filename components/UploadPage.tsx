@@ -1,16 +1,14 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Upload, CheckCircle, FileText, Zap, Send, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 import { DataManager } from '../lib/data/dataManager';
 import { supabase } from '../lib/supabase/client';
+import { getDiagEvents, isDiagEnabled } from '../lib/utils/diag';
 
 export default function UploadPage() {
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const diagEnabled = (typeof window !== 'undefined') && (
-        (process.env.NEXT_PUBLIC_DIAG_UPLOAD === '1') || (searchParams?.get('diag') === '1')
-    );
+    const diagEnabled = isDiagEnabled();
     const [hoveredZone, setHoveredZone] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [errors, setErrors] = useState<string[]>([]);
@@ -19,6 +17,7 @@ export default function UploadPage() {
     const [ingestStartTs, setIngestStartTs] = useState<number | null>(null);
     const [ingestProgress, setIngestProgress] = useState<any>(null);
     const [diagSnapshot, setDiagSnapshot] = useState<any>(null);
+    const [diagEvents, setDiagEvents] = useState<Array<{ ts: number; source: string; message: string; data?: any }>>([]);
 
     // Text animation state
     const words = ['Simple', 'Useful', 'Valuable', 'Truthful', 'Actionable'];
@@ -31,6 +30,15 @@ export default function UploadPage() {
 
         return () => clearInterval(interval);
     }, [words.length]);
+
+    useEffect(() => {
+        if (!diagEnabled) return;
+        setDiagEvents(getDiagEvents());
+        const id = setInterval(() => {
+            setDiagEvents(getDiagEvents());
+        }, 500);
+        return () => clearInterval(id);
+    }, [diagEnabled]);
 
     // Files selected
     const fileRefs = useRef<{ campaigns?: File; flows?: File; subscribers?: File }>({});
@@ -515,6 +523,28 @@ export default function UploadPage() {
                                             </div>
                                             <div className="mt-2 text-gray-600 dark:text-gray-400">
                                                 Last email date: {diagSnapshot.lastEmailDateISO || 'n/a'} · Elapsed: {Math.round((diagSnapshot.elapsedMs || 0) / 1000)}s
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Event log */}
+                                    {diagEvents.length > 0 && (
+                                        <div className="mt-4 text-xs text-gray-700 dark:text-gray-300">
+                                            <div className="font-medium mb-1">Event log</div>
+                                            <div className="max-h-48 overflow-y-auto rounded border border-purple-200/70 dark:border-purple-800/50 bg-white/80 dark:bg-gray-900/40">
+                                                <ul className="divide-y divide-purple-100/70 dark:divide-purple-900/40">
+                                                    {diagEvents.slice(-40).reverse().map((evt, idx) => (
+                                                        <li key={idx} className="px-2 py-2">
+                                                            <div className="font-semibold text-purple-800 dark:text-purple-200">
+                                                                {new Date(evt.ts).toLocaleTimeString()} · {evt.source}
+                                                            </div>
+                                                            <div>{evt.message}</div>
+                                                            {evt.data && (
+                                                                <pre className="mt-1 bg-black/5 dark:bg-white/5 p-1 rounded overflow-x-auto text-[10px] leading-4">{JSON.stringify(evt.data)}</pre>
+                                                            )}
+                                                        </li>
+                                                    ))}
+                                                </ul>
                                             </div>
                                         </div>
                                     )}

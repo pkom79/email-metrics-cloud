@@ -1,8 +1,9 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase/client';
 import { ingestBucketNamePublic } from '../lib/storage/ingest';
 import { DataManager } from '../lib/data/dataManager';
+import { isDiagEnabled, recordDiag } from '../lib/utils/diag';
 
 function stripName(file?: File | null) {
     return file?.name || '';
@@ -40,6 +41,7 @@ function FileRow({
 }
 
 export default function UploadWizard() {
+    const diagEnabled = useMemo(() => isDiagEnabled(), []);
     const [campaigns, setCampaigns] = useState<File | null>(null);
     const [flows, setFlows] = useState<File | null>(null);
     const [subscribers, setSubscribers] = useState<File | null>(null);
@@ -57,12 +59,15 @@ export default function UploadWizard() {
             campaigns: { path: string; token: string };
         };
     }> {
+        recordDiag('upload:init', 'Requesting signed upload URLs');
         const res = await fetch('/api/upload/init', { method: 'POST' });
         if (!res.ok) {
             const j = await res.json().catch(() => ({} as any));
+            recordDiag('upload:init', 'Init failed', { status: res.status, body: j });
             throw new Error(j.error || 'Failed to initialize upload');
         }
         const data = await res.json();
+        recordDiag('upload:init', 'Init success', { uploadId: data?.uploadId });
         if (!data?.urls?.subscribers?.token) {
             throw new Error('Upload init did not return signed tokens. Check server env and bucket.');
         }
@@ -84,12 +89,14 @@ export default function UploadWizard() {
             if (!campaigns || !flows || !subscribers) throw new Error('Please select all three CSV files.');
 
             const { uploadId, bucket, urls } = await initUpload();
+            recordDiag('upload:files', 'Received signed URLs', { uploadId });
 
             await Promise.all([
                 uploadFile(bucket, 'subscribers', subscribers, urls.subscribers.path, urls.subscribers.token),
                 uploadFile(bucket, 'flows', flows, urls.flows.path, urls.flows.token),
                 uploadFile(bucket, 'campaigns', campaigns, urls.campaigns.path, urls.campaigns.token),
             ]);
+            recordDiag('upload:files', 'Uploaded CSV files', { uploadId });
 
             const validate = await fetch('/api/upload/validate', {
                 method: 'POST',
@@ -98,11 +105,15 @@ export default function UploadWizard() {
             });
             const v = await validate.json().catch(() => ({}));
             if (!validate.ok || !v?.ok) throw new Error(`Validation failed${v?.missing ? `: missing ${v.missing.join(', ')}` : ''}`);
+            recordDiag('upload:validate', 'Validation response', { ok: v?.ok, missing: v?.missing });
 
             let snapshotId: string | undefined;
 
             const { data: { session } } = await supabase.auth.getSession();
             const authedUser = session?.user;
+            if (diagEnabled) {
+                recordDiag('upload:session', 'Current session checked', { userId: authedUser?.id, hasAccessToken: Boolean(session?.access_token) });
+            }
 
             if (authedUser) {
                 const linkRes = await fetch('/api/auth/link-upload', {
@@ -112,6 +123,9 @@ export default function UploadWizard() {
                     body: JSON.stringify({ uploadId }),
                 });
                 const linkJson = await linkRes.json().catch(() => ({}));
+                if (diagEnabled) {
+                    recordDiag('upload:link', 'Link response received', { status: linkRes.status, body: linkJson });
+                }
 
                 if (!linkRes.ok || !linkJson?.ok) {
                     throw new Error(linkJson?.error || 'Failed to finalize upload');
@@ -119,6 +133,7 @@ export default function UploadWizard() {
                 snapshotId = linkJson?.snapshotId;
                 setNotice('Upload complete! Processing your data now.');
             } else {
+                recordDiag('upload:link', 'User not authenticated; storing pending upload', { uploadId });
                 try {
                     const existingRaw = localStorage.getItem('pending-upload-ids');
                     const arr: string[] = existingRaw ? JSON.parse(existingRaw) : [];
@@ -144,6 +159,14 @@ export default function UploadWizard() {
                         body: JSON.stringify({ snapshotId, lastEmailDate })
                     }).catch(() => { });
                 }
+                if (diagEnabled) {
+                    recordDiag('upload:local-load', 'Local dataset loaded', {
+                        campaigns: campaigns.size,
+                        flows: flows.size,
+                        subscribers: subscribers.size,
+                        snapshotId
+                    });
+                }
             } catch { /* non-blocking */ }
 
             // Notify dashboard to refresh snapshots list and close modal
@@ -156,6 +179,9 @@ export default function UploadWizard() {
         } catch (e: any) {
             setNotice(null);
             setErrors([e?.message || 'Upload failed']);
+            if (diagEnabled) {
+                recordDiag('upload:error', 'Upload flow failed', { message: e?.message, stack: e?.stack });
+            }
         } finally {
             setLoading(false);
         }
