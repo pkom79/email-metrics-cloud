@@ -13,7 +13,7 @@ import { computeAxisMax, thirdTicks, formatTickLabels } from '../../lib/utils/ch
 
 interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; compareMode?: 'prev-period' | 'prev-year'; }
 
-type MetricKey = 'totalRevenue' | 'revenuePerEmail' | 'unsubsPer1k' | 'spamPer1k' | 'bouncesPer1k';
+type MetricKey = 'totalRevenue' | 'unsubsPer1k' | 'spamPer1k' | 'bouncesPer1k';
 type SourceScope = 'all' | 'campaigns' | 'flows';
 
 interface Bucket {
@@ -28,7 +28,6 @@ interface Bucket {
 
 const METRIC_OPTIONS: { value: MetricKey; label: string; unit: string }[] = [
     { value: 'totalRevenue', label: 'Average Revenue', unit: '$' },
-    { value: 'revenuePerEmail', label: 'Revenue / Email', unit: '$' },
     { value: 'unsubsPer1k', label: 'Unsubs / 1K', unit: 'per 1k sends' },
     { value: 'spamPer1k', label: 'Spam / 1K', unit: 'per 1k sends' },
     { value: 'bouncesPer1k', label: 'Bounce / 1K', unit: 'per 1k sends' },
@@ -62,14 +61,11 @@ const THRESHOLDS = {
     bouncesPer1k: 10     // 1%
 };
 
-// Minimum emails per bucket for rate / per-email metrics to render with confidence
-const MIN_EMAILS_PER_BUCKET_RPE = 200;
 const MIN_EMAILS_PER_BUCKET_PER1K = 300;
 
 // Dead-zone percentage change thresholds
 const DEAD_ZONE = {
     totalRevenue: 0.02,
-    revenuePerEmail: 0.02,
     unsubsPer1k: 0.05,
     spamPer1k: 0.05,
     bouncesPer1k: 0.05,
@@ -149,8 +145,8 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
         return res;
     }, [points, xScale]);
     // Y ticks for metric (3)
-    const metricTickValues = useMemo(() => thirdTicks(metricMax, (metric === 'totalRevenue' || metric === 'revenuePerEmail') ? 'currency' : 'number'), [metricMax, metric]);
-    const metricTickLabels = useMemo(() => formatTickLabels(metricTickValues, (metric === 'totalRevenue' || metric === 'revenuePerEmail') ? 'currency' : 'number', metricMax), [metricTickValues, metric, metricMax]);
+    const metricTickValues = useMemo(() => thirdTicks(metricMax, metric === 'totalRevenue' ? 'currency' : 'number'), [metricMax, metric]);
+    const metricTickLabels = useMemo(() => formatTickLabels(metricTickValues, metric === 'totalRevenue' ? 'currency' : 'number', metricMax), [metricTickValues, metric, metricMax]);
 
     const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
     const active = hover ? points[hover.idx] : null;
@@ -313,10 +309,10 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     const metricSeries = useMemo(() => baseSeries.map(b => {
         switch (metric) {
             case 'totalRevenue': return b.revenue;
-            case 'revenuePerEmail': return b.emails > 0 ? b.revenue / b.emails : null;
             case 'unsubsPer1k': return b.emails > 0 ? (b.unsubs / b.emails) * 1000 : null;
             case 'spamPer1k': return b.emails > 0 ? (b.spam / b.emails) * 1000 : null;
             case 'bouncesPer1k': return b.emails > 0 ? (b.bounces / b.emails) * 1000 : null;
+            default: return null;
         }
     }), [baseSeries, metric]);
 
@@ -340,10 +336,10 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         const series = rev.map((r, i) => {
             const em = emails[i]?.value || 0; switch (metric) {
                 case 'totalRevenue': return r.value;
-                case 'revenuePerEmail': return em > 0 ? r.value / em : null;
                 case 'unsubsPer1k': return em > 0 ? (unsub[i]?.value || 0) * 10 : null;
                 case 'spamPer1k': return em > 0 ? (spam[i]?.value || 0) * 10 : null;
                 case 'bouncesPer1k': return em > 0 ? (bounce[i]?.value || 0) * 10 : null;
+                default: return null;
             }
         });
         if (series.length === baseSeries.length) return series;
@@ -367,10 +363,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         const b = baseSeries[idx];
         const val = laggedMetricSeries[idx];
         let faded = false;
-        if (val != null) {
-            if (metric === 'revenuePerEmail' && b.emails < MIN_EMAILS_PER_BUCKET_RPE) faded = true;
-            if (NEGATIVE_METRICS.includes(metric) && b.emails < MIN_EMAILS_PER_BUCKET_PER1K) faded = true;
-        }
+        if (val != null && NEGATIVE_METRICS.includes(metric) && b.emails < MIN_EMAILS_PER_BUCKET_PER1K) faded = true;
         const label = sortMode === 'volume' ? formatEmailsShort(b.emails) : b.label;
         return { x: displayIdx, value: val, emails: b.emails, label, dateLabel: b.label, faded };
     }), [displayOrder, baseSeries, laggedMetricSeries, metric, sortMode]);
@@ -385,7 +378,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     }, [baseSeries]);
     const metricMax = useMemo(() => {
         const values = points.map(p => p.value || 0);
-        return computeAxisMax(values, null, (metric === 'totalRevenue' || metric === 'revenuePerEmail') ? 'currency' : 'number');
+        return computeAxisMax(values, null, metric === 'totalRevenue' ? 'currency' : 'number');
     }, [points, metric]);
 
     // Correlation (always computed on chronological series for integrity)
@@ -436,17 +429,13 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
 
     // Average across displayed buckets (non-null values)
     const avgValue = (() => {
-        if (metric === 'revenuePerEmail') {
-            const totals = baseSeries.reduce((acc, b) => { acc.rev += b.revenue; acc.em += b.emails; return acc; }, { rev: 0, em: 0 });
-            return totals.em > 0 ? totals.rev / totals.em : null;
-        }
         const vals = points.filter(p => p.value != null).map(p => p.value as number);
         if (!vals.length) return null;
         return vals.reduce((s, v) => s + v, 0) / vals.length;
     })();
     const formatValue = (v: number | null) => {
         if (v == null) return '—';
-        if (metric === 'totalRevenue' || metric === 'revenuePerEmail') return fmtCurrency(v);
+        if (metric === 'totalRevenue') return fmtCurrency(v);
         return v >= 1 ? v.toFixed(2) : v.toFixed(3);
     };
     return (
@@ -541,11 +530,9 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                         if (!pos && !neg) narrative = `Little relationship between volume and ${metricLabel}.`;
                         else if (pos) {
                             if (metric === 'totalRevenue') narrative = 'Higher send volume often coincides with higher total revenue.';
-                            else if (metric === 'revenuePerEmail') narrative = 'Scaling volume hasn’t hurt efficiency (revenue/email rises with volume).';
                             else if (isNegativeMetric) narrative = `Higher volume periods tend to have higher ${metricLabel.toLowerCase()} (monitor).`;
                         } else if (neg) {
                             if (metric === 'totalRevenue') narrative = 'Higher volume is not translating into more total revenue.';
-                            else if (metric === 'revenuePerEmail') narrative = 'Efficiency drops at higher volume (revenue/email falls).';
                             else if (isNegativeMetric) narrative = `Higher volume does not increase ${metricLabel.toLowerCase()} (good).`;
                         }
                     }
