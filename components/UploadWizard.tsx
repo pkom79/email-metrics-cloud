@@ -45,6 +45,7 @@ export default function UploadWizard() {
     const [subscribers, setSubscribers] = useState<File | null>(null);
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState<string[]>([]);
+    const [notice, setNotice] = useState<string | null>(null);
     const [progress, setProgress] = useState({ campaigns: 0, flows: 0, subscribers: 0 });
 
     async function initUpload(): Promise<{
@@ -79,6 +80,7 @@ export default function UploadWizard() {
         try {
             setLoading(true);
             setErrors([]);
+            setNotice(null);
             if (!campaigns || !flows || !subscribers) throw new Error('Please select all three CSV files.');
 
             const { uploadId, bucket, urls } = await initUpload();
@@ -97,35 +99,38 @@ export default function UploadWizard() {
             const v = await validate.json().catch(() => ({}));
             if (!validate.ok || !v?.ok) throw new Error(`Validation failed${v?.missing ? `: missing ${v.missing.join(', ')}` : ''}`);
 
-            // Link the upload to the authenticated account and create a snapshot
-            const linkRes = await fetch('/api/auth/link-upload', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ uploadId }),
-            });
-            const linkJson = await linkRes.json().catch(() => ({}));
+            let snapshotId: string | undefined;
 
-            // If user is not authenticated, store uploadId for later linking
-            if (!linkRes.ok && linkRes.status === 401) {
-                // Store multiple pending uploads (array) so user can upload multiple times pre-auth
+            const { data: { session } } = await supabase.auth.getSession();
+            const authedUser = session?.user;
+
+            if (authedUser) {
+                const linkRes = await fetch('/api/auth/link-upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ uploadId }),
+                });
+                const linkJson = await linkRes.json().catch(() => ({}));
+
+                if (!linkRes.ok || !linkJson?.ok) {
+                    throw new Error(linkJson?.error || 'Failed to finalize upload');
+                }
+                snapshotId = linkJson?.snapshotId;
+                setNotice('Upload complete! Processing your data now.');
+            } else {
                 try {
                     const existingRaw = localStorage.getItem('pending-upload-ids');
                     const arr: string[] = existingRaw ? JSON.parse(existingRaw) : [];
                     if (!arr.includes(uploadId)) arr.push(uploadId);
                     localStorage.setItem('pending-upload-ids', JSON.stringify(arr));
-                    // Mirror to cookie so server auth callback can read & link immediately
                     document.cookie = `pending-upload-ids=${encodeURIComponent(JSON.stringify(arr))}; path=/; max-age=86400; SameSite=Lax`;
                 } catch {
-                    /* fallback to legacy key */
                     localStorage.setItem('pending-upload-id', uploadId);
                     document.cookie = `pending-upload-ids=${encodeURIComponent(uploadId)}; path=/; max-age=86400; SameSite=Lax`;
                 }
-                // Continue with local data loading for immediate preview
-            } else if (!linkRes.ok || !linkJson?.ok) {
-                throw new Error(linkJson?.error || 'Failed to finalize upload');
+                setNotice('Files uploaded! Create an account or sign in to finish linking.');
             }
-
-            const snapshotId: string | undefined = linkJson?.snapshotId;
 
             // Optimistically load data locally so charts populate immediately
             try {
@@ -149,6 +154,7 @@ export default function UploadWizard() {
             // Done
             setLoading(false);
         } catch (e: any) {
+            setNotice(null);
             setErrors([e?.message || 'Upload failed']);
         } finally {
             setLoading(false);
@@ -178,6 +184,12 @@ export default function UploadWizard() {
                 {progress.subscribers > 0 && (
                     <div className="h-1 bg-gray-200 dark:bg-gray-800 rounded">
                         <div className="h-1 bg-purple-600 rounded" style={{ width: `${Math.round(progress.subscribers)}%` }} />
+                    </div>
+                )}
+
+                {notice && (
+                    <div className="p-3 rounded-lg border border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20 text-sm text-emerald-800 dark:text-emerald-200">
+                        {notice}
                     </div>
                 )}
 

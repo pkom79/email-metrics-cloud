@@ -121,23 +121,47 @@ function SignupInner() {
         setSubmitting(true);
         try {
             if (mode === 'signup') {
-                    const { error } = await supabase.auth.signUp({
-                        email,
-                        password,
-                        options: {
-                            // Email confirmation disabled - user is immediately authenticated
-                            data: { businessName, storeUrl: normalizeStoreUrl(storeUrl), country }
-                        }
-                    });
-                    if (error) throw error;
+                const { data, error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        // Email confirmation disabled - user is immediately authenticated
+                        data: { businessName, storeUrl: normalizeStoreUrl(storeUrl), country }
+                    }
+                });
+                if (error) throw error;
 
-                    // User is now immediately authenticated! Link uploads using server-side cookie mechanism
+                let session = data.session || null;
+                if (session) {
+                    try {
+                        await fetch('/api/auth/session', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ event: 'SIGNED_IN', session })
+                        });
+                    } catch (syncErr) {
+                        console.warn('Failed to sync session after signup:', syncErr);
+                    }
+                }
+
+                if (!session) {
+                    for (let i = 0; i < 10; i++) {
+                        const { data: { session: polled } } = await supabase.auth.getSession();
+                        if (polled) { session = polled; break; }
+                        await new Promise(r => setTimeout(r, 200));
+                    }
+                }
+
+                if (!session) {
+                    setOk('Account created! Please sign in again to finish linking your data.');
+                } else {
                     setOk('Account created! Setting up your data...');
-
                     try {
                         const linkResponse = await fetch('/api/auth/link-pending-uploads', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
                             body: JSON.stringify({})
                         });
 
@@ -153,17 +177,16 @@ function SignupInner() {
                             console.warn('Upload linking failed, but account created successfully');
                             setOk('Account created! Redirecting...');
                         }
-                    } catch (error) {
-                        console.warn('Upload linking error:', error);
+                    } catch (linkErr) {
+                        console.warn('Upload linking error:', linkErr);
                         setOk('Account created! Redirecting...');
                     }
+                }
 
-                    // Clean up localStorage since we've processed the uploads
-                    localStorage.removeItem('pending-upload-ids');
-                    localStorage.removeItem('pending-upload-id');
+                localStorage.removeItem('pending-upload-ids');
+                localStorage.removeItem('pending-upload-id');
 
-                    // Hard navigation to avoid RSC caching discrepancies
-                    setTimeout(() => { window.location.assign('/dashboard'); }, 800);
+                setTimeout(() => { window.location.assign('/dashboard'); }, 800);
             } else {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
