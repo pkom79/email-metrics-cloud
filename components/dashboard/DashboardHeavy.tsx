@@ -416,7 +416,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         let cancelled = false;
         (async () => {
             try {
-                const r = await fetch('/api/account/my-brands', { cache: 'no-store' });
+                // Managers: use members-only list (excludes personal/owner placeholders)
+                const r = await fetch('/api/account/my-member-brands', { cache: 'no-store' });
                 if (!r.ok) { return; }
                 const j = await r.json();
                 const list: Array<{ id: string; label: string }> = (j.accounts || []).map((a: any) => ({ id: String(a.id), label: String(a.company || a.name || a.id) }));
