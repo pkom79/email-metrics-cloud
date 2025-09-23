@@ -157,6 +157,13 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         return Array.from(names).sort();
     }, [liveFlowEmails]);
 
+    // Ensure we have a selected flow as soon as names arrive (fallback to first)
+    useEffect(() => {
+        if (!selectedFlow && uniqueFlowNames.length > 0) {
+            setSelectedFlow(uniqueFlowNames[0]);
+        }
+    }, [selectedFlow, uniqueFlowNames]);
+
     const currentFlowEmails = useMemo(() => {
         if (!dateWindows) return liveFlowEmails; // All time
         const { startDateOnly, endDateOnly } = dateWindows;

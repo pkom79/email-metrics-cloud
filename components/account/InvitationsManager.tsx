@@ -83,7 +83,7 @@ export default function InvitationsManager() {
           <UserPlus className="w-5 h-5 text-purple-600" />
           <div>
             <div className="text-base font-semibold text-gray-900 dark:text-gray-100">Invite Users</div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Admins can invite up to 5 managers per brand.</div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">Admins can invite up to 5 users per brand.</div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 mb-3">
