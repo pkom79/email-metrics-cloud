@@ -35,7 +35,7 @@ export default function AgenciesClient() {
       const { data } = await supabase
         .from('agency_users')
         .select('role, agencies(id, name, brand_limit, seat_limit)')
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id || '');
+        .eq('user_id', (await supabase.auth.getSession()).data.session?.user?.id || '');
       const list = (data || []) as any as AgencyRow[];
       setAgencies(list);
       const first = list.find(a => a.agencies)?.agencies?.id || null;
@@ -63,7 +63,7 @@ export default function AgenciesClient() {
       const { data } = await supabase
         .from('agency_users')
         .select('role, agencies(id, name, brand_limit, seat_limit)')
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id || '');
+        .eq('user_id', (await supabase.auth.getSession()).data.session?.user?.id || '');
       const list = (data || []) as any as AgencyRow[];
       setAgencies(list); setSelected(list.find(a => a.agencies)?.agencies?.id || null);
     } catch (e: any) { setLinkErr(e?.message || 'Failed to create agency'); }

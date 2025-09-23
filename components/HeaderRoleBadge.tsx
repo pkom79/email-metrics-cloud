@@ -11,8 +11,8 @@ export default function HeaderRoleBadge() {
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await supabase.auth.getUser();
-        const user = data.user;
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
         if (!user) { setBadge(null); return; }
         const isAdmin = user.app_metadata?.role === 'admin' || user.app_metadata?.app_role === 'admin';
         if (isAdmin) { if (!cancelled) setBadge({ label: 'Global Admin', className: 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 border border-purple-200 dark:border-purple-700' }); return; }

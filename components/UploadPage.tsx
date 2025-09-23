@@ -230,7 +230,8 @@ export default function UploadPage() {
             let linkingSucceeded = false;
             try {
                 // Check if user is authenticated before attempting to link
-                const { data: { user } } = await supabase.auth.getUser();
+                const { data: { session } } = await supabase.auth.getSession();
+                const user = session?.user;
 
                 if (user) {
                     console.log('User is authenticated, attempting to link upload to account...');
@@ -256,7 +257,8 @@ export default function UploadPage() {
             } catch (linkErr) {
                 console.error('Error during upload linking:', linkErr);
                 // Only show error if user was actually authenticated (otherwise it's expected)
-                const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+                const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+                const user = session?.user;
                 if (user) {
                     setErrors([`Upload successful but account linking failed: ${linkErr}. Files were uploaded but may not appear in your dashboard. Please contact support or try uploading again.`]);
                 } else {

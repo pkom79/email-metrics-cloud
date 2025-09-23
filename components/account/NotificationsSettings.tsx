@@ -51,11 +51,6 @@ export default function NotificationsSettings() {
   useEffect(() => { loadAccounts(); /* eslint-disable-next-line */ }, []);
   useEffect(() => { if (accountId) loadSubs(accountId); }, [accountId]);
 
-  // Gate for agency logins (UI only)
-  useEffect(() => { (async () => {
-    const { data } = await supabase.auth.getUser();
-  })(); }, []);
-
   const AVAILABLE_TOPICS = useMemo(() => TOPICS, []);
 
   const onAdd = async () => {

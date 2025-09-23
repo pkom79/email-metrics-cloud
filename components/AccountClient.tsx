@@ -32,8 +32,9 @@ export default function AccountClient({ initial }: Props) {
     const [isAgency, setIsAgency] = useState(false);
     const [isOwner, setIsOwner] = useState(false);
     useEffect(() => { (async () => {
-        const { data } = await supabase.auth.getUser();
-        setIsAgency(((data.user?.user_metadata as any)?.signup_type) === 'agency');
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
+        setIsAgency(((user?.user_metadata as any)?.signup_type) === 'agency');
         try {
             const sp = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
             const accountId = sp.get('account');

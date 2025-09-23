@@ -23,8 +23,8 @@ export default function BrandsManager() {
       const list = ((j.accounts || []) as Brand[]).filter(a => (a.role || '').toLowerCase() === 'owner');
       setBrands(list);
     } catch {
-      const me = await supabase.auth.getUser();
-      const uid = me.data.user?.id || '';
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id || '';
       const { data } = await supabase.from('accounts').select('id,name,company,store_url').eq('owner_user_id', uid).order('created_at', { ascending: true });
       setBrands((data || []) as any);
     }
