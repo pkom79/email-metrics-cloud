@@ -1,4 +1,3 @@
-import AuthGate from '../../../components/AuthGate';
 import AccountClient from '../../../components/AccountClient';
 import { getServerUser } from '../../../lib/supabase/auth';
 import { redirect } from 'next/navigation';
@@ -6,6 +5,9 @@ import { createServiceClient } from '../../../lib/supabase/server';
 
 export default async function AccountPage({ searchParams }: { searchParams?: Record<string, string | string[] | undefined> }) {
     const user = await getServerUser();
+    if (!user) {
+        redirect('/signup?mode=signup');
+    }
     const email = user?.email || '';
     const businessName = (user?.user_metadata as any)?.businessName as string | undefined;
     const storeUrl = (user?.user_metadata as any)?.storeUrl as string | undefined;
@@ -21,9 +23,5 @@ export default async function AccountPage({ searchParams }: { searchParams?: Rec
         } catch { /* ignore */ }
     }
 
-    return (
-        <AuthGate>
-            <AccountClient initial={{ email, businessName: businessName || '', storeUrl: storeUrl || '' }} />
-        </AuthGate>
-    );
+    return <AccountClient initial={{ email, businessName: businessName || '', storeUrl: storeUrl || '' }} />;
 }

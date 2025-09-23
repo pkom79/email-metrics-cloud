@@ -137,9 +137,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [mfCompareMode, setMfCompareMode] = useState<typeof compareMode>(compareMode);
     const [mfSelectedFlow, setMfSelectedFlow] = useState<string>(selectedFlow);
 
-    // Role badge (set after admin detection)
-    const [roleBadge, setRoleBadge] = useState<{ label: 'Admin' | 'Owner' | 'Manager'; className: string } | null>(null);
-
     // Granularity validation logic
     const totalDays = useMemo(() => {
         if (dateRange === 'custom' && customActive) {
@@ -204,30 +201,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // Removed API integration modal/state (CSV-only ingestion)
     const [showKeyModal, setShowKeyModal] = useState(false);
     const [keyInput, setKeyInput] = useState('');
-
-    // Resolve role badge now that isAdmin and account selections exist
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            if (isAdmin) { if (!cancelled) setRoleBadge({ label: 'Admin', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200' }); return; }
-            const accId = memberSelectedId || selectedAccountId || '';
-            if (!accId) { setRoleBadge(null); return; }
-            try {
-                const r = await fetch(`/api/account/my-role?accountId=${encodeURIComponent(accId)}`, { cache: 'no-store' });
-                const j = await r.json().catch(() => ({}));
-                const role = j?.role as string | null;
-                if (cancelled) return;
-                if (role === 'owner') {
-                    setRoleBadge({ label: 'Admin', className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200' });
-                } else if (role === 'manager') {
-                    setRoleBadge({ label: 'Manager', className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200' });
-                } else {
-                    setRoleBadge(null);
-                }
-            } catch { if (!cancelled) setRoleBadge(null); }
-        })();
-        return () => { cancelled = true; };
-    }, [isAdmin, memberSelectedId, selectedAccountId]);
 
     const checkKeyAndSync = useCallback(async () => {
         // API sync removed; guide user to upload CSVs instead

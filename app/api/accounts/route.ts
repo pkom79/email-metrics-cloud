@@ -3,6 +3,14 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { createServiceClient } from '../../../lib/supabase/server';
 
+type AdminAccount = {
+    id: string;
+    businessName: string | null;
+    ownerEmail: string | null;
+    storeUrl: string | null;
+    country: string | null;
+};
+
 // Returns list of all accounts with owner email & metadata (admin only)
 export async function GET() {
     const userClient = createRouteHandlerClient({ cookies });
@@ -31,59 +39,30 @@ export async function GET() {
     }
     const looksLikeEmail = (s: string | null) => !!s && /@/.test(s);
     const trimmed = (s: string | null) => (s && s.trim()) || null;
-    const rawAccounts = (data || []).map((a: any) => ({
-        id: (a as any).id as string,
-        ownerUserId: (a as any).owner_user_id as string | null,
-        company: trimmed((a as any).company as string | null),
-        country: trimmed((a as any).country as string | null),
-        name: trimmed((a as any).name as string | null),
-        storeUrl: (a as any).store_url || null,
-    }));
-
-    // Build derived list including country and members (owner + account_users)
-    const derived: Array<{ id: string; businessName: string | null; storeUrl: string | null; ownerEmail: string | null; country: string | null; members: Array<{ userId: string; email: string | null; role: string }> }> = [];
-    for (const a of rawAccounts) {
+    const derived = (data || []).map((a: { id: string; owner_user_id: string | null; company: string | null; name: string | null; store_url: string | null; country: string | null }) => {
+        const ownerUserId = a.owner_user_id;
         let businessName: string | null = null;
-        if (a.company && !looksLikeEmail(a.company)) businessName = a.company;
-        else if (a.name && !looksLikeEmail(a.name)) businessName = a.name;
-
-        const members: Array<{ userId: string; email: string | null; role: string }> = [];
-        if (a.ownerUserId) {
-            members.push({ userId: a.ownerUserId, email: emailMap[a.ownerUserId] || null, role: 'owner' });
+        const company = trimmed(a.company);
+        const name = trimmed(a.name);
+        if (company && !looksLikeEmail(company)) {
+            businessName = company;
+        } else if (name && !looksLikeEmail(name)) {
+            businessName = name;
         }
-        try {
-            const { data: aus } = await service.from('account_users').select('user_id, role').eq('account_id', a.id);
-            for (const r of (aus as any) || []) {
-                const uid = r.user_id as string;
-                let email = emailMap[uid];
-                if (!email) {
-                    try { const { data: u2 } = await (service as any).auth.admin.getUserById(uid); email = u2?.user?.email || null; } catch {}
-                }
-                members.push({ userId: uid, email: email || null, role: r.role });
-            }
-        } catch {}
 
-        derived.push({ id: a.id, businessName, storeUrl: a.storeUrl, ownerEmail: a.ownerUserId ? emailMap[a.ownerUserId] || null : null, country: a.country || null, members });
-    }
+        return {
+            id: a.id,
+            businessName,
+            storeUrl: a.store_url || null,
+            ownerEmail: ownerUserId ? emailMap[ownerUserId] || null : null,
+            country: trimmed(a.country),
+        };
+    });
 
-    // Keep only those with a businessName initially
-    let withNames = derived.filter((a: any) => a.businessName);
-
-    if (withNames.length === 0) {
-        // Fallback: synthesize labels from id fragments to avoid blank dropdown
-        withNames = derived.map((a: any) => ({
-            ...a,
-            businessName: a.businessName || `Account-${a.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8)}`
-        }));
-    } else {
-        // Ensure admin's own account appears even if lacks business name
-        if (!withNames.find((a: any) => a.id === user.id)) {
-            const self = derived.find((a: any) => a.id === user.id);
-            if (self) withNames.unshift({ ...self, businessName: 'Your Account' });
-        }
-    }
-
-    const accounts = withNames;
+    const accounts = derived.map((a: AdminAccount) => ({
+        ...a,
+        businessName: a.businessName || `Account-${a.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8)}`,
+    }));
 
     return NextResponse.json({ accounts });
 }

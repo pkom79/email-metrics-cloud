@@ -28,16 +28,14 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_key
 SUPABASE_JWT_SECRET=your_jwt_secret
 ```
 
-### Multi-tenant Accounts
+### Account Model
 
-The app supports multi-tenant brand accounts with Owners and Members. Agencies have been retired for now.
+Each user owns exactly one account. All dashboard data, uploads, and notifications are scoped to that account. Global Admins can switch between accounts for support and auditing.
 
-- Brand accounts: `accounts.owner_user_id` + `account_users` for members (DB-enforced limit of 5 members).
-- Invitations: `invitations` (hashed tokens) for brand member invites (brand Owner only).
+- Owner accounts live in `public.accounts` (`owner_user_id` column).
+- Global Admins are resolved by `public.is_admin()` (JWT `role=admin` or `app_admins` table).
 - Notifications: Postmark outbox processed by `/api/cron/notifications` (Vercel Cron every minute).
-- Storage: Private ingest bucket (default `preauth-uploads`) with RLS aligned to `is_account_member()`.
-
-See `docs/multi-tenant-accounts-plan.md` for full details.
+- Storage: Private ingest bucket (default `preauth-uploads`) with RLS aligned to `public.accounts.owner_user_id`.
 
 ## Deployment (Vercel)
 

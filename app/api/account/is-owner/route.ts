@@ -18,14 +18,16 @@ export async function GET(req: NextRequest) {
     const svc = createServiceClient();
 
     if (accountId) {
-      const { data, error } = await svc.rpc('account_role_for_user', {
-        p_account: accountId,
-        p_user: user.id,
-      });
+      const { data, error } = await svc
+        .from('accounts')
+        .select('owner_user_id')
+        .eq('id', accountId)
+        .limit(1)
+        .maybeSingle();
       if (error) {
         return NextResponse.json({ error: error.message || 'Failed' }, { status: 500 });
       }
-      return NextResponse.json({ isOwnerOf: data === 'owner' });
+      return NextResponse.json({ isOwnerOf: data?.owner_user_id === user.id });
     }
 
     const { data } = await svc

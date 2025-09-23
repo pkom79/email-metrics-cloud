@@ -61,7 +61,7 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
   - Dashboard: No Account Access (Manager) — Title “No account access yet”, body “You don’t have access to any account. Ask an Admin to invite you.” Icon: `Calendar` in gray-300. No CTAs.
   - Dashboard: Admin (no account selected) — Title “Select an account”, body “Choose an account from the selector above to view its dashboard.” Icon: `Calendar` in gray-300. No CTAs.
 
-### Settings and management pages (new)
+### Settings and management pages (current)
 - Use the same section-card pattern with compact controls.
 - Forms:
   - Inputs `h-9`/`h-10`, rounded, bordered; dark variants.
@@ -70,15 +70,7 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Notifications Settings UI:
   - Header with `Bell` icon, account selector, topic dropdown, recipient input, add button.
   - List recipients in a simple divided list with enable/disable control and delete icon button.
-- Agencies UI:
-  - Empty state card with `Building2` icon, dashed border, clear CTA to create agency.
-  - Brands list as simple text list inside a section card.
-  - Actions: Create Brand and Request Access rows with inputs + purple buttons.
-- Invitations UI:
-  - Invite form with account selector + email input + primary button.
-  - Uses “Manager” terminology (formerly “Member”) consistently in labels and copy.
-  - Show newly created token in a bordered code chip with a copy button.
-  - Pending list with subtle status pill.
+- Multi-user invitations and agency management were retired in Sept 2025. Leave historical guidance here for context, but do not reintroduce those surfaces without a new review.
 
 
 ## Actionable notice cards (segments)

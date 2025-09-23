@@ -16,14 +16,17 @@ export async function GET(req: NextRequest) {
     }
 
     const svc = createServiceClient();
-    const { data, error } = await svc.rpc('account_role_for_user', {
-      p_account: accountId,
-      p_user: user.id,
-    });
+    const { data, error } = await svc
+      .from('accounts')
+      .select('owner_user_id')
+      .eq('id', accountId)
+      .limit(1)
+      .maybeSingle();
     if (error) {
       return NextResponse.json({ error: error.message || 'Failed to resolve role' }, { status: 500 });
     }
-    return NextResponse.json({ role: data ?? null });
+    const isOwner = data?.owner_user_id === user.id;
+    return NextResponse.json({ role: isOwner ? 'owner' : null });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'Failed' }, { status: 500 });
   }

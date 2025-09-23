@@ -79,35 +79,25 @@ export async function GET(request: Request) {
         const brandName = acc?.company || acc?.name || 'Brand';
         // Build CTA URL; for member_invited and agency_link_requested include tokens when available
         const tokenFromPayload = (row as any)?.payload?.token as string | undefined;
-        let ctaUrl = `${SITE_URL}/dashboard?account=${row.account_id}`;
-        if (row.topic === 'member_invited' && tokenFromPayload) {
-          ctaUrl = `${SITE_URL}/invitations/accept?token=${encodeURIComponent(tokenFromPayload)}`;
-        } else if (row.topic === 'agency_link_requested' && tokenFromPayload) {
-          ctaUrl = `${SITE_URL}/agency/approve?token=${encodeURIComponent(tokenFromPayload)}`;
-        }
+        const ctaUrl = `${SITE_URL}/dashboard?account=${row.account_id || ''}`;
         // Resolve recipient email (prefer explicit email)
         const to = row.recipient_email || (await resolveUserEmail(row.recipient_user_id));
         if (!to) throw new Error('No recipient');
 
         // Pick template + model copy by topic
         const topic = String(row.topic);
+        if (['member_invited', 'member_revoked', 'agency_link_requested', 'agency_link_approved'].includes(topic)) {
+          await supabaseAdmin
+            .from('notifications_outbox')
+            .update({ status: 'dead', last_error: 'Topic retired' })
+            .eq('id', row.id);
+          continue;
+        }
         let TemplateId = Number(POSTMARK_TEMPLATE_NOTIFICATION_ID);
         let model: any = { brand_name: brandName, cta_url: ctaUrl };
         if (topic === 'csv_uploaded') {
           TemplateId = Number(POSTMARK_TEMPLATE_DATA_UPDATED_ID);
           model = { brand_name: brandName, cta_url: ctaUrl, headline: `New data available for ${brandName}`, cta_label: 'View dashboard' };
-        } else if (topic === 'member_invited') {
-          TemplateId = Number(POSTMARK_TEMPLATE_MEMBER_INVITED_ID);
-          model = { brand_name: brandName, cta_url: ctaUrl, headline: `You’re invited to join ${brandName}`, cta_label: 'Accept invite' };
-        } else if (topic === 'member_revoked') {
-          TemplateId = Number(POSTMARK_TEMPLATE_MEMBER_REVOKED_ID);
-          model = { brand_name: brandName, cta_url: ctaUrl, headline: `Access removed for ${brandName}`, cta_label: 'Open dashboard' };
-        } else if (topic === 'agency_link_requested') {
-          TemplateId = Number(POSTMARK_TEMPLATE_AGENCY_REQUESTED_ID);
-          model = { brand_name: brandName, cta_url: ctaUrl, headline: `Agency access requested for ${brandName}`, cta_label: 'Review in dashboard' };
-        } else if (topic === 'agency_link_approved') {
-          TemplateId = Number(POSTMARK_TEMPLATE_AGENCY_APPROVED_ID);
-          model = { brand_name: brandName, cta_url: ctaUrl, headline: `Agency linked to ${brandName}`, cta_label: 'View brand' };
         }
 
         await postmark.sendEmailWithTemplate({

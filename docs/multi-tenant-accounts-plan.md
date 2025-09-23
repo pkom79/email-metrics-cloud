@@ -1,4 +1,6 @@
-# Multi‑Tenant + Agency Plan (Supabase, Next.js, Postmark, Vercel)
+# Multi‑Tenant + Agency Plan (Superseded)
+
+> **Status**: Deprecated September 2025. The product reverted to a single-account-per-user model with Global Admin overrides. This document remains for archival reference only and no longer reflects the live system.
 
 This document defines a secure, scalable, and executable design for a multi‑tenant system with:
 - Brand Accounts (companies) with Owner/Member roles and invitations

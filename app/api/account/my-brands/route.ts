@@ -11,40 +11,23 @@ export async function GET() {
     const uid = user.id;
     const supabase = createServiceClient();
 
-    const out: Array<{ id: string; name: string | null; company: string | null; role: string | null }> = [];
-    const seen = new Set<string>();
-
-    // Owner brands
-    const { data: own } = await supabase
+    const { data: own, error } = await supabase
       .from('accounts')
       .select('id, name, company')
       .eq('owner_user_id', uid);
-    for (const r of own || []) {
-      if (!seen.has(r.id)) {
-        out.push({ id: r.id, name: r.name || null, company: r.company || null, role: 'owner' });
-        seen.add(r.id);
-      }
+
+    if (error) {
+      return NextResponse.json({ error: error.message || 'Failed' }, { status: 500 });
     }
 
-    // Explicit memberships
-    const { data: mem } = await supabase
-      .from('account_users')
-      .select('account_id, role, accounts!inner(id, name, company)')
-      .eq('user_id', uid);
-    for (const r of (mem as any) || []) {
-      const acc = r.accounts; if (!acc || seen.has(acc.id)) continue;
-      out.push({ id: acc.id, name: acc.name || null, company: acc.company || null, role: r.role || null });
-      seen.add(acc.id);
-    }
+    const accounts = (own || []).map((r: { id: string; name: string | null; company: string | null }) => ({
+      id: r.id,
+      name: r.name ?? null,
+      company: r.company ?? null,
+      role: 'owner' as const,
+    }));
 
-    let result = out;
-    if (result.length > 1) {
-      const looksLikeEmail = (s: string | null) => !!s && /@/.test(s);
-      result = result.filter(a => !(looksLikeEmail(a.name) && !a.company));
-      if (result.length === 0) result = out;
-    }
-
-    return NextResponse.json({ accounts: result });
+    return NextResponse.json({ accounts });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 });
   }
