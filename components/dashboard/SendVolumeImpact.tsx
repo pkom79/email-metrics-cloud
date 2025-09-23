@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import SelectBase from "../ui/SelectBase";
 import { Activity } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
@@ -7,6 +7,8 @@ import TooltipPortal from '../TooltipPortal';
 import AutoFitText from "../ui/AutoFitText";
 import { DataManager } from '../../lib/data/dataManager';
 import { ProcessedCampaign, ProcessedFlowEmail } from '../../lib/data/dataTypes';
+import { computeSendVolumeGuidance } from '../../lib/analytics/sendVolumeGuidance';
+import type { SendVolumeGuidanceResult, SendVolumeStatus } from '../../lib/analytics/sendVolumeGuidance';
 import { computeAxisMax, thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
 
 interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; compareMode?: 'prev-period' | 'prev-year'; }
@@ -33,6 +35,25 @@ const METRIC_OPTIONS: { value: MetricKey; label: string; unit: string }[] = [
 ];
 
 const NEGATIVE_METRICS: MetricKey[] = ['unsubsPer1k', 'spamPer1k', 'bouncesPer1k'];
+
+const STATUS_LABELS: Record<SendVolumeStatus, string> = {
+    'send-more': 'Send More',
+    'send-less': 'Send Less',
+    'keep-as-is': 'Keep as Is',
+    'insufficient': 'Not Enough Data'
+};
+
+const STATUS_BADGE_CLASSES: Record<SendVolumeStatus, string> = {
+    'send-more': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+    'send-less': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
+    'keep-as-is': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    'insufficient': 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+};
+
+const CHANNEL_ACCENTS: Record<'campaigns' | 'flows', string> = {
+    campaigns: 'bg-indigo-500',
+    flows: 'bg-emerald-500'
+};
 
 // Guardrails (approx industry heuristics) per 1k emails
 const THRESHOLDS = {
@@ -162,7 +183,7 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
                     </g>
                 ))}
                 {axisMode === 'volume' && (
-                    <text x={PADDING_LEFT} y={GRAPH_H + 40} textAnchor="start" fontSize={10} className="font-medium fill-gray-600 dark:fill-gray-400">
+                    <text x={PADDING_LEFT} y={GRAPH_H + 38} textAnchor="start" fontSize={10} className="font-medium fill-gray-600 dark:fill-gray-400">
                         Send Volume (Highest → Lowest)
                     </text>
                 )}
@@ -199,6 +220,14 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     const dm = DataManager.getInstance();
     const campaigns = dm.getCampaigns();
     const flows = dm.getFlowEmails();
+    const guidanceCampaigns = useMemo(
+        () => computeSendVolumeGuidance('campaigns', { dateRange, customFrom, customTo, campaigns }, dm),
+        [dm, campaigns, dateRange, customFrom, customTo]
+    );
+    const guidanceFlows = useMemo(
+        () => computeSendVolumeGuidance('flows', { dateRange, customFrom, customTo, flows }, dm),
+        [dm, flows, dateRange, customFrom, customTo]
+    );
     const [metric, setMetric] = useState<MetricKey>('totalRevenue');
     const [scope, setScope] = useState<SourceScope>('all');
     const [sortMode, setSortMode] = useState<'time' | 'volume'>('time');
@@ -235,6 +264,18 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         if (scope === 'flows') return { campaigns: [] as ProcessedCampaign[], flows };
         return { campaigns, flows };
     }, [scope, campaigns, flows]);
+
+    const guidanceCards: { key: 'campaigns' | 'flows'; label: string; result: SendVolumeGuidanceResult }[] = [
+        { key: 'campaigns', label: 'Campaigns', result: guidanceCampaigns },
+        { key: 'flows', label: 'Flows', result: guidanceFlows }
+    ];
+
+    const formatSampleText = (result: SendVolumeGuidanceResult) => {
+        if (!result.periodType || result.sampleSize <= 0) return null;
+        const unit = result.periodType === 'weekly' ? 'week' : 'month';
+        const plural = result.sampleSize === 1 ? unit : `${unit}s`;
+        return `Based on ${result.sampleSize} ${plural} of volume data.`;
+    };
 
     // Build base buckets using dm.getMetricTimeSeries for each needed metric then join on date labels
     const baseSeries = useMemo(() => {
@@ -445,6 +486,27 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                         </SelectBase>
                     </div>
                 </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 mb-6">
+                {guidanceCards.map(card => {
+                    const badgeClass = STATUS_BADGE_CLASSES[card.result.status];
+                    const statusText = STATUS_LABELS[card.result.status];
+                    const sample = formatSampleText(card.result);
+                    return (
+                        <div key={card.key} className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-center gap-2">
+                                    <span className={`w-2.5 h-2.5 rounded-full ${CHANNEL_ACCENTS[card.key]}`}></span>
+                                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{card.label}</span>
+                                </div>
+                                <span className={`px-2 py-1 rounded-md text-xs font-semibold ${badgeClass}`}>{statusText}</span>
+                            </div>
+                            <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Action Note</p>
+                            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{card.result.message}</p>
+                            {sample && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{sample}</p>}
+                        </div>
+                    );
+                })}
             </div>
             <div className="flex items-start justify-between mb-4">
                 <div />

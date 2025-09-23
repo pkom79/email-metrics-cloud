@@ -87,6 +87,15 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Button: purple filled, small/compact; label “Use this date range”; centered; only render when the action is valid.
 - Do not stack multiple actions; prefer one clear CTA or none.
 - Dark mode: bg-gray-900 with gray-800 border; maintain contrast for text and button.
+
+### Send Volume Guidance (campaigns vs flows)
+- Lives at the top of the Send Volume Impact module, ahead of the chart.
+- Layout: responsive two-up grid on md+ (`grid gap-4 md:grid-cols-2`), stacked on small screens.
+- Card: `rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4` with no shadow. Accent dot uses indigo for campaigns and emerald for flows.
+- Status badge: semantic colors — emerald for "Send More", rose for "Send Less", amber for "Keep as Is", gray for "Not Enough Data" — using `text-xs font-semibold` chips.
+- Body copy: `text-sm text-gray-700 dark:text-gray-300 leading-relaxed`; flows copy always references Flow Step Analysis per product guidance.
+- Optional sample hint: `text-xs text-gray-500 dark:text-gray-400` line (“Based on N weeks/months of volume data.”) only when we have enough observations.
+
 ### Export controls
 
 ## Inline data links + tooltip (Segments)
