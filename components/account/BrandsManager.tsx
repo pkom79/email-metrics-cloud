@@ -37,7 +37,10 @@ export default function BrandsManager() {
       const bn = (name || '').trim();
       const su = normalizeStoreUrl(storeUrl);
       if (!bn || !su) throw new Error('Business Name and Store URL are required');
-      const insert = { name: bn, company: bn, store_url: su } as any;
+      const { data: { session } } = await supabase.auth.getSession();
+      const ownerId = session?.user?.id;
+      if (!ownerId) throw new Error('Authentication expired. Please sign in again.');
+      const insert = { owner_user_id: ownerId, name: bn, company: bn, store_url: su || null } as any;
       const { data, error } = await supabase.from('accounts').insert(insert).select('id').single();
       if (error) throw error;
       setMsg('Brand created'); setName(''); setCompany(''); setStoreUrl('');
