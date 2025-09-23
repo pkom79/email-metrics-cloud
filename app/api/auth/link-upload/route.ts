@@ -174,7 +174,14 @@ export async function POST(request: Request) {
             .single();
         if (snapErr) throw snapErr;
 
-        // 5) Opportunistically bind any additional preauth uploads supplied (bulk claim) — ignore errors
+        // 5a) Seed continuity fingerprint immediately using parsed keys (so first-time accounts have a row)
+        try {
+            await supabase
+                .from('accounts_fingerprint')
+                .upsert({ account_id: accountId, last10_profiles: profiles10, last10_campaigns: campaigns10, last10_flows: flows10, updated_at: new Date().toISOString() as any } as any, { onConflict: 'account_id' });
+        } catch { /* ignore */ }
+
+        // 5b) Opportunistically bind any additional preauth uploads supplied (bulk claim) — ignore errors
         if (Array.isArray(pendingUploadIds)) {
             const others = pendingUploadIds.filter((id: string) => id && id !== uploadId);
             if (others.length) {

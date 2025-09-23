@@ -19,7 +19,10 @@ export async function GET(request: Request) {
       ? bearer.slice(7).trim()
       : '';
     const token = url.searchParams.get('token') || '';
-    const isCron = request.headers.has('x-vercel-cron');
+    const ua = (request.headers.get('user-agent') || '').toLowerCase();
+    const isCronHeader = request.headers.has('x-vercel-cron');
+    const isCronUA = ua.includes('vercel-cron');
+    const isCron = isCronHeader || isCronUA;
     if (!isCron && (!ADMIN_SECRET || (provided !== ADMIN_SECRET && token !== ADMIN_SECRET && bearerToken !== ADMIN_SECRET))) {
       return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
     }

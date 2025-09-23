@@ -36,6 +36,21 @@ interface FlowStepMetrics {
 
 export default function FlowStepAnalysis({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period' }: FlowStepAnalysisProps) {
     const DIAG_DASHBOARD = (process.env.NEXT_PUBLIC_DIAG_DASHBOARD === '1');
+    // Re-render when dataset hydrates/persists so date windows and flow lists refresh
+    const [dataTick, setDataTick] = useState(0);
+    useEffect(() => {
+        const onHydrated = () => setDataTick(t => t + 1);
+        if (typeof window !== 'undefined') {
+            window.addEventListener('em:dataset-hydrated', onHydrated as any);
+            window.addEventListener('em:dataset-persisted', onHydrated as any);
+        }
+        return () => {
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('em:dataset-hydrated', onHydrated as any);
+                window.removeEventListener('em:dataset-persisted', onHydrated as any);
+            }
+        };
+    }, []);
     const [hoveredPoint, setHoveredPoint] = useState<{
         chartIndex: number;
         x: number;
@@ -132,7 +147,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             prevEndDateOnly: toDateOnly(prevEndDate),
             days: periodDays
         };
-    }, [dateRange, customFrom, customTo, dataManager, compareMode]);
+    }, [dateRange, customFrom, customTo, dataManager, compareMode, dataTick]);
 
     const liveFlowEmails = useMemo(() => ALL_FLOW_EMAILS.filter(e => e.status && e.status.toLowerCase() === 'live'), [ALL_FLOW_EMAILS]);
 

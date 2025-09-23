@@ -445,10 +445,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         if (isAdmin) return;
         let cancelled = false;
         (async () => {
-            // If user picked a brand, load that specific account
+            // If user picked a brand, hydrate from cache first; fall back to server CSVs
             if (memberSelectedId) {
                 try {
-                    try { (dm as any).clearAllData?.(); } catch {}
+                    const hydrated = await dm.ensureHydrated();
+                    if (hydrated && dm.hasRealData()) {
+                        if (!cancelled) { setDataVersion(v => v + 1); setIsInitialLoading(false); }
+                        return;
+                    }
                     const ok = await loadAccountData(dm, memberSelectedId);
                     if (!cancelled) setIsInitialLoading(false);
                     if (!cancelled && ok) setDataVersion(v => v + 1);
