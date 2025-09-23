@@ -410,14 +410,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         };
     }, [userId, isAdmin, selectedAccountId, adminCheckComplete]);
 
-    // Load accessible brands for members/agency and default-select
+    // Load accessible brands (owner + members + any agency-entitled) and default-select
     useEffect(() => {
         if (!adminCheckComplete || isAdmin) return;
         let cancelled = false;
         (async () => {
             try {
-                // Managers: use members-only list (excludes personal/owner placeholders)
-                const r = await fetch('/api/account/my-member-brands', { cache: 'no-store' });
+                // Unified list includes owner brands as well
+                const r = await fetch('/api/account/my-brands', { cache: 'no-store' });
                 if (!r.ok) { return; }
                 const j = await r.json();
                 const list: Array<{ id: string; label: string }> = (j.accounts || []).map((a: any) => ({ id: String(a.id), label: String(a.company || a.name || a.id) }));
@@ -1410,6 +1410,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 {(isAdmin && !HAS_ACTIVE_ACCOUNT) && (
                     <EmptyStateCard title="Select an account" body="Choose an account from the selector above to view its dashboard." />
                 )}
+                {HAS_ACTIVE_ACCOUNT && (<>
                 {overviewMetrics && (
                     <section>
                         <div className="flex items-center gap-2 mb-3">
@@ -1683,6 +1684,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         </div>
                     </section>
                 )}
+                </>)}
                 {/* Flow Step Analysis — only when an account is active */}
                 {HAS_ACTIVE_ACCOUNT && (
                     <section>

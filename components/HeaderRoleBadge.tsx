@@ -46,12 +46,10 @@ export default function HeaderRoleBadge() {
         const acc = sp?.get('account');
         let isOwner = false;
         try {
-          if (acc) {
-            const url = `/api/account/is-owner?accountId=${encodeURIComponent(acc)}`;
-            const res = await fetch(url, { cache: 'no-store' });
-            const j = await res.json().catch(() => ({}));
-            isOwner = Boolean(j?.isOwnerOf);
-          }
+          const url = acc ? `/api/account/is-owner?accountId=${encodeURIComponent(acc)}` : `/api/account/is-owner`;
+          const res = await fetch(url, { cache: 'no-store' });
+          const j = await res.json().catch(() => ({}));
+          isOwner = acc ? Boolean(j?.isOwnerOf) : Boolean(j?.ownsAny);
         } catch {}
         if (isOwner) {
           if (!cancelled) setBadge({ label: 'Admin', className: 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800' });

@@ -35,12 +35,13 @@ export default function AccountClient({ initial }: Props) {
         const { data } = await supabase.auth.getUser();
         setIsAgency(((data.user?.user_metadata as any)?.signup_type) === 'agency');
         try {
-            // Show Management when owner of current brand if provided, otherwise when owner of any brand
+            // Show Management when owner of selected brand if provided,
+            // otherwise when user owns any brand at all
             const sp = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
             const accountId = sp.get('account');
             const r = await fetch(`/api/account/is-owner${accountId ? `?accountId=${encodeURIComponent(accountId)}` : ''}`, { cache: 'no-store' });
             const j = await r.json().catch(() => ({}));
-            const isOwnerCurrent = accountId ? Boolean(j?.isOwnerOf) : false;
+            const isOwnerCurrent = accountId ? Boolean(j?.isOwnerOf) : Boolean(j?.ownsAny);
             setIsOwner(isOwnerCurrent);
         } catch { setIsOwner(false); }
     })(); }, []);
