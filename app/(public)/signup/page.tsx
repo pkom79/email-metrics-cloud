@@ -296,11 +296,23 @@ function SignupInner() {
                             <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 space-y-2">
                                 <div className="space-y-1">
                                     <label className="text-sm text-gray-700 dark:text-gray-300">Business name</label>
-                                    <input type="text" value={businessName} onChange={e => setBusinessName(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
+                                    <input
+                                        type="text"
+                                        value={businessName}
+                                        onChange={e => setBusinessName(e.target.value)}
+                                        className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-sm text-gray-700 dark:text-gray-300">Store URL</label>
-                                    <input type="text" inputMode="url" placeholder="e.g. yourstore.com" value={storeUrl} onChange={e => setStoreUrl(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
+                                    <input
+                                        type="text"
+                                        inputMode="url"
+                                       placeholder="e.g. yourstore.com"
+                                        value={storeUrl}
+                                        onChange={e => setStoreUrl(e.target.value)}
+                                        className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                    />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-sm text-gray-700 dark:text-gray-300">Country</label>
@@ -321,8 +333,24 @@ function SignupInner() {
                 )}
 
                 {/* Email / Password */}
-                <input type="email" autoComplete="email" required placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
-                <input type="password" autoComplete={mode==='signup' ? 'new-password' : 'current-password'} required placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full px-3 py-2 rounded border bg-white dark:bg-gray-800" />
+                <input
+                    type="email"
+                    autoComplete="email"
+                    required
+                    placeholder="Email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+                <input
+                    type="password"
+                    autoComplete={mode==='signup' ? 'new-password' : 'current-password'}
+                    required
+                    placeholder="Password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
 
                 {/* GDPR restriction notice (signup only) */}
                 {/* GDPR notices removed (we’re compliant). Country is optional. */}
