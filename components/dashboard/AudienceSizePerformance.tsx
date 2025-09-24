@@ -210,7 +210,14 @@ function computeAudienceSizeGuidance(buckets: Bucket[]): AudienceGuidanceResult 
     const totalEmails = buckets.reduce((sum, b) => sum + b.sumEmails, 0);
 
     const formatSample = (override?: number, a?: Bucket | null, b?: Bucket | null) => {
-        const count = override ?? ((a?.campaigns.length ?? 0) + (b?.campaigns.length ?? 0));
+        let count: number;
+        if (typeof override === 'number') {
+            count = override;
+        } else if (a && b) {
+            count = (a.campaigns.length ?? 0) + (b.campaigns.length ?? 0);
+        } else {
+            count = totalCampaigns;
+        }
         if (count <= 0) return null;
         return `Based on ${count} ${pluralize('campaign', count)} in this date range.`;
     };
