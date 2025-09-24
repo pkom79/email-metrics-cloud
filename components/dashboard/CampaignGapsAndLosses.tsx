@@ -79,11 +79,11 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
         const coverageText = `${pctCoverage.toFixed(1)}% coverage`;
 
         if (lostRevenue > 0) {
-            const title = `Recover ${formatShortCurrency(lostRevenue)} by closing idle weeks`;
+            const title = `Prevent another ${formatShortCurrency(lostRevenue)} loss`;
             const messageParts = [
                 `You skipped ${formatWeeks(zeroWeeks)} (${coverageText}).`,
-                longestText ? `The longest break was ${longestText}, but those ${formatWeeks(zeroWeeks)} still add up to ${formatCurrency(lostRevenue)} in estimated missed revenue.` : `Those gaps add up to ${formatCurrency(lostRevenue)} in estimated missed revenue.`,
-                `Add a safety send each week—you're already averaging ${avgPerWeek.toFixed(2)} campaigns when active, so redistribute that cadence to cover blank weeks.`
+                longestText ? `The longest break was ${longestText}, but those ${formatWeeks(zeroWeeks)} still added up to ${formatCurrency(lostRevenue)} in missed revenue.` : `Those gaps still added up to ${formatCurrency(lostRevenue)} in missed revenue.`,
+                `Set a safety send or automated campaign to keep future weeks covered—you already average ${avgPerWeek.toFixed(2)} sends when active.`
             ];
             return { title, message: messageParts.join(' '), sample };
         }
