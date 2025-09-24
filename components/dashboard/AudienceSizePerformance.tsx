@@ -416,9 +416,6 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                     {guidance.sample && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{guidance.sample}</p>}
                 </div>
             )}
-            {limited && (
-                <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">Limited data — results may be noisy. More campaigns will improve reliability.</p>
-            )}
             <div className={`grid gap-6 ${buckets.length === 1 ? 'grid-cols-1 max-w-xs mx-auto' : buckets.length === 2 ? 'grid-cols-2 max-w-md mx-auto' : buckets.length === 3 ? 'grid-cols-3 max-w-3xl mx-auto' : 'grid-cols-2 md:grid-cols-4'}`}>
                 {buckets.map((b) => {
                     const val = getValue(b);
