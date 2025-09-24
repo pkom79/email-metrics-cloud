@@ -670,7 +670,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const results = (stepScores as any).results as Array<any> | undefined;
         if (!results) return null;
 
-        const stepItems: string[] = [];
+        const stepItems: React.ReactNode[] = [];
         let good = 0;
         let needsWork = 0;
         let pauseCount = 0;
@@ -689,10 +689,15 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             const emailBaseLabel = `Email ${step.sequencePosition}`;
             const emailName = (step.emailName || '').trim();
             const label = emailName ? `${emailBaseLabel} (${emailName})` : emailBaseLabel;
+            const labelNode = <strong className="font-semibold">{label}</strong>;
             const emails = step.emailsSent || 0;
             if (res.volumeInsufficient) {
                 lowVolume++;
-                stepItems.push(`${label} needs more data (${emails.toLocaleString('en-US')} sends so far). Let it reach at least ${MIN_STEP_EMAILS.toLocaleString('en-US')} sends before making changes.`);
+                stepItems.push(
+                    <span>
+                        {labelNode} needs more data ({emails.toLocaleString('en-US')} sends so far). Let it reach at least {MIN_STEP_EMAILS.toLocaleString('en-US')} sends before making changes.
+                    </span>
+                );
                 return;
             }
 
@@ -736,19 +741,32 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                         `It brings in ${revenueText} per ${periodLabel}`
                     ].filter(Boolean);
                     const detailSentence = detailParts.length ? `${detailParts.join('. ')}.` : '';
-                    stepItems.push(`${label} is performing well. ${detailSentence}`.trim());
+                    stepItems.push(
+                        <span>
+                            {labelNode} is performing well.
+                            {detailSentence ? <> {detailSentence}</> : null}
+                        </span>
+                    );
                     break;
                 }
                 case 'improve': {
                     needsWork++;
                     const issue = issueSummary();
-                    stepItems.push(`${label} needs a refresh. ${issue} Try new creative or adjust the delay to lift results.`);
+                    stepItems.push(
+                        <span>
+                            {labelNode} needs a refresh. {issue} Try new creative or adjust the delay to lift results.
+                        </span>
+                    );
                     break;
                 }
                 case 'pause': {
                     pauseCount++;
                     const issue = issueSummary();
-                    stepItems.push(`${label} should be paused for now. ${issue} Rebuild the trigger or content before turning it back on.`);
+                    stepItems.push(
+                        <span className="text-rose-700 dark:text-rose-300">
+                            {labelNode} should be paused for now. {issue} Rebuild the trigger or content before turning it back on.
+                        </span>
+                    );
                     break;
                 }
                 default:
@@ -782,11 +800,15 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             const lastStep = flowStepMetrics[flowStepMetrics.length - 1];
             const est = (addStepSuggestion as any).estimate;
             const perPeriodGain = periodsInRange > 0 ? est.estimatedRevenue / periodsInRange : est.estimatedRevenue;
-            stepItems.push(`Adding one more email after Email ${lastStep.sequencePosition} could unlock an estimated revenue increase of ${formatUsd(perPeriodGain)} per ${periodLabel}.`);
+            stepItems.push(
+                <span className="text-emerald-700 dark:text-emerald-300 font-medium">
+                    Adding one more email after <strong>Email {lastStep.sequencePosition}</strong> could unlock an estimated revenue increase of {formatUsd(perPeriodGain)} per {periodLabel}.
+                </span>
+            );
         }
 
         const totalSends = flowStepMetrics.reduce((sum, step) => sum + (step.emailsSent || 0), 0);
-        const sample = `Based on ${totalSends.toLocaleString('en-US')} emails in this flow during the selected range.`;
+        const sample = `Based on ${totalSends.toLocaleString('en-US')} emails in this flow during the selected range. Review this flow across other date ranges and make sure it supports any objectives beyond revenue before acting.`;
 
         return { title, body, items: stepItems, sample };
     }, [selectedFlow, flowStepMetrics, stepScores, addStepSuggestion, periodsInRange, periodLabel]);
@@ -1391,9 +1413,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
             {selectedFlow && flowActionNote && (
                 <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4 mb-6">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{flowActionNote.title}</p>
                     {flowActionNote.body && (
-                        <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{flowActionNote.body}</p>
+                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{flowActionNote.body}</p>
                     )}
                     {flowActionNote.items?.length ? (
                         <ul className="mt-3 space-y-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed list-disc pl-5">
