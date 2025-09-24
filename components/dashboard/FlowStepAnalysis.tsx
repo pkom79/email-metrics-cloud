@@ -789,7 +789,20 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             body = 'Every email trails benchmarks. Revisit the trigger and refresh each message before adding more touches.';
         } else {
             const parts: string[] = [];
-            if (good > 0) parts.push(`${good === 1 ? 'One email is' : `${good} emails are`} performing well—keep them running.`);
+            if (good > 0) {
+                if (good === totalSteps) {
+                    const word = totalSteps === 1 ? 'email' : (totalSteps === 2 ? 'two emails' : totalSteps === 3 ? 'all three emails' : `all ${totalSteps} emails`);
+                    parts.push(`${word.charAt(0).toUpperCase()}${word.slice(1)} are performing well—keep them running.`);
+                } else {
+                    const countWord = (() => {
+                        if (good === 1) return 'One email is';
+                        if (good === 2) return 'Two emails are';
+                        if (good === 3) return 'Three emails are';
+                        return `${good} emails are`;
+                    })();
+                    parts.push(`${countWord} performing well—keep them running.`);
+                }
+            }
             if (needsWork > 0) parts.push(`${needsWork === 1 ? 'One email needs testing' : `${needsWork} emails need testing`} to improve timing or creative.`);
             if (pauseCount > 0) parts.push(`${pauseCount === 1 ? 'Pause the flagged email' : 'Pause the flagged emails'} until you rebuild them.`);
             if (lowVolume > 0) parts.push(`Collect more sends for the ${lowVolume === 1 ? 'low-volume email' : 'low-volume emails'}.`);
