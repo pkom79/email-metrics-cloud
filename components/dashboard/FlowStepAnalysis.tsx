@@ -1,11 +1,38 @@
 "use client";
 import React, { useState, useMemo, useEffect } from 'react';
-import { Workflow, GitBranch, AlertTriangle, ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
+import { Workflow, AlertTriangle, ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
 import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
 import { thirdTicks, formatTickLabels, computeAxisMax } from '../../lib/utils/chartTicks';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import TooltipPortal from '../TooltipPortal';
+
+const usdFormatter = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+});
+
+const formatUsd = (value: number) => usdFormatter.format(value || 0);
+
+const MIN_STEP_EMAILS = 250;
+
+const METRIC_OPTIONS = [
+    // Display label changed per request; metric key remains 'revenue'
+    { value: 'revenue', label: 'Total Revenue', format: 'currency' },
+    { value: 'emailsSent', label: 'Emails Sent', format: 'number' },
+    { value: 'openRate', label: 'Open Rate', format: 'percentage' },
+    { value: 'clickRate', label: 'Click Rate', format: 'percentage' },
+    { value: 'clickToOpenRate', label: 'Click to Open Rate', format: 'percentage' },
+    { value: 'conversionRate', label: 'Conversion Rate', format: 'percentage' },
+    { value: 'unsubscribeRate', label: 'Unsubscribe Rate', format: 'percentage', isNegative: true },
+    { value: 'bounceRate', label: 'Bounce Rate', format: 'percentage', isNegative: true },
+    { value: 'spamRate', label: 'Spam Rate', format: 'percentage', isNegative: true },
+    { value: 'avgOrderValue', label: 'Average Order Value', format: 'currency' },
+    { value: 'revenuePerEmail', label: 'Revenue per Email', format: 'currency' },
+    { value: 'totalOrders', label: 'Total Orders', format: 'number' }
+] as const;
 
 interface FlowStepAnalysisProps {
     dateRange: string;
@@ -60,26 +87,31 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         pointIndex: number;
     } | null>(null);
 
-    const metricOptions = [
-        // Display label changed per request; metric key remains 'revenue'
-        { value: 'revenue', label: 'Total Revenue', format: 'currency' },
-        { value: 'emailsSent', label: 'Emails Sent', format: 'number' },
-        { value: 'openRate', label: 'Open Rate', format: 'percentage' },
-        { value: 'clickRate', label: 'Click Rate', format: 'percentage' },
-        { value: 'clickToOpenRate', label: 'Click to Open Rate', format: 'percentage' },
-        { value: 'conversionRate', label: 'Conversion Rate', format: 'percentage' },
-        { value: 'unsubscribeRate', label: 'Unsubscribe Rate', format: 'percentage', isNegative: true },
-        { value: 'bounceRate', label: 'Bounce Rate', format: 'percentage', isNegative: true },
-        { value: 'spamRate', label: 'Spam Rate', format: 'percentage', isNegative: true },
-        { value: 'avgOrderValue', label: 'Average Order Value', format: 'currency' },
-        { value: 'revenuePerEmail', label: 'Revenue per Email', format: 'currency' },
-        { value: 'totalOrders', label: 'Total Orders', format: 'number' }
-    ] as const;
-
     const [selectedFlow, setSelectedFlow] = useState<string>('');
     const [selectedMetric, setSelectedMetric] = useState<string>('revenue');
 
     const dataManager = DataManager.getInstance();
+    const resolvedRange = useMemo(() => dataManager.getResolvedDateRange(dateRange, customFrom, customTo), [dataManager, dateRange, customFrom, customTo]);
+    const daysInRange = resolvedRange
+        ? Math.max(1, Math.ceil((resolvedRange.endDate.getTime() - resolvedRange.startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+        : 7;
+    let periodLabel: 'day' | 'week' | 'month';
+    let periodsInRange: number;
+    switch (granularity) {
+        case 'daily':
+            periodLabel = 'day';
+            periodsInRange = daysInRange;
+            break;
+        case 'monthly':
+            periodLabel = 'month';
+            periodsInRange = Math.max(1, Math.round(daysInRange / 30));
+            break;
+        case 'weekly':
+        default:
+            periodLabel = 'week';
+            periodsInRange = Math.max(1, Math.round(daysInRange / 7));
+            break;
+    }
     const ALL_FLOW_EMAILS = dataManager.getFlowEmails();
 
     const toDateOnly = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -440,6 +472,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
         for (let i = 0; i < arr.length; i++) {
             const s = arr[i];
+            const emailsSent = s.emailsSent || 0;
+            const volumeSufficient = emailsSent >= MIN_STEP_EMAILS;
             const notes: string[] = [];
             // Money pillar (max 70) = Revenue Index (35) + Store Revenue Share (35)
             const rpe = (s.emailsSent || 0) > 0 ? (s.revenue || 0) / (s.emailsSent || 0) : 0;
@@ -501,7 +535,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             const D = clamp(adjustedD, 0, 20);
 
             // Statistical Confidence (max 10): 1 point per 100 sends, cap 10
-            const scPoints = clamp(Math.floor((s.emailsSent || 0) / 100), 0, 10);
+            const scPoints = volumeSufficient ? clamp(Math.floor(emailsSent / 100), 0, 10) : 0;
 
             const flowSendShare = totalFlowSendsInWindow > 0 ? (s.emailsSent / totalFlowSendsInWindow) : 0;
             // High-risk guardrail using critical thresholds aligned with scoring bins
@@ -512,7 +546,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             const deliverabilityPoints = D; // 0..20
 
             let score = clamp(moneyPoints + deliverabilityPoints + scPoints, 0, 100);
-            let action: 'scale' | 'keep' | 'improve' | 'pause' = 'improve';
+            let action: 'scale' | 'keep' | 'improve' | 'pause' | 'insufficient' = 'improve';
             if (lowMoney && riskHigh) action = 'pause';
             else if (riskHigh && highMoney) action = 'keep';
             else if (score >= 75) action = 'scale';
@@ -528,9 +562,15 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 notes.push('High revenue guardrail');
             }
 
+            if (!volumeSufficient) {
+                action = 'insufficient';
+                notes.push('Needs ≥250 sends for reliable read');
+            }
+
             const resObj = {
                 score,
                 action,
+                volumeInsufficient: !volumeSufficient,
                 notes,
                 pillars: {
                     money: { points: moneyPoints, ri: riClipped, riPts, storeSharePts, storeShare },
@@ -559,7 +599,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const rpeMedianOld = (stepScores as any).context?.rpeBaseline as number; // legacy context (may be undefined after simplification)
         const lastRes = (stepScores as any).results?.[lastIdx] as any | undefined;
         const lastScoreVal = Number(lastRes?.score) || Number(lastRes?.stepScore?.score) || 0;
-        const volumeOk = last.emailsSent >= Math.max(500, Math.round(0.05 * s1Sends));
+        const volumeOk = last.emailsSent >= Math.max(MIN_STEP_EMAILS, Math.round(0.05 * s1Sends));
         // Deliverability gate removed — rely on overall step score instead
         const deliverabilityOk = true;
         // Recompute median RPE across steps for gating (kept from earlier behavior)
@@ -618,10 +658,117 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 volumeOk,
                 rpeOk,
                 deltaRpeOk,
-                isRecentWindow
+                absoluteRevenueOk,
+                isRecentWindow,
+                lastScoreVal
             }
         } as const;
     }, [indicatorAvailable, flowStepMetrics, stepScores, dataManager, dateRange, customFrom, customTo]);
+
+    const flowActionNote = useMemo(() => {
+        if (!selectedFlow || !flowStepMetrics.length) return null;
+        const results = (stepScores as any).results as Array<any> | undefined;
+        if (!results) return null;
+
+        const stepItems: string[] = [];
+        let good = 0;
+        let needsWork = 0;
+        let pauseCount = 0;
+        let lowVolume = 0;
+
+        flowStepMetrics.forEach((step, idx) => {
+            const res = results[idx];
+            if (!res) return;
+            const label = `S${step.sequencePosition}`;
+            const emails = step.emailsSent || 0;
+            if (res.volumeInsufficient) {
+                lowVolume++;
+                stepItems.push(`${label} – Not enough data (${emails.toLocaleString('en-US')} sends). Let it reach at least ${MIN_STEP_EMAILS.toLocaleString('en-US')} sends before making changes.`);
+                return;
+            }
+
+            const ri = res.pillars?.money?.ri ?? 0;
+            const ersPct = (res.pillars?.money?.storeShare ?? 0) * 100;
+            const openRate = step.openRate ?? 0;
+            const clickRate = step.clickRate ?? 0;
+            const unsubRate = step.unsubscribeRate ?? 0;
+            const spamRate = step.spamRate ?? 0;
+            const perPeriodRevenue = periodsInRange > 0 ? step.revenue / periodsInRange : step.revenue;
+            const revenueText = formatUsd(perPeriodRevenue);
+            const riDelta = (ri - 1) * 100;
+
+            const issueSummary = () => {
+                const notes: string[] = [];
+                if (ri < 1) notes.push(`RI ${ri.toFixed(1)}× (below median)`);
+                if (ersPct < 0.5) notes.push(`ERS ${ersPct.toFixed(1)}% (small share)`);
+                if (openRate < 20) notes.push(`open ${openRate.toFixed(1)}% (<20%)`);
+                if (clickRate < 1) notes.push(`click ${clickRate.toFixed(1)}% (<1%)`);
+                if (unsubRate > 1) notes.push(`unsub ${unsubRate.toFixed(2)}% (>1%)`);
+                if (spamRate >= 0.3) notes.push(`spam ${spamRate.toFixed(3)}% (≥0.30%)`);
+                return notes.length ? notes.slice(0, 2).join('; ') : 'needs stronger engagement';
+            };
+
+            switch (res.action as 'scale' | 'keep' | 'improve' | 'pause' | 'insufficient') {
+                case 'scale':
+                case 'keep': {
+                    good++;
+                    const perfText = riDelta >= 0
+                        ? `earns ≈${Math.round(riDelta)}% more than the flow median`
+                        : `earns ≈${Math.abs(Math.round(riDelta))}% less than the flow median`;
+                    stepItems.push(`${label} – Performing well. Revenue Index ${ri.toFixed(1)}× (${perfText}) and ERS ${ersPct.toFixed(1)}% (share of flow revenue) show this touch is working. Delivers ${revenueText} per ${periodLabel}.`);
+                    break;
+                }
+                case 'improve': {
+                    needsWork++;
+                    const issue = issueSummary();
+                    stepItems.push(`${label} – Needs a refresh. ${issue}. Test new creative or adjust the delay to lift results.`);
+                    break;
+                }
+                case 'pause': {
+                    pauseCount++;
+                    const issue = issueSummary();
+                    stepItems.push(`${label} – Pause this step. ${issue}. Rebuild the trigger or content before turning it back on.`);
+                    break;
+                }
+                default:
+                    break;
+            }
+        });
+
+        const totalSteps = flowStepMetrics.length;
+        const actionableSteps = totalSteps - lowVolume;
+        const allLowVolume = lowVolume === totalSteps;
+        const allWeak = actionableSteps > 0 && good === 0 && (needsWork + pauseCount === actionableSteps);
+
+        let title = 'Flow guidance';
+        let body: string | null = null;
+        if (allLowVolume) {
+            title = 'Collect more data for this flow';
+            body = `Each step has fewer than ${MIN_STEP_EMAILS.toLocaleString('en-US')} sends. Let this flow run longer before making changes.`;
+        } else if (allWeak) {
+            title = 'Rework this flow';
+            body = 'Every step trails benchmarks. Revisit the trigger and refresh each email’s content before adding more touches.';
+        } else {
+            const parts: string[] = [];
+            if (good > 0) parts.push(`${good === 1 ? 'One step is' : `${good} steps are`} performing well—keep them running.`);
+            if (needsWork > 0) parts.push(`${needsWork === 1 ? 'One step needs a test' : `${needsWork} steps need tests`} (timing or creative).`);
+            if (pauseCount > 0) parts.push(`${pauseCount === 1 ? 'Pause the flagged step' : 'Pause the flagged steps'} until you rebuild them.`);
+            if (lowVolume > 0) parts.push(`Collect more sends for the ${lowVolume === 1 ? 'low-volume step' : 'low-volume steps'}.`);
+            body = parts.join(' ');
+        }
+
+        if ((addStepSuggestion as any)?.suggested && (addStepSuggestion as any)?.estimate) {
+            const lastStep = flowStepMetrics[flowStepMetrics.length - 1];
+            const est = (addStepSuggestion as any).estimate;
+            const perPeriodGain = periodsInRange > 0 ? est.estimatedRevenue / periodsInRange : est.estimatedRevenue;
+            stepItems.push(`Adding one more email after S${lastStep.sequencePosition} could unlock ≈${formatUsd(perPeriodGain)} per ${periodLabel}.`);
+        }
+
+        const totalSends = flowStepMetrics.reduce((sum, step) => sum + (step.emailsSent || 0), 0);
+        const sample = `Based on ${totalSends.toLocaleString('en-US')} emails in this flow during the selected range.`;
+
+        return { title, body, items: stepItems, sample };
+    }, [selectedFlow, flowStepMetrics, stepScores, addStepSuggestion, periodsInRange, periodLabel]);
 
     const getStepSparklineData = React.useCallback((sequencePosition: number, _metric: string) => {
         if (!selectedFlow) return [] as { value: number; date: string }[];
@@ -630,7 +777,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
     const sharedYAxisRange = useMemo(() => {
         if (!selectedFlow) return { min: 0, max: 10 };
-        const metricConfig = metricOptions.find(m => m.value === selectedMetric);
+        const metricConfig = METRIC_OPTIONS.find(m => m.value === selectedMetric);
         const type = metricConfig?.format === 'currency' ? 'currency' : metricConfig?.format === 'percentage' ? 'percentage' : 'number';
         let allValues: number[] = [];
         let allPrevValues: number[] = [];
@@ -701,7 +848,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
     };
 
     const formatMetricValue = (value: number, metric: string) => {
-        const metricConfig = (metricOptions as any).find((m: any) => m.value === metric);
+        const metricConfig = (METRIC_OPTIONS as any).find((m: any) => m.value === metric);
         if (!metricConfig) return value.toString();
         if (metricConfig.format === 'currency') return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
         if (metricConfig.format === 'percentage') {
@@ -813,15 +960,17 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                     </TooltipPortal>
                                 );
                             }
-                            const action = res.action as 'scale' | 'keep' | 'improve' | 'pause';
-                            const color = action === 'scale' ? '#10b981' // emerald
-                                : action === 'keep' ? '#7c3aed' // purple
-                                    : action === 'improve' ? '#f59e0b' // amber
-                                        : '#e11d48'; // red
+                            const action = res.action as 'scale' | 'keep' | 'improve' | 'pause' | 'insufficient';
+                            const color = action === 'scale' ? '#10b981'
+                                : action === 'keep' ? '#0ea5e9'
+                                    : action === 'improve' ? '#f59e0b'
+                                        : action === 'pause' ? '#e11d48'
+                                            : '#a855f7';
                             const label = action === 'scale' ? 'Scale'
-                                : action === 'keep' ? 'Keep'
+                                : action === 'keep' ? 'Keep steady'
                                     : action === 'improve' ? 'Improve/Test'
-                                        : 'Pause/Merge';
+                                        : action === 'pause' ? 'Pause'
+                                            : 'Low volume';
                             const m = res.pillars?.money?.points ?? 0;
                             const d = res.pillars?.deliverability?.points ?? 0;
                             const c = res.pillars?.confidence?.points ?? 0;
@@ -873,13 +1022,15 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
                                 // Gating reason if riskHigh prevented scale
                                 const riskHigh = !!res?.pillars?.deliverability?.riskHigh;
-                                const gated = (res.action !== 'scale') && riskHigh;
+                                const volumeLow = !!res?.volumeInsufficient;
+                                const gated = (res.action !== 'scale') && (riskHigh || volumeLow);
                                 const reasons: string[] = [];
                                 if (spam >= 0.30) reasons.push('spam ≥ 0.30%');
                                 if (unsub > 1.00) reasons.push('unsub > 1.00%');
                                 if (bounce >= 5.00) reasons.push('bounce ≥ 5.00%');
                                 if (open < 20) reasons.push('open < 20%');
                                 if (click < 1) reasons.push('click < 1%');
+                                if (volumeLow) reasons.push('emails < 250');
                                 const deltaAdj = typeof baseD === 'number' ? (d - baseD) : 0;
 
                                 return (
@@ -933,6 +1084,9 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                             <span className="inline-flex items-center" title={`Multiple emails share the name "${step.emailName}" (${duplicateNameCounts[step.emailName]}).`} aria-label="Duplicate step name warning">
                                 <AlertTriangle className="w-4 h-4 text-amber-600" />
                             </span>
+                        )}
+                        {(stepScores as any).results?.[index]?.volumeInsufficient && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 text-[11px] font-medium">Low volume</span>
                         )}
                     </div>
                     <div className="flex flex-col items-end">
@@ -1000,7 +1154,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                     } catch { }
 
                                     const formatTooltipValue = (value: number): string => {
-                                        const metricConfig = metricOptions.find(m => m.value === selectedMetric);
+                                    const metricConfig = METRIC_OPTIONS.find(m => m.value === selectedMetric);
                                         switch (metricConfig?.format) {
                                             case 'currency':
                                                 return value >= 1000
@@ -1083,7 +1237,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 >
                                     <div className="font-semibold mb-0.5">{hoveredPoint.date}</div>
                                     <div className="tabular-nums mb-1.5">{(() => {
-                                        const metricConfig = metricOptions.find(m => m.value === selectedMetric);
+                                    const metricConfig = METRIC_OPTIONS.find(m => m.value === selectedMetric);
                                         switch (metricConfig?.format) {
                                             case 'currency':
                                                 return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(hoveredPoint.value);
@@ -1112,7 +1266,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                                 <>
                                                     <div className="font-semibold mt-1">{prevPoint.date}</div>
                                                     <div className="tabular-nums mb-1.5">{(() => {
-                                                        const metricConfig = metricOptions.find(m => m.value === selectedMetric);
+                                                        const metricConfig = METRIC_OPTIONS.find(m => m.value === selectedMetric);
                                                         switch (metricConfig?.format) {
                                                             case 'currency':
                                                                 return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(prevVal);
@@ -1198,33 +1352,11 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                     </div>
                     <div className="relative min-w-0 w-full sm:w-auto">
                         <SelectBase value={selectedMetric} onChange={(e) => setSelectedMetric((e.target as HTMLSelectElement).value)} className="w-full sm:w-auto px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
-                            {metricOptions.map(metric => (<option key={metric.value} value={metric.value}>{metric.label}</option>))}
+                            {METRIC_OPTIONS.map(metric => (<option key={metric.value} value={metric.value}>{metric.label}</option>))}
                         </SelectBase>
                     </div>
                 </div>
             </div>
-            {/* Add-step suggestion (header-level dots removed; dots shown per step) */}
-            {selectedFlow && indicatorAvailable && (addStepSuggestion as any)?.suggested && (
-                <div className="mb-3">
-                    <div className="mt-1 text-xs text-emerald-900 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg px-3 py-2 inline-flex items-center gap-2">
-                        <GitBranch className="w-4 h-4 text-emerald-600" />
-                        {flowStepMetrics.length === 1 ? (
-                            <span className="font-medium">Consider adding a second step</span>
-                        ) : (
-                            <span className="font-medium">Consider adding a follow-up after S{flowStepMetrics[flowStepMetrics.length - 1].sequencePosition}</span>
-                        )}
-                        <span className="text-emerald-800 dark:text-emerald-200">(strong recent performance)</span>
-                        {(addStepSuggestion as any)?.estimate ? (
-                            <span className="ml-1 text-emerald-700 dark:text-emerald-300" title="Estimate is conservative and depends on how many emails your flow sends and may vary with audience behavior.">
-                                Est. +{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((addStepSuggestion as any).estimate.estimatedRevenue)} in next {(addStepSuggestion as any).horizonDays} days
-                            </span>
-                        ) : null}
-                        {(!isFinite((addStepSuggestion as any)?.estimate?.estimatedRevenue) || !(addStepSuggestion as any)?.estimate) && (
-                            <span className="sr-only">Add-step estimate unavailable</span>
-                        )}
-                    </div>
-                </div>
-            )}
             {/* Naming note styled like Data Coverage Notice (purple) */}
             <div className="mb-3">
                 <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-2.5">
@@ -1235,6 +1367,25 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                     </div>
                 </div>
             </div>
+
+            {selectedFlow && flowActionNote && (
+                <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4 mb-6">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{flowActionNote.title}</p>
+                    {flowActionNote.body && (
+                        <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{flowActionNote.body}</p>
+                    )}
+                    {flowActionNote.items?.length ? (
+                        <ul className="mt-3 space-y-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed list-disc pl-5">
+                            {flowActionNote.items.map((item, idx) => (
+                                <li key={idx}>{item}</li>
+                            ))}
+                        </ul>
+                    ) : null}
+                    {flowActionNote.sample && (
+                        <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{flowActionNote.sample}</p>
+                    )}
+                </div>
+            )}
 
             {/* Not enough data empty state card (still render charts below) */}
             {selectedFlow && notEnoughDataCard && (

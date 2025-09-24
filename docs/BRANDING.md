@@ -290,6 +290,8 @@ Scope: Applies to both UI and export surfaces. Keep naming, formatting, and calc
 - Confidence (10 points): 1 point per 100 emails sent in the window, capped at 10.
 - Score N/A: When store revenue in the selected window is zero, show “Score N/A” in the UI; export should also note the lack of store revenue.
 - Notes: When RI ≥ 1.4, include “High Revenue Index” in the notes. Retain the high‑revenue guardrail note when applicable.
+- Minimum volume: Don’t recommend scaling/pausing until a step has at least 250 sends in the selected range. Show the purple “Low volume” badge and Action Note reminder instead of a scale/keep verdict below that threshold.
+- Flow Action Note: one card above the step list summarises each step in plain English (performing well, needs refresh, pause, or collect more data). Call out the reason (Revenue Index, ERS share, deliverability issues) and average revenue per the selected granularity (day/week/month). When the last step is strong enough to extend, phrase the suggestion as “Adding one more email…” and include the estimated lift per the active granularity.
 
 Formatting:
 - RI display: use “x.x×” format in tooltips (e.g., “1.4×”).
