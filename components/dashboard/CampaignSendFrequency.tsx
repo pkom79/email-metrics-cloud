@@ -303,7 +303,14 @@ function computeSendFrequencyGuidance(buckets: BucketAggregate[], mode: 'week' |
     const totalWeeksAll = buckets.reduce((sum, b) => sum + b.weeksCount, 0);
 
     const formatSample = (overrideWeeks?: number, a?: BucketAggregate | null, b?: BucketAggregate | null) => {
-        const weeks = overrideWeeks ?? ((a?.weeksCount ?? 0) + (b?.weeksCount ?? 0));
+        let weeks: number;
+        if (typeof overrideWeeks === 'number') {
+            weeks = overrideWeeks;
+        } else if (a && b) {
+            weeks = (a.weeksCount ?? 0) + (b.weeksCount ?? 0);
+        } else {
+            weeks = totalWeeksAll;
+        }
         if (weeks <= 0) return null;
         return `Based on ${weeks} ${pluralize('week', weeks)} of campaign data.`;
     };
