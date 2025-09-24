@@ -780,13 +780,13 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const allWeak = actionableSteps > 0 && good === 0 && (needsWork + pauseCount === actionableSteps);
 
         let title = 'Flow guidance';
-        let body: string | null = null;
+        let bodyParts: string[] = [];
         if (allLowVolume) {
             title = 'Collect more data for this flow';
-            body = `Each email has fewer than ${MIN_STEP_EMAILS.toLocaleString('en-US')} sends. Let this flow run longer before making changes.`;
+            bodyParts = [`Each email has fewer than ${MIN_STEP_EMAILS.toLocaleString('en-US')} sends. Let this flow run longer before making changes.`];
         } else if (allWeak) {
             title = 'Rework this flow';
-            body = 'Every email trails benchmarks. Revisit the trigger and refresh each message before adding more touches.';
+            bodyParts = ['Every email trails benchmarks. Revisit the trigger and refresh each message before adding more touches.'];
         } else {
             const parts: string[] = [];
             if (good > 0) {
@@ -806,7 +806,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             if (needsWork > 0) parts.push(`${needsWork === 1 ? 'One email needs testing' : `${needsWork} emails need testing`} to improve timing or creative.`);
             if (pauseCount > 0) parts.push(`${pauseCount === 1 ? 'Pause the flagged email' : 'Pause the flagged emails'} until you rebuild them.`);
             if (lowVolume > 0) parts.push(`Collect more sends for the ${lowVolume === 1 ? 'low-volume email' : 'low-volume emails'}.`);
-            body = parts.join(' ');
+            bodyParts = parts;
         }
 
         if ((addStepSuggestion as any)?.suggested && (addStepSuggestion as any)?.estimate) {
@@ -823,7 +823,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const totalSends = flowStepMetrics.reduce((sum, step) => sum + (step.emailsSent || 0), 0);
         const sample = `Based on ${totalSends.toLocaleString('en-US')} emails in this flow during the selected range. Review this flow across other date ranges and make sure it supports any objectives beyond revenue before acting.`;
 
-        return { title, body, items: stepItems, sample };
+        return { title, bodyParts, items: stepItems, sample };
     }, [selectedFlow, flowStepMetrics, stepScores, addStepSuggestion, periodsInRange, periodLabel]);
 
     const getStepSparklineData = React.useCallback((sequencePosition: number, _metric: string) => {
@@ -1426,8 +1426,12 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
             {selectedFlow && flowActionNote && (
                 <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4 mb-6">
-                    {flowActionNote.body && (
-                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{flowActionNote.body}</p>
+                    {Array.isArray(flowActionNote.bodyParts) && flowActionNote.bodyParts.length > 0 && (
+                        <div className="space-y-1">
+                            {flowActionNote.bodyParts.map((line: string, idx: number) => (
+                                <p key={idx} className="text-sm font-semibold text-gray-900 dark:text-gray-100">{line}</p>
+                            ))}
+                        </div>
                     )}
                     {flowActionNote.items?.length ? (
                         <ul className="mt-3 space-y-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed list-disc pl-5">
