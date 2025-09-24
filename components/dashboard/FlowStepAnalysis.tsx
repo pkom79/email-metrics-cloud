@@ -676,14 +676,23 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         let pauseCount = 0;
         let lowVolume = 0;
 
+        const joinWithAnd = (items: string[]) => {
+            if (!items.length) return '';
+            if (items.length === 1) return items[0];
+            if (items.length === 2) return `${items[0]} and ${items[1]}`;
+            return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+        };
+
         flowStepMetrics.forEach((step, idx) => {
             const res = results[idx];
             if (!res) return;
-            const label = `S${step.sequencePosition}`;
+            const emailBaseLabel = `Email ${step.sequencePosition}`;
+            const emailName = (step.emailName || '').trim();
+            const label = emailName ? `${emailBaseLabel} (${emailName})` : emailBaseLabel;
             const emails = step.emailsSent || 0;
             if (res.volumeInsufficient) {
                 lowVolume++;
-                stepItems.push(`${label} – Not enough data (${emails.toLocaleString('en-US')} sends). Let it reach at least ${MIN_STEP_EMAILS.toLocaleString('en-US')} sends before making changes.`);
+                stepItems.push(`${label} needs more data (${emails.toLocaleString('en-US')} sends so far). Let it reach at least ${MIN_STEP_EMAILS.toLocaleString('en-US')} sends before making changes.`);
                 return;
             }
 
@@ -697,37 +706,49 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             const revenueText = formatUsd(perPeriodRevenue);
             const riDelta = (ri - 1) * 100;
 
+            const perEmailDetail = (() => {
+                if (!isFinite(ri) || !isFinite(riDelta)) return '';
+                const deltaAbs = Math.round(Math.abs(riDelta));
+                if (deltaAbs < 5) return 'Per-email revenue is roughly in line with the flow average';
+                const direction = riDelta >= 0 ? 'above' : 'below';
+                return `Per-email revenue is about ${deltaAbs}% ${direction} the flow average`;
+            })();
+
             const issueSummary = () => {
                 const notes: string[] = [];
-                if (ri < 1) notes.push(`RI ${ri.toFixed(1)}× (below median)`);
-                if (ersPct < 0.5) notes.push(`ERS ${ersPct.toFixed(1)}% (small share)`);
-                if (openRate < 20) notes.push(`open ${openRate.toFixed(1)}% (<20%)`);
-                if (clickRate < 1) notes.push(`click ${clickRate.toFixed(1)}% (<1%)`);
-                if (unsubRate > 1) notes.push(`unsub ${unsubRate.toFixed(2)}% (>1%)`);
-                if (spamRate >= 0.3) notes.push(`spam ${spamRate.toFixed(3)}% (≥0.30%)`);
-                return notes.length ? notes.slice(0, 2).join('; ') : 'needs stronger engagement';
+                if (ri < 1) notes.push('per-email revenue trails the flow average');
+                if (ersPct < 0.5) notes.push(`it contributes only ${ersPct.toFixed(1)}% of flow revenue`);
+                if (openRate < 20) notes.push(`opens are ${openRate.toFixed(1)}%`);
+                if (clickRate < 1) notes.push(`clicks are ${clickRate.toFixed(1)}%`);
+                if (unsubRate > 1) notes.push(`unsubscribe rate is ${unsubRate.toFixed(2)}%`);
+                if (spamRate >= 0.3) notes.push(`spam complaints are ${spamRate.toFixed(3)}%`);
+                if (!notes.length) return 'Performance is lagging benchmarks.';
+                return `${notes.length > 1 ? 'Key issues: ' : 'Key issue: '}${joinWithAnd(notes)}.`;
             };
 
             switch (res.action as 'scale' | 'keep' | 'improve' | 'pause' | 'insufficient') {
                 case 'scale':
                 case 'keep': {
                     good++;
-                    const perfText = riDelta >= 0
-                        ? `earns ≈${Math.round(riDelta)}% more than the flow median`
-                        : `earns ≈${Math.abs(Math.round(riDelta))}% less than the flow median`;
-                    stepItems.push(`${label} – Performing well. Revenue Index ${ri.toFixed(1)}× (${perfText}) and ERS ${ersPct.toFixed(1)}% (share of flow revenue) show this touch is working. Delivers ${revenueText} per ${periodLabel}.`);
+                    const detailParts = [
+                        `It accounts for ${ersPct.toFixed(1)}% of flow revenue`,
+                        perEmailDetail,
+                        `It brings in ${revenueText} per ${periodLabel}`
+                    ].filter(Boolean);
+                    const detailSentence = detailParts.length ? `${detailParts.join('. ')}.` : '';
+                    stepItems.push(`${label} is performing well. ${detailSentence}`.trim());
                     break;
                 }
                 case 'improve': {
                     needsWork++;
                     const issue = issueSummary();
-                    stepItems.push(`${label} – Needs a refresh. ${issue}. Test new creative or adjust the delay to lift results.`);
+                    stepItems.push(`${label} needs a refresh. ${issue} Try new creative or adjust the delay to lift results.`);
                     break;
                 }
                 case 'pause': {
                     pauseCount++;
                     const issue = issueSummary();
-                    stepItems.push(`${label} – Pause this step. ${issue}. Rebuild the trigger or content before turning it back on.`);
+                    stepItems.push(`${label} should be paused for now. ${issue} Rebuild the trigger or content before turning it back on.`);
                     break;
                 }
                 default:
@@ -744,16 +765,16 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         let body: string | null = null;
         if (allLowVolume) {
             title = 'Collect more data for this flow';
-            body = `Each step has fewer than ${MIN_STEP_EMAILS.toLocaleString('en-US')} sends. Let this flow run longer before making changes.`;
+            body = `Each email has fewer than ${MIN_STEP_EMAILS.toLocaleString('en-US')} sends. Let this flow run longer before making changes.`;
         } else if (allWeak) {
             title = 'Rework this flow';
-            body = 'Every step trails benchmarks. Revisit the trigger and refresh each email’s content before adding more touches.';
+            body = 'Every email trails benchmarks. Revisit the trigger and refresh each message before adding more touches.';
         } else {
             const parts: string[] = [];
-            if (good > 0) parts.push(`${good === 1 ? 'One step is' : `${good} steps are`} performing well—keep them running.`);
-            if (needsWork > 0) parts.push(`${needsWork === 1 ? 'One step needs a test' : `${needsWork} steps need tests`} (timing or creative).`);
-            if (pauseCount > 0) parts.push(`${pauseCount === 1 ? 'Pause the flagged step' : 'Pause the flagged steps'} until you rebuild them.`);
-            if (lowVolume > 0) parts.push(`Collect more sends for the ${lowVolume === 1 ? 'low-volume step' : 'low-volume steps'}.`);
+            if (good > 0) parts.push(`${good === 1 ? 'One email is' : `${good} emails are`} performing well—keep them running.`);
+            if (needsWork > 0) parts.push(`${needsWork === 1 ? 'One email needs testing' : `${needsWork} emails need testing`} to improve timing or creative.`);
+            if (pauseCount > 0) parts.push(`${pauseCount === 1 ? 'Pause the flagged email' : 'Pause the flagged emails'} until you rebuild them.`);
+            if (lowVolume > 0) parts.push(`Collect more sends for the ${lowVolume === 1 ? 'low-volume email' : 'low-volume emails'}.`);
             body = parts.join(' ');
         }
 
@@ -761,7 +782,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             const lastStep = flowStepMetrics[flowStepMetrics.length - 1];
             const est = (addStepSuggestion as any).estimate;
             const perPeriodGain = periodsInRange > 0 ? est.estimatedRevenue / periodsInRange : est.estimatedRevenue;
-            stepItems.push(`Adding one more email after S${lastStep.sequencePosition} could unlock ≈${formatUsd(perPeriodGain)} per ${periodLabel}.`);
+            stepItems.push(`Adding one more email after Email ${lastStep.sequencePosition} could unlock ≈${formatUsd(perPeriodGain)} per ${periodLabel}.`);
         }
 
         const totalSends = flowStepMetrics.reduce((sum, step) => sum + (step.emailsSent || 0), 0);
