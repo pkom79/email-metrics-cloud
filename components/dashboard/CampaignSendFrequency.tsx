@@ -278,6 +278,7 @@ export default function CampaignSendFrequency({ campaigns }: Props) {
 
 const MIN_WEEKS = 4;
 const MIN_EMAILS = 1000;
+const VARIATION_WEEKS_THRESHOLD = 8;
 const LIFT_THRESHOLD = 0.1;
 const NEG_LIFT_THRESHOLD = -0.1;
 const ENGAGEMENT_DROP_LIMIT = -0.05;
@@ -285,6 +286,11 @@ const SPAM_DELTA_LIMIT = 0.05;
 const BOUNCE_DELTA_LIMIT = 0.1;
 const HIGH_SPAM_ALERT = 0.3;
 const HIGH_BOUNCE_ALERT = 0.5;
+const OPEN_HEALTHY_MIN = 12;
+const CLICK_HEALTHY_MIN = 1;
+const UNSUB_WARN = 0.5;
+const SPAM_WARN = 0.15;
+const BOUNCE_WARN = 0.5;
 
 function computeSendFrequencyGuidance(buckets: BucketAggregate[], mode: 'week' | 'campaign'): GuidanceResult | null {
     if (!buckets.length) return null;
@@ -294,6 +300,13 @@ function computeSendFrequencyGuidance(buckets: BucketAggregate[], mode: 'week' |
 
     const metricKey = mode === 'week' ? 'avgWeeklyRevenue' : 'avgCampaignRevenue';
     const getRevenueValue = (b: BucketAggregate) => (b as any)[metricKey] as number;
+    const totalWeeksAll = buckets.reduce((sum, b) => sum + b.weeksCount, 0);
+
+    const formatSample = (overrideWeeks?: number, a?: BucketAggregate | null, b?: BucketAggregate | null) => {
+        const weeks = overrideWeeks ?? ((a?.weeksCount ?? 0) + (b?.weeksCount ?? 0));
+        if (weeks <= 0) return null;
+        return `Based on ${weeks} ${pluralize('week', weeks)} of campaign data.`;
+    };
 
     const pickBaseline = (): BucketAggregate | null => {
         if (!eligible.length) return null;
@@ -310,18 +323,20 @@ function computeSendFrequencyGuidance(buckets: BucketAggregate[], mode: 'week' |
     const baselineLabel = baseline ? labelForBucket(baseline.key) : null;
     const baselineAction = baseline ? actionLabelForBucket(baseline.key) : null;
 
-    const buildSampleText = (primary: BucketAggregate, secondary?: BucketAggregate | null) => {
-        if (!primary) return null;
-        const totalWeeks = primary.weeksCount + (secondary ? secondary.weeksCount : 0);
-        if (totalWeeks <= 0) return null;
-        return `Based on ${totalWeeks} ${pluralize('week', totalWeeks)} of campaign data.`;
-    };
-
     if (!baseline) {
         const richest = buckets.reduce((best, curr) => (curr.weeksCount > (best?.weeksCount ?? 0) ? curr : best), null as BucketAggregate | null);
-        if (!richest) return null;
-        const msg = 'Not enough variation yet. Test additional weeks at different cadences to unlock guidance.';
-        return { status: 'insufficient', cadenceLabel: labelForBucket(richest.key), title: 'Not enough data for a recommendation', message: msg, sample: buildSampleText(richest) };
+        const cadenceLabel = richest ? labelForBucket(richest.key) : 'current cadence';
+        const hasWeeksButLowVolume = buckets.some(b => b.weeksCount >= MIN_WEEKS && b.sumEmails < MIN_EMAILS);
+        let message: string;
+        if (totalWeeksAll < MIN_WEEKS) {
+            if (totalWeeksAll === 0) message = 'We have no complete campaign weeks in this range yet. Keep sending to unlock cadence guidance.';
+            else message = `We only captured ${totalWeeksAll} ${pluralize('week', totalWeeksAll)} so far. Collect more data before changing cadence.`;
+        } else if (hasWeeksButLowVolume) {
+            message = `Each cadence ran with fewer than ${MIN_EMAILS.toLocaleString()} emails. Run larger sends at ${cadenceLabel} to measure impact confidently.`;
+        } else {
+            message = 'Cadence tests were too short to compare. Extend each cadence for at least four weeks before making frequency changes.';
+        }
+        return { status: 'insufficient', cadenceLabel, title: 'Not enough data for a recommendation', message, sample: formatSample(totalWeeksAll) };
     }
 
     const higher = eligible.filter(b => orderMap[b.key] > orderMap[baseline.key]).sort((a, b) => orderMap[a.key] - orderMap[b.key]);
@@ -348,7 +363,7 @@ function computeSendFrequencyGuidance(buckets: BucketAggregate[], mode: 'week' |
             const msg = lift === Infinity
                 ? `${labelForBucket(candidate.key)} has revenue where ${baselineLabel ?? 'your current cadence'} does not. Scale testing into this cadence while monitoring engagement.`
                 : `${labelForBucket(candidate.key)} weeks delivered ${liftPct} more weekly revenue than ${baselineLabel}. Open and click rates stayed within 5% and spam/bounce remained under guardrails, so increase cadence toward this level.`;
-            const sample = buildSampleText(candidate, baseline);
+            const sample = formatSample(undefined, candidate, baseline);
             return { status: 'send-more', cadenceLabel: labelForBucket(candidate.key), title, message: msg, sample };
         }
     }
@@ -362,45 +377,54 @@ function computeSendFrequencyGuidance(buckets: BucketAggregate[], mode: 'week' |
         if (lessRisk && revenueOkay) {
             const title = `Send ${actionLabelForBucket(candidate.key)}`;
             const msg = `${baselineLabel} shows rising risk (spam or bounce). Drop back to ${labelForBucket(candidate.key)} to stabilize engagement while keeping revenue within 10% of current results.`;
-            const sample = buildSampleText(baseline, candidate);
+            const sample = formatSample(undefined, baseline, candidate);
             return { status: 'send-less', cadenceLabel: labelForBucket(candidate.key), title, message: msg, sample };
         }
         if (lift <= NEG_LIFT_THRESHOLD) {
             const title = `Send ${actionLabelForBucket(candidate.key)}`;
             const msg = `${baselineLabel} underperforms ${labelForBucket(candidate.key)} by ${formatPct(Math.abs(lift))}. Shift down to recover revenue and reduce fatigue.`;
-            const sample = buildSampleText(baseline, candidate);
+            const sample = formatSample(undefined, baseline, candidate);
             return { status: 'send-less', cadenceLabel: labelForBucket(candidate.key), title, message: msg, sample };
         }
     }
 
     const onlyBucket = eligible.length === 1 && higher.length === 0 && lower.length === 0;
     if (onlyBucket) {
-        const healthy = baselineRevenue > 0 && baseline.spamRate < HIGH_SPAM_ALERT && baseline.bounceRate < HIGH_BOUNCE_ALERT && baseline.openRate > 10 && baseline.clickRate > 1;
+        const healthy = baselineRevenue > 0 && baseline.spamRate < HIGH_SPAM_ALERT && baseline.bounceRate < HIGH_BOUNCE_ALERT && baseline.openRate >= OPEN_HEALTHY_MIN && baseline.clickRate >= CLICK_HEALTHY_MIN;
+        const issueSummary = describeIssues(baseline, baselineRevenue);
+        const weeksAtCadence = baseline.weeksCount;
         if (healthy && orderMap[baseline.key] < 4) {
             const nextKey = ['1', '2', '3', '4+'][orderMap[baseline.key]] as BucketKey | undefined;
             const nextLabel = nextKey ? labelForBucket(nextKey) : 'a higher cadence';
             const title = `Test ${nextKey ? actionLabelForBucket(nextKey) : 'a higher cadence'}`;
-            const msg = `${baselineLabel} is performing well with healthy engagement and low complaints. Run at least four weeks with ${nextKey ? nextLabel : 'a higher cadence'} to validate headroom.`;
-            return { status: 'send-more', cadenceLabel: nextLabel, title, message: msg, sample: buildSampleText(baseline) };
+            const msg = weeksAtCadence >= VARIATION_WEEKS_THRESHOLD
+                ? `${baselineLabel} has held strong for ${weeksAtCadence} ${pluralize('week', weeksAtCadence)}. Add ${nextLabel} for a four-week test to see if the lift holds.`
+                : `${baselineLabel} is performing well with healthy engagement and low complaints. Run at least four weeks with ${nextKey ? nextLabel : 'a higher cadence'} to validate headroom.`;
+            return { status: 'send-more', cadenceLabel: nextLabel, title, message: msg, sample: formatSample(undefined, baseline) };
         }
         if (orderMap[baseline.key] === 4) {
             const title = `Ease back to 3 campaigns per week`;
             const msg = `${baselineLabel} is aggressive with limited comparative data. If you see complaint spikes, test a three-campaign cadence to protect reputation.`;
-            return { status: 'send-less', cadenceLabel: '3 campaigns / week', title, message: msg, sample: buildSampleText(baseline) };
+            return { status: 'send-less', cadenceLabel: '3 campaigns / week', title, message: msg, sample: formatSample(undefined, baseline) };
+        }
+        if (!healthy) {
+            const title = `Stabilize ${actionLabelForBucket(baseline.key)} before scaling`;
+            const msg = `${baselineLabel} is struggling—${issueSummary}. Tighten audience segments and creative at this cadence, then revisit higher-frequency tests.`;
+            return { status: 'keep-as-is', cadenceLabel: baselineLabel ?? 'current cadence', title, message: msg, sample: formatSample(undefined, baseline) };
         }
     }
 
     if (riskyBaseline && orderMap[baseline.key] === 4) {
         const title = `Send 3 campaigns per week`;
         const msg = `${baselineLabel} is triggering high spam or bounce rates without a safer alternative measured. Start dialing back to a 3-campaign cadence to protect deliverability.`;
-        return { status: 'send-less', cadenceLabel: '3 campaigns / week', title, message: msg, sample: buildSampleText(baseline) };
+        return { status: 'send-less', cadenceLabel: '3 campaigns / week', title, message: msg, sample: formatSample(undefined, baseline) };
     }
 
     const title = baselineAction ? `Stay at ${baselineAction}` : 'Keep current cadence';
     const msg = higher.length || lower.length
         ? `${baselineLabel} remains the most balanced cadence. Other buckets either lack enough weeks, miss the 10% revenue lift bar, or add spam/bounce risk. Maintain this schedule and retest after gathering more data.`
         : `${baselineLabel} is the only cadence with enough data. Continue collecting results and test another cadence when ready.`;
-    return { status: 'keep-as-is', cadenceLabel: baselineLabel ?? 'current cadence', title, message: msg, sample: buildSampleText(baseline) };
+    return { status: 'keep-as-is', cadenceLabel: baselineLabel ?? 'current cadence', title, message: msg, sample: formatSample(undefined, baseline) };
 }
 
 function deltaRatio(candidate: number, baseline: number) {
@@ -433,4 +457,17 @@ function formatPct(value: number) {
 
 function pluralize(word: string, count: number) {
     return count === 1 ? word : `${word}s`;
+}
+
+function describeIssues(bucket: BucketAggregate, revenue: number) {
+    const issues: string[] = [];
+    if (revenue <= 0) issues.push('revenue is flat');
+    if (bucket.openRate < OPEN_HEALTHY_MIN) issues.push(`opens are below ${OPEN_HEALTHY_MIN}%`);
+    if (bucket.clickRate < CLICK_HEALTHY_MIN) issues.push(`clicks are below ${CLICK_HEALTHY_MIN}%`);
+    if (bucket.unsubscribeRate > UNSUB_WARN) issues.push(`unsubscribes exceed ${UNSUB_WARN}%`);
+    if (bucket.spamRate > SPAM_WARN) issues.push(`spam complaints are elevated`);
+    if (bucket.bounceRate > BOUNCE_WARN) issues.push(`bounce rate is high`);
+    if (!issues.length) return 'engagement needs improvement';
+    if (issues.length === 1) return issues[0];
+    return `${issues.slice(0, -1).join(', ')}, and ${issues[issues.length - 1]}`;
 }
