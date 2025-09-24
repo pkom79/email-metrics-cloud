@@ -329,8 +329,8 @@ function computeSendFrequencyGuidance(buckets: BucketAggregate[], mode: 'week' |
         const hasWeeksButLowVolume = buckets.some(b => b.weeksCount >= MIN_WEEKS && b.sumEmails < MIN_EMAILS);
         let message: string;
         if (totalWeeksAll < MIN_WEEKS) {
-            if (totalWeeksAll === 0) message = 'We have no complete campaign weeks in this range yet. Keep sending to unlock cadence guidance.';
-            else message = `We only captured ${totalWeeksAll} ${pluralize('week', totalWeeksAll)} so far. Collect more data before changing cadence.`;
+            if (totalWeeksAll === 0) message = 'No complete campaign weeks fall inside this date range yet. Expand the window or keep sending to unlock guidance.';
+            else message = `This date range includes only ${totalWeeksAll} ${pluralize('week', totalWeeksAll)} of campaign data. Expand the range or keep sending before changing cadence.`;
         } else if (hasWeeksButLowVolume) {
             message = `Each cadence ran with fewer than ${MIN_EMAILS.toLocaleString()} emails. Run larger sends at ${cadenceLabel} to measure impact confidently.`;
         } else {
