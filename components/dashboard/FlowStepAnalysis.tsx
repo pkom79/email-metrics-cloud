@@ -782,7 +782,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             const lastStep = flowStepMetrics[flowStepMetrics.length - 1];
             const est = (addStepSuggestion as any).estimate;
             const perPeriodGain = periodsInRange > 0 ? est.estimatedRevenue / periodsInRange : est.estimatedRevenue;
-            stepItems.push(`Adding one more email after Email ${lastStep.sequencePosition} could unlock ≈${formatUsd(perPeriodGain)} per ${periodLabel}.`);
+            stepItems.push(`Adding one more email after Email ${lastStep.sequencePosition} could unlock an estimated revenue increase of ${formatUsd(perPeriodGain)} per ${periodLabel}.`);
         }
 
         const totalSends = flowStepMetrics.reduce((sum, step) => sum + (step.emailsSent || 0), 0);
