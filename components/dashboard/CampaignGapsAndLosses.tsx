@@ -8,6 +8,17 @@ import { DataManager } from '../../lib/data/dataManager';
 import type { ProcessedCampaign } from '../../lib/data/dataTypes';
 import { computeCampaignGapsAndLosses } from '../../lib/analytics/campaignGapsLosses';
 
+const currencyFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatCurrency = (v: number) => currencyFormatter.format(v || 0);
+const formatShortCurrency = (v: number) => {
+    if (!Number.isFinite(v)) return formatCurrency(0);
+    const abs = Math.abs(v);
+    if (abs >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+    if (abs >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
+    return formatCurrency(v);
+};
+const formatWeeks = (n: number) => `${n} ${n === 1 ? 'week' : 'weeks'}`;
+
 interface Props {
     dateRange: string;
     granularity?: 'daily' | 'weekly' | 'monthly';
@@ -45,6 +56,46 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
         return computeCampaignGapsAndLosses({ campaigns, flows: [], rangeStart: range.start, rangeEnd: range.end });
     }, [range, campaigns]);
 
+    const actionNote = useMemo(() => {
+        if (!result) return null;
+        const zeroWeeks = result.zeroCampaignSendWeeks;
+        const longestGap = result.longestZeroSendGap;
+        const pctCoverage = Number.isFinite(result.pctWeeksWithCampaignsSent) ? result.pctWeeksWithCampaignsSent : 0;
+        const lostRevenue = result.estimatedLostRevenue ?? 0;
+        const avgPerWeek = result.avgCampaignsPerWeek;
+        const totalWeeks = result.weeksInRangeFull;
+
+        const sample = totalWeeks > 0 ? `Based on ${formatWeeks(totalWeeks)} in this date range.` : null;
+
+        if (zeroWeeks <= 0) {
+            return {
+                title: 'Keep weekly cadence humming',
+                message: 'You shipped campaigns every full week in this range. Maintain a backup promo or automation so this coverage stays intact when volume shifts.',
+                sample
+            };
+        }
+
+        const longestText = longestGap > 0 ? formatWeeks(longestGap) : null;
+        const coverageText = `${pctCoverage.toFixed(1)}% coverage`;
+
+        if (lostRevenue > 0) {
+            const title = `Recover ${formatShortCurrency(lostRevenue)} by closing idle weeks`;
+            const messageParts = [
+                `You skipped ${formatWeeks(zeroWeeks)} (${coverageText}).`,
+                longestText ? `The longest break was ${longestText}, but even single-week gaps add up to ${formatCurrency(lostRevenue)} in estimated missed revenue.` : `Those gaps add up to ${formatCurrency(lostRevenue)} in estimated missed revenue.`,
+                `Add a safety send each week—you're already averaging ${avgPerWeek.toFixed(2)} campaigns when active, so redistribute that cadence to cover blank weeks.`
+            ];
+            return { title, message: messageParts.join(' '), sample };
+        }
+
+        const title = `Fill the ${formatWeeks(zeroWeeks)} without campaigns`;
+        const message = [
+            `Coverage sits at ${coverageText}, and the longest break was ${longestText ?? 'short'}.`,
+            `Spread your ${avgPerWeek.toFixed(2)} campaigns-per-week average so each week has at least one send to keep revenue steady.`
+        ].join(' ');
+        return { title, message, sample };
+    }, [result]);
+
     if (!range || !result) return null;
 
     // Visibility gate: show only in Weekly view for ranges >= 90 days (presets or custom)
@@ -72,8 +123,6 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
             </div>
         );
     }
-
-    const formatCurrency = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0);
 
     // Empty state if the selected range contains zero full weeks
     if (result.weeksInRangeFull === 0) {
@@ -105,6 +154,13 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                             Heads up: We detected a long {result.suspectedCsvCoverageGap.weeks} week stretch without any campaigns ({result.suspectedCsvCoverageGap.start} → {result.suspectedCsvCoverageGap.end}). If this looks wrong, re-export your Campaigns CSV for that span.
                         </div>
                     )}
+                </div>
+            )}
+            {actionNote && (
+                <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4 mb-6">
+                    <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{actionNote.title}</p>
+                    <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{actionNote.message}</p>
+                    {actionNote.sample && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{actionNote.sample}</p>}
                 </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
