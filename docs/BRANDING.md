@@ -104,6 +104,7 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Guardrails: when computing recommendations, require ≥4 full weeks and ≥1k emails per cadence before comparing buckets. Treat revenue lift ≥10% as meaningful, only approve higher cadence when open/click drops stay within -5% and spam/bounce stay within +0.05/+0.10 percentage points. The inverse guardrails apply when lowering cadence.
 - Sparse data handling: if only one cadence meets the sample bar, surface an exploratory message (“Test 2 campaigns per week”) when engagement is healthy; otherwise show “Not enough data for a recommendation.”
 - Deliverability alerts: always mention when spam ≥0.3% or bounce ≥0.5% triggers a “Send Less” recommendation so users know the risk driver.
+- Audience size guidance mirrors this card shell. Minimum inputs: ≥12 campaigns total, ≥3 per bucket, and ≥50k emails combined before recommending direction. When a larger bucket shows promising lift with limited coverage, frame it as a “Test” recommendation and call out the small sample in body copy. Reference the active date range in all “not enough data” messages (e.g., “This date range includes only …”).
 
 ### Export controls
 

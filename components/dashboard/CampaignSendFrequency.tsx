@@ -368,6 +368,22 @@ function computeSendFrequencyGuidance(buckets: BucketAggregate[], mode: 'week' |
         }
     }
 
+    const exploratoryHigher = buckets.filter(b => orderMap[b.key] > orderMap[baseline.key] && (b.weeksCount > 0 || b.sumEmails > 0) && !eligible.includes(b));
+    for (const candidate of exploratoryHigher) {
+        const { lift, openDelta, clickDelta, spamDelta, bounceDelta } = acceptance(candidate);
+        const engagementSafe = openDelta >= ENGAGEMENT_DROP_LIMIT && clickDelta >= ENGAGEMENT_DROP_LIMIT;
+        const riskSafe = spamDelta <= SPAM_DELTA_LIMIT && bounceDelta <= BOUNCE_DELTA_LIMIT;
+        if (lift >= LIFT_THRESHOLD && engagementSafe && riskSafe) {
+            const title = `Test ${actionLabelForBucket(candidate.key)}`;
+            const liftPct = lift === Infinity ? 'from zero' : formatPct(lift);
+            const limitedWeeks = candidate.weeksCount;
+            const limitedCopy = limitedWeeks > 0 ? `${limitedWeeks} ${pluralize('week', limitedWeeks)} of ${labelForBucket(candidate.key)} data` : `${labelForBucket(candidate.key)} tests so far`;
+            const msg = `${limitedCopy} show ${liftPct} higher weekly revenue than ${baselineLabel}. Schedule a four-week test at this cadence and keep an eye on engagement.`;
+            const sample = formatSample(undefined, candidate, baseline);
+            return { status: 'send-more', cadenceLabel: labelForBucket(candidate.key), title, message: msg, sample };
+        }
+    }
+
     const riskyBaseline = baseline.spamRate >= HIGH_SPAM_ALERT || baseline.bounceRate >= HIGH_BOUNCE_ALERT;
 
     for (const candidate of lower) {
@@ -380,9 +396,9 @@ function computeSendFrequencyGuidance(buckets: BucketAggregate[], mode: 'week' |
             const sample = formatSample(undefined, baseline, candidate);
             return { status: 'send-less', cadenceLabel: labelForBucket(candidate.key), title, message: msg, sample };
         }
-        if (lift <= NEG_LIFT_THRESHOLD) {
+        if (lift >= LIFT_THRESHOLD) {
             const title = `Send ${actionLabelForBucket(candidate.key)}`;
-            const msg = `${baselineLabel} underperforms ${labelForBucket(candidate.key)} by ${formatPct(Math.abs(lift))}. Shift down to recover revenue and reduce fatigue.`;
+            const msg = `${baselineLabel} underperforms ${labelForBucket(candidate.key)} by ${formatPct(lift)}. Shift down to recover revenue and reduce fatigue.`;
             const sample = formatSample(undefined, baseline, candidate);
             return { status: 'send-less', cadenceLabel: labelForBucket(candidate.key), title, message: msg, sample };
         }

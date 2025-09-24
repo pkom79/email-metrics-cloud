@@ -65,6 +65,12 @@ function formatEmailsShort(n: number) {
     return `${n}`;
 }
 
+interface AudienceGuidanceResult {
+    title: string;
+    message: string;
+    sample: string | null;
+}
+
 function niceRangeLabel(min: number, max: number) {
     const roundTo = (x: number) => {
         if (x >= 1_000_000) return Math.round(x / 100_000) * 100_000;
@@ -183,10 +189,183 @@ function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; li
     return { buckets, limited };
 }
 
+const AUDIENCE_MIN_TOTAL_CAMPAIGNS = 12;
+const AUDIENCE_MIN_BUCKET_CAMPAIGNS = 3;
+const AUDIENCE_MIN_TOTAL_EMAILS = 50_000;
+const AUDIENCE_MIN_BUCKET_EMAILS = 10_000;
+const AUDIENCE_LIFT_THRESHOLD = 0.1;
+const AUDIENCE_NEG_LIFT_THRESHOLD = -0.1;
+const AUDIENCE_ENGAGEMENT_DROP_LIMIT = -0.05;
+const AUDIENCE_SPAM_DELTA_LIMIT = 0.05;
+const AUDIENCE_BOUNCE_DELTA_LIMIT = 0.1;
+const AUDIENCE_SPAM_ALERT = 0.3;
+const AUDIENCE_BOUNCE_ALERT = 0.5;
+const AUDIENCE_OPEN_HEALTHY = 10;
+const AUDIENCE_CLICK_HEALTHY = 1;
+
+function computeAudienceSizeGuidance(buckets: Bucket[]): AudienceGuidanceResult | null {
+    if (!buckets.length) return null;
+
+    const totalCampaigns = buckets.reduce((sum, b) => sum + b.campaigns.length, 0);
+    const totalEmails = buckets.reduce((sum, b) => sum + b.sumEmails, 0);
+
+    const formatSample = (override?: number, a?: Bucket | null, b?: Bucket | null) => {
+        const count = override ?? ((a?.campaigns.length ?? 0) + (b?.campaigns.length ?? 0));
+        if (count <= 0) return null;
+        return `Based on ${count} ${pluralize('campaign', count)} in this date range.`;
+    };
+
+    if (totalCampaigns < AUDIENCE_MIN_TOTAL_CAMPAIGNS || totalEmails < AUDIENCE_MIN_TOTAL_EMAILS) {
+        const message = `This date range includes only ${totalCampaigns} ${pluralize('campaign', totalCampaigns)} across distinct audience sizes. Expand the range or keep sending before adjusting targeting.`;
+        return { title: 'Not enough data for a recommendation', message, sample: formatSample(totalCampaigns) };
+    }
+
+    const orderMap = (b: Bucket) => parseInt(b.key, 10);
+    const metricKey: keyof Bucket = 'avgCampaignRevenue';
+
+    const qualified = buckets.filter(b => b.campaigns.length >= AUDIENCE_MIN_BUCKET_CAMPAIGNS && b.sumEmails >= AUDIENCE_MIN_BUCKET_EMAILS);
+    if (!qualified.length) {
+        const message = 'Campaigns at each audience size are too sparse to compare. Gather more sends per size before changing targeting.';
+        return { title: 'Not enough data for a recommendation', message, sample: formatSample(totalCampaigns) };
+    }
+
+    const pickBaseline = () => {
+        const sorted = [...qualified].sort((a, b) => {
+            if (b.campaigns.length !== a.campaigns.length) return b.campaigns.length - a.campaigns.length;
+            const diff = (b[metricKey] as number) - (a[metricKey] as number);
+            if (Math.abs(diff) > 1e-6) return diff > 0 ? 1 : -1;
+            return orderMap(a) - orderMap(b);
+        });
+        return sorted[0];
+    };
+
+    const baseline = pickBaseline();
+    if (!baseline) return null;
+    const baselineLabel = `${baseline.rangeLabel} recipients`;
+    const baselineValue = baseline[metricKey] as number;
+
+    const evaluate = (candidate: Bucket) => {
+        const value = candidate[metricKey] as number;
+        const lift = baselineValue === 0 ? (value > 0 ? Infinity : 0) : (value - baselineValue) / baselineValue;
+        const openDelta = ratioDelta(candidate.openRate, baseline.openRate);
+        const clickDelta = ratioDelta(candidate.clickRate, baseline.clickRate);
+        const spamDelta = candidate.spamRate - baseline.spamRate;
+        const bounceDelta = candidate.bounceRate - baseline.bounceRate;
+        return { lift, openDelta, clickDelta, spamDelta, bounceDelta };
+    };
+
+    const higher = qualified.filter(b => orderMap(b) > orderMap(baseline));
+    for (const candidate of higher) {
+        const { lift, openDelta, clickDelta, spamDelta, bounceDelta } = evaluate(candidate);
+        const engagementSafe = openDelta >= AUDIENCE_ENGAGEMENT_DROP_LIMIT && clickDelta >= AUDIENCE_ENGAGEMENT_DROP_LIMIT;
+        const riskSafe = spamDelta <= AUDIENCE_SPAM_DELTA_LIMIT && bounceDelta <= AUDIENCE_BOUNCE_DELTA_LIMIT;
+        if (lift >= AUDIENCE_LIFT_THRESHOLD && engagementSafe && riskSafe) {
+            const liftPct = formatDeltaPct(lift);
+            const title = `Send to ${candidate.rangeLabel} recipients`;
+            const msg = `${candidate.rangeLabel} audiences delivered ${liftPct} more revenue per campaign than ${baseline.rangeLabel}. Expand targeting to this size while monitoring engagement.`;
+            return { title, message: msg, sample: formatSample(undefined, candidate, baseline) };
+        }
+    }
+
+    const exploratoryHigher = buckets.filter(b => orderMap(b) > orderMap(baseline) && !qualified.includes(b) && b.campaigns.length > 0);
+    for (const candidate of exploratoryHigher) {
+        const { lift, openDelta, clickDelta, spamDelta, bounceDelta } = evaluate(candidate);
+        const engagementSafe = openDelta >= AUDIENCE_ENGAGEMENT_DROP_LIMIT && clickDelta >= AUDIENCE_ENGAGEMENT_DROP_LIMIT;
+        const riskSafe = spamDelta <= AUDIENCE_SPAM_DELTA_LIMIT && bounceDelta <= AUDIENCE_BOUNCE_DELTA_LIMIT;
+        if (lift >= AUDIENCE_LIFT_THRESHOLD && engagementSafe && riskSafe) {
+            const liftPct = formatDeltaPct(lift);
+            const sampleCount = candidate.campaigns.length;
+            const title = `Test ${candidate.rangeLabel} recipients`;
+            const msg = `${sampleCount} ${pluralize('campaign', sampleCount)} reaching ${candidate.rangeLabel} recipients lifted revenue per campaign by ${liftPct} versus ${baseline.rangeLabel}. Plan a focused test and monitor deliverability.`;
+            return { title, message: msg, sample: formatSample(undefined, candidate, baseline) };
+        }
+    }
+
+    const riskyBaseline = baseline.spamRate >= AUDIENCE_SPAM_ALERT || baseline.bounceRate >= AUDIENCE_BOUNCE_ALERT;
+    const lower = qualified.filter(b => orderMap(b) < orderMap(baseline));
+    for (const candidate of lower) {
+        const { lift, openDelta, clickDelta, spamDelta, bounceDelta } = evaluate(candidate);
+        const riskImproved = spamDelta < -AUDIENCE_SPAM_DELTA_LIMIT || bounceDelta < -AUDIENCE_BOUNCE_DELTA_LIMIT || riskyBaseline;
+        if (riskImproved && lift >= AUDIENCE_NEG_LIFT_THRESHOLD) {
+            const title = `Focus on ${candidate.rangeLabel} recipients`;
+            const msg = `${baselineLabel} is straining deliverability. Shifting toward ${candidate.rangeLabel} recipients reduces risk while keeping revenue within 10%.`;
+            return { title, message: msg, sample: formatSample(undefined, baseline, candidate) };
+        }
+        if (lift >= AUDIENCE_LIFT_THRESHOLD) {
+            const liftPct = formatDeltaPct(lift);
+            const title = `Lean into ${candidate.rangeLabel} recipients`;
+            const msg = `${candidate.rangeLabel} segments outperform ${baseline.rangeLabel} by ${liftPct}. Prioritize these audiences to maximize efficiency.`;
+            return { title, message: msg, sample: formatSample(undefined, baseline, candidate) };
+        }
+    }
+
+    const healthyBaseline = baseline[metricKey] > 0 && baseline.openRate >= AUDIENCE_OPEN_HEALTHY && baseline.clickRate >= AUDIENCE_CLICK_HEALTHY && baseline.spamRate < AUDIENCE_SPAM_ALERT && baseline.bounceRate < AUDIENCE_BOUNCE_ALERT;
+    const onlyBucket = qualified.length === 1 && higher.length === 0 && lower.length === 0;
+    if (onlyBucket) {
+        if (healthyBaseline) {
+            const nextIndex = orderMap(baseline) + 1;
+            const nextBucket = buckets.find(b => parseInt(b.key, 10) === nextIndex);
+            if (nextBucket) {
+                const title = `Test ${nextBucket.rangeLabel} recipients`;
+                const msg = `${baselineLabel} is performing well. When you have enough campaigns hitting ${nextBucket.rangeLabel}, run a test to validate headroom.`;
+                return { title, message: msg, sample: formatSample(undefined, baseline) };
+            }
+        }
+        const issues = describeAudienceIssues(baseline, baseline[metricKey] as number);
+        const title = `Stabilize ${baseline.rangeLabel} recipients`;
+        const msg = `${baselineLabel} needs work—${issues}. Improve segmentation and content at this size, then re-run larger audience tests.`;
+        return { title, message: msg, sample: formatSample(undefined, baseline) };
+    }
+
+    if (riskyBaseline) {
+        const safer = lower[0];
+        if (safer) {
+            const title = `Protect sender reputation`;
+            const msg = `${baselineLabel} shows elevated spam or bounce rates. Shift more volume to ${safer.rangeLabel} recipients while fixes take effect.`;
+            return { title, message: msg, sample: formatSample(undefined, baseline, safer) };
+        }
+    }
+
+    const title = `Stay with ${baseline.rangeLabel} recipients`;
+    const msg = `${baselineLabel} remains the most balanced audience size. Other segments either lack coverage, miss the 10% lift bar, or add deliverability risk.`;
+    return { title, message: msg, sample: formatSample(undefined, baseline) };
+}
+
+function ratioDelta(candidate: number, baseline: number) {
+    if (!isFinite(candidate) || !isFinite(baseline)) return 0;
+    if (baseline === 0) return candidate === 0 ? 0 : Infinity;
+    return (candidate - baseline) / baseline;
+}
+
+function formatDeltaPct(value: number) {
+    if (!isFinite(value)) return '∞%';
+    const abs = Math.abs(value * 100);
+    const decimals = abs >= 100 ? 0 : 1;
+    return `${abs.toFixed(decimals)}%`;
+}
+
+function describeAudienceIssues(bucket: Bucket, metricValue: number) {
+    const issues: string[] = [];
+    if (metricValue <= 0) issues.push('revenue is flat');
+    if (bucket.openRate < AUDIENCE_OPEN_HEALTHY) issues.push(`opens are below ${AUDIENCE_OPEN_HEALTHY}%`);
+    if (bucket.clickRate < AUDIENCE_CLICK_HEALTHY) issues.push(`clicks are below ${AUDIENCE_CLICK_HEALTHY}%`);
+    if (bucket.spamRate > AUDIENCE_SPAM_ALERT) issues.push('spam complaints are elevated');
+    if (bucket.bounceRate > AUDIENCE_BOUNCE_ALERT) issues.push('bounce rate is high');
+    if (!issues.length) return 'engagement needs improvement';
+    if (issues.length === 1) return issues[0];
+    return `${issues.slice(0, -1).join(', ')}, and ${issues[issues.length - 1]}`;
+}
+
+function pluralize(word: string, count: number) {
+    return count === 1 ? word : `${word}s`;
+}
+
+
 export default function AudienceSizePerformance({ campaigns }: Props) {
     const [metric, setMetric] = useState<string>('avgCampaignRevenue');
 
     const { buckets, limited } = useMemo(() => computeBuckets(campaigns || []), [campaigns]);
+    const guidance = useMemo(() => computeAudienceSizeGuidance(buckets), [buckets]);
 
     if (!campaigns?.length) {
         return (
@@ -230,6 +409,13 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                     </SelectBase>
                 </div>
             </div>
+            {guidance && (
+                <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4 mb-6">
+                    <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{guidance.title}</p>
+                    <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{guidance.message}</p>
+                    {guidance.sample && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{guidance.sample}</p>}
+                </div>
+            )}
             {limited && (
                 <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">Limited data — results may be noisy. More campaigns will improve reliability.</p>
             )}
