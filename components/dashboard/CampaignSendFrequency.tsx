@@ -226,8 +226,7 @@ export default function CampaignSendFrequency({ campaigns }: Props) {
             </div>
             {guidance && (
                 <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4 mb-6">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Action Note</p>
-                    <p className="mt-2 text-sm font-semibold text-gray-900 dark:text-gray-100">{guidance.title}</p>
+                    <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{guidance.title}</p>
                     <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{guidance.message}</p>
                     {guidance.sample && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{guidance.sample}</p>}
                 </div>
@@ -311,10 +310,11 @@ function computeSendFrequencyGuidance(buckets: BucketAggregate[], mode: 'week' |
     const baselineLabel = baseline ? labelForBucket(baseline.key) : null;
     const baselineAction = baseline ? actionLabelForBucket(baseline.key) : null;
 
-    const buildSampleText = (a: BucketAggregate, b?: BucketAggregate | null) => {
-        if (!a) return null;
-        if (!b) return `${a.weeksCount} ${pluralize('week', a.weeksCount)} observed at ${labelForBucket(a.key)}.`;
-        return `${a.weeksCount} ${pluralize('week', a.weeksCount)} vs ${b.weeksCount} ${pluralize('week', b.weeksCount)} (${labelForBucket(a.key)} vs ${labelForBucket(b.key)}).`;
+    const buildSampleText = (primary: BucketAggregate, secondary?: BucketAggregate | null) => {
+        if (!primary) return null;
+        const totalWeeks = primary.weeksCount + (secondary ? secondary.weeksCount : 0);
+        if (totalWeeks <= 0) return null;
+        return `Based on ${totalWeeks} ${pluralize('week', totalWeeks)} of campaign data.`;
     };
 
     if (!baseline) {

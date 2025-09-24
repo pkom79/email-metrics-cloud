@@ -490,8 +490,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                                 </div>
                                 <span className={`px-2 py-1 rounded-md text-xs font-semibold ${badgeClass}`}>{statusText}</span>
                             </div>
-                            <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Action Note</p>
-                            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{card.result.message}</p>
+                            <p className="mt-3 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{card.result.message}</p>
                             {sample && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{sample}</p>}
                         </div>
                     );
