@@ -96,6 +96,15 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Body copy: `text-sm text-gray-700 dark:text-gray-300 leading-relaxed`; flows copy always references Flow Step Analysis per product guidance.
 - Optional sample hint: `text-xs text-gray-500 dark:text-gray-400` line (“Based on N weeks/months of volume data.”) only when we have enough observations.
 
+### Action Notes (shared pattern)
+- Structure: same card shell as Send Volume Guidance (`rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4`). Always include the uppercase label `Action Note` in `text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400`.
+- Title: bold sentence summarizing the recommendation (`text-sm font-semibold text-gray-900 dark:text-gray-100`). Follow with body copy in `text-sm text-gray-700 dark:text-gray-300 leading-relaxed` describing the why and next step.
+- Sample line: optional `text-xs text-gray-500 dark:text-gray-400` (“Based on … weeks”) when we can cite observations. Keep the card single-column to avoid crowding controls for narrower layouts.
+- No status badges for frequency guidance; the recommendation itself must include the cadence (“Send 3 campaigns per week”) so the user gets a clear action without extra chrome.
+- Guardrails: when computing recommendations, require ≥4 full weeks and ≥1k emails per cadence before comparing buckets. Treat revenue lift ≥10% as meaningful, only approve higher cadence when open/click drops stay within -5% and spam/bounce stay within +0.05/+0.10 percentage points. The inverse guardrails apply when lowering cadence.
+- Sparse data handling: if only one cadence meets the sample bar, surface an exploratory message (“Test 2 campaigns per week”) when engagement is healthy; otherwise show “Not enough data for a recommendation.”
+- Deliverability alerts: always mention when spam ≥0.3% or bounce ≥0.5% triggers a “Send Less” recommendation so users know the risk driver.
+
 ### Export controls
 
 ## Inline data links + tooltip (Segments)
