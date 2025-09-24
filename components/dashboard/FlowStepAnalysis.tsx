@@ -1418,7 +1418,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-2.5">
                     <div className="flex items-start gap-2.5 text-purple-700 dark:text-purple-200">
                         <div className="flex-1">
-                            <span className="text-[11px]"><span className="font-medium">Naming Note:</span> Flow steps are organized by message names. When you create an A/B test, Klaviyo may give the same name to multiple emails, which can mess up the order. To avoid this, rename emails with clear suffixes like “-A” and “-B” so the order stays correct.</span>
+                            <span className="text-[11px]"><span className="font-medium">Naming Note:</span> Email names define flow steps. A/B tests often reuse names, which breaks order. Use suffixes like “-A” and “-B”.</span>
                         </div>
                     </div>
                 </div>
