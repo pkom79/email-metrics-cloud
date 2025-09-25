@@ -205,7 +205,7 @@ export interface LlmExportJson {
   audienceLifetime?: Array<{ label: '0-3 months' | '3-6 months' | '6-12 months' | '1-2 years' | '2+ years'; count: number; percentage: number }>;
   // Snapshots: High-Value Customer Segments (AOV multipliers)
   highValueCustomerSegments?: Array<{ label: '2x AOV' | '3x AOV' | '6x AOV'; multiplier: 2 | 3 | 6; customers: number; revenue: number }>;
-  // Snapshots: Last Active Segments (count + percentage of total audience)
+  // Snapshots: Inactive Segments (count + percentage of total audience)
   lastActiveSegments?: Array<{ label: 'Never Active' | 'Inactive for 90+ days' | 'Inactive for 120+ days' | 'Inactive for 180+ days' | 'Inactive for 365+ days'; count: number; percentage: number }>;
   // Engagement by Profile Age: for each age segment, profile count and percentages across engagement windows
   engagementByProfileAge?: {
@@ -409,7 +409,7 @@ export async function buildLlmExportJson(params: {
         purchaseFrequencyDistribution: 'How many profiles have never purchased, purchased once, twice, 3–5 times, or 6+ times; includes counts and percent of audience.',
         audienceLifetime: 'How long profiles have been on your list (0–3m, 3–6m, 6–12m, 1–2y, 2+y); includes counts and percent of audience.',
         highValueCustomerSegments: 'Buyer cohorts whose lifetime value is at least 2x, 3x, or 6x the buyer AOV; includes customer counts and their cumulative revenue.',
-        lastActiveSegments: 'Recency of engagement: Never Active, and inactive for 90+/120+/180+/365+ days based on Last Active; includes counts and percent of audience.',
+        lastActiveSegments: 'Inactive segments: Never Active, plus profiles inactive for 90+/120+/180+/365+ days based on Last Active; includes counts and percent of audience.',
         campaignFlowSplit: 'Monthly split of revenue and emails between Campaigns vs Flows over the full-month window, plus period totals.',
         sendVolumeImpact: 'Correlation between emails sent and performance metrics across the selected lookback buckets, by segment (Campaigns/Flows).',
         campaignSendFrequency: 'KPIs by weekly send frequency buckets (1, 2, 3, 4+) over the selected lookback period; includes campaign counts.',
@@ -526,7 +526,7 @@ export async function buildLlmExportJson(params: {
     }
   } catch {}
 
-  // Last Active Segments (Never Active; Inactive 90+/120+/180+/365+ days)
+  // Inactive Segments (Never Active; Inactive 90+/120+/180+/365+ days)
   try {
     const subs = dm.getSubscribers() as any[];
     const lastEmailDate = dm.getLastEmailDate();

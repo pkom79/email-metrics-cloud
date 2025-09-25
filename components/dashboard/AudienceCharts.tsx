@@ -57,8 +57,8 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         return segments;
     }, [hasData, audienceInsights.avgClvBuyers, subscribers]);
 
-    // Last Active segments
-    const lastActiveSegments = React.useMemo(() => {
+    // Inactive segments
+    const inactiveSegments = React.useMemo(() => {
         if (!hasData) return [] as { label: string; count: number; percent: number }[];
         const lastEmailDate = dataManager.getLastEmailDate();
         const total = subscribers.length;
@@ -407,15 +407,15 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 </div>
             </div>
 
-            {/* Last Active Segments */}
+            {/* Inactive Segments */}
             <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-4">
                     <MousePointerClick className="w-5 h-5 text-purple-600" />
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Last Active Segments
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">Inactive Segments
                         <InfoTooltipIcon placement="top" content={(
                             <div>
                                 <p className="font-semibold mb-1">What</p>
-                                <p>How recently people engaged.</p>
+                                <p>How long profiles have gone without engaging.</p>
                                 <p className="font-semibold mt-2 mb-1">How</p>
                                 <p>We group profiles by days since the last open or click, and include those who never engaged.</p>
                                 <p className="font-semibold mt-2 mb-1">Why</p>
@@ -425,7 +425,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                     </h3>
                 </div>
                 <div className="space-y-3">
-                    {lastActiveSegments.map((seg) => (
+                    {inactiveSegments.map((seg) => (
                         <div key={seg.label}>
                             <div className="flex items-center justify-between mb-1">
                                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{seg.label}</span>
@@ -442,7 +442,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             {/* Engagement by Tenure heatmap */}
             <EngagementByTenure subscribers={subscribers} dateRange={dateRange} customTo={customTo} />
 
-            {/* Inactivity Revenue Drain (placed after Last Active Segments and heatmap) */}
+            {/* Inactivity Revenue Drain (placed after Inactive Segments and heatmap) */}
             <InactivityRevenueDrain subscribers={subscribers} />
 
             {/* Dead Weight Audience & Potential Savings */}
