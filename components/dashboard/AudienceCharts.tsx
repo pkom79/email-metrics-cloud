@@ -37,10 +37,17 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         body: string;
         segments: PurchaseActionSegment[];
     }
+    interface LifetimeSegmentDetail {
+        label: string;
+        count: number;
+        percentage: number;
+        summary: string;
+        ideas: string[];
+    }
     interface LifetimeActionNote {
         headline: string;
         body: string;
-        insights: Array<{ title: string; insight: string; action: string }>;
+        segments: LifetimeSegmentDetail[];
     }
 
     const purchaseFrequencyData = [
@@ -167,70 +174,88 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         const sorted = [...groups].sort((a, b) => b.percentage - a.percentage);
         const [leader, runnerUp] = sorted;
         const dominance = leader.percentage - (runnerUp?.percentage ?? 0);
+        const newGroup = groups.find(g => g.key === 'new');
+        const midGroup = groups.find(g => g.key === 'mid');
+        const oldGroup = groups.find(g => g.key === 'old');
 
-        const headline = dominance < 5 ? 'Audiences spread evenly across tenure' : `${leader.label} leads the list (${formatPercent(leader.percentage)})`;
-        const general = dominance < 5
-            ? 'No single lifespan dominates, so balance onboarding, retention, and reactivation programs.'
-            : leader.key === 'new'
-                ? 'Most subscribers are still settling in—guide them quickly toward first and second purchases.'
-                : leader.key === 'mid'
-                    ? 'Mid-tenure subscribers make up the core—keep them engaged with richer storytelling and value proof.'
-                    : 'Long-tenure profiles dominate—refresh them with reactivation touches and prune where necessary.';
-
+        let headline: string;
         if (dominance < 5) {
-            return {
-                headline,
-                body: general,
-                insights: [
-                    {
-                        title: 'Healthy spread across tenure buckets',
-                        insight: 'New, mid, and long-standing profiles are within a few points of each other.',
-                        action: 'Keep a steady drumbeat: welcome/onboarding for new joins, product education for mid-tenure, and gentle reactivation touchpoints for older cohorts.'
-                    }
-                ]
-            };
+            headline = 'Balanced mix across subscriber age groups';
+        } else if (leader.key === 'new') {
+            headline = `New joiners (0-3 and 3-6 months) lead the list (${formatPercent(newGroup?.percentage ?? leader.percentage)})`;
+        } else if (leader.key === 'mid') {
+            headline = `6-12 months leads the list (${formatPercent(midGroup?.percentage ?? leader.percentage)})`;
+        } else {
+            headline = `1+ year subscribers lead the list (${formatPercent(oldGroup?.percentage ?? leader.percentage)})`;
         }
 
-        if (leader.key === 'new') {
-            return {
-                headline,
-                body: general,
-                insights: [
-                    {
-                        title: 'New cohorts dominate',
-                        insight: 'Nearly all recent subscribers joined within the last six months.',
-                        action: 'Send structured onboarding: welcome flows, brand education, early social proof, and quick-win offers that drive first or second purchase.'
-                    }
-                ]
-            };
+        let body: string;
+        if (dominance < 5) {
+            body = 'No single age group dominates, so keep onboarding, retention, and reactivation running in parallel.';
+        } else if (leader.key === 'new') {
+            body = 'Most of your list joined in the last six months. Guide them toward the first and second purchase while excitement is high.';
+        } else if (leader.key === 'mid') {
+            body = 'Six-to-twelve-month profiles are the core of your list. Show ongoing proof of value and make the next purchase effortless.';
+        } else {
+            body = 'Many subscribers have been around for a year or more. Reactivate them with fresh offers and clean up profiles that stay cold.';
         }
 
-        if (leader.key === 'mid') {
-            return {
-                headline,
-                body: general,
-                insights: [
-                    {
-                        title: 'Mid-tenure profiles lead',
-                        insight: 'Many subscribers have experienced a few cycles with your brand.',
-                        action: 'Focus on lifecycle nurture: highlight use cases, community stories, loyalty perks, and intelligent cross-sells that keep them buying.'
-                    }
+        const segmentCopy: Record<string, { summary: string; ideas: string[] }> = {
+            '0-3 months': {
+                summary: 'They are still getting to know the brand and may not have purchased yet.',
+                ideas: [
+                    'Send a paced welcome or onboarding series that explains the value prop',
+                    'Include first-purchase incentives or bundles tied to early milestones',
+                    'Share quick-start tips or content that helps them experience the product fast'
                 ]
-            };
-        }
-
-        return {
-            headline,
-            body: general,
-            insights: [
-                {
-                    title: 'Long-tenure profiles dominate',
-                    insight: 'A large share of the list has been subscribed for 1+ years.',
-                    action: 'Prioritize reactivation drips, preference refreshes, and explicit value reminders. Consider sunset policies for profiles that stay cold.'
-                }
-            ]
+            },
+            '3-6 months': {
+                summary: 'They graduated from onboarding but are still fresh.',
+                ideas: [
+                    'Share customer stories or social proof that reinforces the decision to subscribe',
+                    'Promote complementary products or bundles that fit a second purchase',
+                    'Invite them to preference and profile updates so future messages stay relevant'
+                ]
+            },
+            '6-12 months': {
+                summary: 'They know the brand and respond to proof of ongoing value.',
+                ideas: [
+                    'Highlight deeper use cases, how-to guides, or product refreshers',
+                    'Remind them about loyalty perks, referrals, or rewards they can earn',
+                    'Blend in surveys or feedback requests to uncover blockers to repeat purchases'
+                ]
+            },
+            '1-2 years': {
+                summary: 'They have stayed for a long stretch and may slip without attention.',
+                ideas: [
+                    'Run light-touch win-back automations tied to seasonality or last purchase',
+                    'Offer exclusive content or insider previews that renew interest',
+                    'Ask for preferences or segment them into lower-frequency nurture tracks'
+                ]
+            },
+            '2+ years': {
+                summary: 'They are legacy profiles who need clear reasons to stay on the list.',
+                ideas: [
+                    'Send reactivation campaigns with clear next steps and urgency',
+                    'Test sunset countdowns or “last chance to stay subscribed” messaging',
+                    'Review deliverability and suppress profiles that remain completely inactive'
+                ]
+            }
         };
-    }, [audienceInsights.lifetimeDistribution.zeroTo3Months, audienceInsights.lifetimeDistribution.threeTo6Months, audienceInsights.lifetimeDistribution.sixTo12Months, audienceInsights.lifetimeDistribution.oneToTwoYears, audienceInsights.lifetimeDistribution.twoYearsPlus, audienceInsights.totalSubscribers]);
+
+        const segments: LifetimeSegmentDetail[] = lifetimeData.map(item => {
+            const copy = segmentCopy[item.label];
+            return {
+                label: item.label,
+                count: item.value,
+                percentage: item.percentage,
+                summary: copy?.summary ?? '',
+                ideas: copy?.ideas ?? []
+            };
+        });
+
+        return { headline, body, segments };
+    }, [lifetimeData, audienceInsights.lifetimeDistribution.zeroTo3Months, audienceInsights.lifetimeDistribution.threeTo6Months, audienceInsights.lifetimeDistribution.sixTo12Months, audienceInsights.lifetimeDistribution.oneToTwoYears, audienceInsights.lifetimeDistribution.twoYearsPlus, audienceInsights.totalSubscribers]);
 
     // High-value customer segments (exclusive bins: 2x–<3x, 3x–<6x, 6x+ of buyer AOV) with buyer-share and list-share revenue percentages
     const highValueSegments = React.useMemo(() => {
@@ -248,9 +273,13 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             ];
         }
         const t2 = aov * 2, t3 = aov * 3, t6 = aov * 6;
+        const toCents = (n: number) => Math.round(n * 100);
+        const fromCents = (c: number) => c / 100;
+        const t3Minus = fromCents(Math.max(0, toCents(t3) - 1));
+        const t6Minus = fromCents(Math.max(0, toCents(t6) - 1));
         const segments: Seg[] = [
-            { label: `2x–<3x AOV (${formatCurrency(t2)}–<${formatCurrency(t3)})`, customers: 0, revenue: 0, revenuePercentage: 0, revenuePercentageOfList: 0 },
-            { label: `3x–<6x AOV (${formatCurrency(t3)}–<${formatCurrency(t6)})`, customers: 0, revenue: 0, revenuePercentage: 0, revenuePercentageOfList: 0 },
+            { label: `2x-3x AOV (${formatCurrency(t2)}–${formatCurrency(t3Minus)})`, customers: 0, revenue: 0, revenuePercentage: 0, revenuePercentageOfList: 0 },
+            { label: `3x-6x AOV (${formatCurrency(t3)}–${formatCurrency(t6Minus)})`, customers: 0, revenue: 0, revenuePercentage: 0, revenuePercentageOfList: 0 },
             { label: `6x+ AOV (${formatCurrency(t6)}+)`, customers: 0, revenue: 0, revenuePercentage: 0, revenuePercentageOfList: 0 },
         ];
         for (const s of subscribers) {
@@ -638,7 +667,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                                     <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{lifetimeActionNote.headline}</p>
                                     <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{lifetimeActionNote.body}</p>
                                 </div>
-                                {lifetimeActionNote.insights.length > 0 && (
+                                {lifetimeActionNote.segments.length > 0 && (
                                     <button
                                         type="button"
                                         onClick={() => setShowLifetimeActionDetails(prev => !prev)}
@@ -651,13 +680,25 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                                     </button>
                                 )}
                             </div>
-                            {showLifetimeActionDetails && lifetimeActionNote.insights.length > 0 && (
-                                <div id="lifetime-action-note-details" className="mt-4 space-y-4">
-                                    {lifetimeActionNote.insights.map((item, idx) => (
-                                        <div key={`lifetime-insight-${idx}`} className="space-y-2">
-                                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{item.title}</p>
-                                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"><span className="font-semibold text-gray-900 dark:text-gray-100">What it means:</span> {item.insight}</p>
-                                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"><span className="font-semibold text-gray-900 dark:text-gray-100">Send this:</span> {item.action}</p>
+                            {showLifetimeActionDetails && lifetimeActionNote.segments.length > 0 && (
+                                <div id="lifetime-action-note-details" className="mt-4 space-y-5">
+                                    {lifetimeActionNote.segments.map(segment => (
+                                        <div key={segment.label} className="space-y-2">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{segment.label}</span>
+                                                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{segment.count.toLocaleString()} • {formatPercent(segment.percentage)}</span>
+                                            </div>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{segment.summary}</p>
+                                            {segment.ideas.length > 0 && (
+                                                <div className="pt-1">
+                                                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Campaign ideas</p>
+                                                    <ul className="mt-1 list-disc list-inside space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                                                        {segment.ideas.map((idea, idx) => (
+                                                            <li key={`${segment.label}-idea-${idx}`}>{idea}</li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -677,7 +718,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                                 <p className="font-semibold mb-1">What</p>
                                 <p>Buyers who spend much more than average.</p>
                                 <p className="font-semibold mt-2 mb-1">How</p>
-                                <p>We flag customers whose lifetime value is 2x, 3x, or 6x your buyer AOV.</p>
+                                <p>We group buyers into 2x–&lt;3x, 3x–&lt;6x, and 6x+ of your buyer AOV (mutually exclusive tiers).</p>
                                 <p className="font-semibold mt-2 mb-1">Why</p>
                                 <p>Protect and grow these relationships with VIP offers and tailored flows.</p>
                             </div>
@@ -685,19 +726,14 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                     </h3>
                 </div>
                 <div className="space-y-3">
-                    {/* Totals row */}
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Historic CLV (All Subscribers)</span>
-                        <span className="text-sm text-gray-900 dark:text-gray-100">{formatCurrency(subscribers.reduce((acc, s) => acc + (((s.historicClv ?? s.totalClv) || 0)), 0))}</span>
-                    </div>
                     {highValueSegments.map((seg) => (
                         <div key={seg.label}>
                             <div className="flex items-center justify-between mb-1">
                                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{seg.label}</span>
-                                <span className="text-sm text-gray-900 dark:text-gray-100">{seg.customers.toLocaleString()} customers • {formatCurrency(seg.revenue)} revenue • {formatPercent(seg.revenuePercentageOfList)}</span>
+                                <span className="text-sm text-gray-900 dark:text-gray-100">{seg.customers.toLocaleString()} customers • {formatCurrency(seg.revenue)} revenue • {formatPercent(seg.revenuePercentageOfList)} of total revenue</span>
                             </div>
                             <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-2 overflow-hidden">
-                                <div className="h-full bg-gradient-to-r from-purple-500 to-purple-600 rounded-full transition-all duration-500" style={{ width: `${seg.revenuePercentage}%` }} />
+                                <div className="h-full bg-gradient-to-r from-purple-500 to-purple-600 rounded-full transition-all duration-500" style={{ width: `${seg.revenuePercentageOfList}%` }} />
                             </div>
                         </div>
                     ))}
