@@ -114,9 +114,10 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 
 #### Audience Lifetime Action Note
 - Placement: sits directly under the Audience Lifetime chart inside the existing card, using the same action-note shell and hierarchy as Purchase Frequency (`mt-6`, bordered, rounded-xl, padded).
-- Header: single-line headline summarising the dominant lifetime cohort (e.g., “0-6 months leads the distribution (47.2%)”). Body sentence underneath explains why the mix matters (`text-sm text-gray-700 dark:text-gray-300`).
-- Interaction: include a “View Insights” / “Hide Insights” toggle with chevron; when expanded, show insight blocks that mirror the Purchase Frequency pattern (bold subheading + Insight/Action sentences in `text-sm`).
+- Header line: `text-sm font-semibold` sentence that interprets the distribution (e.g., “0-6 months leads the list (47.2%)”). Body sentence underneath explains the marketing implication in plain language (`text-sm text-gray-700 dark:text-gray-300`).
+- Interaction: include a “View Insights” / “Hide Insights” toggle with chevron; when expanded, show insight blocks mirroring Purchase Frequency (bold subheading plus two `text-sm` lines with labels “What it means:” and “Send this:” to keep guidance action-oriented).
 - Logic: aggregate 0-3 + 3-6 months as “new”, 6-12 as “mid”, and 1-2 + 2+ years as “old”. Treat as balanced when the leading aggregate is within 5 percentage points of the runner-up and label accordingly. Skip rendering entirely when `totalSubscribers` is zero.
+- Scenario copy: New-dominant → emphasise onboarding, welcome storytelling, first/second-purchase nudges. Mid-dominant → focus on retention, loyalty proof, cross-sells. Old-dominant → highlight reactivation, preference refresh, sunset hygiene. Balanced → recommend maintaining a mix of onboarding, retention, and reactivation streams.
 
 ### Export controls
 

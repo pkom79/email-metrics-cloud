@@ -168,18 +168,24 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         const [leader, runnerUp] = sorted;
         const dominance = leader.percentage - (runnerUp?.percentage ?? 0);
 
-        const headline = dominance < 5 ? 'Balanced mix across cohorts' : `${leader.label} leads the distribution (${formatPercent(leader.percentage)})`;
-        const general = 'This chart shows how long people have been on your list. It helps you see whether your audience is weighted toward newer sign-ups, mid-age cohorts, or long-standing profiles. Each mix carries different priorities: acquisition, retention, or reactivation.';
+        const headline = dominance < 5 ? 'Audiences spread evenly across tenure' : `${leader.label} leads the list (${formatPercent(leader.percentage)})`;
+        const general = dominance < 5
+            ? 'No single lifespan dominates, so balance onboarding, retention, and reactivation programs.'
+            : leader.key === 'new'
+                ? 'Most subscribers are still settling in—guide them quickly toward first and second purchases.'
+                : leader.key === 'mid'
+                    ? 'Mid-tenure subscribers make up the core—keep them engaged with richer storytelling and value proof.'
+                    : 'Long-tenure profiles dominate—refresh them with reactivation touches and prune where necessary.';
 
         if (dominance < 5) {
             return {
-                headline: 'Balanced mix across cohorts',
+                headline,
                 body: general,
                 insights: [
                     {
-                        title: 'All cohorts share the load',
-                        insight: 'Healthy spread across tenure buckets.',
-                        action: 'Balance onboarding for new sign-ups with retention for mid-age profiles and reactivation for long-tenured subscribers.'
+                        title: 'Healthy spread across tenure buckets',
+                        insight: 'New, mid, and long-standing profiles are within a few points of each other.',
+                        action: 'Keep a steady drumbeat: welcome/onboarding for new joins, product education for mid-tenure, and gentle reactivation touchpoints for older cohorts.'
                     }
                 ]
             };
@@ -192,8 +198,8 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 insights: [
                     {
                         title: 'New cohorts dominate',
-                        insight: 'Strong growth, but most people are still early in their journey.',
-                        action: 'Prioritize onboarding flows and second-purchase nudges before momentum cools.'
+                        insight: 'Nearly all recent subscribers joined within the last six months.',
+                        action: 'Send structured onboarding: welcome flows, brand education, early social proof, and quick-win offers that drive first or second purchase.'
                     }
                 ]
             };
@@ -205,9 +211,9 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 body: general,
                 insights: [
                     {
-                        title: 'Mid-age cohort leads',
-                        insight: 'Profiles have spent enough time with the brand to judge value.',
-                        action: 'Lean into retention programs, cross-sells, and storytelling that deepens the relationship.'
+                        title: 'Mid-tenure profiles lead',
+                        insight: 'Many subscribers have experienced a few cycles with your brand.',
+                        action: 'Focus on lifecycle nurture: highlight use cases, community stories, loyalty perks, and intelligent cross-sells that keep them buying.'
                     }
                 ]
             };
@@ -218,9 +224,9 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             body: general,
             insights: [
                 {
-                    title: 'Older profiles are heavy',
-                    insight: 'Many subscribers have been on the list for a long time.',
-                    action: 'Invest in reactivation plays and review whether legacy profiles still align with current goals.'
+                    title: 'Long-tenure profiles dominate',
+                    insight: 'A large share of the list has been subscribed for 1+ years.',
+                    action: 'Prioritize reactivation drips, preference refreshes, and explicit value reminders. Consider sunset policies for profiles that stay cold.'
                 }
             ]
         };
@@ -650,8 +656,8 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                                     {lifetimeActionNote.insights.map((item, idx) => (
                                         <div key={`lifetime-insight-${idx}`} className="space-y-2">
                                             <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{item.title}</p>
-                                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"><span className="font-semibold text-gray-900 dark:text-gray-100">Insight:</span> {item.insight}</p>
-                                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"><span className="font-semibold text-gray-900 dark:text-gray-100">Action:</span> {item.action}</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"><span className="font-semibold text-gray-900 dark:text-gray-100">What it means:</span> {item.insight}</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"><span className="font-semibold text-gray-900 dark:text-gray-100">Send this:</span> {item.action}</p>
                                         </div>
                                     ))}
                                 </div>
