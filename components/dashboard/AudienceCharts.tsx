@@ -193,52 +193,52 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         if (dominance < 5) {
             body = 'No single age group dominates, so keep onboarding, retention, and reactivation running in parallel.';
         } else if (leader.key === 'new') {
-            body = 'Most of your list joined in the last six months. Guide them toward the first and second purchase while excitement is high.';
+            body = 'Use welcome journeys, proof, and early offers to turn fresh sign-ups into first and second buyers.';
         } else if (leader.key === 'mid') {
-            body = 'Six-to-twelve-month profiles are the core of your list. Show ongoing proof of value and make the next purchase effortless.';
+            body = 'Lean on loyalty stories, product education, and cross-sells to keep six-to-twelve-month profiles converting.';
         } else {
-            body = 'Many subscribers have been around for a year or more. Reactivate them with fresh offers and clean up profiles that stay cold.';
+            body = 'Make reactivation and list hygiene the priority when 1+ year subscribers outnumber newer cohorts.';
         }
 
         const segmentCopy: Record<string, { summary: string; ideas: string[] }> = {
             '0-3 months': {
-                summary: 'They are still getting to know the brand and may not have purchased yet.',
+                summary: 'Keep them inside a clear welcome track that introduces the brand promise and first purchase path.',
                 ideas: [
-                    'Send a paced welcome or onboarding series that explains the value prop',
-                    'Include first-purchase incentives or bundles tied to early milestones',
-                    'Share quick-start tips or content that helps them experience the product fast'
+                    'Use a paced welcome or onboarding series that reiterates value and social proof',
+                    'Offer a first-purchase incentive or starter bundle tied to an early milestone',
+                    'Share quick-start tips or setup content that helps them experience the product fast'
                 ]
             },
             '3-6 months': {
-                summary: 'They graduated from onboarding but are still fresh.',
+                summary: 'Transition them from onboarding into product education and next-step offers.',
                 ideas: [
-                    'Share customer stories or social proof that reinforces the decision to subscribe',
-                    'Promote complementary products or bundles that fit a second purchase',
-                    'Invite them to preference and profile updates so future messages stay relevant'
+                    'Share customer stories, reviews, or UGC that reinforces the decision to stay subscribed',
+                    'Promote add-ons or bundles that make sense as a second purchase',
+                    'Invite them to update preferences so future sends stay highly relevant'
                 ]
             },
             '6-12 months': {
-                summary: 'They know the brand and respond to proof of ongoing value.',
+                summary: 'They know the brand well and respond to proof of ongoing value.',
                 ideas: [
-                    'Highlight deeper use cases, how-to guides, or product refreshers',
-                    'Remind them about loyalty perks, referrals, or rewards they can earn',
-                    'Blend in surveys or feedback requests to uncover blockers to repeat purchases'
+                    'Highlight deeper use cases, how-to guides, or refreshed product benefits',
+                    'Remind them about loyalty perks, referrals, or rewards they can still unlock',
+                    'Blend in surveys or feedback requests to surface blockers before they drift'
                 ]
             },
             '1-2 years': {
-                summary: 'They have stayed for a long stretch and may slip without attention.',
+                summary: 'They have stuck around but need reasons to re-engage before they quiet down.',
                 ideas: [
-                    'Run light-touch win-back automations tied to seasonality or last purchase',
-                    'Offer exclusive content or insider previews that renew interest',
-                    'Ask for preferences or segment them into lower-frequency nurture tracks'
+                    'Run gentle win-back automations tied to seasonality or last purchase window',
+                    'Offer exclusive content or early access that renews excitement',
+                    'Ask for preference updates or move them into a lower-frequency nurture track'
                 ]
             },
             '2+ years': {
-                summary: 'They are legacy profiles who need clear reasons to stay on the list.',
+                summary: 'They are legacy profiles who need a strong reason to stay subscribed.',
                 ideas: [
-                    'Send reactivation campaigns with clear next steps and urgency',
-                    'Test sunset countdowns or “last chance to stay subscribed” messaging',
-                    'Review deliverability and suppress profiles that remain completely inactive'
+                    'Send reactivation campaigns with a clear next step and a concise timeline',
+                    'Test sunset countdowns or last-chance reminders before suppression',
+                    'Review deliverability and remove profiles that stay silent after reactivation tries'
                 ]
             }
         };
