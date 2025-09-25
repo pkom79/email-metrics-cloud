@@ -376,7 +376,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             } else {
                 summary = `Meaningful mid-tier contribution (${shareLabel}).`;
             }
-            summary += ` Range: ${seg.rangeText}.`;
+            summary += '.';
             return {
                 name: seg.name,
                 rangeText: seg.rangeText,
@@ -858,7 +858,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                                     <div key={`high-value-segment-${idx}`} className="space-y-2">
                                         <div className="flex items-center justify-between gap-2">
                                             <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{segment.name}</span>
-                                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{segment.customers.toLocaleString()} customers • {formatCurrency(segment.revenue)} • {formatPercent(segment.revenueShare)} of HV revenue</span>
+                                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{segment.customers.toLocaleString()} customers • {formatCurrency(segment.revenue)}</span>
                                         </div>
                                         <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{segment.summary}</p>
                                         {segment.ideas.length > 0 && (
