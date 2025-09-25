@@ -683,13 +683,13 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
 
         let summary: string;
         if (subscribedValueLead && engagedLeadSubscribed) {
-            summary = 'Subscribed cohorts lead on value and engagement, so keep scaling opt-in growth while coaching imports toward sign-up.';
+            summary = 'Subscribed profiles bring the most value and activity, so grow that opted-in list and invite imports to confirm.';
         } else if (notSubscribedVolumeLead) {
-            summary = 'Non subscribed imports dominate volume, so nudge them into consent and trim the quiet ones.';
+            summary = 'Not subscribed profiles make up most of the list, so ask them to opt in and remove the ones who stay quiet.';
         } else if (notSubscribedValueLead) {
-            summary = 'Revenue leans on non subscribed cohorts, so convert their spend into consent and prune inactive records.';
+            summary = 'Revenue leans on not subscribed profiles, so turn their spend into opt-ins and tidy up inactive records.';
         } else {
-            summary = 'Value and engagement are mixed across consent statuses, so balance opt-in pushes with regular clean-up of never-consented profiles.';
+            summary = 'Value and engagement are split, so run opt-in pushes and regular clean-up together.';
         }
 
         const describeShare = (pct: number) => {
@@ -704,18 +704,18 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         const timeframeDescriptor = periodLabel || 'the selected window';
 
         const firstSentenceLead = describeShare(subscribedValueShare);
-        sentences.push(`${firstSentenceLead} of the tracked revenue still comes from subscribed profiles during ${timeframeDescriptor}.`);
+        sentences.push(`${firstSentenceLead} of the revenue we track still comes from subscribed profiles during ${timeframeDescriptor}.`);
 
         if (engagedLeadSubscribed) {
-            sentences.push('They also open and click more in the recent window, which shows consented readers stay engaged.');
+            sentences.push('They also open and click more in the recent window, which shows opted-in readers stay engaged.');
         } else if (engagedLeadNotSubscribed) {
-            sentences.push('Non subscribed cohorts are opening slightly more right now, so recent imports still respond when nudged.');
+            sentences.push('Not subscribed contacts are opening slightly more right now, so recent imports still respond when nudged.');
         } else {
-            sentences.push('Recent engagement is similar for both groups, so consent status alone does not separate active from quiet profiles.');
+            sentences.push('Recent engagement looks similar for both groups, so consent status by itself does not tell you who is active.');
         }
 
         if (notSubscribedVolumeLead) {
-            sentences.push('Non subscribed profiles make up more of the list, which boosts reach but adds deliverability risk if they cool off.');
+            sentences.push('Not subscribed profiles make up more of the list, which boosts reach but adds deliverability risk if they cool off.');
         } else if (subscribedVolumeLead) {
             sentences.push('Subscribed profiles also dominate volume, so growth is anchored in permission-based channels.');
         } else {
@@ -724,11 +724,11 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
 
         let ltvSentence: string;
         if (subscribedValueMeaningful && notSubscribedValueMeaningful) {
-            ltvSentence = 'Both consent groups carry a meaningful slice of lifetime value, so protect the spend coming from each side.';
+            ltvSentence = 'Both groups account for a noticeable share of lifetime value, so keep their journeys active.';
         } else if (subscribedValueMeaningful) {
-            ltvSentence = 'Subscribed profiles hold a meaningful slice of lifetime value, so keep that audience warm.';
+            ltvSentence = 'Subscribed profiles account for a noticeable share of lifetime value, so keep that audience warm.';
         } else if (notSubscribedValueMeaningful) {
-            ltvSentence = 'Non subscribed contacts still carry real lifetime value, so move them toward consent before attrition sets in.';
+            ltvSentence = 'Not subscribed contacts still hold a noticeable slice of lifetime value, so move them toward opt-in before they drop off.';
         } else {
             ltvSentence = 'Lifetime value is spread thin across both consent groups right now.';
         }
@@ -736,15 +736,15 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
 
         let actionSentence: string;
         if (subscribedValueLead) {
-            actionSentence = 'Keep rewarding opt-in behaviour with welcome offers and loyalty perks, and give imports clear sign-up prompts plus a safety net of repermission emails.';
+            actionSentence = 'Offer simple welcome perks to reward subscribers, and send a short opt-in series to imports so they can join them.';
         } else if (notSubscribedValueLead) {
-            actionSentence = 'Map a consent upgrade journey for non subscribed buyers and remove the imports who stay quiet after a few nudges.';
+            actionSentence = 'Plan a quick opt-in path for not subscribed buyers and remove imports who stay silent after a few reminders.';
         } else {
-            actionSentence = 'Run opt-in incentives alongside quick clean-up passes that suppress non subscribed contacts who never engage.';
+            actionSentence = 'Run opt-in nudges alongside fast clean-up passes that pause emails to imports who never respond.';
         }
         sentences.push(actionSentence);
 
-        sentences.push('If the pattern flips—consented revenue shrinking while imports swell—pause heavy imports and rebuild opt-in signals before they erode deliverability.');
+        sentences.push('If imports start growing faster than revenue from subscribers, slow new imports and focus on collecting consent first.');
 
         const paragraph = sentences.slice(0, 6).join(' ');
 
