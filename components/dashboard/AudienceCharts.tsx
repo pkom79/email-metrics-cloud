@@ -36,6 +36,12 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         body: string;
         segments: PurchaseActionSegment[];
     }
+    interface LifetimeActionNote {
+        general: string;
+        scenarioTitle: string;
+        insight: string;
+        action: string;
+    }
 
     const purchaseFrequencyData = [
         { label: 'Never', value: audienceInsights.purchaseFrequency.never, percentage: (audienceInsights.purchaseFrequency.never / (audienceInsights.totalSubscribers || 1)) * 100 },
@@ -126,6 +132,89 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         { label: '1-2 years', value: audienceInsights.lifetimeDistribution.oneToTwoYears, percentage: (audienceInsights.lifetimeDistribution.oneToTwoYears / (audienceInsights.totalSubscribers || 1)) * 100 },
         { label: '2+ years', value: audienceInsights.lifetimeDistribution.twoYearsPlus, percentage: (audienceInsights.lifetimeDistribution.twoYearsPlus / (audienceInsights.totalSubscribers || 1)) * 100 }
     ];
+
+    const lifetimeActionNote = React.useMemo<LifetimeActionNote | null>(() => {
+        const total = audienceInsights.totalSubscribers || 0;
+        if (!total) return null;
+
+        const zeroTo3 = audienceInsights.lifetimeDistribution.zeroTo3Months || 0;
+        const threeTo6 = audienceInsights.lifetimeDistribution.threeTo6Months || 0;
+        const sixTo12 = audienceInsights.lifetimeDistribution.sixTo12Months || 0;
+        const oneToTwo = audienceInsights.lifetimeDistribution.oneToTwoYears || 0;
+        const twoPlus = audienceInsights.lifetimeDistribution.twoYearsPlus || 0;
+
+        const groups = [
+            {
+                key: 'new' as const,
+                label: '0-6 months',
+                count: zeroTo3 + threeTo6,
+                percentage: ((zeroTo3 + threeTo6) / total) * 100,
+            },
+            {
+                key: 'mid' as const,
+                label: '6-12 months',
+                count: sixTo12,
+                percentage: (sixTo12 / total) * 100,
+            },
+            {
+                key: 'old' as const,
+                label: '1+ years',
+                count: oneToTwo + twoPlus,
+                percentage: ((oneToTwo + twoPlus) / total) * 100,
+            }
+        ];
+
+        const sorted = [...groups].sort((a, b) => b.percentage - a.percentage);
+        const [leader, runnerUp] = sorted;
+        const dominance = leader.percentage - (runnerUp?.percentage ?? 0);
+
+        const general = 'This chart shows how long people have been on your list. It helps you see whether your audience is weighted toward newer sign-ups, mid-age cohorts, or long-standing profiles. Each mix carries different priorities: acquisition, retention, or reactivation.';
+
+        if (!leader) {
+            return {
+                general,
+                scenarioTitle: 'Audience distribution is unavailable',
+                insight: 'We could not determine which lifetime cohort is leading right now.',
+                action: 'Refresh your data to see where to focus onboarding, retention, or reactivation next.'
+            };
+        }
+
+        const formattedPercent = formatPercent(leader.percentage);
+
+        if (dominance < 5) {
+            return {
+                general,
+                scenarioTitle: 'Balanced mix across cohorts',
+                insight: 'Healthy spread across all cohorts.',
+                action: 'Balance efforts across onboarding, retention, and targeted reactivation to keep the distribution steady.'
+            };
+        }
+
+        if (leader.key === 'new') {
+            return {
+                general,
+                scenarioTitle: `${leader.label} leads the list (${formattedPercent})`,
+                insight: 'Strong growth, but most people are still early in their journey.',
+                action: 'Prioritize onboarding and campaigns that drive first or second purchases before momentum cools.'
+            };
+        }
+
+        if (leader.key === 'mid') {
+            return {
+                general,
+                scenarioTitle: `${leader.label} leads the list (${formattedPercent})`,
+                insight: 'Your list is built around profiles that have had time to experience your brand.',
+                action: 'Lean into retention flows, cross-sells, and stories that deepen the brand relationship.'
+            };
+        }
+
+        return {
+            general,
+            scenarioTitle: `${leader.label} leads the list (${formattedPercent})`,
+            insight: 'Many profiles have been on the list for a long time.',
+            action: 'Run reactivation campaigns and evaluate if older profiles still fit your goals.'
+        };
+    }, [audienceInsights.lifetimeDistribution.zeroTo3Months, audienceInsights.lifetimeDistribution.threeTo6Months, audienceInsights.lifetimeDistribution.sixTo12Months, audienceInsights.lifetimeDistribution.oneToTwoYears, audienceInsights.lifetimeDistribution.twoYearsPlus, audienceInsights.totalSubscribers]);
 
     // High-value customer segments (2x, 3x, 6x AOV of buyers)
     const highValueSegments = React.useMemo(() => {
@@ -511,6 +600,16 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                             </div>
                         ))}
                     </div>
+                    {lifetimeActionNote && (
+                        <div className="mt-6 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{lifetimeActionNote.general}</p>
+                            <div className="mt-4 space-y-2">
+                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{lifetimeActionNote.scenarioTitle}</p>
+                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"><span className="font-semibold text-gray-900 dark:text-gray-100">Insight:</span> {lifetimeActionNote.insight}</p>
+                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"><span className="font-semibold text-gray-900 dark:text-gray-100">Action:</span> {lifetimeActionNote.action}</p>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
