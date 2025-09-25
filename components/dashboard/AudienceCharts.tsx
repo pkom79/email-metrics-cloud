@@ -16,6 +16,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
     const [showLifetimeActionDetails, setShowLifetimeActionDetails] = React.useState(false);
     const [showHighValueActionDetails, setShowHighValueActionDetails] = React.useState(false);
     const [showInactiveActionDetails, setShowInactiveActionDetails] = React.useState(false);
+    const [showEngagementAgeDetails, setShowEngagementAgeDetails] = React.useState(false);
 
     const formatCurrency = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
     const formatPercent = (value: number) => {
@@ -64,6 +65,11 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         headline: string;
         body: string;
         segments: Array<{ name: string; rangeText: string; revenueShare: number; summary: string; ideas: string[]; customers: number; revenue: number }>;
+    }
+    interface EngagementAgeNote {
+        headline: string;
+        summary: string;
+        paragraph: string;
     }
 
     const purchaseFrequencyData = [
@@ -391,6 +397,160 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
 
         return { headline, body, segments };
     }, [highValueSegments]);
+
+    const engagementAgeNote = React.useMemo<EngagementAgeNote | null>(() => {
+        if (!hasData) return null;
+        const dm = dataManager;
+        const ageDefs = [
+            { key: '0_6m', label: '0–6 months', minM: 0, maxM: 5 },
+            { key: '6_12m', label: '6–12 months', minM: 6, maxM: 11 },
+            { key: '1_2y', label: '1–2 years', minM: 12, maxM: 23 },
+            { key: '2y_plus', label: '2+ years', minM: 24, maxM: Infinity },
+        ];
+
+        const anchor = (() => {
+            if (dateRange === 'custom' && customTo) {
+                const d = new Date(customTo + 'T23:59:59');
+                if (!isNaN(d.getTime())) return d;
+            }
+            if (referenceDate) {
+                const d = new Date(referenceDate);
+                if (!isNaN(d.getTime())) return d;
+            }
+            return dm.getLastEmailDate();
+        })();
+
+        if (!anchor) return null;
+
+        const diffMonths = (anchorDate: Date, start: Date) => {
+            let months = (anchorDate.getFullYear() - start.getFullYear()) * 12 + (anchorDate.getMonth() - start.getMonth());
+            if (anchorDate.getDate() < start.getDate()) months -= 1;
+            return Math.max(0, months);
+        };
+
+        const diffDays = (anchorDate: Date, last: Date) => {
+            const MS = 1000 * 60 * 60 * 24;
+            const a = new Date(anchorDate); a.setHours(0, 0, 0, 0);
+            const b = new Date(last); b.setHours(0, 0, 0, 0);
+            return Math.floor((a.getTime() - b.getTime()) / MS);
+        };
+
+        const buckets = ageDefs.map(def => ({
+            key: def.key,
+            label: def.label,
+            denom: 0,
+            neverCount: 0,
+            recentCount: 0,
+            deepCount: 0,
+        }));
+
+        subscribers.forEach(sub => {
+            const created = sub.profileCreated instanceof Date ? sub.profileCreated : null;
+            if (!created) return;
+            const ageMonths = diffMonths(anchor, created);
+            const def = ageDefs.find(a => ageMonths >= a.minM && ageMonths <= a.maxM);
+            if (!def) return;
+            const bucket = buckets.find(b => b.key === def.key);
+            if (!bucket) return;
+            bucket.denom += 1;
+
+            const lastOpen = sub.lastOpen instanceof Date ? sub.lastOpen : null;
+            const lastClick = sub.lastClick instanceof Date ? sub.lastClick : null;
+            const last = lastOpen && lastClick ? (lastOpen > lastClick ? lastOpen : lastClick) : (lastOpen || lastClick);
+            if (!last) {
+                bucket.neverCount += 1;
+                return;
+            }
+            const days = diffDays(anchor, last);
+            if (days <= 30) bucket.recentCount += 1;
+            if (days >= 120) bucket.deepCount += 1;
+        });
+
+        const total = buckets.reduce((sum, b) => sum + b.denom, 0);
+        if (total === 0) return null;
+
+        const metrics = buckets.map(b => ({
+            key: b.key,
+            label: b.label,
+            share: (b.denom / total) * 100,
+            neverPct: b.denom > 0 ? (b.neverCount / b.denom) * 100 : 0,
+            recentPct: b.denom > 0 ? (b.recentCount / b.denom) * 100 : 0,
+            deepPct: b.denom > 0 ? (b.deepCount / b.denom) * 100 : 0,
+        }));
+
+        const highNever = metrics.reduce((prev, curr) => (curr.neverPct > prev.neverPct ? curr : prev), metrics[0]);
+        const highRecent = metrics.reduce((prev, curr) => (curr.recentPct > prev.recentPct ? curr : prev), metrics[0]);
+        const weightedNever = metrics.reduce((sum, m) => sum + (m.share * m.neverPct) / 100, 0);
+        const weightedRecent = metrics.reduce((sum, m) => sum + (m.share * m.recentPct) / 100, 0);
+        const overallTrend = weightedRecent >= weightedNever ? 'recent_outpaces_never' : 'never_outpaces_recent';
+        const olderMetrics = metrics.filter(m => m.key === '1_2y' || m.key === '2y_plus');
+        const avgDeepOlder = olderMetrics.length ? olderMetrics.reduce((sum, m) => sum + m.deepPct, 0) / olderMetrics.length : 0;
+        const maxOlderNever = olderMetrics.length ? Math.max(...olderMetrics.map(m => m.neverPct)) : 0;
+
+        let maintenance: 'cleaned_old_inactives' | 'aging_dead_weight' | 'neutral';
+        if (olderMetrics.length && avgDeepOlder < 0.5 && maxOlderNever < 1) maintenance = 'cleaned_old_inactives';
+        else if (olderMetrics.length && (avgDeepOlder >= 1 || maxOlderNever >= 5)) maintenance = 'aging_dead_weight';
+        else maintenance = 'neutral';
+
+        let acquisition: 'broad_low_quality' | 'strong_new_cohorts' | 'mixed_new_cohorts';
+        const newBucket = metrics.find(m => m.key === '0_6m');
+        if (newBucket && highNever.key === '0_6m' && newBucket.neverPct >= 20) acquisition = 'broad_low_quality';
+        else if (newBucket && highRecent.key === '0_6m' && newBucket.recentPct >= 25 && newBucket.neverPct < 10) acquisition = 'strong_new_cohorts';
+        else acquisition = 'mixed_new_cohorts';
+
+        let stability: 'habits_form_by_month6' | 'midlife_drop' | 'steady_across_ages';
+        const sixTo12 = metrics.find(m => m.key === '6_12m');
+        const oneToTwo = metrics.find(m => m.key === '1_2y');
+        if (highRecent && (highRecent.key === '6_12m' || highRecent.key === '1_2y') && newBucket && Math.abs(highRecent.recentPct - newBucket.recentPct) <= 2) {
+            stability = 'habits_form_by_month6';
+        } else if (sixTo12 && oneToTwo && (sixTo12.recentPct - oneToTwo.recentPct) > 5) {
+            stability = 'midlife_drop';
+        } else {
+            stability = 'steady_across_ages';
+        }
+
+        let headline: string;
+        if (maintenance === 'cleaned_old_inactives') headline = 'Engagement quality strengthens with age, suggesting consistent list hygiene.';
+        else if (maintenance === 'aging_dead_weight') headline = 'Older cohorts show accumulated inactivity, pointing to list hygiene gaps.';
+        else if (acquisition === 'strong_new_cohorts') headline = 'New joiners are engaging well, indicating high-quality acquisition.';
+        else if (acquisition === 'broad_low_quality') headline = 'Many new profiles never engage, diluting list quality.';
+        else headline = 'Engagement varies by profile age, with mixed signals on quality.';
+
+        let summary: string;
+        if (acquisition === 'broad_low_quality') summary = 'Onboarding and habit-building for 0–6 month profiles should be the immediate focus.';
+        else if (maintenance === 'aging_dead_weight') summary = 'Reactivation and sunset programs for older cohorts need attention.';
+        else if (maintenance === 'cleaned_old_inactives') summary = 'Keep hygiene strong while investing in growth and nurture programs.';
+        else if (stability === 'habits_form_by_month6') summary = 'Maintain momentum in the six-to-twelve-month window to solidify habits.';
+        else if (stability === 'midlife_drop') summary = 'Re-energize one-to-two-year cohorts to prevent drop-off.';
+        else summary = 'Balance onboarding, nurture, and hygiene to keep cohorts aligned.';
+
+        const sentences: string[] = [];
+        if (acquisition === 'broad_low_quality') sentences.push('A high share of never-engaged profiles inside the first six months shows acquisition is broad but low intent.');
+        else if (acquisition === 'strong_new_cohorts') sentences.push('Early cohorts already interact, indicating acquisition brings in motivated subscribers.');
+        else sentences.push('New cohorts mix eager readers with quiet sign-ups, hinting at uneven acquisition quality.');
+
+        if (overallTrend === 'recent_outpaces_never') sentences.push('Across the whole list, recent interactions still outweigh the portion that never engages, so the channel retains momentum.');
+        else sentences.push('Across the whole list, never-engaged profiles outweigh recent opens, underscoring the need to tighten early nurture.');
+
+        if (maintenance === 'cleaned_old_inactives') sentences.push('Older age groups stay relatively clean, suggesting consistent suppression of dead weight.');
+        else if (maintenance === 'aging_dead_weight') sentences.push('Older cohorts store dormant addresses, signalling that hygiene work has lagged.');
+        else sentences.push('Older cohorts are neither especially clean nor especially cluttered, leaving room to tighten hygiene.');
+
+        if (stability === 'habits_form_by_month6') sentences.push('Engagement habits appear to form by the six-month mark and hold through the first year.');
+        else if (stability === 'midlife_drop') sentences.push('Engagement fades once profiles pass the one-year mark, showing habits require mid-life reinforcement.');
+        else sentences.push('Engagement stays fairly even as profiles age, avoiding dramatic swings.');
+
+        if (acquisition === 'broad_low_quality') sentences.push('Allocate extra effort to onboarding flows, welcome education, and early proof that encourages first actions.');
+        else if (maintenance === 'aging_dead_weight') sentences.push('Dedicate resources to reactivation and sunset campaigns so older cohorts either re-engage or exit gracefully.');
+        else if (stability === 'midlife_drop') sentences.push('Balance onboarding wins with programs that re-energize the one-to-two-year audience.');
+        else sentences.push('Distribute effort across welcome journeys, loyalty reinforcement, and recurring hygiene checks.');
+
+        sentences.push('If the pattern flips—strong early engagement but heavy inactivity later—it usually points to hygiene issues rather than acquisition, so keep watching these signals.');
+
+        const paragraph = sentences.slice(0, 5).join(' ');
+
+        return { headline, summary, paragraph };
+    }, [hasData, subscribers, dataManager, dateRange, customTo, referenceDate]);
 
     // Inactive segments
     interface InactiveSegmentDetail {
@@ -1026,6 +1186,32 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
 
             {/* Engagement by Tenure heatmap */}
             <EngagementByTenure subscribers={subscribers} dateRange={dateRange} customTo={customTo} />
+
+            {engagementAgeNote && (
+                <div className="mt-6 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex-1">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{engagementAgeNote.headline}</p>
+                            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{engagementAgeNote.summary}</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setShowEngagementAgeDetails(prev => !prev)}
+                            className="inline-flex items-center justify-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
+                            aria-expanded={showEngagementAgeDetails}
+                            aria-controls="engagement-age-action-note-details"
+                        >
+                            {showEngagementAgeDetails ? 'Hide Insights' : 'View Insights'}
+                            <ChevronDown className={`w-4 h-4 transition-transform ${showEngagementAgeDetails ? 'rotate-180' : ''}`} />
+                        </button>
+                    </div>
+                    {showEngagementAgeDetails && (
+                        <div id="engagement-age-action-note-details" className="mt-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                            {engagementAgeNote.paragraph}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Inactivity Revenue Drain (placed after Inactive Segments and heatmap) */}
             <InactivityRevenueDrain subscribers={subscribers} />

@@ -132,6 +132,13 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
   - 3x-6x AOV → early access, accelerated loyalty rewards, personalised recommendations.
   - 6x+ AOV → concierge outreach, surprise-and-delight gifts, invitation-only previews.
 
+#### Engagement by Profile Age Action Note
+- Placement: sits directly below the Engagement by Profile Age heatmap; same card shell as other action notes.
+- Header line: interpret the overall engagement health by age (use the rule priority: hygiene, then acquisition quality, then stability). Subline is a one-sentence focus reminder derived from the signals map.
+- Interaction: “View Insights” / “Hide Insights” toggle with chevron; expanded state shows a short 4–6 sentence paragraph (no bullets) that covers acquisition quality, list maintenance, where habits form or fade, recommended allocation, and a contrast reminder.
+- Data inputs: derive segments using the same age buckets (0–6m, 6–12m, 1–2y, 2+y) and engagement buckets (0–30d, 31–60d, 61–90d, 91–120d, 120+, Never). Do not restate raw percentages already shown on the chart.
+- Sentence templates: follow the rule set—headline priority order, subline mapping, paragraph sentences covering quality, maintenance, stability, focus, and contrast.
+
 ### Export controls
 
 ## Inline data links + tooltip (Segments)
