@@ -441,7 +441,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                                     aria-expanded={showPurchaseActionDetails}
                                     aria-controls="purchase-action-note-details"
                                 >
-                                    {showPurchaseActionDetails ? 'Hide guidance' : 'View guidance'}
+                                    {showPurchaseActionDetails ? 'Hide Purchase Frequency Distribution insights' : 'View Purchase Frequency Distribution insights'}
                                     <ChevronDown className={`w-4 h-4 transition-transform ${showPurchaseActionDetails ? 'rotate-180' : ''}`} />
                                 </button>
                             </div>
