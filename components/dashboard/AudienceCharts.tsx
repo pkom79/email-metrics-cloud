@@ -31,6 +31,11 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         caution?: string;
         ideas: string[];
     }
+    interface PurchaseActionNote {
+        headline: string;
+        body: string;
+        segments: PurchaseActionSegment[];
+    }
 
     const purchaseFrequencyData = [
         { label: 'Never', value: audienceInsights.purchaseFrequency.never, percentage: (audienceInsights.purchaseFrequency.never / (audienceInsights.totalSubscribers || 1)) * 100 },
@@ -40,7 +45,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         { label: '6+ Orders', value: audienceInsights.purchaseFrequency.sixPlus, percentage: (audienceInsights.purchaseFrequency.sixPlus / (audienceInsights.totalSubscribers || 1)) * 100 }
     ];
 
-    const purchaseActionNote = React.useMemo(() => {
+    const purchaseActionNote = React.useMemo<PurchaseActionNote | null>(() => {
         const total = audienceInsights.totalSubscribers || 0;
         if (!total) return null;
         const pf = audienceInsights.purchaseFrequency;
@@ -105,14 +110,12 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         }
 
         const adaptHeadline = `${dominant.label} leads the distribution (${formatPercent(dominant.percentage)})`;
+        const filteredSegments = segments.filter(segment => segment.count > 0 && segment.percentage > 0);
 
         return {
-            summary: 'Move each cohort to its next purchase by aligning nurture tracks to where they are in the order journey.',
-            segments,
-            adapt: {
-                headline: adaptHeadline,
-                body: adaptBody
-            }
+            headline: adaptHeadline,
+            body: adaptBody,
+            segments: filteredSegments
         };
     }, [audienceInsights.purchaseFrequency, audienceInsights.totalSubscribers]);
 
@@ -432,20 +435,27 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                     </div>
                     {purchaseActionNote && (
                         <div className="mt-6 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{purchaseActionNote.summary}</p>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPurchaseActionDetails(prev => !prev)}
-                                    className="inline-flex items-center justify-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
-                                    aria-expanded={showPurchaseActionDetails}
-                                    aria-controls="purchase-action-note-details"
-                                >
-                                    {showPurchaseActionDetails ? 'Hide Purchase Frequency Distribution insights' : 'View Purchase Frequency Distribution insights'}
-                                    <ChevronDown className={`w-4 h-4 transition-transform ${showPurchaseActionDetails ? 'rotate-180' : ''}`} />
-                                </button>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="flex-1">
+                                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{purchaseActionNote.headline}</p>
+                                    {purchaseActionNote.body && (
+                                        <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{purchaseActionNote.body}</p>
+                                    )}
+                                </div>
+                                {purchaseActionNote.segments.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPurchaseActionDetails(prev => !prev)}
+                                        className="inline-flex items-center justify-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
+                                        aria-expanded={showPurchaseActionDetails}
+                                        aria-controls="purchase-action-note-details"
+                                    >
+                                        {showPurchaseActionDetails ? 'Hide Insights' : 'View Insights'}
+                                        <ChevronDown className={`w-4 h-4 transition-transform ${showPurchaseActionDetails ? 'rotate-180' : ''}`} />
+                                    </button>
+                                )}
                             </div>
-                            {showPurchaseActionDetails && (
+                            {showPurchaseActionDetails && purchaseActionNote.segments.length > 0 && (
                                 <div id="purchase-action-note-details" className="mt-4 space-y-5">
                                     {purchaseActionNote.segments.map(segment => (
                                         <div key={segment.key} className="space-y-2">
@@ -467,11 +477,6 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                                             </div>
                                         </div>
                                     ))}
-                                    <div className="mt-6 border-t border-gray-200 dark:border-gray-800 pt-4">
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">How to adapt by distribution</p>
-                                        <p className="mt-2 text-sm font-semibold text-gray-900 dark:text-gray-100">{purchaseActionNote.adapt.headline}</p>
-                                        <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{purchaseActionNote.adapt.body}</p>
-                                    </div>
                                 </div>
                             )}
                         </div>
