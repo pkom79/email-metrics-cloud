@@ -5,6 +5,7 @@ import InfoTooltipIcon from '../InfoTooltipIcon';
 import InactivityRevenueDrain from './InactivityRevenueDrain';
 import EngagementByTenure from './EngagementByTenure';
 import { DataManager } from '../../lib/data/dataManager';
+import { getConsentSplitMetrics } from '../../lib/analytics/consentSplitMetrics';
 
 export default function AudienceCharts({ dateRange, granularity, customFrom, customTo, referenceDate }: { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; referenceDate?: Date }) {
     const dataManager = DataManager.getInstance();
@@ -17,6 +18,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
     const [showHighValueActionDetails, setShowHighValueActionDetails] = React.useState(false);
     const [showInactiveActionDetails, setShowInactiveActionDetails] = React.useState(false);
     const [showEngagementAgeDetails, setShowEngagementAgeDetails] = React.useState(false);
+    const [showConsentSplitDetails, setShowConsentSplitDetails] = React.useState(false);
 
     const formatCurrency = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
     const formatPercent = (value: number) => {
@@ -71,6 +73,13 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         summary: string;
         paragraph: string;
     }
+    interface ConsentSplitNote {
+        headline: string;
+        summary: string;
+        paragraph: string;
+    }
+
+    type ConsentGroupKey = 'Subscribed' | 'Not Subscribed';
 
     const purchaseFrequencyData = [
         { label: 'Never', value: audienceInsights.purchaseFrequency.never, percentage: (audienceInsights.purchaseFrequency.never / (audienceInsights.totalSubscribers || 1)) * 100 },
@@ -552,6 +561,183 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         return { headline, summary, paragraph };
     }, [hasData, subscribers, dataManager, dateRange, customTo, referenceDate]);
 
+    const consentSplitNote = React.useMemo<ConsentSplitNote | null>(() => {
+        if (!hasData) return null;
+        if (!subscribers.length) return null;
+
+        const safeDate = (value?: Date) => {
+            if (!value) return null;
+            const d = new Date(value);
+            return Number.isNaN(d.getTime()) ? null : d;
+        };
+
+        const anchorDate = safeDate(referenceDate) || safeDate(dataManager.getLastEmailDate()) || new Date();
+
+        const range = (() => {
+            try {
+                if (dateRange === 'custom' && customFrom && customTo) {
+                    return {
+                        start: new Date(`${customFrom}T00:00:00`),
+                        end: new Date(`${customTo}T23:59:59`)
+                    };
+                }
+                if (dateRange === 'all') {
+                    const createdDates = subscribers
+                        .map(sub => sub.profileCreated instanceof Date ? sub.profileCreated.getTime() : NaN)
+                        .filter(ts => !Number.isNaN(ts));
+                    if (!createdDates.length) return null;
+                    return { start: new Date(Math.min(...createdDates)), end: new Date(Math.max(...createdDates)) };
+                }
+                if (typeof dateRange === 'string' && dateRange.endsWith('d')) {
+                    const days = parseInt(dateRange.replace('d', ''), 10) || 30;
+                    const end = new Date(anchorDate);
+                    end.setHours(23, 59, 59, 999);
+                    const start = new Date(end);
+                    start.setDate(start.getDate() - days + 1);
+                    start.setHours(0, 0, 0, 0);
+                    return { start, end };
+                }
+                return null;
+            } catch {
+                return null;
+            }
+        })();
+
+        const filteredSubscribers = range
+            ? subscribers.filter(sub => {
+                const created = sub.profileCreated instanceof Date ? sub.profileCreated : null;
+                if (!created) return false;
+                return created >= range.start && created <= range.end;
+            })
+            : subscribers;
+
+        if (!filteredSubscribers.length) return null;
+
+        const periodLabel = (() => {
+            if (!range) return 'the selected window';
+            if (typeof dateRange === 'string' && dateRange.endsWith('d')) {
+                const days = parseInt(dateRange.replace('d', ''), 10) || 30;
+                return `profiles created in the last ${days} days`;
+            }
+            if (dateRange === 'custom' && customFrom && customTo) {
+                const from = new Date(`${customFrom}T00:00:00`).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+                const to = new Date(`${customTo}T00:00:00`).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+                return `profiles created between ${from} and ${to}`;
+            }
+            if (dateRange === 'all') {
+                return 'the full subscriber history';
+            }
+            const from = range.start.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+            const to = range.end.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+            return `profiles created between ${from} and ${to}`;
+        })();
+
+        const toMap = (groups: { key: ConsentGroupKey; value: number; sampleSize: number; percentOfGroup?: number | null }[]) => {
+            return groups.reduce<Record<ConsentGroupKey, { value: number; sampleSize: number; percent?: number }>>((acc, group) => {
+                acc[group.key] = { value: group.value || 0, sampleSize: group.sampleSize || 0, percent: group.percentOfGroup ?? undefined };
+                return acc;
+            }, {
+                Subscribed: { value: 0, sampleSize: 0 },
+                'Not Subscribed': { value: 0, sampleSize: 0 },
+            });
+        };
+
+        const countMap = toMap(getConsentSplitMetrics(filteredSubscribers, 'count', anchorDate).groups);
+        const revenueMap = toMap(getConsentSplitMetrics(filteredSubscribers, 'totalRevenue', anchorDate).groups);
+        const engagedMap = toMap(getConsentSplitMetrics(filteredSubscribers, 'engaged30', anchorDate).groups);
+
+        const subscribedCount = countMap.Subscribed.value;
+        const notSubscribedCount = countMap['Not Subscribed'].value;
+        const totalCount = subscribedCount + notSubscribedCount;
+
+        if (totalCount === 0) return null;
+
+        const subscribedRevenue = revenueMap.Subscribed.value;
+        const notSubscribedRevenue = revenueMap['Not Subscribed'].value;
+        const totalRevenue = subscribedRevenue + notSubscribedRevenue;
+
+        const subscribedVolumeShare = totalCount > 0 ? (subscribedCount / totalCount) * 100 : 0;
+        const notSubscribedVolumeShare = 100 - subscribedVolumeShare;
+        const subscribedValueShare = totalRevenue > 0 ? (subscribedRevenue / totalRevenue) * 100 : subscribedVolumeShare;
+        const notSubscribedValueShare = 100 - subscribedValueShare;
+
+        const subscribedEngaged = engagedMap.Subscribed.percent ?? 0;
+        const notSubscribedEngaged = engagedMap['Not Subscribed'].percent ?? 0;
+        const engagedDelta = subscribedEngaged - notSubscribedEngaged;
+
+        const valueDiff = subscribedValueShare - notSubscribedValueShare;
+        const volumeDiff = subscribedVolumeShare - notSubscribedVolumeShare;
+
+        const subscribedValueLead = valueDiff >= 5;
+        const notSubscribedValueLead = valueDiff <= -5;
+        const subscribedVolumeLead = volumeDiff >= 5;
+        const notSubscribedVolumeLead = volumeDiff <= -5;
+        const engagedLeadSubscribed = engagedDelta >= 2;
+        const engagedLeadNotSubscribed = engagedDelta <= -2;
+
+        const shareLabel = formatPercent(subscribedValueShare);
+        const headline = `Subscribed profiles drive ${shareLabel} of tracked revenue for ${periodLabel}.`;
+
+        let summary: string;
+        if (subscribedValueLead && engagedLeadSubscribed) {
+            summary = 'Subscribed cohorts lead on value and engagement, so keep scaling explicit-consent acquisition and deeper nurture journeys.';
+        } else if (notSubscribedVolumeLead) {
+            summary = 'Non subscribed imports dominate volume, so prioritize consent upgrades and routine hygiene sweeps.';
+        } else if (notSubscribedValueLead) {
+            summary = 'Revenue leans on non subscribed cohorts, so convert their spend into consented status before fatigue sets in.';
+        } else {
+            summary = 'Value and engagement are mixed across consent statuses, so balance opt-in growth with keeping non subscribed profiles responsive.';
+        }
+
+        const describeShare = (pct: number) => {
+            if (pct >= 65) return 'Most';
+            if (pct >= 55) return 'More than half';
+            if (pct >= 45) return 'Roughly half';
+            if (pct >= 35) return 'Less than half';
+            return 'A small slice';
+        };
+
+        const sentences: string[] = [];
+        const timeframeDescriptor = periodLabel || 'the selected window';
+
+        const firstSentenceLead = describeShare(subscribedValueShare);
+        sentences.push(`${firstSentenceLead} of tracked revenue comes from subscribed profiles across ${timeframeDescriptor}.`);
+
+        if (engagedLeadSubscribed) {
+            sentences.push('They also open and click more in the recent window, signalling stronger intent from consented audiences.');
+        } else if (engagedLeadNotSubscribed) {
+            sentences.push('Non subscribed cohorts post slightly higher recent engagement, showing imports still respond when nudged.');
+        } else {
+            sentences.push('Recent engagement rates stay comparable, so consent status alone does not separate active from quiet profiles.');
+        }
+
+        if (notSubscribedVolumeLead) {
+            sentences.push('However, non subscribed profiles make up a larger portion of the list, boosting reach but adding deliverability risk if they cool off.');
+        } else if (subscribedVolumeLead) {
+            sentences.push('Subscribed profiles also dominate volume, which keeps growth anchored in permission-based channels.');
+        } else {
+            sentences.push('Overall volume is fairly balanced between consented and imported cohorts.');
+        }
+
+        if (subscribedValueLead) {
+            sentences.push('Keep reinforcing opt-in experiences with welcome incentives, loyalty perks, and preference updates that reward subscribers for staying active.');
+        } else if (notSubscribedValueLead) {
+            sentences.push('Guide high-value imports through consent upgrade campaigns, social-proof landers, and personal outreach so their spend becomes compliant.');
+        } else {
+            sentences.push('Pair consent-growth campaigns with warm-up sequences for imports, nudging quiet profiles toward preference updates or soft repermission flows.');
+        }
+
+        sentences.push('If the pattern flips—consented revenue shrinking while imports swell—pause heavy imports and rebuild opt-in signals before they erode deliverability.');
+
+        const paragraph = sentences.slice(0, 5).join(' ');
+
+        return {
+            headline,
+            summary,
+            paragraph
+        };
+    }, [hasData, subscribers, dataManager, dateRange, customFrom, customTo, referenceDate]);
+
     // Inactive segments
     interface InactiveSegmentDetail {
         label: string;
@@ -822,6 +1008,31 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             <div className="mb-8">
                 {React.createElement(require('./SubscribedVsNotSubscribed').default, { dateRange, customFrom, customTo, referenceDate })}
             </div>
+            {consentSplitNote && (
+                <div className="mb-8 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex-1">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{consentSplitNote.headline}</p>
+                            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{consentSplitNote.summary}</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setShowConsentSplitDetails(prev => !prev)}
+                            className="inline-flex items-center justify-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
+                            aria-expanded={showConsentSplitDetails}
+                            aria-controls="consent-split-note-details"
+                        >
+                            {showConsentSplitDetails ? 'Hide Insights' : 'View Insights'}
+                            <ChevronDown className={`w-4 h-4 transition-transform ${showConsentSplitDetails ? 'rotate-180' : ''}`} />
+                        </button>
+                    </div>
+                    {showConsentSplitDetails && (
+                        <div id="consent-split-note-details" className="mt-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                            <p>{consentSplitNote.paragraph}</p>
+                        </div>
+                    )}
+                </div>
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-2 mb-4">
