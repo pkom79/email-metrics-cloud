@@ -1,6 +1,6 @@
 "use client";
-import React, { useMemo } from 'react';
-import { Moon, Info } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Moon, Info, ChevronDown } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import type { ProcessedSubscriber } from '../../lib/data/dataTypes';
 
@@ -33,15 +33,58 @@ export default function InactivityRevenueDrain({ subscribers }: Props) {
             }
         });
         const totalDormantClv = defs.reduce((s, b) => s + b.clv, 0);
-        return { defs, totalClv, totalDormantClv };
+        const dormantPct = totalClv > 0 ? (totalDormantClv / totalClv) * 100 : 0;
+        const bucketsWithShare = defs.map(def => ({
+            ...def,
+            dormantShare: totalDormantClv > 0 ? (def.clv / totalDormantClv) * 100 : 0,
+        }));
+        return { defs: bucketsWithShare, totalClv, totalDormantClv, dormantPct };
     }, [subscribers]);
 
     if (!buckets || buckets.totalClv === 0) return null;
 
-    const { defs, totalClv, totalDormantClv } = buckets;
+    const { defs, totalClv, totalDormantClv, dormantPct } = buckets;
     const maxShare = Math.max(...defs.map(b => b.clv), 1);
     const pct = (v: number) => ((v / totalClv) * 100).toFixed(v / totalClv * 100 >= 10 ? 1 : 2) + '%';
     const formatCurrency = (v: number) => '$' + Math.round(v).toLocaleString('en-US');
+
+    const majorityBucket = defs.reduce((prev, curr) => (curr.dormantShare > prev.dormantShare ? curr : prev), defs[0]);
+    const allBucketsSmall = defs.every(def => def.dormantShare < 2);
+    let summary = 'Run light reactivation and maintain conservative frequency.';
+    if (majorityBucket && (majorityBucket.key === '30_59' || majorityBucket.key === '60_89') && !allBucketsSmall) {
+        summary = 'Most inactive value sits in recently lapsed customers, making them the top priority for win-back.';
+    } else if (majorityBucket && (majorityBucket.key === '90_119' || majorityBucket.key === '120_plus') && !allBucketsSmall) {
+        summary = 'A large share of inactive value is older, meaning recovery is harder and list hygiene becomes critical.';
+    }
+    if (allBucketsSmall) {
+        summary = 'Inactive value is minimal, suggesting timely maintenance is in place.';
+    }
+
+    const headline = `Dormant profiles hold ${dormantPct.toFixed(dormantPct >= 10 ? 1 : 2)}% of historic CLV.`;
+
+    const paragraphSentences: string[] = [];
+    if (majorityBucket && (majorityBucket.key === '30_59' || majorityBucket.key === '60_89')) {
+        paragraphSentences.push('Dormant value is concentrated in the first ninety days of inactivity, which means the lost revenue is still fresh.');
+        paragraphSentences.push('That shape suggests quick nurture touches, reminders, and gentle offers can still pull these profiles back.');
+        paragraphSentences.push('Act quickly with light win-back journeys before inertia sets in.');
+        paragraphSentences.push('Because older buckets are smaller, you can maintain your existing hygiene cadence without drastic suppression.');
+        paragraphSentences.push('If the pattern were flipped and most value sat beyond ninety days, odds of recovery would drop and you would need stricter list pruning.');
+    } else if (majorityBucket && (majorityBucket.key === '90_119' || majorityBucket.key === '120_plus')) {
+        paragraphSentences.push('Dormant value piles up in the older inactivity buckets, indicating these customers have gone quiet for a long stretch.');
+        paragraphSentences.push('Win-back chances shrink the longer profiles sit inactive, so campaigns should combine stronger incentives with firm deadlines.');
+        paragraphSentences.push('Expect to retire a portion of this value through suppression if engagement does not improve.');
+        paragraphSentences.push('Meanwhile, keep recruiting healthier cohorts so future value does not stagnate in late buckets.');
+        paragraphSentences.push('If the pattern flips back toward recent inactivity, quick nudges will have a better chance of preserving revenue.');
+    } else {
+        paragraphSentences.push('Dormant value is spread thinly across inactivity buckets, so no single lapse window dominates.');
+        paragraphSentences.push('That distribution hints at steady maintenance routines that keep dead weight from stacking up.');
+        paragraphSentences.push('Maintain your cadence of light reactivation touches just in case, but avoid over-investing where little value is trapped.');
+        paragraphSentences.push('Continue monitoring the mix so a spike in early or late inactivity does not catch you off guard.');
+        paragraphSentences.push('If a future shift concentrates value in recent lapses, pivot resources toward fast win-back; if it drifts older, prepare for more aggressive hygiene.');
+    }
+    const paragraph = paragraphSentences.slice(0, 5).join(' ');
+
+    const [showDetails, setShowDetails] = useState(false);
 
     return (
         <div className="mt-6 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
@@ -94,6 +137,27 @@ export default function InactivityRevenueDrain({ subscribers }: Props) {
             <div className="mt-4 text-xs md:text-sm text-gray-500 dark:text-gray-400 flex flex-wrap gap-4">
                 <div><span className="font-medium text-gray-600 dark:text-gray-300">Total Historic CLV:</span> {formatCurrency(totalClv)}</div>
                 <div><span className="font-medium text-gray-600 dark:text-gray-300">Dormant Historic CLV:</span> {formatCurrency(totalDormantClv)} ({((totalDormantClv / totalClv) * 100).toFixed(1)}%)</div>
+            </div>
+            <div className="mt-6 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex-1">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{headline}</p>
+                        <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{summary}</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setShowDetails(prev => !prev)}
+                        className="inline-flex items-center justify-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
+                        aria-expanded={showDetails}
+                        aria-controls="dormant-rev-insights"
+                    >
+                        {showDetails ? 'Hide Insights' : 'View Insights'}
+                        <ChevronDown className={`w-4 h-4 transition-transform ${showDetails ? 'rotate-180' : ''}`} />
+                    </button>
+                </div>
+                {showDetails && (
+                    <p id="dormant-rev-insights" className="mt-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{paragraph}</p>
+                )}
             </div>
         </div>
     );
