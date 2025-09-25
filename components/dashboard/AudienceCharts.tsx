@@ -13,6 +13,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
     const hasData = subscribers.length > 0;
     const [showDeadWeightGuide, setShowDeadWeightGuide] = React.useState(false);
     const [showPurchaseActionDetails, setShowPurchaseActionDetails] = React.useState(false);
+    const [showLifetimeActionDetails, setShowLifetimeActionDetails] = React.useState(false);
 
     const formatCurrency = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
     const formatPercent = (value: number) => {
@@ -37,10 +38,9 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         segments: PurchaseActionSegment[];
     }
     interface LifetimeActionNote {
-        general: string;
-        scenarioTitle: string;
-        insight: string;
-        action: string;
+        headline: string;
+        body: string;
+        insights: Array<{ title: string; insight: string; action: string }>;
     }
 
     const purchaseFrequencyData = [
@@ -168,71 +168,95 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         const [leader, runnerUp] = sorted;
         const dominance = leader.percentage - (runnerUp?.percentage ?? 0);
 
+        const headline = dominance < 5 ? 'Balanced mix across cohorts' : `${leader.label} leads the distribution (${formatPercent(leader.percentage)})`;
         const general = 'This chart shows how long people have been on your list. It helps you see whether your audience is weighted toward newer sign-ups, mid-age cohorts, or long-standing profiles. Each mix carries different priorities: acquisition, retention, or reactivation.';
-
-        if (!leader) {
-            return {
-                general,
-                scenarioTitle: 'Audience distribution is unavailable',
-                insight: 'We could not determine which lifetime cohort is leading right now.',
-                action: 'Refresh your data to see where to focus onboarding, retention, or reactivation next.'
-            };
-        }
-
-        const formattedPercent = formatPercent(leader.percentage);
 
         if (dominance < 5) {
             return {
-                general,
-                scenarioTitle: 'Balanced mix across cohorts',
-                insight: 'Healthy spread across all cohorts.',
-                action: 'Balance efforts across onboarding, retention, and targeted reactivation to keep the distribution steady.'
+                headline: 'Balanced mix across cohorts',
+                body: general,
+                insights: [
+                    {
+                        title: 'All cohorts share the load',
+                        insight: 'Healthy spread across tenure buckets.',
+                        action: 'Balance onboarding for new sign-ups with retention for mid-age profiles and reactivation for long-tenured subscribers.'
+                    }
+                ]
             };
         }
 
         if (leader.key === 'new') {
             return {
-                general,
-                scenarioTitle: `${leader.label} leads the list (${formattedPercent})`,
-                insight: 'Strong growth, but most people are still early in their journey.',
-                action: 'Prioritize onboarding and campaigns that drive first or second purchases before momentum cools.'
+                headline,
+                body: general,
+                insights: [
+                    {
+                        title: 'New cohorts dominate',
+                        insight: 'Strong growth, but most people are still early in their journey.',
+                        action: 'Prioritize onboarding flows and second-purchase nudges before momentum cools.'
+                    }
+                ]
             };
         }
 
         if (leader.key === 'mid') {
             return {
-                general,
-                scenarioTitle: `${leader.label} leads the list (${formattedPercent})`,
-                insight: 'Your list is built around profiles that have had time to experience your brand.',
-                action: 'Lean into retention flows, cross-sells, and stories that deepen the brand relationship.'
+                headline,
+                body: general,
+                insights: [
+                    {
+                        title: 'Mid-age cohort leads',
+                        insight: 'Profiles have spent enough time with the brand to judge value.',
+                        action: 'Lean into retention programs, cross-sells, and storytelling that deepens the relationship.'
+                    }
+                ]
             };
         }
 
         return {
-            general,
-            scenarioTitle: `${leader.label} leads the list (${formattedPercent})`,
-            insight: 'Many profiles have been on the list for a long time.',
-            action: 'Run reactivation campaigns and evaluate if older profiles still fit your goals.'
+            headline,
+            body: general,
+            insights: [
+                {
+                    title: 'Older profiles are heavy',
+                    insight: 'Many subscribers have been on the list for a long time.',
+                    action: 'Invest in reactivation plays and review whether legacy profiles still align with current goals.'
+                }
+            ]
         };
     }, [audienceInsights.lifetimeDistribution.zeroTo3Months, audienceInsights.lifetimeDistribution.threeTo6Months, audienceInsights.lifetimeDistribution.sixTo12Months, audienceInsights.lifetimeDistribution.oneToTwoYears, audienceInsights.lifetimeDistribution.twoYearsPlus, audienceInsights.totalSubscribers]);
 
-    // High-value customer segments (2x, 3x, 6x AOV of buyers)
+    // High-value customer segments (exclusive bins: 2x–<3x, 3x–<6x, 6x+ of buyer AOV)
     const highValueSegments = React.useMemo(() => {
-        if (!hasData) return [] as { label: string; threshold: number; customers: number; revenue: number; revenuePercentage: number }[];
+        if (!hasData) return [] as { label: string; customers: number; revenue: number; revenuePercentage: number }[];
         const aov = audienceInsights.avgClvBuyers;
+        if (!aov || aov <= 0) {
+            // Return labeled, zeroed tiers without attempting to bucket
+            const t2 = 0, t3 = 0, t6 = 0;
+            return [
+                { label: `2x–<3x AOV (${formatCurrency(t2)}–<${formatCurrency(t3)})`, customers: 0, revenue: 0, revenuePercentage: 0 },
+                { label: `3x–<6x AOV (${formatCurrency(t3)}–<${formatCurrency(t6)})`, customers: 0, revenue: 0, revenuePercentage: 0 },
+                { label: `6x+ AOV (${formatCurrency(t6)}+)`, customers: 0, revenue: 0, revenuePercentage: 0 },
+            ];
+        }
+        const t2 = aov * 2;
+        const t3 = aov * 3;
+        const t6 = aov * 6;
         const segments = [
-            { label: `2x AOV (${formatCurrency(aov * 2)}+)`, threshold: aov * 2, customers: 0, revenue: 0, revenuePercentage: 0 },
-            { label: `3x AOV (${formatCurrency(aov * 3)}+)`, threshold: aov * 3, customers: 0, revenue: 0, revenuePercentage: 0 },
-            { label: `6x AOV (${formatCurrency(aov * 6)}+)`, threshold: aov * 6, customers: 0, revenue: 0, revenuePercentage: 0 },
+            { label: `2x–<3x AOV (${formatCurrency(t2)}–<${formatCurrency(t3)})`, customers: 0, revenue: 0, revenuePercentage: 0 },
+            { label: `3x–<6x AOV (${formatCurrency(t3)}–<${formatCurrency(t6)})`, customers: 0, revenue: 0, revenuePercentage: 0 },
+            { label: `6x+ AOV (${formatCurrency(t6)}+)`, customers: 0, revenue: 0, revenuePercentage: 0 },
         ];
         let totalBuyerRevenue = 0;
         subscribers.forEach(s => { const h = (s.historicClv ?? s.totalClv) || 0; if (s.isBuyer && h > 0) totalBuyerRevenue += h; });
-        subscribers.forEach(s => {
-            if (s.isBuyer) {
-                const h = (s.historicClv ?? s.totalClv) || 0;
-                if (h > 0) segments.forEach(seg => { if (h >= seg.threshold) { seg.customers++; seg.revenue += h; } });
-            }
-        });
+        for (const s of subscribers) {
+            if (!s.isBuyer) continue;
+            const h = (s.historicClv ?? s.totalClv) || 0;
+            if (h <= 0) continue;
+            if (h >= t6) { segments[2].customers++; segments[2].revenue += h; }
+            else if (h >= t3) { segments[1].customers++; segments[1].revenue += h; }
+            else if (h >= t2) { segments[0].customers++; segments[0].revenue += h; }
+        }
         segments.forEach(seg => { seg.revenuePercentage = totalBuyerRevenue > 0 ? (seg.revenue / totalBuyerRevenue) * 100 : 0; });
         return segments;
     }, [hasData, audienceInsights.avgClvBuyers, subscribers]);
@@ -602,12 +626,35 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                     </div>
                     {lifetimeActionNote && (
                         <div className="mt-6 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{lifetimeActionNote.general}</p>
-                            <div className="mt-4 space-y-2">
-                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{lifetimeActionNote.scenarioTitle}</p>
-                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"><span className="font-semibold text-gray-900 dark:text-gray-100">Insight:</span> {lifetimeActionNote.insight}</p>
-                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"><span className="font-semibold text-gray-900 dark:text-gray-100">Action:</span> {lifetimeActionNote.action}</p>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="flex-1">
+                                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{lifetimeActionNote.headline}</p>
+                                    <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{lifetimeActionNote.body}</p>
+                                </div>
+                                {lifetimeActionNote.insights.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowLifetimeActionDetails(prev => !prev)}
+                                        className="inline-flex items-center justify-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
+                                        aria-expanded={showLifetimeActionDetails}
+                                        aria-controls="lifetime-action-note-details"
+                                    >
+                                        {showLifetimeActionDetails ? 'Hide Insights' : 'View Insights'}
+                                        <ChevronDown className={`w-4 h-4 transition-transform ${showLifetimeActionDetails ? 'rotate-180' : ''}`} />
+                                    </button>
+                                )}
                             </div>
+                            {showLifetimeActionDetails && lifetimeActionNote.insights.length > 0 && (
+                                <div id="lifetime-action-note-details" className="mt-4 space-y-4">
+                                    {lifetimeActionNote.insights.map((item, idx) => (
+                                        <div key={`lifetime-insight-${idx}`} className="space-y-2">
+                                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{item.title}</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"><span className="font-semibold text-gray-900 dark:text-gray-100">Insight:</span> {item.insight}</p>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed"><span className="font-semibold text-gray-900 dark:text-gray-100">Action:</span> {item.action}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

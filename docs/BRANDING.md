@@ -113,10 +113,10 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Data guardrail: hide the entire note when `totalSubscribers` is zero so empty accounts do not show placeholder messaging.
 
 #### Audience Lifetime Action Note
-- Placement: sits directly under the Audience Lifetime chart inside the existing card, using the standard action-note shell (`mt-6`, bordered, rounded-xl, padded).
-- Leading copy: keep the general explanation sentence visible at all times in `text-sm font-semibold text-gray-900 dark:text-gray-100` so users remember what the chart represents.
-- Scenario block: below the general line, show a `text-sm font-semibold` headline with the dominant cohort (e.g., “0-6 months leads the list (47.2%)”) unless the mix is balanced, in which case use “Balanced mix across cohorts”. Insight and Action lines follow as `text-sm text-gray-700 dark:text-gray-300` paragraphs with bold labels (`Insight:`, `Action:`).
-- Logic: aggregate 0-3 + 3-6 months as “new”, 6-12 as “mid”, and 1-2 + 2+ years as “old”. Treat the distribution as balanced when the leading aggregate is within 5 percentage points of the runner-up. Skip rendering entirely when `totalSubscribers` is zero.
+- Placement: sits directly under the Audience Lifetime chart inside the existing card, using the same action-note shell and hierarchy as Purchase Frequency (`mt-6`, bordered, rounded-xl, padded).
+- Header: single-line headline summarising the dominant lifetime cohort (e.g., “0-6 months leads the distribution (47.2%)”). Body sentence underneath explains why the mix matters (`text-sm text-gray-700 dark:text-gray-300`).
+- Interaction: include a “View Insights” / “Hide Insights” toggle with chevron; when expanded, show insight blocks that mirror the Purchase Frequency pattern (bold subheading + Insight/Action sentences in `text-sm`).
+- Logic: aggregate 0-3 + 3-6 months as “new”, 6-12 as “mid”, and 1-2 + 2+ years as “old”. Treat as balanced when the leading aggregate is within 5 percentage points of the runner-up and label accordingly. Skip rendering entirely when `totalSubscribers` is zero.
 
 ### Export controls
 
