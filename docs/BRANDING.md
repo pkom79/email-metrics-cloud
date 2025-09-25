@@ -119,6 +119,19 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Logic: aggregate 0-3 + 3-6 months as “new”, 6-12 as “mid”, and 1-2 + 2+ years as “old”. Treat as balanced when the leading aggregate is within 5 percentage points of the runner-up and label accordingly. Skip rendering entirely when `totalSubscribers` is zero.
 - Scenario copy: New-dominant → emphasise onboarding, welcome storytelling, first/second-purchase nudges. Mid-dominant → focus on retention, loyalty proof, cross-sells. Old-dominant → highlight reactivation, preference refresh, sunset hygiene. Balanced → recommend maintaining a mix of onboarding, retention, and reactivation streams.
 
+#### High-Value Customer Segments Action Note
+- Placement: sits beneath the High-Value Customer Segments card using the same action-note shell (`mt-6`, bordered, rounded-xl, padded).
+- Header line: “High-value customers generate {{total_share}} of total revenue.” (use `formatPercent` on combined high-value revenue share). Subline adapts per distribution:
+  - Single tier ahead by ≥2 pp → “Prioritize moving customers up from {{top.name}} while protecting {{smallest.name}} with personal recognition.”
+  - Top two tiers within 2 pp → “Balance lift efforts across tiers and protect {{smallest.name}} with personal recognition.”
+  - 6x+ represents ≥1/3 of the combined share → “Anchor a VIP track for 6x+ AOV alongside lift programs for the lower tiers.”
+- Interaction: reuse the “View Insights” / “Hide Insights” toggle; expanded state lists each tier with bold subheading, a share summary (“Largest…”, “Meaningful…”, etc.) plus “Range: …” and a `Campaign ideas` list of three bullets aligned to that tier.
+- Logic: bucket customers exclusively into 2x-3x, 3x-6x, and 6x+ AOV ranges. Determine “largest”, “smallest”, or “comparable” using revenue share inside the high-value group (2 pp tolerance). Append the formatted range text used in the chart.
+- Campaign idea templates:
+  - 2x-3x AOV → spend-threshold offers, bundles/multi-packs, add-on upsells.
+  - 3x-6x AOV → early access, accelerated loyalty rewards, personalised recommendations.
+  - 6x+ AOV → concierge outreach, surprise-and-delight gifts, invitation-only previews.
+
 ### Export controls
 
 ## Inline data links + tooltip (Segments)

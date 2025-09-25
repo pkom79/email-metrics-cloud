@@ -14,6 +14,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
     const [showDeadWeightGuide, setShowDeadWeightGuide] = React.useState(false);
     const [showPurchaseActionDetails, setShowPurchaseActionDetails] = React.useState(false);
     const [showLifetimeActionDetails, setShowLifetimeActionDetails] = React.useState(false);
+    const [showHighValueActionDetails, setShowHighValueActionDetails] = React.useState(false);
 
     const formatCurrency = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
     const formatPercent = (value: number) => {
@@ -48,6 +49,20 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         headline: string;
         body: string;
         segments: LifetimeSegmentDetail[];
+    }
+    interface HighValueSegmentDetail {
+        label: string;
+        name: string;
+        rangeText: string;
+        customers: number;
+        revenue: number;
+        revenueShare: number;
+        revenueShareOfList: number;
+    }
+    interface HighValueActionNote {
+        headline: string;
+        body: string;
+        segments: Array<{ name: string; rangeText: string; revenueShare: number; summary: string; ideas: string[]; customers: number; revenue: number }>;
     }
 
     const purchaseFrequencyData = [
@@ -265,18 +280,17 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
     }, [lifetimeData, audienceInsights.lifetimeDistribution.zeroTo3Months, audienceInsights.lifetimeDistribution.threeTo6Months, audienceInsights.lifetimeDistribution.sixTo12Months, audienceInsights.lifetimeDistribution.oneToTwoYears, audienceInsights.lifetimeDistribution.twoYearsPlus, audienceInsights.totalSubscribers]);
 
     // High-value customer segments (exclusive bins: 2x–<3x, 3x–<6x, 6x+ of buyer AOV) with buyer-share and list-share revenue percentages
-    const highValueSegments = React.useMemo(() => {
-        type Seg = { label: string; customers: number; revenue: number; revenuePercentage: number; revenuePercentageOfList: number };
-        if (!hasData) return [] as Seg[];
+    const highValueSegments = React.useMemo<HighValueSegmentDetail[]>(() => {
+        if (!hasData) return [] as HighValueSegmentDetail[];
         const aov = audienceInsights.avgClvBuyers;
         const totalBuyerRevenue = subscribers.reduce((acc, s) => acc + ((s.isBuyer ? ((s.historicClv ?? s.totalClv) || 0) : 0)), 0);
         const totalListRevenue = subscribers.reduce((acc, s) => acc + (((s.historicClv ?? s.totalClv) || 0)), 0);
         if (!aov || aov <= 0) {
             const t2 = 0, t3 = 0, t6 = 0;
             return [
-                { label: `2x–<3x AOV (${formatCurrency(t2)}–<${formatCurrency(t3)})`, customers: 0, revenue: 0, revenuePercentage: 0, revenuePercentageOfList: 0 },
-                { label: `3x–<6x AOV (${formatCurrency(t3)}–<${formatCurrency(t6)})`, customers: 0, revenue: 0, revenuePercentage: 0, revenuePercentageOfList: 0 },
-                { label: `6x+ AOV (${formatCurrency(t6)}+)`, customers: 0, revenue: 0, revenuePercentage: 0, revenuePercentageOfList: 0 },
+                { label: `2x–<3x AOV (${formatCurrency(t2)}–<${formatCurrency(t3)})`, name: '2x-3x AOV', rangeText: `${formatCurrency(t2)}–<${formatCurrency(t3)}`, customers: 0, revenue: 0, revenueShare: 0, revenueShareOfList: 0 },
+                { label: `3x–<6x AOV (${formatCurrency(t3)}–<${formatCurrency(t6)})`, name: '3x-6x AOV', rangeText: `${formatCurrency(t3)}–<${formatCurrency(t6)}`, customers: 0, revenue: 0, revenueShare: 0, revenueShareOfList: 0 },
+                { label: `6x+ AOV (${formatCurrency(t6)}+)`, name: '6x+ AOV', rangeText: `${formatCurrency(t6)}+`, customers: 0, revenue: 0, revenueShare: 0, revenueShareOfList: 0 },
             ];
         }
         const t2 = aov * 2, t3 = aov * 3, t6 = aov * 6;
@@ -284,10 +298,10 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         const fromCents = (c: number) => c / 100;
         const t3Minus = fromCents(Math.max(0, toCents(t3) - 1));
         const t6Minus = fromCents(Math.max(0, toCents(t6) - 1));
-        const segments: Seg[] = [
-            { label: `2x-3x AOV (${formatCurrency(t2)}–${formatCurrency(t3Minus)})`, customers: 0, revenue: 0, revenuePercentage: 0, revenuePercentageOfList: 0 },
-            { label: `3x-6x AOV (${formatCurrency(t3)}–${formatCurrency(t6Minus)})`, customers: 0, revenue: 0, revenuePercentage: 0, revenuePercentageOfList: 0 },
-            { label: `6x+ AOV (${formatCurrency(t6)}+)`, customers: 0, revenue: 0, revenuePercentage: 0, revenuePercentageOfList: 0 },
+        const segments: HighValueSegmentDetail[] = [
+            { label: `2x-3x AOV (${formatCurrency(t2)}–${formatCurrency(t3Minus)})`, name: '2x-3x AOV', rangeText: `${formatCurrency(t2)}–${formatCurrency(t3Minus)}`, customers: 0, revenue: 0, revenueShare: 0, revenueShareOfList: 0 },
+            { label: `3x-6x AOV (${formatCurrency(t3)}–${formatCurrency(t6Minus)})`, name: '3x-6x AOV', rangeText: `${formatCurrency(t3)}–${formatCurrency(t6Minus)}`, customers: 0, revenue: 0, revenueShare: 0, revenueShareOfList: 0 },
+            { label: `6x+ AOV (${formatCurrency(t6)}+)`, name: '6x+ AOV', rangeText: `${formatCurrency(t6)}+`, customers: 0, revenue: 0, revenueShare: 0, revenueShareOfList: 0 },
         ];
         for (const s of subscribers) {
             if (!s.isBuyer) continue;
@@ -298,11 +312,84 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             else if (h >= t2) { segments[0].customers++; segments[0].revenue += h; }
         }
         segments.forEach(seg => {
-            seg.revenuePercentage = totalBuyerRevenue > 0 ? (seg.revenue / totalBuyerRevenue) * 100 : 0;
-            seg.revenuePercentageOfList = totalListRevenue > 0 ? (seg.revenue / totalListRevenue) * 100 : 0;
+            seg.revenueShare = totalBuyerRevenue > 0 ? (seg.revenue / totalBuyerRevenue) * 100 : 0;
+            seg.revenueShareOfList = totalListRevenue > 0 ? (seg.revenue / totalListRevenue) * 100 : 0;
         });
         return segments;
     }, [hasData, audienceInsights.avgClvBuyers, subscribers]);
+
+    const highValueActionNote = React.useMemo<HighValueActionNote | null>(() => {
+        if (!highValueSegments.length) return null;
+        const totalShare = highValueSegments.reduce((sum, seg) => sum + seg.revenueShareOfList, 0);
+        const formatShare = (value: number) => formatPercent(value);
+        const headline = `High-value customers generate ${formatShare(totalShare)} of total revenue.`;
+
+        const sortedByShare = [...highValueSegments].sort((a, b) => b.revenueShare - a.revenueShare);
+        const top = sortedByShare[0];
+        const second = sortedByShare[1];
+        const smallest = sortedByShare[sortedByShare.length - 1];
+        const diffTop = top && second ? top.revenueShare - second.revenueShare : 0;
+        const sixPlus = highValueSegments.find(seg => seg.name === '6x+ AOV');
+        const sixPlusDominant = sixPlus ? sixPlus.revenueShareOfList >= (totalShare / 3) : false;
+
+        let body: string;
+        if (sixPlusDominant) {
+            body = 'Anchor a VIP track for 6x+ AOV alongside lift programs for the lower tiers.';
+        } else if (diffTop < 2) {
+            body = `Balance lift efforts across tiers and protect ${smallest.name} with personal recognition.`;
+        } else {
+            body = `Prioritize moving customers up from ${top.name} while protecting ${smallest.name} with personal recognition.`;
+        }
+
+        const ideaMap: Record<string, string[]> = {
+            '2x-3x AOV': [
+                'Promote spend-threshold offers that unlock bonuses or free gifts',
+                'Bundle complementary products or multi-packs to grow basket size',
+                'Suggest add-on upsells after checkout to increase order value'
+            ],
+            '3x-6x AOV': [
+                'Offer early access to launches or limited runs',
+                'Accelerate loyalty rewards or tier upgrades to keep them active',
+                'Deliver personalised product recommendation emails tuned to their history'
+            ],
+            '6x+ AOV': [
+                'Schedule concierge-style outreach or account manager check-ins',
+                'Surprise with thank-you gifts or exclusive merch drops',
+                'Invite them to invitation-only previews or advisory moments'
+            ]
+        };
+
+        const topShare = top?.revenueShare ?? 0;
+        const minShare = smallest?.revenueShare ?? 0;
+
+        const segments = highValueSegments.map(seg => {
+            const share = seg.revenueShare;
+            const comparable = highValueSegments.some(other => other !== seg && Math.abs(share - other.revenueShare) < 2);
+            let summary: string;
+            const shareLabel = formatPercent(share);
+            if (comparable) {
+                summary = `Comparable to other tiers (${shareLabel}).`;
+            } else if (share === topShare && diffTop >= 2) {
+                summary = `Largest share of high-value revenue (${shareLabel}).`;
+            } else if (share === minShare) {
+                summary = `Smallest share (${shareLabel}); individual spend is high but scale is limited.`;
+            } else {
+                summary = `Meaningful mid-tier contribution (${shareLabel}).`;
+            }
+            summary += ` Range: ${seg.rangeText}.`;
+            return {
+                name: seg.name,
+                rangeText: seg.rangeText,
+                revenueShare: seg.revenueShare,
+                summary,
+                ideas: ideaMap[seg.name] || [],
+                customers: seg.customers,
+                revenue: seg.revenue
+            };
+        });
+
+        return { headline, body, segments };
+    }, [highValueSegments]);
 
     // Inactive segments
     const inactiveSegments = React.useMemo(() => {
@@ -737,14 +824,59 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                         <div key={seg.label}>
                             <div className="flex items-center justify-between mb-1">
                                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{seg.label}</span>
-                                <span className="text-sm text-gray-900 dark:text-gray-100">{seg.customers.toLocaleString()} customers • {formatCurrency(seg.revenue)} revenue • {formatPercent(seg.revenuePercentageOfList)} of total revenue</span>
+                                <span className="text-sm text-gray-900 dark:text-gray-100">{seg.customers.toLocaleString()} customers • {formatCurrency(seg.revenue)} revenue • {formatPercent(seg.revenueShareOfList)} of total revenue</span>
                             </div>
                             <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-2 overflow-hidden">
-                                <div className="h-full bg-gradient-to-r from-purple-500 to-purple-600 rounded-full transition-all duration-500" style={{ width: `${seg.revenuePercentageOfList}%` }} />
+                                <div className="h-full bg-gradient-to-r from-purple-500 to-purple-600 rounded-full transition-all duration-500" style={{ width: `${seg.revenueShareOfList}%` }} />
                             </div>
                         </div>
                     ))}
                 </div>
+                {highValueActionNote && (
+                    <div className="mt-6 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="flex-1">
+                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{highValueActionNote.headline}</p>
+                                <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{highValueActionNote.body}</p>
+                            </div>
+                            {highValueActionNote.segments.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowHighValueActionDetails(prev => !prev)}
+                                    className="inline-flex items-center justify-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
+                                    aria-expanded={showHighValueActionDetails}
+                                    aria-controls="high-value-action-note-details"
+                                >
+                                    {showHighValueActionDetails ? 'Hide Insights' : 'View Insights'}
+                                    <ChevronDown className={`w-4 h-4 transition-transform ${showHighValueActionDetails ? 'rotate-180' : ''}`} />
+                                </button>
+                            )}
+                        </div>
+                        {showHighValueActionDetails && highValueActionNote.segments.length > 0 && (
+                            <div id="high-value-action-note-details" className="mt-4 space-y-5">
+                                {highValueActionNote.segments.map((segment, idx) => (
+                                    <div key={`high-value-segment-${idx}`} className="space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{segment.name}</span>
+                                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{segment.customers.toLocaleString()} customers • {formatCurrency(segment.revenue)} • {formatPercent(segment.revenueShare)} of HV revenue</span>
+                                        </div>
+                                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{segment.summary}</p>
+                                        {segment.ideas.length > 0 && (
+                                            <div className="pt-1">
+                                                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Campaign ideas</p>
+                                                <ul className="mt-1 list-disc list-inside space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                                                    {segment.ideas.map((idea, ideaIdx) => (
+                                                        <li key={`hv-idea-${idx}-${ideaIdx}`}>{idea}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Inactive Segments */}
