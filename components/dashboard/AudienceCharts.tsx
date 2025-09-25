@@ -678,15 +678,18 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         const shareLabel = formatPercent(subscribedValueShare);
         const headline = `Subscribed profiles drive ${shareLabel} of tracked revenue for ${periodLabel}.`;
 
+        const subscribedValueMeaningful = subscribedValueShare >= 10;
+        const notSubscribedValueMeaningful = notSubscribedValueShare >= 10;
+
         let summary: string;
         if (subscribedValueLead && engagedLeadSubscribed) {
-            summary = 'Subscribed cohorts lead on value and engagement, so keep scaling explicit-consent acquisition and deeper nurture journeys.';
+            summary = 'Subscribed cohorts lead on value and engagement, so keep scaling opt-in growth while coaching imports toward sign-up.';
         } else if (notSubscribedVolumeLead) {
-            summary = 'Non subscribed imports dominate volume, so prioritize consent upgrades and routine hygiene sweeps.';
+            summary = 'Non subscribed imports dominate volume, so nudge them into consent and trim the quiet ones.';
         } else if (notSubscribedValueLead) {
-            summary = 'Revenue leans on non subscribed cohorts, so convert their spend into consented status before fatigue sets in.';
+            summary = 'Revenue leans on non subscribed cohorts, so convert their spend into consent and prune inactive records.';
         } else {
-            summary = 'Value and engagement are mixed across consent statuses, so balance opt-in growth with keeping non subscribed profiles responsive.';
+            summary = 'Value and engagement are mixed across consent statuses, so balance opt-in pushes with regular clean-up of never-consented profiles.';
         }
 
         const describeShare = (pct: number) => {
@@ -701,35 +704,49 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         const timeframeDescriptor = periodLabel || 'the selected window';
 
         const firstSentenceLead = describeShare(subscribedValueShare);
-        sentences.push(`${firstSentenceLead} of tracked revenue comes from subscribed profiles across ${timeframeDescriptor}.`);
+        sentences.push(`${firstSentenceLead} of the tracked revenue still comes from subscribed profiles during ${timeframeDescriptor}.`);
 
         if (engagedLeadSubscribed) {
-            sentences.push('They also open and click more in the recent window, signalling stronger intent from consented audiences.');
+            sentences.push('They also open and click more in the recent window, which shows consented readers stay engaged.');
         } else if (engagedLeadNotSubscribed) {
-            sentences.push('Non subscribed cohorts post slightly higher recent engagement, showing imports still respond when nudged.');
+            sentences.push('Non subscribed cohorts are opening slightly more right now, so recent imports still respond when nudged.');
         } else {
-            sentences.push('Recent engagement rates stay comparable, so consent status alone does not separate active from quiet profiles.');
+            sentences.push('Recent engagement is similar for both groups, so consent status alone does not separate active from quiet profiles.');
         }
 
         if (notSubscribedVolumeLead) {
-            sentences.push('However, non subscribed profiles make up a larger portion of the list, boosting reach but adding deliverability risk if they cool off.');
+            sentences.push('Non subscribed profiles make up more of the list, which boosts reach but adds deliverability risk if they cool off.');
         } else if (subscribedVolumeLead) {
-            sentences.push('Subscribed profiles also dominate volume, which keeps growth anchored in permission-based channels.');
+            sentences.push('Subscribed profiles also dominate volume, so growth is anchored in permission-based channels.');
         } else {
             sentences.push('Overall volume is fairly balanced between consented and imported cohorts.');
         }
 
-        if (subscribedValueLead) {
-            sentences.push('Keep reinforcing opt-in experiences with welcome incentives, loyalty perks, and preference updates that reward subscribers for staying active.');
-        } else if (notSubscribedValueLead) {
-            sentences.push('Guide high-value imports through consent upgrade campaigns, social-proof landers, and personal outreach so their spend becomes compliant.');
+        let ltvSentence: string;
+        if (subscribedValueMeaningful && notSubscribedValueMeaningful) {
+            ltvSentence = 'Both consent groups carry a meaningful slice of lifetime value, so protect the spend coming from each side.';
+        } else if (subscribedValueMeaningful) {
+            ltvSentence = 'Subscribed profiles hold a meaningful slice of lifetime value, so keep that audience warm.';
+        } else if (notSubscribedValueMeaningful) {
+            ltvSentence = 'Non subscribed contacts still carry real lifetime value, so move them toward consent before attrition sets in.';
         } else {
-            sentences.push('Pair consent-growth campaigns with warm-up sequences for imports, nudging quiet profiles toward preference updates or soft repermission flows.');
+            ltvSentence = 'Lifetime value is spread thin across both consent groups right now.';
         }
+        sentences.push(ltvSentence);
+
+        let actionSentence: string;
+        if (subscribedValueLead) {
+            actionSentence = 'Keep rewarding opt-in behaviour with welcome offers and loyalty perks, and give imports clear sign-up prompts plus a safety net of repermission emails.';
+        } else if (notSubscribedValueLead) {
+            actionSentence = 'Map a consent upgrade journey for non subscribed buyers and remove the imports who stay quiet after a few nudges.';
+        } else {
+            actionSentence = 'Run opt-in incentives alongside quick clean-up passes that suppress non subscribed contacts who never engage.';
+        }
+        sentences.push(actionSentence);
 
         sentences.push('If the pattern flips—consented revenue shrinking while imports swell—pause heavy imports and rebuild opt-in signals before they erode deliverability.');
 
-        const paragraph = sentences.slice(0, 5).join(' ');
+        const paragraph = sentences.slice(0, 6).join(' ');
 
         return {
             headline,
