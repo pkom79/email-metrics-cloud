@@ -106,6 +106,13 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Deliverability alerts: always mention when spam ≥0.3% or bounce ≥0.5% triggers a “Send Less” recommendation so users know the risk driver.
 - Audience size guidance mirrors this card shell. Minimum inputs: ≥12 campaigns total, ≥3 per bucket, and ≥50k emails combined before recommending direction. When a larger bucket shows promising lift with limited coverage, frame it as a “Test” recommendation and call out the small sample in body copy. Reference the active date range in all “not enough data” messages (e.g., “This date range includes only …”).
 
+#### Purchase Frequency Distribution Action Note
+- Placement: appended inside the Purchase Frequency card beneath the bar list. Keeps the same action-note shell with `mt-6` spacing from the bars.
+- Summary line: “Move each cohort to its next purchase by aligning nurture tracks to where they are in the order journey.” Rendered in `text-sm font-semibold text-gray-900 dark:text-gray-100`.
+- Segment blocks: three sections (Never Purchased, One Order, Repeat Buyers) each show `count • percent` at the top right, a recommendation line in `text-sm text-gray-700 dark:text-gray-300`, optional caution line in `text-sm text-gray-600 dark:text-gray-400`, and a `Campaign ideas` label in `text-xs uppercase` followed by a `list-disc` of three ideas.
+- Distribution guidance: footer with a `border-t` divider, uppercase label “How to adapt by distribution”, a bold headline `{{segment label}} leads the distribution ({{percent}})`, and a body sentence tailored to the dominant cohort (Never → acquisition-to-first-purchase focus, One → win-back and cross-sell, Repeat → loyalty and community).
+- Data guardrail: hide the entire note when `totalSubscribers` is zero so empty accounts do not show placeholder messaging.
+
 ### Export controls
 
 ## Inline data links + tooltip (Segments)

@@ -20,6 +20,17 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         return num >= 1000 ? `${num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : `${formatted}%`;
     };
 
+    type PurchaseSegmentKey = 'never' | 'one' | 'repeat';
+    interface PurchaseActionSegment {
+        key: PurchaseSegmentKey;
+        label: string;
+        count: number;
+        percentage: number;
+        recommendation: string;
+        caution?: string;
+        ideas: string[];
+    }
+
     const purchaseFrequencyData = [
         { label: 'Never', value: audienceInsights.purchaseFrequency.never, percentage: (audienceInsights.purchaseFrequency.never / (audienceInsights.totalSubscribers || 1)) * 100 },
         { label: '1 Order', value: audienceInsights.purchaseFrequency.oneOrder, percentage: (audienceInsights.purchaseFrequency.oneOrder / (audienceInsights.totalSubscribers || 1)) * 100 },
@@ -27,6 +38,82 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         { label: '3-5 Orders', value: audienceInsights.purchaseFrequency.threeTo5, percentage: (audienceInsights.purchaseFrequency.threeTo5 / (audienceInsights.totalSubscribers || 1)) * 100 },
         { label: '6+ Orders', value: audienceInsights.purchaseFrequency.sixPlus, percentage: (audienceInsights.purchaseFrequency.sixPlus / (audienceInsights.totalSubscribers || 1)) * 100 }
     ];
+
+    const purchaseActionNote = React.useMemo(() => {
+        const total = audienceInsights.totalSubscribers || 0;
+        if (!total) return null;
+        const pf = audienceInsights.purchaseFrequency;
+        const toPct = (value: number) => total > 0 ? (value / total) * 100 : 0;
+        const repeatCount = (pf.twoOrders || 0) + (pf.threeTo5 || 0) + (pf.sixPlus || 0);
+
+        const segments: PurchaseActionSegment[] = [
+            {
+                key: 'never',
+                label: 'Never Purchased',
+                count: pf.never || 0,
+                percentage: toPct(pf.never || 0),
+                recommendation: 'Reintroduce the brand value with welcome refreshers, proof, and seasonal hooks to earn the first order.',
+                caution: 'Do not suppress this cohort purely on purchase history. Watch opens and clicks elsewhere before making suppression calls.',
+                ideas: [
+                    'First-order perk or welcome reminder with clear positioning',
+                    'Best-seller spotlight that leans on reviews or social proof',
+                    'Educational series that demystifies the product line'
+                ]
+            },
+            {
+                key: 'one',
+                label: 'One Order',
+                count: pf.oneOrder || 0,
+                percentage: toPct(pf.oneOrder || 0),
+                recommendation: 'Treat one-timers as the highest-leverage segment and trigger retention offers that make the second purchase inevitable.',
+                ideas: [
+                    'Post-purchase follow-up with complementary product picks',
+                    'Loyalty or referral incentive that unlocks after order two',
+                    'Time-limited second-purchase bonus such as free shipping or a bundle offer'
+                ]
+            },
+            {
+                key: 'repeat',
+                label: 'Repeat Buyers (2+ Orders)',
+                count: repeatCount,
+                percentage: toPct(repeatCount),
+                recommendation: 'Keep loyalists feeling like insiders so they stay active and advocate for the brand.',
+                ideas: [
+                    'VIP or loyalty program invite with milestone perks',
+                    'Early access drops or collection previews reserved for loyalists',
+                    'Personalized thank-you or recommendation campaigns'
+                ]
+            }
+        ];
+
+        if (!segments.length) return null;
+        const dominant = segments.slice(1).reduce<PurchaseActionSegment>((prev, current) => current.percentage > prev.percentage ? current : prev, segments[0]);
+        let adaptBody = '';
+        switch (dominant.key) {
+            case 'never':
+                adaptBody = 'Improve acquisition-to-first-purchase conversion with trust-building sequences and proof-driven welcome content.';
+                break;
+            case 'one':
+                adaptBody = 'Prioritize win-back and cross-sell programs that move one-time buyers into automated second-order journeys.';
+                break;
+            case 'repeat':
+                adaptBody = 'Invest in loyalty, exclusivity, and community touchpoints to keep repeat buyers engaged and protect CLV.';
+                break;
+            default:
+                adaptBody = 'Balance efforts across acquisition, second-order conversion, and loyalty to keep the distribution healthy.';
+        }
+
+        const adaptHeadline = `${dominant.label} leads the distribution (${formatPercent(dominant.percentage)})`;
+
+        return {
+            summary: 'Move each cohort to its next purchase by aligning nurture tracks to where they are in the order journey.',
+            segments,
+            adapt: {
+                headline: adaptHeadline,
+                body: adaptBody
+            }
+        };
+    }, [audienceInsights.purchaseFrequency, audienceInsights.totalSubscribers]);
 
     const lifetimeData = [
         { label: '0-3 months', value: audienceInsights.lifetimeDistribution.zeroTo3Months, percentage: (audienceInsights.lifetimeDistribution.zeroTo3Months / (audienceInsights.totalSubscribers || 1)) * 100 },
@@ -342,6 +429,38 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                             </div>
                         ))}
                     </div>
+                    {purchaseActionNote && (
+                        <div className="mt-6 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{purchaseActionNote.summary}</p>
+                            <div className="mt-4 space-y-5">
+                                {purchaseActionNote.segments.map(segment => (
+                                    <div key={segment.key} className="space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{segment.label}</span>
+                                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{segment.count.toLocaleString()} • {formatPercent(segment.percentage)}</span>
+                                        </div>
+                                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{segment.recommendation}</p>
+                                        {segment.caution && (
+                                            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed"><span className="font-medium text-gray-700 dark:text-gray-300">Caution:</span> {segment.caution}</p>
+                                        )}
+                                        <div className="pt-1">
+                                            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Campaign ideas</p>
+                                            <ul className="mt-1 list-disc list-inside space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                                                {segment.ideas.map((idea, idx) => (
+                                                    <li key={`${segment.key}-idea-${idx}`}>{idea}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-6 border-t border-gray-200 dark:border-gray-800 pt-4">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">How to adapt by distribution</p>
+                                <p className="mt-2 text-sm font-semibold text-gray-900 dark:text-gray-100">{purchaseActionNote.adapt.headline}</p>
+                                <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{purchaseActionNote.adapt.body}</p>
+                            </div>
+                        </div>
+                    )}
                 </div>
                 <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                     <div className="flex items-center gap-2 mb-4">
