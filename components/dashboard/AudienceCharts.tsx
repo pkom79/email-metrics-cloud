@@ -15,6 +15,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
     const [showPurchaseActionDetails, setShowPurchaseActionDetails] = React.useState(false);
     const [showLifetimeActionDetails, setShowLifetimeActionDetails] = React.useState(false);
     const [showHighValueActionDetails, setShowHighValueActionDetails] = React.useState(false);
+    const [showInactiveActionDetails, setShowInactiveActionDetails] = React.useState(false);
 
     const formatCurrency = (value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
     const formatPercent = (value: number) => {
@@ -392,8 +393,15 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
     }, [highValueSegments]);
 
     // Inactive segments
-    const inactiveSegments = React.useMemo(() => {
-        if (!hasData) return [] as { label: string; count: number; percent: number }[];
+    interface InactiveSegmentDetail {
+        label: string;
+        count: number;
+        percent: number;
+        olderThan30DaysPct?: number;
+    }
+
+    const inactiveSegments = React.useMemo<InactiveSegmentDetail[]>(() => {
+        if (!hasData) return [];
         const lastEmailDate = dataManager.getLastEmailDate();
         const total = subscribers.length;
         const neverActiveCount = subscribers.filter(sub => {
@@ -405,12 +413,13 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             return true;
         }).length;
         const counters = [
-            { label: 'Never Active', count: neverActiveCount },
+            { label: 'Never Active', count: neverActiveCount, olderThan30DaysPct: 0 },
             { label: 'Inactive for 90+ days', days: 90, count: 0 },
             { label: 'Inactive for 120+ days', days: 120, count: 0 },
             { label: 'Inactive for 180+ days', days: 180, count: 0 },
             { label: 'Inactive for 365+ days', days: 365, count: 0 },
         ] as any[];
+        let neverActiveOlderThan30 = 0;
         subscribers.forEach(sub => {
             if (sub.lastActive && lastEmailDate) {
                 const diffDays = Math.floor((lastEmailDate.getTime() - sub.lastActive.getTime()) / (1000 * 60 * 60 * 24));
@@ -418,9 +427,16 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 if (diffDays >= 120) counters[2].count++;
                 if (diffDays >= 180) counters[3].count++;
                 if (diffDays >= 365) counters[4].count++;
+            } else if (sub.lastActive == null) {
+                const created = sub.profileCreated instanceof Date ? sub.profileCreated : null;
+                if (created && lastEmailDate) {
+                    const diff = Math.floor((lastEmailDate.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+                        if (diff >= 30) neverActiveOlderThan30++;
+                }
             }
         });
-        return counters.map(c => ({ label: c.label, count: c.count, percent: total > 0 ? (c.count / total) * 100 : 0 }));
+        counters[0].olderThan30DaysPct = neverActiveCount > 0 ? (neverActiveOlderThan30 / neverActiveCount) * 100 : 0;
+        return counters.map(c => ({ label: c.label, count: c.count, percent: total > 0 ? (c.count / total) * 100 : 0, olderThan30DaysPct: c.olderThan30DaysPct }));
     }, [hasData, subscribers, dataManager]);
 
     // Dead Weight Subscribers & Savings module
@@ -909,6 +925,103 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                         </div>
                     ))}
                 </div>
+                {(() => {
+                    const totalInactive = inactiveSegments.reduce((sum, seg) => sum + seg.percent, 0);
+                    const totalInactivePct = formatPercent(totalInactive);
+                    const largest = inactiveSegments.reduce((prev, curr) => (curr.percent > prev.percent ? curr : prev), inactiveSegments[0]);
+                    const largestIsNever = largest?.label === 'Never Active';
+                    const allSmall = inactiveSegments.every(seg => seg.percent < 5);
+                    let subline: string;
+                    if (largestIsNever) subline = 'Warm recent joiners, escalate older non-engagers, and keep a clean list.';
+                    else if (allSmall) subline = 'Run light reactivation and maintain conservative frequency.';
+                    else subline = 'Prioritize staged reactivation and tighten list hygiene.';
+
+                    const segmentIdeasMap: Record<string, string[]> = {
+                        'Never Active': [
+                            'Welcome refresher with strong proof and a single clear action',
+                            '“What you’ve missed” digest that spotlights most-viewed content',
+                            'Final nudge before suppression with preference link'
+                        ],
+                        'Inactive for 90+ days': [
+                            'Seasonal “here’s what’s new” update',
+                            'Preference update to reset cadence',
+                            'Gentle offer or bundle reminder'
+                        ],
+                        'Inactive for 120+ days': [
+                            'Stronger limited-time incentive',
+                            '“Still want to hear from us?” consent check',
+                            'Sunset countdown followed by suppression if no response'
+                        ],
+                        'Inactive for 180+ days': [
+                            'Stronger limited-time incentive',
+                            '“Still want to hear from us?” consent check',
+                            'Sunset countdown followed by suppression if no response'
+                        ],
+                        'Inactive for 365+ days': [
+                            'Stronger limited-time incentive',
+                            '“Still want to hear from us?” consent check',
+                            'Sunset countdown followed by suppression if no response'
+                        ]
+                    };
+
+                    const segmentSummary = (seg: InactiveSegmentDetail) => {
+                        if (seg.label === 'Never Active') {
+                            const olderPct = seg.olderThan30DaysPct ?? 0;
+                            return olderPct >= 50 ? 'Most have never engaged after 30 days.' : 'Many are new non-engagers; give them a short runway.';
+                        }
+                        if (seg.label === 'Inactive for 90+ days') {
+                            return 'Early reactivation window; keep tone light.';
+                        }
+                        return 'Older inactivity cohort; escalate and decide.';
+                    };
+
+                    if (!inactiveSegments.some(seg => seg.percent > 0)) return null;
+
+                    return (
+                        <div className="mt-6 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="flex-1">
+                                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Inactive profiles make up {totalInactivePct} of the list.</p>
+                                    <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{subline}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowInactiveActionDetails(prev => !prev)}
+                                    className="inline-flex items-center justify-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
+                                    aria-expanded={showInactiveActionDetails}
+                                    aria-controls="inactive-action-note-details"
+                                >
+                                    {showInactiveActionDetails ? 'Hide Insights' : 'View Insights'}
+                                    <ChevronDown className={`w-4 h-4 transition-transform ${showInactiveActionDetails ? 'rotate-180' : ''}`} />
+                                </button>
+                            </div>
+                            {showInactiveActionDetails && (
+                                <div id="inactive-action-note-details" className="mt-4 space-y-5">
+                                    {inactiveSegments.filter(seg => seg.percent > 0).map((seg, idx) => (
+                                        <div key={`inactive-segment-${idx}`} className="space-y-2">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{seg.label}</span>
+                                                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{seg.count.toLocaleString()} • {formatPercent(seg.percent)}</span>
+                                            </div>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{segmentSummary(seg)}</p>
+                                            {seg.label === 'Never Active' && (
+                                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">If a profile remains unengaged for 30 days, suppress.</p>
+                                            )}
+                                            <div className="pt-1">
+                                                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Campaign ideas</p>
+                                                <ul className="mt-1 list-disc list-inside space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                                                    {(segmentIdeasMap[seg.label] || segmentIdeasMap['Inactive for 120+ days']).map((idea, ideaIdx) => (
+                                                        <li key={`inactive-idea-${idx}-${ideaIdx}`}>{idea}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* Engagement by Tenure heatmap */}
