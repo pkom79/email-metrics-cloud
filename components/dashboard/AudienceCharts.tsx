@@ -189,7 +189,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         if (dominance < 5) {
             headline = 'Balanced mix across subscriber age groups';
         } else if (leader.key === 'new') {
-            headline = `New joiners (0-3 and 3-6 months) lead the list (${formatPercent(newGroup?.percentage ?? leader.percentage)})`;
+            headline = `New joiners (0-6 months) lead the list (${formatPercent(newGroup?.percentage ?? leader.percentage)})`;
         } else if (leader.key === 'mid') {
             headline = `6-12 months leads the list (${formatPercent(midGroup?.percentage ?? leader.percentage)})`;
         } else {
