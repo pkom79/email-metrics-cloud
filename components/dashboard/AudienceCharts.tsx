@@ -226,37 +226,23 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         };
     }, [audienceInsights.lifetimeDistribution.zeroTo3Months, audienceInsights.lifetimeDistribution.threeTo6Months, audienceInsights.lifetimeDistribution.sixTo12Months, audienceInsights.lifetimeDistribution.oneToTwoYears, audienceInsights.lifetimeDistribution.twoYearsPlus, audienceInsights.totalSubscribers]);
 
-    // High-value customer segments (exclusive bins: 2x–<3x, 3x–<6x, 6x+ of buyer AOV)
+    // High-value customer segments (2x, 3x, 6x AOV of buyers)
     const highValueSegments = React.useMemo(() => {
-        if (!hasData) return [] as { label: string; customers: number; revenue: number; revenuePercentage: number }[];
+        if (!hasData) return [] as { label: string; threshold: number; customers: number; revenue: number; revenuePercentage: number }[];
         const aov = audienceInsights.avgClvBuyers;
-        if (!aov || aov <= 0) {
-            // Return labeled, zeroed tiers without attempting to bucket
-            const t2 = 0, t3 = 0, t6 = 0;
-            return [
-                { label: `2x–<3x AOV (${formatCurrency(t2)}–<${formatCurrency(t3)})`, customers: 0, revenue: 0, revenuePercentage: 0 },
-                { label: `3x–<6x AOV (${formatCurrency(t3)}–<${formatCurrency(t6)})`, customers: 0, revenue: 0, revenuePercentage: 0 },
-                { label: `6x+ AOV (${formatCurrency(t6)}+)`, customers: 0, revenue: 0, revenuePercentage: 0 },
-            ];
-        }
-        const t2 = aov * 2;
-        const t3 = aov * 3;
-        const t6 = aov * 6;
         const segments = [
-            { label: `2x–<3x AOV (${formatCurrency(t2)}–<${formatCurrency(t3)})`, customers: 0, revenue: 0, revenuePercentage: 0 },
-            { label: `3x–<6x AOV (${formatCurrency(t3)}–<${formatCurrency(t6)})`, customers: 0, revenue: 0, revenuePercentage: 0 },
-            { label: `6x+ AOV (${formatCurrency(t6)}+)`, customers: 0, revenue: 0, revenuePercentage: 0 },
+            { label: `2x AOV (${formatCurrency(aov * 2)}+)`, threshold: aov * 2, customers: 0, revenue: 0, revenuePercentage: 0 },
+            { label: `3x AOV (${formatCurrency(aov * 3)}+)`, threshold: aov * 3, customers: 0, revenue: 0, revenuePercentage: 0 },
+            { label: `6x AOV (${formatCurrency(aov * 6)}+)`, threshold: aov * 6, customers: 0, revenue: 0, revenuePercentage: 0 },
         ];
         let totalBuyerRevenue = 0;
         subscribers.forEach(s => { const h = (s.historicClv ?? s.totalClv) || 0; if (s.isBuyer && h > 0) totalBuyerRevenue += h; });
-        for (const s of subscribers) {
-            if (!s.isBuyer) continue;
-            const h = (s.historicClv ?? s.totalClv) || 0;
-            if (h <= 0) continue;
-            if (h >= t6) { segments[2].customers++; segments[2].revenue += h; }
-            else if (h >= t3) { segments[1].customers++; segments[1].revenue += h; }
-            else if (h >= t2) { segments[0].customers++; segments[0].revenue += h; }
-        }
+        subscribers.forEach(s => {
+            if (s.isBuyer) {
+                const h = (s.historicClv ?? s.totalClv) || 0;
+                if (h > 0) segments.forEach(seg => { if (h >= seg.threshold) { seg.customers++; seg.revenue += h; } });
+            }
+        });
         segments.forEach(seg => { seg.revenuePercentage = totalBuyerRevenue > 0 ? (seg.revenue / totalBuyerRevenue) * 100 : 0; });
         return segments;
     }, [hasData, audienceInsights.avgClvBuyers, subscribers]);
