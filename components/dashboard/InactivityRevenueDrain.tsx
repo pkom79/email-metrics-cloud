@@ -41,6 +41,8 @@ export default function InactivityRevenueDrain({ subscribers }: Props) {
         return { defs: bucketsWithShare, totalClv, totalDormantClv, dormantPct };
     }, [subscribers]);
 
+    const [showDetails, setShowDetails] = useState(false);
+
     if (!buckets || buckets.totalClv === 0) return null;
 
     const { defs, totalClv, totalDormantClv, dormantPct } = buckets;
@@ -83,8 +85,6 @@ export default function InactivityRevenueDrain({ subscribers }: Props) {
         paragraphSentences.push('If a future shift concentrates value in recent lapses, pivot resources toward fast win-back; if it drifts older, prepare for more aggressive hygiene.');
     }
     const paragraph = paragraphSentences.slice(0, 5).join(' ');
-
-    const [showDetails, setShowDetails] = useState(false);
 
     return (
         <div className="mt-6 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
@@ -134,9 +134,8 @@ export default function InactivityRevenueDrain({ subscribers }: Props) {
                     );
                 })}
             </div>
-            <div className="mt-4 text-xs md:text-sm text-gray-500 dark:text-gray-400 flex flex-wrap gap-4">
-                <div><span className="font-medium text-gray-600 dark:text-gray-300">Total Historic CLV:</span> {formatCurrency(totalClv)}</div>
-                <div><span className="font-medium text-gray-600 dark:text-gray-300">Dormant Historic CLV:</span> {formatCurrency(totalDormantClv)} ({((totalDormantClv / totalClv) * 100).toFixed(1)}%)</div>
+            <div className="mt-4 text-xs md:text-sm text-gray-500 dark:text-gray-400">
+                {/* Totals intentionally omitted to keep focus on action note */}
             </div>
             <div className="mt-6 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
