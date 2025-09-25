@@ -132,13 +132,20 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         };
     }, [audienceInsights.purchaseFrequency, audienceInsights.totalSubscribers]);
 
-    const lifetimeData = [
+    const lifetimeData = React.useMemo(() => ([
         { label: '0-3 months', value: audienceInsights.lifetimeDistribution.zeroTo3Months, percentage: (audienceInsights.lifetimeDistribution.zeroTo3Months / (audienceInsights.totalSubscribers || 1)) * 100 },
         { label: '3-6 months', value: audienceInsights.lifetimeDistribution.threeTo6Months, percentage: (audienceInsights.lifetimeDistribution.threeTo6Months / (audienceInsights.totalSubscribers || 1)) * 100 },
         { label: '6-12 months', value: audienceInsights.lifetimeDistribution.sixTo12Months, percentage: (audienceInsights.lifetimeDistribution.sixTo12Months / (audienceInsights.totalSubscribers || 1)) * 100 },
         { label: '1-2 years', value: audienceInsights.lifetimeDistribution.oneToTwoYears, percentage: (audienceInsights.lifetimeDistribution.oneToTwoYears / (audienceInsights.totalSubscribers || 1)) * 100 },
         { label: '2+ years', value: audienceInsights.lifetimeDistribution.twoYearsPlus, percentage: (audienceInsights.lifetimeDistribution.twoYearsPlus / (audienceInsights.totalSubscribers || 1)) * 100 }
-    ];
+    ]), [
+        audienceInsights.lifetimeDistribution.zeroTo3Months,
+        audienceInsights.lifetimeDistribution.threeTo6Months,
+        audienceInsights.lifetimeDistribution.sixTo12Months,
+        audienceInsights.lifetimeDistribution.oneToTwoYears,
+        audienceInsights.lifetimeDistribution.twoYearsPlus,
+        audienceInsights.totalSubscribers
+    ]);
 
     const lifetimeActionNote = React.useMemo<LifetimeActionNote | null>(() => {
         const total = audienceInsights.totalSubscribers || 0;
