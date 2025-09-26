@@ -139,6 +139,23 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Data inputs: derive segments using the same age buckets (0–6m, 6–12m, 1–2y, 2+y) and engagement buckets (0–30d, 31–60d, 61–90d, 91–120d, 120+, Never). Do not restate raw percentages already shown on the chart.
 - Sentence templates: follow the rule set—headline priority order, subline mapping, paragraph sentences covering quality, maintenance, stability, focus, and contrast.
 
+#### Campaign Day Performance Action Note (new)
+- Purpose: Recommend which day(s) of the week to prioritize for campaign sends based on Revenue per Email, engagement (opens, clicks, conversions), and risk (unsub & spam) while respecting the existing Send Frequency recommendation.
+- Shell & Typography: Reuses the standard action note card (`rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4`). Headline `text-sm font-semibold`, body `text-sm leading-relaxed`, sample line `text-xs` identical to other action notes.
+- Headline styles:
+  - Single clear winner: “Prioritize Tue sends.”
+  - Multi-day cluster: “Focus sends on Tue and Thu.” (Oxford comma omitted; last two joined with “and”).
+  - Even performance: “Performance is even across days.”
+  - Not enough data: “Not enough data for day-of-week guidance.”
+  - Exploratory (only one eligible day): “Use Tue as an anchor day.”
+  - Consider (no clear winner for frequency=1): “No clear leader—consider Tue or Wed.”
+- Sampling guardrails: Require ≥4 full weeks; a day eligible when it has ≥3 campaigns OR ≥1k emails (or ≥2% of total emails, whichever larger). Volatile single-campaign spikes dampen revenue weight (0.7×) to avoid overfitting.
+- Scoring blend (not displayed directly): 55% revenue index, 25% engagement index (opens 50%, clicks 30%, conversion 20%), 20% risk index (penalizes unsub & spam deltas; spam weighted heavier). Result only influences recommendation copy and ordering; we do not surface raw composite values in UI to minimize noise.
+- Risk gating: Days exceeding spam 0.5% or unsub +0.15 pp over weighted average are excluded/substituted when alternatives exist; elevated but not blocking risk adds a caution sentence (“Monitoring elevated complaints on Fri…”).
+- Sample line format: “Based on X weeks / Y campaigns (Z emails).” Mirrors existing modules.
+- No new colors, icons, or layout patterns introduced; the section header uses `CalendarDays` icon with purple accent consistent with scope icons.
+
+
 ### Export controls
 
 ## Inline data links + tooltip (Segments)
