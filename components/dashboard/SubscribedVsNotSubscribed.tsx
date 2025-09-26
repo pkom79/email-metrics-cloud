@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { BarChart3, ChevronDown } from "lucide-react";
 import InfoTooltipIcon from "../InfoTooltipIcon";
 import SelectBase from "../ui/SelectBase";
@@ -230,6 +230,24 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
         };
     }, [anchor, customFrom, customTo, dateRange, filteredSubs, range]);
 
+    // Safety guard: if a stale duplicate action note card remains in the DOM (e.g. legacy placement), remove extras
+    useEffect(() => {
+        if (typeof document === 'undefined') return;
+        // small timeout gives React a tick to mount potential duplicates
+        const t = setTimeout(() => {
+            const cards = document.querySelectorAll('[data-consent-action-note="svns"]');
+            if (cards.length > 1) {
+                cards.forEach((el, idx) => {
+                    if (idx > 0) {
+                        // Remove subsequent duplicates
+                        el.parentElement?.removeChild(el);
+                    }
+                });
+            }
+        }, 0);
+        return () => clearTimeout(t);
+    }, [actionNote]);
+
     if (!filteredSubs.length) return null;
 
     // Prepare chart values
@@ -358,7 +376,7 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
 
             {actionNote && (
                 <div className="px-6 pb-6 border-t border-gray-100 dark:border-gray-800">
-                    <div className="mt-4 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
+                    <div className="mt-4 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4" data-consent-action-note="svns">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="flex-1">
                                 <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{actionNote.headline}</p>
