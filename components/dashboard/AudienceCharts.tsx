@@ -392,7 +392,6 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             } else {
                 summary = `Meaningful mid-tier contribution (${shareLabel}).`;
             }
-            summary += '.';
             return {
                 name: seg.name,
                 rangeText: seg.rangeText,
