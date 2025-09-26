@@ -775,7 +775,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         const lastEmailDate = dataManager.getLastEmailDate();
         const total = subscribers.length;
         const defs: Array<{ key: 'never' | '90_119' | '120_179' | '180_364' | '365_plus'; label: string; count: number }> = [
-            { key: 'never', label: 'Never Engaged (no last click, no last open)', count: 0 },
+            { key: 'never', label: 'Never Engaged', count: 0 },
             { key: '90_119', label: 'Unengaged 90-119 days', count: 0 },
             { key: '120_179', label: 'Unengaged 120-179 days', count: 0 },
             { key: '180_364', label: 'Unengaged 180-364 days', count: 0 },
