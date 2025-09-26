@@ -1194,34 +1194,8 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 })()}
             </div>
 
-            {/* Engagement by Tenure heatmap */}
-            <EngagementByTenure subscribers={subscribers} dateRange={dateRange} customTo={customTo} />
-
-            {engagementAgeNote && (
-                <div className="mt-6 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="flex-1">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{engagementAgeNote.headline}</p>
-                            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{engagementAgeNote.summary}</p>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => setShowEngagementAgeDetails(prev => !prev)}
-                            className="inline-flex items-center justify-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
-                            aria-expanded={showEngagementAgeDetails}
-                            aria-controls="engagement-age-action-note-details"
-                        >
-                            {showEngagementAgeDetails ? 'Hide Insights' : 'View Insights'}
-                            <ChevronDown className={`w-4 h-4 transition-transform ${showEngagementAgeDetails ? 'rotate-180' : ''}`} />
-                        </button>
-                    </div>
-                    {showEngagementAgeDetails && (
-                        <div id="engagement-age-action-note-details" className="mt-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                            {engagementAgeNote.paragraph}
-                        </div>
-                    )}
-                </div>
-            )}
+            {/* Engagement by Tenure heatmap with integrated action note */}
+            <EngagementByTenure subscribers={subscribers} dateRange={dateRange} customTo={customTo} note={engagementAgeNote} />
 
             {/* Inactivity Revenue Drain (placed after Inactive Segments and heatmap) */}
             <InactivityRevenueDrain subscribers={subscribers} />

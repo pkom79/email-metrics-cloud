@@ -6,10 +6,17 @@ import type { ProcessedSubscriber } from '../../lib/data/dataTypes';
 import { DataManager } from '../../lib/data/dataManager';
 import TooltipPortal from '../TooltipPortal';
 
+interface EngagementAgeNote {
+    headline: string;
+    summary: string;
+    paragraph: string;
+}
+
 interface Props {
     subscribers: ProcessedSubscriber[];
     dateRange: string;
     customTo?: string;
+    note?: EngagementAgeNote | null;
 }
 
 // Compute full months difference between two dates (anchor >= start)
@@ -27,7 +34,7 @@ function daysBetween(a: Date, b: Date) {
     return Math.floor((da.getTime() - db.getTime()) / MS);
 }
 
-export default function EngagementByTenure({ subscribers, dateRange, customTo }: Props) {
+export default function EngagementByTenure({ subscribers, dateRange, customTo, note }: Props) {
     const dm = DataManager.getInstance();
 
     const anchor = useMemo(() => {
@@ -130,6 +137,8 @@ export default function EngagementByTenure({ subscribers, dateRange, customTo }:
         return v.toFixed(2) + '%';
     };
 
+    const [showDetails, setShowDetails] = React.useState(false);
+
     return (
         <div className="mt-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -195,6 +204,33 @@ export default function EngagementByTenure({ subscribers, dateRange, customTo }:
                     </tbody>
                 </table>
             </div>
+            {note && (
+                <div className="mt-6 border-t border-gray-100 dark:border-gray-800 pt-4">
+                    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="flex-1">
+                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{note.headline}</p>
+                                <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{note.summary}</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowDetails(prev => !prev)}
+                                className="inline-flex items-center justify-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
+                                aria-expanded={showDetails}
+                                aria-controls="engagement-by-age-note-details"
+                            >
+                                {showDetails ? 'Hide Insights' : 'View Insights'}
+                                <Info className={`w-4 h-4 transition-transform ${showDetails ? 'rotate-180' : ''}`} />
+                            </button>
+                        </div>
+                        {showDetails && (
+                            <div id="engagement-by-age-note-details" className="mt-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                {note.paragraph}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
