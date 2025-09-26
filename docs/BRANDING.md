@@ -156,19 +156,19 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - No new colors, icons, or layout patterns introduced; the section header uses `CalendarDays` icon with purple accent consistent with scope icons.
 
 #### Campaign & Subject Line Action Note (new)
-- Placement: lives inside the Campaign Details card, directly above the campaign list and below the “You sent X campaigns…” line. Always uses the action-note shell (`rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4`) with the standard View/Hide toggle in the upper-right.
-- Icon & headline: pair the `MailSearch` icon (purple accent) with headlines that reflect the active template.
-  - General template: “Campaign & Subject Line Insights ({{range}})”
-  - Warning template: “Subject Line Performance Warning ({{range}})”
-  - Wins template: “Subject Line Wins ({{range}})”
-- Summary text: one sentence summarising revenue concentration and overall subject engagement health for the selected range.
-- Expanded paragraph: 3–4 concise sentences covering (1) the recommended subject length window, (2) weak categories or long-form risks to dial back, (3) high-performing categories or combos to scale, and (4) a closing reminder to apply learnings to upcoming tests.
-- Logic inputs: reuse the subject line analysis engine (length bins + category lifts) along with campaign revenue concentration metrics. Guardrail: require ≥5 campaigns in range; otherwise show the “Not enough campaigns…” fallback copy.
-- Triggers:
-  - Warning when any category underperforms baseline by ≥1.0 pp or the longest length bin trails baseline by ≥0.8 pp.
-  - Wins when no warning fires and any category beats baseline by ≥0.5 pp with enough volume.
-  - General when neither warning nor wins criteria are met but data volume is sufficient, emphasising mix discipline.
-- Copy tone: concise, direct, and instructive—mirror the voice used in other dashboard action notes. Avoid bullet lists inside the paragraph.
+- Placement: lives inside the Campaign Details card, directly above the campaign list and below the “You sent X campaigns…” line. Uses the standard action-note shell (`rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4`) with the View/Hide toggle on the right.
+- Icon & headline: keep the `MailSearch` icon in purple. Headline adapts per template:
+  - General: “Campaign & Subject Line Revenue Insights ({{range}})”
+  - Wins: “Revenue Wins from Subject Lines ({{range}})”
+  - Warning: “Revenue & Reputation Warning ({{range}})”
+  - Insufficient data: “More Data Needed ({{range}})”
+- Summary line: always lead with revenue per email / total revenue context (e.g., share of revenue, % lift, or warning trigger). Support with a short clause on subject line structure only when the cohort passes the volume guardrails.
+- Expanded paragraph: 3–4 sentences max—highlight cohort volume (recipients + revenue share), the RPE gap vs baseline, and any meaningful open/click lift while reminding the user to reuse or adjust. No bullets.
+- Logic inputs: reuse subject analysis for revenue-per-email, open rate, and click rate plus campaign-level unsub/spam/bounce metrics. Guardrails: ≥5 campaigns and ≥5k emails; otherwise show the “More Data Needed” fallback.
+- Warning template only fires when RPE is ≥30% below baseline on ≥20% of send volume **or** spam/unsub/bounce rates breach the deliverability thresholds (0.5% spam, 1.5% unsub, 4% bounce, each ≥40% above baseline) on ≥10k sends.
+- Wins template fires when a subject-line category or length delivers ≥2× baseline RPE (or ≥1.5× with ≥15% revenue share) on ≥10k emails. Mention open/click lifts only when the cohort hits the same volume guardrail.
+- General template calls out revenue concentration across top sends and nudges the highest-RPE theme/length that clears the volume guardrail, even if lift < wins threshold.
+- Copy tone: revenue-first, direct, and instructive. Always format percentage changes as `%` (no “pp”/“pts”).
 
 
 ### Export controls
