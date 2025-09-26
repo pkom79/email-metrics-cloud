@@ -17,6 +17,16 @@ import DataCoverageNotice from './DataCoverageNotice';
 import CampaignSendFrequency from './CampaignSendFrequency';
 import AudienceSizePerformance from './AudienceSizePerformance';
 import CampaignGapsAndLosses from './CampaignGapsAndLosses';
+// Helper: map guidance cadence label to numeric recommendation for Day-of-Week note
+function deriveFrequencyRecommendation(g: any): number | undefined {
+    if (!g || !g.cadenceLabel) return undefined;
+    const label: string = g.cadenceLabel.toLowerCase();
+    if (label.startsWith('1')) return 1;
+    if (label.startsWith('2')) return 2;
+    if (label.startsWith('3')) return 3;
+    if (label.startsWith('4')) return 4; // treat 4+ as 4 (cap logic in analytics already)
+    return undefined;
+}
 import SubjectAnalysis from './SubjectAnalysis';
 import { BarChart3, Calendar, GitCompare, Mail, Send, Zap, MailSearch, Upload as UploadIcon, X, Share2, RefreshCcw, Key } from 'lucide-react';
 import { buildLlmExportJson } from '../../lib/export/exportBuilder';
@@ -101,7 +111,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         const qp = new URLSearchParams(window.location.search);
         if (qp.get('empty') === '1') setForceEmpty(true);
         // Load latest snapshot metadata for last-update
-        (async () => { try { const r = await fetch('/api/snapshots/last/self', { cache: 'no-store' }); const j = await r.json().catch(() => ({})); if (j?.latest) setLastUpdate({ at: j.latest.created_at, source: j.latest.label }); } catch {} })();
+        (async () => { try { const r = await fetch('/api/snapshots/last/self', { cache: 'no-store' }); const j = await r.json().catch(() => ({})); if (j?.latest) setLastUpdate({ at: j.latest.created_at, source: j.latest.label }); } catch { } })();
     }, []);
     const [dataVersion, setDataVersion] = useState(0);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -116,6 +126,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [compareMode, setCompareMode] = useState<'prev-period' | 'prev-year'>('prev-period');
     const [selectedFlow, setSelectedFlow] = useState('all');
     const [selectedCampaignMetric, setSelectedCampaignMetric] = useState('revenue');
+    // Shared guidance outputs
+    const [frequencyGuidance, setFrequencyGuidance] = useState<any | null>(null);
     // JSON export temporarily disabled during redesign
     // Chart metric selections (defaults: Total Revenue)
     const [overviewChartMetric, setOverviewChartMetric] = useState<'revenue' | 'avgOrderValue' | 'revenuePerEmail' | 'openRate' | 'clickRate' | 'clickToOpenRate' | 'emailsSent' | 'totalOrders' | 'conversionRate' | 'unsubscribeRate' | 'spamRate' | 'bounceRate'>('revenue');
@@ -363,7 +375,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         // Non-admin path OR admin + selected account (account-specific hydration handled in separate effect already)
         if (isAdmin) return; // Avoid double-hydration; admin account hydration is in another effect.
         const refreshLastUpdate = async () => {
-            try { const r = await fetch('/api/snapshots/last/self', { cache: 'no-store' }); const j = await r.json().catch(() => ({})); if (j?.latest) setLastUpdate({ at: j.latest.created_at, source: j.latest.label }); } catch {}
+            try { const r = await fetch('/api/snapshots/last/self', { cache: 'no-store' }); const j = await r.json().catch(() => ({})); if (j?.latest) setLastUpdate({ at: j.latest.created_at, source: j.latest.label }); } catch { }
         };
         const onCreated = () => { setDataVersion(v => v + 1); setShowUploadModal(false); refreshLastUpdate(); };
         const onHydrated = () => { setDataVersion(v => v + 1); setIsInitialLoading(false); refreshLastUpdate(); };
@@ -405,10 +417,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 setMemberSelectedId(initial);
                 // If user has no accessible accounts, clear any cached dataset immediately
                 if (!initial) {
-                    try { (dm as any).clearAllData?.(); } catch {}
+                    try { (dm as any).clearAllData?.(); } catch { }
                     setDataVersion(v => v + 1);
                 }
-            } catch {}
+            } catch { }
             finally { if (!cancelled) setMemberBrandsLoaded(true); }
         })();
         return () => { cancelled = true; };
@@ -433,12 +445,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     if (!cancelled) setIsInitialLoading(false);
                     if (!cancelled && ok) setDataVersion(v => v + 1);
                     return;
-                } catch {}
+                } catch { }
             }
             try {
                 // If there is no selected account and we still have cached data, clear it
                 if (!memberSelectedId && (dm.getCampaigns().length || dm.getFlowEmails().length || dm.getSubscribers().length)) {
-                    try { (dm as any).clearAllData?.(); } catch {}
+                    try { (dm as any).clearAllData?.(); } catch { }
                     setDataVersion(v => v + 1);
                     setIsInitialLoading(false);
                     return;
@@ -526,7 +538,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         if (!memberSelectedId) return false;
         return memberAccounts.some(a => a.id === memberSelectedId);
     }, [isAdmin, selectedAccountId, memberBrandsLoaded, memberSelectedId, memberAccounts]);
-    useEffect(() => { try { DataManager.setAccountId(EFFECTIVE_ACCOUNT_ID || null); } catch {} }, [EFFECTIVE_ACCOUNT_ID]);
+    useEffect(() => { try { DataManager.setAccountId(EFFECTIVE_ACCOUNT_ID || null); } catch { } }, [EFFECTIVE_ACCOUNT_ID]);
     // Reference/end date for presets and bounds —
     // align with DataCoverageNotice by using DataManager's helper.
     const REFERENCE_DATE = useMemo(() => {
@@ -538,7 +550,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 const max = all.reduce((a, b) => (b > a ? b : a), all[0]);
                 return new Date(max);
             }
-        } catch {}
+        } catch { }
         // Fallback to DataManager helper
         return dm.getLastEmailDate();
     }, [ALL_CAMPAIGNS, ALL_FLOWS, dm, dataVersion]);
@@ -1082,7 +1094,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             </div>
                             {/* Status line removed per spec */}
                         </div>
-                        
+
                     </div>
                     {/* Data Coverage & Age — only when an account is active */}
                     {HAS_ACTIVE_ACCOUNT && (
@@ -1128,169 +1140,169 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             {/* Filters bar (sticky) — hide when no active account */}
             {/* Mobile filters trigger (visible only on small screens) — hide when no active account */}
             {HAS_ACTIVE_ACCOUNT && (
-            <div className="sm:hidden pt-2">
-                <div className="max-w-7xl mx-auto px-4">
-                    <div className="flex items-center justify-end">
-                        <button
-                            onClick={() => { setMfDateRange(dateRange); setMfCustomFrom(customFrom); setMfCustomTo(customTo); setMfGranularity(granularity); setMfCompareMode(compareMode); setMfSelectedFlow(selectedFlow); setMobileFiltersOpen(true); }}
-                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-medium text-gray-900 dark:text-gray-100 shadow-sm"
-                            aria-label="Open Filters"
-                        >
-                            <span className="w-2 h-2 rounded-full bg-purple-600" aria-hidden></span>
-                            Filters
-                        </button>
+                <div className="sm:hidden pt-2">
+                    <div className="max-w-7xl mx-auto px-4">
+                        <div className="flex items-center justify-end">
+                            <button
+                                onClick={() => { setMfDateRange(dateRange); setMfCustomFrom(customFrom); setMfCustomTo(customTo); setMfGranularity(granularity); setMfCompareMode(compareMode); setMfSelectedFlow(selectedFlow); setMobileFiltersOpen(true); }}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-medium text-gray-900 dark:text-gray-100 shadow-sm"
+                                aria-label="Open Filters"
+                            >
+                                <span className="w-2 h-2 rounded-full bg-purple-600" aria-hidden></span>
+                                Filters
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
             )}
 
             {HAS_ACTIVE_ACCOUNT && (
-            <div className={`hidden sm:block sm:pt-2 ${stickyBar ? 'sm:sticky sm:top-0 sm:z-50' : ''}`}> <div className="max-w-7xl mx-auto px-4"><div className={`rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${stickyBar ? 'shadow-lg' : 'shadow-sm'} px-3 py-2 sm:mx-[-30px]`}>
-                <div className="hidden sm:flex items-center justify-center gap-3 flex-nowrap whitespace-nowrap">
-                    {/* Custom date inputs */}
-                    <div className="flex items-center gap-1.5 relative">
-                        <button ref={calendarButtonRef} onClick={() => setShowDatePopover(v => !v)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
-                            <Calendar className="w-4 h-4 text-gray-500" />
-                        </button>
-                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Date Range:</span>
-                        <input type="date" min={allowedMinISO} max={allowedMaxISO} value={customFrom || ''} onChange={e => { let v = e.target.value || undefined; if (v) { if (v < allowedMinISO) v = allowedMinISO; if (v > allowedMaxISO) v = allowedMaxISO; } setCustomFrom(v); if (v && customTo && new Date(v) > new Date(customTo)) setCustomTo(v); setDateRange('custom'); }} className="px-2 py-1 rounded text-xs border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
-                        <span className="text-xs text-gray-500">to</span>
-                        <input type="date" min={allowedMinISO} max={allowedMaxISO} value={customTo || ''} onChange={e => { let v = e.target.value || undefined; if (v) { if (v < allowedMinISO) v = allowedMinISO; if (v > allowedMaxISO) v = allowedMaxISO; } setCustomTo(v); if (v && customFrom && new Date(v) < new Date(customFrom)) setCustomFrom(v); setDateRange('custom'); }} className="px-2 py-1 rounded text-xs border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
-                        {customActive && <button onClick={() => { setCustomFrom(undefined); setCustomTo(undefined); setDateRange('30d'); }} className="ml-1 px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700">Clear</button>}
-                        {/* Popover calendar */}
-                        {showDatePopover && (
-                            <div ref={calendarRef} className="absolute left-0 top-full mt-2 z-50 w-[660px] rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-3">
-                                <div className="flex items-center justify-between mb-2">
-                                    <div className="flex items-center gap-2">
-                                        <label className="text-xs text-gray-600 dark:text-gray-300">Year</label>
-                                        <SelectBase value={popoverYear} onChange={e => setPopoverYear(parseInt((e.target as HTMLSelectElement).value, 10))} className="px-2 py-1 pr-6 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs">
-                                            {allowedYears.map(y => <option key={y} value={y}>{y}</option>)}
-                                        </SelectBase>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <button onClick={() => { let m = popoverMonth - 1, y = popoverYear; if (m < 0) { m = 11; y--; } setPopoverYear(y); setPopoverMonth(m); }} className="px-2 py-1 text-xs rounded border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Prev</button>
-                                        <button onClick={() => { let m = popoverMonth + 1, y = popoverYear; if (m > 11) { m = 0; y++; } setPopoverYear(y); setPopoverMonth(m); }} className="px-2 py-1 text-xs rounded border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Next</button>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-6">
-                                    {/* Month A */}
-                                    <div>
-                                        <div className="grid grid-cols-7 gap-1 text-[10px] text-gray-500 mb-1">
-                                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => <div key={d} className="text-center">{d}</div>)}
+                <div className={`hidden sm:block sm:pt-2 ${stickyBar ? 'sm:sticky sm:top-0 sm:z-50' : ''}`}> <div className="max-w-7xl mx-auto px-4"><div className={`rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${stickyBar ? 'shadow-lg' : 'shadow-sm'} px-3 py-2 sm:mx-[-30px]`}>
+                    <div className="hidden sm:flex items-center justify-center gap-3 flex-nowrap whitespace-nowrap">
+                        {/* Custom date inputs */}
+                        <div className="flex items-center gap-1.5 relative">
+                            <button ref={calendarButtonRef} onClick={() => setShowDatePopover(v => !v)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+                                <Calendar className="w-4 h-4 text-gray-500" />
+                            </button>
+                            <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Date Range:</span>
+                            <input type="date" min={allowedMinISO} max={allowedMaxISO} value={customFrom || ''} onChange={e => { let v = e.target.value || undefined; if (v) { if (v < allowedMinISO) v = allowedMinISO; if (v > allowedMaxISO) v = allowedMaxISO; } setCustomFrom(v); if (v && customTo && new Date(v) > new Date(customTo)) setCustomTo(v); setDateRange('custom'); }} className="px-2 py-1 rounded text-xs border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
+                            <span className="text-xs text-gray-500">to</span>
+                            <input type="date" min={allowedMinISO} max={allowedMaxISO} value={customTo || ''} onChange={e => { let v = e.target.value || undefined; if (v) { if (v < allowedMinISO) v = allowedMinISO; if (v > allowedMaxISO) v = allowedMaxISO; } setCustomTo(v); if (v && customFrom && new Date(v) < new Date(customFrom)) setCustomFrom(v); setDateRange('custom'); }} className="px-2 py-1 rounded text-xs border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
+                            {customActive && <button onClick={() => { setCustomFrom(undefined); setCustomTo(undefined); setDateRange('30d'); }} className="ml-1 px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700">Clear</button>}
+                            {/* Popover calendar */}
+                            {showDatePopover && (
+                                <div ref={calendarRef} className="absolute left-0 top-full mt-2 z-50 w-[660px] rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-3">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <label className="text-xs text-gray-600 dark:text-gray-300">Year</label>
+                                            <SelectBase value={popoverYear} onChange={e => setPopoverYear(parseInt((e.target as HTMLSelectElement).value, 10))} className="px-2 py-1 pr-6 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs">
+                                                {allowedYears.map(y => <option key={y} value={y}>{y}</option>)}
+                                            </SelectBase>
                                         </div>
-                                        {(() => {
-                                            const first = firstDayOfMonth(popoverYear, popoverMonth);
-                                            const startDay = first.getDay();
-                                            const total = daysInMonth(popoverYear, popoverMonth);
-                                            const cells: React.ReactNode[] = [];
-                                            for (let i = 0; i < startDay; i++) cells.push(<div key={`a-e${i}`} className="h-8" />);
-                                            for (let d = 1; d <= total; d++) {
-                                                const cur = new Date(popoverYear, popoverMonth, d);
-                                                const disabled = isDisabled(cur);
-                                                const selected = (tempFrom && cur.toDateString() === tempFrom.toDateString()) || (tempTo && cur.toDateString() === tempTo.toDateString());
-                                                const inRange = !selected && isInRange(cur);
-                                                cells.push(
-                                                    <button key={`a-${d}`} onClick={() => onDayClick(d, popoverYear, popoverMonth)} disabled={disabled} className={`h-8 w-8 text-xs rounded mx-auto flex items-center justify-center border ${disabled ? 'text-gray-300 dark:text-gray-600 border-transparent' : inRange ? 'bg-purple-100 text-purple-900 border-purple-200' : selected ? 'bg-purple-600 text-white border-purple-600' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}>{d}</button>
-                                                );
-                                            }
-                                            return <div className="grid grid-cols-7 gap-1">{cells}</div>;
-                                        })()}
-                                    </div>
-                                    {/* Month B (next month) */}
-                                    <div>
-                                        <div className="grid grid-cols-7 gap-1 text-[10px] text-gray-500 mb-1">
-                                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => <div key={d} className="text-center">{d}</div>)}
+                                        <div className="flex items-center gap-1">
+                                            <button onClick={() => { let m = popoverMonth - 1, y = popoverYear; if (m < 0) { m = 11; y--; } setPopoverYear(y); setPopoverMonth(m); }} className="px-2 py-1 text-xs rounded border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Prev</button>
+                                            <button onClick={() => { let m = popoverMonth + 1, y = popoverYear; if (m > 11) { m = 0; y++; } setPopoverYear(y); setPopoverMonth(m); }} className="px-2 py-1 text-xs rounded border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Next</button>
                                         </div>
-                                        {(() => {
-                                            let y = popoverYear; let m = popoverMonth + 1; if (m > 11) { m = 0; y += 1; }
-                                            const first = firstDayOfMonth(y, m);
-                                            const startDay = first.getDay();
-                                            const total = daysInMonth(y, m);
-                                            const cells: React.ReactNode[] = [];
-                                            for (let i = 0; i < startDay; i++) cells.push(<div key={`b-e${i}`} className="h-8" />);
-                                            for (let d = 1; d <= total; d++) {
-                                                const cur = new Date(y, m, d);
-                                                const disabled = isDisabled(cur);
-                                                const selected = (tempFrom && cur.toDateString() === tempFrom.toDateString()) || (tempTo && cur.toDateString() === tempTo.toDateString());
-                                                const inRange = !selected && isInRange(cur);
-                                                cells.push(
-                                                    <button key={`b-${d}`} onClick={() => onDayClick(d, y, m)} disabled={disabled} className={`h-8 w-8 text-xs rounded mx-auto flex items-center justify-center border ${disabled ? 'text-gray-300 dark:text-gray-600 border-transparent' : inRange ? 'bg-purple-100 text-purple-900 border-purple-200' : selected ? 'bg-purple-600 text-white border-purple-600' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}>{d}</button>
-                                                );
-                                            }
-                                            return <div className="grid grid-cols-7 gap-1">{cells}</div>;
-                                        })()}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-6">
+                                        {/* Month A */}
+                                        <div>
+                                            <div className="grid grid-cols-7 gap-1 text-[10px] text-gray-500 mb-1">
+                                                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => <div key={d} className="text-center">{d}</div>)}
+                                            </div>
+                                            {(() => {
+                                                const first = firstDayOfMonth(popoverYear, popoverMonth);
+                                                const startDay = first.getDay();
+                                                const total = daysInMonth(popoverYear, popoverMonth);
+                                                const cells: React.ReactNode[] = [];
+                                                for (let i = 0; i < startDay; i++) cells.push(<div key={`a-e${i}`} className="h-8" />);
+                                                for (let d = 1; d <= total; d++) {
+                                                    const cur = new Date(popoverYear, popoverMonth, d);
+                                                    const disabled = isDisabled(cur);
+                                                    const selected = (tempFrom && cur.toDateString() === tempFrom.toDateString()) || (tempTo && cur.toDateString() === tempTo.toDateString());
+                                                    const inRange = !selected && isInRange(cur);
+                                                    cells.push(
+                                                        <button key={`a-${d}`} onClick={() => onDayClick(d, popoverYear, popoverMonth)} disabled={disabled} className={`h-8 w-8 text-xs rounded mx-auto flex items-center justify-center border ${disabled ? 'text-gray-300 dark:text-gray-600 border-transparent' : inRange ? 'bg-purple-100 text-purple-900 border-purple-200' : selected ? 'bg-purple-600 text-white border-purple-600' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}>{d}</button>
+                                                    );
+                                                }
+                                                return <div className="grid grid-cols-7 gap-1">{cells}</div>;
+                                            })()}
+                                        </div>
+                                        {/* Month B (next month) */}
+                                        <div>
+                                            <div className="grid grid-cols-7 gap-1 text-[10px] text-gray-500 mb-1">
+                                                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => <div key={d} className="text-center">{d}</div>)}
+                                            </div>
+                                            {(() => {
+                                                let y = popoverYear; let m = popoverMonth + 1; if (m > 11) { m = 0; y += 1; }
+                                                const first = firstDayOfMonth(y, m);
+                                                const startDay = first.getDay();
+                                                const total = daysInMonth(y, m);
+                                                const cells: React.ReactNode[] = [];
+                                                for (let i = 0; i < startDay; i++) cells.push(<div key={`b-e${i}`} className="h-8" />);
+                                                for (let d = 1; d <= total; d++) {
+                                                    const cur = new Date(y, m, d);
+                                                    const disabled = isDisabled(cur);
+                                                    const selected = (tempFrom && cur.toDateString() === tempFrom.toDateString()) || (tempTo && cur.toDateString() === tempTo.toDateString());
+                                                    const inRange = !selected && isInRange(cur);
+                                                    cells.push(
+                                                        <button key={`b-${d}`} onClick={() => onDayClick(d, y, m)} disabled={disabled} className={`h-8 w-8 text-xs rounded mx-auto flex items-center justify-center border ${disabled ? 'text-gray-300 dark:text-gray-600 border-transparent' : inRange ? 'bg-purple-100 text-purple-900 border-purple-200' : selected ? 'bg-purple-600 text-white border-purple-600' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}>{d}</button>
+                                                    );
+                                                }
+                                                return <div className="grid grid-cols-7 gap-1">{cells}</div>;
+                                            })()}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-end gap-2 mt-3">
+                                        <button onClick={() => { setTempFrom(null); setTempTo(null); }} className="px-3 py-1.5 text-xs rounded border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Clear</button>
+                                        <button onClick={applyTempRange} className="px-3 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-700">Apply</button>
+                                    </div>
+                                    {dateError && <div className="mt-2 text-[11px] text-rose-600">{dateError}</div>}
+                                    <div className="mt-2 text-[10px] text-gray-500">
+                                        Allowed: {ALLOWED_MIN_DATE.toLocaleDateString()} – {ALLOWED_MAX_DATE.toLocaleDateString()}
                                     </div>
                                 </div>
-                                <div className="flex items-center justify-end gap-2 mt-3">
-                                    <button onClick={() => { setTempFrom(null); setTempTo(null); }} className="px-3 py-1.5 text-xs rounded border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Clear</button>
-                                    <button onClick={applyTempRange} className="px-3 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-700">Apply</button>
+                            )}
+                        </div>
+                        <div className="flex flex-col items-start gap-1"><div className="relative"><SelectBase value={dateRange === 'custom' ? '' : dateRange} onChange={e => handleDateRangeChange((e.target as HTMLSelectElement).value || '30d')} className="px-2 py-1 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs">
+                            <option value="" disabled>Presets</option>
+                            <option value="30d">Last 30 days</option>
+                            <option value="60d">Last 60 days</option>
+                            <option value="90d">Last 90 days</option>
+                            <option value="120d">Last 120 days</option>
+                            <option value="180d">Last 180 days</option>
+                            <option value="365d">Last 365 days</option>
+                            <option value="all">Last 2 Years</option>
+                        </SelectBase></div></div>
+                        <div className="flex items-center gap-1.5"><BarChart3 className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Granularity:</span><div className="flex gap-1.5 ml-2 flex-nowrap">{granularityOptions.map(option => <button key={option.key} onClick={() => { if (!option.disabled && option.key !== granularity) { setGranularity(option.key); } }} disabled={option.disabled} title={option.tooltip} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${granularity === option.key ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'} ${option.disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>{option.label}</button>)}</div></div>
+                        {/* Compare Mode */}
+                        {(() => {
+                            const prevAvail = dm.isCompareWindowAvailable(
+                                dateRange === 'custom' && customActive ? `custom:${customFrom}:${customTo}` : dateRange,
+                                'prev-period',
+                                customFrom,
+                                customTo
+                            );
+                            const yearAvail = dm.isCompareWindowAvailable(
+                                dateRange === 'custom' && customActive ? `custom:${customFrom}:${customTo}` : dateRange,
+                                'prev-year',
+                                customFrom,
+                                customTo
+                            );
+                            return (
+                                <div className="flex items-center gap-1.5">
+                                    <GitCompare className="w-4 h-4 text-gray-500" />
+                                    <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Compare:</span>
+                                    <div className="flex gap-1.5 ml-1 flex-nowrap">
+                                        <button
+                                            onClick={() => {
+                                                if (compareMode !== 'prev-period' && prevAvail) setCompareMode('prev-period');
+                                            }}
+                                            disabled={!prevAvail}
+                                            className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${compareMode === 'prev-period'
+                                                ? 'bg-purple-600 text-white border-purple-600'
+                                                : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'
+                                                }`}
+                                        >
+                                            Prev Period
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                if (compareMode !== 'prev-year' && yearAvail) setCompareMode('prev-year');
+                                            }}
+                                            disabled={!yearAvail}
+                                            className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${compareMode === 'prev-year'
+                                                ? 'bg-purple-600 text-white border-purple-600'
+                                                : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'
+                                                }`}
+                                        >
+                                            Prev Year
+                                        </button>
+                                    </div>
                                 </div>
-                                {dateError && <div className="mt-2 text-[11px] text-rose-600">{dateError}</div>}
-                                <div className="mt-2 text-[10px] text-gray-500">
-                                    Allowed: {ALLOWED_MIN_DATE.toLocaleDateString()} – {ALLOWED_MAX_DATE.toLocaleDateString()}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                    <div className="flex flex-col items-start gap-1"><div className="relative"><SelectBase value={dateRange === 'custom' ? '' : dateRange} onChange={e => handleDateRangeChange((e.target as HTMLSelectElement).value || '30d')} className="px-2 py-1 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs">
-                        <option value="" disabled>Presets</option>
-                        <option value="30d">Last 30 days</option>
-                        <option value="60d">Last 60 days</option>
-                        <option value="90d">Last 90 days</option>
-                        <option value="120d">Last 120 days</option>
-                        <option value="180d">Last 180 days</option>
-                        <option value="365d">Last 365 days</option>
-                        <option value="all">Last 2 Years</option>
-                    </SelectBase></div></div>
-                    <div className="flex items-center gap-1.5"><BarChart3 className="w-4 h-4 text-gray-500" /><span className="font-medium text-sm text-gray-900 dark:text-gray-100">Granularity:</span><div className="flex gap-1.5 ml-2 flex-nowrap">{granularityOptions.map(option => <button key={option.key} onClick={() => { if (!option.disabled && option.key !== granularity) { setGranularity(option.key); } }} disabled={option.disabled} title={option.tooltip} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${granularity === option.key ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'} ${option.disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>{option.label}</button>)}</div></div>
-                    {/* Compare Mode */}
-                    {(() => {
-                        const prevAvail = dm.isCompareWindowAvailable(
-                            dateRange === 'custom' && customActive ? `custom:${customFrom}:${customTo}` : dateRange,
-                            'prev-period',
-                            customFrom,
-                            customTo
-                        );
-                        const yearAvail = dm.isCompareWindowAvailable(
-                            dateRange === 'custom' && customActive ? `custom:${customFrom}:${customTo}` : dateRange,
-                            'prev-year',
-                            customFrom,
-                            customTo
-                        );
-                        return (
-                            <div className="flex items-center gap-1.5">
-                                <GitCompare className="w-4 h-4 text-gray-500" />
-                                <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Compare:</span>
-                                <div className="flex gap-1.5 ml-1 flex-nowrap">
-                                    <button
-                                        onClick={() => {
-                                            if (compareMode !== 'prev-period' && prevAvail) setCompareMode('prev-period');
-                                        }}
-                                        disabled={!prevAvail}
-                                        className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${compareMode === 'prev-period'
-                                            ? 'bg-purple-600 text-white border-purple-600'
-                                            : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'
-                                            }`}
-                                    >
-                                        Prev Period
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            if (compareMode !== 'prev-year' && yearAvail) setCompareMode('prev-year');
-                                        }}
-                                        disabled={!yearAvail}
-                                        className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${compareMode === 'prev-year'
-                                            ? 'bg-purple-600 text-white border-purple-600'
-                                            : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'
-                                            }`}
-                                    >
-                                        Prev Year
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })()}
-                </div></div></div></div>
+                            );
+                        })()}
+                    </div></div></div></div>
             )}
 
             {/* Mobile Filters Bottom Sheet — hide when no active account */}
@@ -1407,279 +1419,279 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     <EmptyStateCard title="Select an account" body="Choose an account from the selector above to view its dashboard." />
                 )}
                 {HAS_ACTIVE_ACCOUNT && (<>
-                {overviewMetrics && (
-                    <section>
-                        <div className="flex items-center gap-2 mb-3">
-                            <Mail className="w-5 h-5 text-purple-600" />
-                            <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Email Performance Overview
-                                <InfoTooltipIcon placement="top" content={(
-                                    <div>
-                                        <p className="font-semibold mb-1">What</p>
-                                        <p>Your email KPIs over time.</p>
-                                        <p className="font-semibold mt-2 mb-1">How</p>
-                                        <p>Switch metrics and compare to a prior period to spot trends.</p>
-                                        <p className="font-semibold mt-2 mb-1">Why</p>
-                                        <p>If core rates slip, improve list quality, content, timing, and deliverability before scaling volume.</p>
-                                    </div>
-                                )} />
-                            </h2>
-                        </div>
-                        {/* Refresh button moved to header; keep section clean */}
-                        {/* Overview Timeseries Chart */}
-                        <TimeSeriesChart
-                            title="Email Performance Overview"
-                            metricKey={overviewChartMetric}
-                            metricOptions={campaignMetricOptions as any}
-                            onMetricChange={m => setOverviewChartMetric(m)}
-                            bigValue={bigValueForOverview(overviewChartMetric)}
-                            primary={overviewChartSeries.primary}
-                            compare={overviewChartSeries.compare}
-                            valueType={metricValueType(overviewChartMetric)}
-                            granularity={granularity}
-                            compareMode={compareMode}
-                            headerChange={overviewMetrics[(overviewChartMetric === 'revenue' ? 'totalRevenue' : overviewChartMetric === 'avgOrderValue' ? 'averageOrderValue' : overviewChartMetric) as keyof typeof overviewMetrics]?.change as any}
-                            headerIsPositive={overviewMetrics[(overviewChartMetric === 'revenue' ? 'totalRevenue' : overviewChartMetric === 'avgOrderValue' ? 'averageOrderValue' : overviewChartMetric) as keyof typeof overviewMetrics]?.isPositive as any}
-                            headerPreviousValue={overviewMetrics[(overviewChartMetric === 'revenue' ? 'totalRevenue' : overviewChartMetric === 'avgOrderValue' ? 'averageOrderValue' : overviewChartMetric) as keyof typeof overviewMetrics]?.previousValue as any}
-                            headerPreviousPeriod={overviewMetrics[(overviewChartMetric === 'revenue' ? 'totalRevenue' : overviewChartMetric === 'avgOrderValue' ? 'averageOrderValue' : overviewChartMetric) as keyof typeof overviewMetrics]?.previousPeriod as any}
-                            colorHue="#8b5cf6" // purple (overview)
-                            idSuffix="overview"
-                        />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                            {/* Row 1 */}
-                            <MetricCard title="Total Revenue" value={formatCurrency(overviewMetrics.totalRevenue.value)} change={overviewMetrics.totalRevenue.change} isPositive={overviewMetrics.totalRevenue.isPositive} previousValue={overviewMetrics.totalRevenue.previousValue} previousPeriod={overviewMetrics.totalRevenue.previousPeriod} dateRange={dateRange} metricKey="revenue" sparklineData={overviewSeries.totalRevenue} compareMode={compareMode} category="email" />
-                            <MetricCard title="Average Order Value" value={formatCurrency(overviewMetrics.averageOrderValue.value)} change={overviewMetrics.averageOrderValue.change} isPositive={overviewMetrics.averageOrderValue.isPositive} previousValue={overviewMetrics.averageOrderValue.previousValue} previousPeriod={overviewMetrics.averageOrderValue.previousPeriod} dateRange={dateRange} metricKey="avgOrderValue" sparklineData={overviewSeries.averageOrderValue} compareMode={compareMode} category="email" />
-                            <MetricCard title="Total Orders" value={formatNumber(overviewMetrics.totalOrders.value)} change={overviewMetrics.totalOrders.change} isPositive={overviewMetrics.totalOrders.isPositive} previousValue={overviewMetrics.totalOrders.previousValue} previousPeriod={overviewMetrics.totalOrders.previousPeriod} dateRange={dateRange} metricKey="totalOrders" sparklineData={overviewSeries.totalOrders} compareMode={compareMode} category="email" />
-                            <MetricCard title="Conversion Rate" value={formatPercent(overviewMetrics.conversionRate.value)} change={overviewMetrics.conversionRate.change} isPositive={overviewMetrics.conversionRate.isPositive} previousValue={overviewMetrics.conversionRate.previousValue} previousPeriod={overviewMetrics.conversionRate.previousPeriod} dateRange={dateRange} metricKey="conversionRate" sparklineData={overviewSeries.conversionRate} compareMode={compareMode} category="email" />
-                            {/* Row 2 */}
-                            <MetricCard title="Open Rate" value={formatPercent(overviewMetrics.openRate.value)} change={overviewMetrics.openRate.change} isPositive={overviewMetrics.openRate.isPositive} previousValue={overviewMetrics.openRate.previousValue} previousPeriod={overviewMetrics.openRate.previousPeriod} dateRange={dateRange} metricKey="openRate" sparklineData={overviewSeries.openRate} compareMode={compareMode} category="email" />
-                            <MetricCard title="Click Rate" value={formatPercent(overviewMetrics.clickRate.value)} change={overviewMetrics.clickRate.change} isPositive={overviewMetrics.clickRate.isPositive} previousValue={overviewMetrics.clickRate.previousValue} previousPeriod={overviewMetrics.clickRate.previousPeriod} dateRange={dateRange} metricKey="clickRate" sparklineData={overviewSeries.clickRate} compareMode={compareMode} category="email" />
-                            <MetricCard title="Click-to-Open Rate" value={formatPercent(overviewMetrics.clickToOpenRate.value)} change={overviewMetrics.clickToOpenRate.change} isPositive={overviewMetrics.clickToOpenRate.isPositive} previousValue={overviewMetrics.clickToOpenRate.previousValue} previousPeriod={overviewMetrics.clickToOpenRate.previousPeriod} dateRange={dateRange} metricKey="clickToOpenRate" sparklineData={overviewSeries.clickToOpenRate} compareMode={compareMode} category="email" />
-                            <MetricCard title="Revenue per Email" value={formatCurrency(overviewMetrics.revenuePerEmail.value)} change={overviewMetrics.revenuePerEmail.change} isPositive={overviewMetrics.revenuePerEmail.isPositive} previousValue={overviewMetrics.revenuePerEmail.previousValue} previousPeriod={overviewMetrics.revenuePerEmail.previousPeriod} dateRange={dateRange} metricKey="revenuePerEmail" sparklineData={overviewSeries.revenuePerEmail} compareMode={compareMode} category="email" />
-                            {/* Row 3 */}
-                            <MetricCard title="Emails Sent" value={formatNumber(overviewMetrics.emailsSent.value)} change={overviewMetrics.emailsSent.change} isPositive={overviewMetrics.emailsSent.isPositive} previousValue={overviewMetrics.emailsSent.previousValue} previousPeriod={overviewMetrics.emailsSent.previousPeriod} dateRange={dateRange} metricKey="emailsSent" sparklineData={overviewSeries.emailsSent} compareMode={compareMode} category="email" />
-                            <MetricCard title="Unsubscribe Rate" value={formatPercent(overviewMetrics.unsubscribeRate.value)} change={overviewMetrics.unsubscribeRate.change} isPositive={overviewMetrics.unsubscribeRate.isPositive} previousValue={overviewMetrics.unsubscribeRate.previousValue} previousPeriod={overviewMetrics.unsubscribeRate.previousPeriod} dateRange={dateRange} metricKey="unsubscribeRate" sparklineData={overviewSeries.unsubscribeRate} compareMode={compareMode} category="email" />
-                            <MetricCard title="Spam Rate" value={formatPercent(overviewMetrics.spamRate.value)} change={overviewMetrics.spamRate.change} isPositive={overviewMetrics.spamRate.isPositive} previousValue={overviewMetrics.spamRate.previousValue} previousPeriod={overviewMetrics.spamRate.previousPeriod} dateRange={dateRange} metricKey="spamRate" sparklineData={overviewSeries.spamRate} compareMode={compareMode} category="email" />
-                            <MetricCard title="Bounce Rate" value={formatPercent(overviewMetrics.bounceRate.value)} change={overviewMetrics.bounceRate.change} isPositive={overviewMetrics.bounceRate.isPositive} previousValue={overviewMetrics.bounceRate.previousValue} previousPeriod={overviewMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={overviewSeries.bounceRate} compareMode={compareMode} category="email" />
-                        </div>
-                        {/* Revenue Split Bar (Campaign vs Flow) moved to sit above Send Volume Impact */}
-                        <RevenueSplitBar campaigns={filteredCampaigns} flows={filteredFlowEmails} />
-                        <SplitShareOverTime
-                            dateRange={dateRange === 'custom' ? 'custom' : dateRange}
-                            granularity={granularity}
-                            customFrom={customFrom}
-                            customTo={customTo}
-                            compareMode={compareMode}
-                        />
-                        {/* Revenue Reliability module removed - placeholder panel removed */}
-                        <SendVolumeImpact dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
-                    </section>
-                )}
-                {campaignMetrics && (
-                    <section>
-                        <div className="flex items-center gap-2 mb-3">
-                            <Send className="w-5 h-5 text-purple-600" />
-                            <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Performance
-                                <InfoTooltipIcon placement="top" content={(
-                                    <div>
-                                        <p className="font-semibold mb-1">What</p>
-                                        <p>KPIs for campaign sends only.</p>
-                                        <p className="font-semibold mt-2 mb-1">How</p>
-                                        <p>Pick a metric and see trends and compare.</p>
-                                        <p className="font-semibold mt-2 mb-1">Why</p>
-                                        <p>If efficiency falls as volume rises, slow down or segment better.</p>
-                                    </div>
-                                )} />
-                            </h2>
-                        </div>
-                        {/* Campaign Timeseries Chart */}
-                        <TimeSeriesChart
-                            title="Campaign Performance"
-                            metricKey={campaignChartMetric}
-                            metricOptions={campaignMetricOptions as any}
-                            onMetricChange={m => setCampaignChartMetric(m)}
-                            bigValue={bigValueForCampaigns(campaignChartMetric)}
-                            primary={campaignChartSeries.primary}
-                            compare={campaignChartSeries.compare}
-                            valueType={metricValueType(campaignChartMetric)}
-                            granularity={granularity}
-                            compareMode={compareMode}
-                            headerChange={campaignMetrics[(campaignChartMetric === 'revenue' ? 'totalRevenue' : campaignChartMetric === 'avgOrderValue' ? 'averageOrderValue' : campaignChartMetric) as keyof typeof campaignMetrics]?.change as any}
-                            headerIsPositive={campaignMetrics[(campaignChartMetric === 'revenue' ? 'totalRevenue' : campaignChartMetric === 'avgOrderValue' ? 'averageOrderValue' : campaignChartMetric) as keyof typeof campaignMetrics]?.isPositive as any}
-                            headerPreviousValue={campaignMetrics[(campaignChartMetric === 'revenue' ? 'totalRevenue' : campaignChartMetric === 'avgOrderValue' ? 'averageOrderValue' : campaignChartMetric) as keyof typeof campaignMetrics]?.previousValue as any}
-                            headerPreviousPeriod={campaignMetrics[(campaignChartMetric === 'revenue' ? 'totalRevenue' : campaignChartMetric === 'avgOrderValue' ? 'averageOrderValue' : campaignChartMetric) as keyof typeof campaignMetrics]?.previousPeriod as any}
-                            colorHue="#6366f1" // indigo (campaigns)
-                            idSuffix="campaigns"
-                        />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                            {/* Row 1 */}
-                            <MetricCard title="Total Revenue" value={formatCurrency(campaignMetrics.totalRevenue.value)} change={campaignMetrics.totalRevenue.change} isPositive={campaignMetrics.totalRevenue.isPositive} previousValue={campaignMetrics.totalRevenue.previousValue} previousPeriod={campaignMetrics.totalRevenue.previousPeriod} dateRange={dateRange} metricKey="revenue" sparklineData={campaignSeries.totalRevenue} compareMode={compareMode} category="campaign" />
-                            <MetricCard title="Average Order Value" value={formatCurrency(campaignMetrics.averageOrderValue.value)} change={campaignMetrics.averageOrderValue.change} isPositive={campaignMetrics.averageOrderValue.isPositive} previousValue={campaignMetrics.averageOrderValue.previousValue} previousPeriod={campaignMetrics.averageOrderValue.previousPeriod} dateRange={dateRange} metricKey="avgOrderValue" sparklineData={campaignSeries.averageOrderValue} compareMode={compareMode} category="campaign" />
-                            <MetricCard title="Total Orders" value={formatNumber(campaignMetrics.totalOrders.value)} change={campaignMetrics.totalOrders.change} isPositive={campaignMetrics.totalOrders.isPositive} previousValue={campaignMetrics.totalOrders.previousValue} previousPeriod={campaignMetrics.totalOrders.previousPeriod} dateRange={dateRange} metricKey="totalOrders" sparklineData={campaignSeries.totalOrders} compareMode={compareMode} category="campaign" />
-                            <MetricCard title="Conversion Rate" value={formatPercent(campaignMetrics.conversionRate.value)} change={campaignMetrics.conversionRate.change} isPositive={campaignMetrics.conversionRate.isPositive} previousValue={campaignMetrics.conversionRate.previousValue} previousPeriod={campaignMetrics.conversionRate.previousPeriod} dateRange={dateRange} metricKey="conversionRate" sparklineData={campaignSeries.conversionRate} compareMode={compareMode} category="campaign" />
-                            {/* Row 2 */}
-                            <MetricCard title="Open Rate" value={formatPercent(campaignMetrics.openRate.value)} change={campaignMetrics.openRate.change} isPositive={campaignMetrics.openRate.isPositive} previousValue={campaignMetrics.openRate.previousValue} previousPeriod={campaignMetrics.openRate.previousPeriod} dateRange={dateRange} metricKey="openRate" sparklineData={campaignSeries.openRate} compareMode={compareMode} category="campaign" />
-                            <MetricCard title="Click Rate" value={formatPercent(campaignMetrics.clickRate.value)} change={campaignMetrics.clickRate.change} isPositive={campaignMetrics.clickRate.isPositive} previousValue={campaignMetrics.clickRate.previousValue} previousPeriod={campaignMetrics.clickRate.previousPeriod} dateRange={dateRange} metricKey="clickRate" sparklineData={campaignSeries.clickRate} compareMode={compareMode} category="campaign" />
-                            <MetricCard title="Click-to-Open Rate" value={formatPercent(campaignMetrics.clickToOpenRate.value)} change={campaignMetrics.clickToOpenRate.change} isPositive={campaignMetrics.clickToOpenRate.isPositive} previousValue={campaignMetrics.clickToOpenRate.previousValue} previousPeriod={campaignMetrics.clickToOpenRate.previousPeriod} dateRange={dateRange} metricKey="clickToOpenRate" sparklineData={campaignSeries.clickToOpenRate} compareMode={compareMode} category="campaign" />
-                            <MetricCard title="Revenue per Email" value={formatCurrency(campaignMetrics.revenuePerEmail.value)} change={campaignMetrics.revenuePerEmail.change} isPositive={campaignMetrics.revenuePerEmail.isPositive} previousValue={campaignMetrics.revenuePerEmail.previousValue} previousPeriod={campaignMetrics.revenuePerEmail.previousPeriod} dateRange={dateRange} metricKey="revenuePerEmail" sparklineData={campaignSeries.revenuePerEmail} compareMode={compareMode} category="campaign" />
-                            {/* Row 3 */}
-                            <MetricCard title="Emails Sent" value={formatNumber(campaignMetrics.emailsSent.value)} change={campaignMetrics.emailsSent.change} isPositive={campaignMetrics.emailsSent.isPositive} previousValue={campaignMetrics.emailsSent.previousValue} previousPeriod={campaignMetrics.emailsSent.previousPeriod} dateRange={dateRange} metricKey="emailsSent" sparklineData={campaignSeries.emailsSent} compareMode={compareMode} category="campaign" />
-                            <MetricCard title="Unsubscribe Rate" value={formatPercent(campaignMetrics.unsubscribeRate.value)} change={campaignMetrics.unsubscribeRate.change} isPositive={campaignMetrics.unsubscribeRate.isPositive} previousValue={campaignMetrics.unsubscribeRate.previousValue} previousPeriod={campaignMetrics.unsubscribeRate.previousPeriod} dateRange={dateRange} metricKey="unsubscribeRate" sparklineData={campaignSeries.unsubscribeRate} compareMode={compareMode} category="campaign" />
-                            <MetricCard title="Spam Rate" value={formatPercent(campaignMetrics.spamRate.value)} change={campaignMetrics.spamRate.change} isPositive={campaignMetrics.spamRate.isPositive} previousValue={campaignMetrics.spamRate.previousValue} previousPeriod={campaignMetrics.spamRate.previousPeriod} dateRange={dateRange} metricKey="spamRate" sparklineData={campaignSeries.spamRate} compareMode={compareMode} category="campaign" />
-                            <MetricCard title="Bounce Rate" value={formatPercent(campaignMetrics.bounceRate.value)} change={campaignMetrics.bounceRate.change} isPositive={campaignMetrics.bounceRate.isPositive} previousValue={campaignMetrics.bounceRate.previousValue} previousPeriod={campaignMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={campaignSeries.bounceRate} compareMode={compareMode} category="campaign" />
-                        </div>
-                        {/* Send Frequency Module */}
-                        <CampaignSendFrequency campaigns={filteredCampaigns} />
-                        <AudienceSizePerformance campaigns={filteredCampaigns} />
-                        {/* Subject Analysis Module — Campaigns only */}
-                        <SubjectAnalysis campaigns={filteredCampaigns} />
-                        {/* Campaign Gaps & Losses — placed below Campaign Send Frequency */}
-                        <CampaignGapsAndLosses
-                            dateRange={dateRange}
-                            granularity={granularity}
-                            customFrom={customFrom}
-                            customTo={customTo}
-                            filteredCampaigns={filteredCampaigns}
-                        />
-                    </section>
-                )}
-                {/* Day & Hour Performance (placed before Top Campaigns to match legacy ordering) */}
-                {campaignMetrics && (
-                    <>
-                        <DayOfWeekPerformance filteredCampaigns={filteredCampaigns} dateRange={dateRange} />
-                        <HourOfDayPerformance filteredCampaigns={filteredCampaigns} dateRange={dateRange} />
-                    </>
-                )}
-                {/* Top Campaigns moved directly after Campaign Performance */}
-                {campaignMetrics && (
-                    <section>
-                        <div className="section-card">
-                            <div className="section-header">
-                                <div className="flex items-center gap-2"><MailSearch className="w-5 h-5 text-purple-600" /><h3 className="text-base sm:text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Details
+                    {overviewMetrics && (
+                        <section>
+                            <div className="flex items-center gap-2 mb-3">
+                                <Mail className="w-5 h-5 text-purple-600" />
+                                <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Email Performance Overview
                                     <InfoTooltipIcon placement="top" content={(
                                         <div>
                                             <p className="font-semibold mb-1">What</p>
-                                            <p>Your campaigns listed by the metric you pick.</p>
+                                            <p>Your email KPIs over time.</p>
                                             <p className="font-semibold mt-2 mb-1">How</p>
-                                            <p>Sort ascending/descending and inspect details to learn what drives outcomes.</p>
+                                            <p>Switch metrics and compare to a prior period to spot trends.</p>
                                             <p className="font-semibold mt-2 mb-1">Why</p>
-                                            <p>Reuse what works like offer, timing, and creative. Iterate on weak ones.</p>
+                                            <p>If core rates slip, improve list quality, content, timing, and deliverability before scaling volume.</p>
                                         </div>
                                     )} />
-                                </h3></div>
-                                <div className="section-controls flex-wrap gap-y-2">
-                                    <div className="flex items-center gap-1.5 min-w-0">
-                                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Sort:</span>
-                                        <div className="flex gap-1.5 ml-1 flex-nowrap">
-                                            <button onClick={() => setCampaignSortOrder('desc')} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${campaignSortOrder === 'desc' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Desc</button>
-                                            <button onClick={() => setCampaignSortOrder('asc')} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${campaignSortOrder === 'asc' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Asc</button>
+                                </h2>
+                            </div>
+                            {/* Refresh button moved to header; keep section clean */}
+                            {/* Overview Timeseries Chart */}
+                            <TimeSeriesChart
+                                title="Email Performance Overview"
+                                metricKey={overviewChartMetric}
+                                metricOptions={campaignMetricOptions as any}
+                                onMetricChange={m => setOverviewChartMetric(m)}
+                                bigValue={bigValueForOverview(overviewChartMetric)}
+                                primary={overviewChartSeries.primary}
+                                compare={overviewChartSeries.compare}
+                                valueType={metricValueType(overviewChartMetric)}
+                                granularity={granularity}
+                                compareMode={compareMode}
+                                headerChange={overviewMetrics[(overviewChartMetric === 'revenue' ? 'totalRevenue' : overviewChartMetric === 'avgOrderValue' ? 'averageOrderValue' : overviewChartMetric) as keyof typeof overviewMetrics]?.change as any}
+                                headerIsPositive={overviewMetrics[(overviewChartMetric === 'revenue' ? 'totalRevenue' : overviewChartMetric === 'avgOrderValue' ? 'averageOrderValue' : overviewChartMetric) as keyof typeof overviewMetrics]?.isPositive as any}
+                                headerPreviousValue={overviewMetrics[(overviewChartMetric === 'revenue' ? 'totalRevenue' : overviewChartMetric === 'avgOrderValue' ? 'averageOrderValue' : overviewChartMetric) as keyof typeof overviewMetrics]?.previousValue as any}
+                                headerPreviousPeriod={overviewMetrics[(overviewChartMetric === 'revenue' ? 'totalRevenue' : overviewChartMetric === 'avgOrderValue' ? 'averageOrderValue' : overviewChartMetric) as keyof typeof overviewMetrics]?.previousPeriod as any}
+                                colorHue="#8b5cf6" // purple (overview)
+                                idSuffix="overview"
+                            />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                {/* Row 1 */}
+                                <MetricCard title="Total Revenue" value={formatCurrency(overviewMetrics.totalRevenue.value)} change={overviewMetrics.totalRevenue.change} isPositive={overviewMetrics.totalRevenue.isPositive} previousValue={overviewMetrics.totalRevenue.previousValue} previousPeriod={overviewMetrics.totalRevenue.previousPeriod} dateRange={dateRange} metricKey="revenue" sparklineData={overviewSeries.totalRevenue} compareMode={compareMode} category="email" />
+                                <MetricCard title="Average Order Value" value={formatCurrency(overviewMetrics.averageOrderValue.value)} change={overviewMetrics.averageOrderValue.change} isPositive={overviewMetrics.averageOrderValue.isPositive} previousValue={overviewMetrics.averageOrderValue.previousValue} previousPeriod={overviewMetrics.averageOrderValue.previousPeriod} dateRange={dateRange} metricKey="avgOrderValue" sparklineData={overviewSeries.averageOrderValue} compareMode={compareMode} category="email" />
+                                <MetricCard title="Total Orders" value={formatNumber(overviewMetrics.totalOrders.value)} change={overviewMetrics.totalOrders.change} isPositive={overviewMetrics.totalOrders.isPositive} previousValue={overviewMetrics.totalOrders.previousValue} previousPeriod={overviewMetrics.totalOrders.previousPeriod} dateRange={dateRange} metricKey="totalOrders" sparklineData={overviewSeries.totalOrders} compareMode={compareMode} category="email" />
+                                <MetricCard title="Conversion Rate" value={formatPercent(overviewMetrics.conversionRate.value)} change={overviewMetrics.conversionRate.change} isPositive={overviewMetrics.conversionRate.isPositive} previousValue={overviewMetrics.conversionRate.previousValue} previousPeriod={overviewMetrics.conversionRate.previousPeriod} dateRange={dateRange} metricKey="conversionRate" sparklineData={overviewSeries.conversionRate} compareMode={compareMode} category="email" />
+                                {/* Row 2 */}
+                                <MetricCard title="Open Rate" value={formatPercent(overviewMetrics.openRate.value)} change={overviewMetrics.openRate.change} isPositive={overviewMetrics.openRate.isPositive} previousValue={overviewMetrics.openRate.previousValue} previousPeriod={overviewMetrics.openRate.previousPeriod} dateRange={dateRange} metricKey="openRate" sparklineData={overviewSeries.openRate} compareMode={compareMode} category="email" />
+                                <MetricCard title="Click Rate" value={formatPercent(overviewMetrics.clickRate.value)} change={overviewMetrics.clickRate.change} isPositive={overviewMetrics.clickRate.isPositive} previousValue={overviewMetrics.clickRate.previousValue} previousPeriod={overviewMetrics.clickRate.previousPeriod} dateRange={dateRange} metricKey="clickRate" sparklineData={overviewSeries.clickRate} compareMode={compareMode} category="email" />
+                                <MetricCard title="Click-to-Open Rate" value={formatPercent(overviewMetrics.clickToOpenRate.value)} change={overviewMetrics.clickToOpenRate.change} isPositive={overviewMetrics.clickToOpenRate.isPositive} previousValue={overviewMetrics.clickToOpenRate.previousValue} previousPeriod={overviewMetrics.clickToOpenRate.previousPeriod} dateRange={dateRange} metricKey="clickToOpenRate" sparklineData={overviewSeries.clickToOpenRate} compareMode={compareMode} category="email" />
+                                <MetricCard title="Revenue per Email" value={formatCurrency(overviewMetrics.revenuePerEmail.value)} change={overviewMetrics.revenuePerEmail.change} isPositive={overviewMetrics.revenuePerEmail.isPositive} previousValue={overviewMetrics.revenuePerEmail.previousValue} previousPeriod={overviewMetrics.revenuePerEmail.previousPeriod} dateRange={dateRange} metricKey="revenuePerEmail" sparklineData={overviewSeries.revenuePerEmail} compareMode={compareMode} category="email" />
+                                {/* Row 3 */}
+                                <MetricCard title="Emails Sent" value={formatNumber(overviewMetrics.emailsSent.value)} change={overviewMetrics.emailsSent.change} isPositive={overviewMetrics.emailsSent.isPositive} previousValue={overviewMetrics.emailsSent.previousValue} previousPeriod={overviewMetrics.emailsSent.previousPeriod} dateRange={dateRange} metricKey="emailsSent" sparklineData={overviewSeries.emailsSent} compareMode={compareMode} category="email" />
+                                <MetricCard title="Unsubscribe Rate" value={formatPercent(overviewMetrics.unsubscribeRate.value)} change={overviewMetrics.unsubscribeRate.change} isPositive={overviewMetrics.unsubscribeRate.isPositive} previousValue={overviewMetrics.unsubscribeRate.previousValue} previousPeriod={overviewMetrics.unsubscribeRate.previousPeriod} dateRange={dateRange} metricKey="unsubscribeRate" sparklineData={overviewSeries.unsubscribeRate} compareMode={compareMode} category="email" />
+                                <MetricCard title="Spam Rate" value={formatPercent(overviewMetrics.spamRate.value)} change={overviewMetrics.spamRate.change} isPositive={overviewMetrics.spamRate.isPositive} previousValue={overviewMetrics.spamRate.previousValue} previousPeriod={overviewMetrics.spamRate.previousPeriod} dateRange={dateRange} metricKey="spamRate" sparklineData={overviewSeries.spamRate} compareMode={compareMode} category="email" />
+                                <MetricCard title="Bounce Rate" value={formatPercent(overviewMetrics.bounceRate.value)} change={overviewMetrics.bounceRate.change} isPositive={overviewMetrics.bounceRate.isPositive} previousValue={overviewMetrics.bounceRate.previousValue} previousPeriod={overviewMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={overviewSeries.bounceRate} compareMode={compareMode} category="email" />
+                            </div>
+                            {/* Revenue Split Bar (Campaign vs Flow) moved to sit above Send Volume Impact */}
+                            <RevenueSplitBar campaigns={filteredCampaigns} flows={filteredFlowEmails} />
+                            <SplitShareOverTime
+                                dateRange={dateRange === 'custom' ? 'custom' : dateRange}
+                                granularity={granularity}
+                                customFrom={customFrom}
+                                customTo={customTo}
+                                compareMode={compareMode}
+                            />
+                            {/* Revenue Reliability module removed - placeholder panel removed */}
+                            <SendVolumeImpact dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
+                        </section>
+                    )}
+                    {campaignMetrics && (
+                        <section>
+                            <div className="flex items-center gap-2 mb-3">
+                                <Send className="w-5 h-5 text-purple-600" />
+                                <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Performance
+                                    <InfoTooltipIcon placement="top" content={(
+                                        <div>
+                                            <p className="font-semibold mb-1">What</p>
+                                            <p>KPIs for campaign sends only.</p>
+                                            <p className="font-semibold mt-2 mb-1">How</p>
+                                            <p>Pick a metric and see trends and compare.</p>
+                                            <p className="font-semibold mt-2 mb-1">Why</p>
+                                            <p>If efficiency falls as volume rises, slow down or segment better.</p>
+                                        </div>
+                                    )} />
+                                </h2>
+                            </div>
+                            {/* Campaign Timeseries Chart */}
+                            <TimeSeriesChart
+                                title="Campaign Performance"
+                                metricKey={campaignChartMetric}
+                                metricOptions={campaignMetricOptions as any}
+                                onMetricChange={m => setCampaignChartMetric(m)}
+                                bigValue={bigValueForCampaigns(campaignChartMetric)}
+                                primary={campaignChartSeries.primary}
+                                compare={campaignChartSeries.compare}
+                                valueType={metricValueType(campaignChartMetric)}
+                                granularity={granularity}
+                                compareMode={compareMode}
+                                headerChange={campaignMetrics[(campaignChartMetric === 'revenue' ? 'totalRevenue' : campaignChartMetric === 'avgOrderValue' ? 'averageOrderValue' : campaignChartMetric) as keyof typeof campaignMetrics]?.change as any}
+                                headerIsPositive={campaignMetrics[(campaignChartMetric === 'revenue' ? 'totalRevenue' : campaignChartMetric === 'avgOrderValue' ? 'averageOrderValue' : campaignChartMetric) as keyof typeof campaignMetrics]?.isPositive as any}
+                                headerPreviousValue={campaignMetrics[(campaignChartMetric === 'revenue' ? 'totalRevenue' : campaignChartMetric === 'avgOrderValue' ? 'averageOrderValue' : campaignChartMetric) as keyof typeof campaignMetrics]?.previousValue as any}
+                                headerPreviousPeriod={campaignMetrics[(campaignChartMetric === 'revenue' ? 'totalRevenue' : campaignChartMetric === 'avgOrderValue' ? 'averageOrderValue' : campaignChartMetric) as keyof typeof campaignMetrics]?.previousPeriod as any}
+                                colorHue="#6366f1" // indigo (campaigns)
+                                idSuffix="campaigns"
+                            />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                {/* Row 1 */}
+                                <MetricCard title="Total Revenue" value={formatCurrency(campaignMetrics.totalRevenue.value)} change={campaignMetrics.totalRevenue.change} isPositive={campaignMetrics.totalRevenue.isPositive} previousValue={campaignMetrics.totalRevenue.previousValue} previousPeriod={campaignMetrics.totalRevenue.previousPeriod} dateRange={dateRange} metricKey="revenue" sparklineData={campaignSeries.totalRevenue} compareMode={compareMode} category="campaign" />
+                                <MetricCard title="Average Order Value" value={formatCurrency(campaignMetrics.averageOrderValue.value)} change={campaignMetrics.averageOrderValue.change} isPositive={campaignMetrics.averageOrderValue.isPositive} previousValue={campaignMetrics.averageOrderValue.previousValue} previousPeriod={campaignMetrics.averageOrderValue.previousPeriod} dateRange={dateRange} metricKey="avgOrderValue" sparklineData={campaignSeries.averageOrderValue} compareMode={compareMode} category="campaign" />
+                                <MetricCard title="Total Orders" value={formatNumber(campaignMetrics.totalOrders.value)} change={campaignMetrics.totalOrders.change} isPositive={campaignMetrics.totalOrders.isPositive} previousValue={campaignMetrics.totalOrders.previousValue} previousPeriod={campaignMetrics.totalOrders.previousPeriod} dateRange={dateRange} metricKey="totalOrders" sparklineData={campaignSeries.totalOrders} compareMode={compareMode} category="campaign" />
+                                <MetricCard title="Conversion Rate" value={formatPercent(campaignMetrics.conversionRate.value)} change={campaignMetrics.conversionRate.change} isPositive={campaignMetrics.conversionRate.isPositive} previousValue={campaignMetrics.conversionRate.previousValue} previousPeriod={campaignMetrics.conversionRate.previousPeriod} dateRange={dateRange} metricKey="conversionRate" sparklineData={campaignSeries.conversionRate} compareMode={compareMode} category="campaign" />
+                                {/* Row 2 */}
+                                <MetricCard title="Open Rate" value={formatPercent(campaignMetrics.openRate.value)} change={campaignMetrics.openRate.change} isPositive={campaignMetrics.openRate.isPositive} previousValue={campaignMetrics.openRate.previousValue} previousPeriod={campaignMetrics.openRate.previousPeriod} dateRange={dateRange} metricKey="openRate" sparklineData={campaignSeries.openRate} compareMode={compareMode} category="campaign" />
+                                <MetricCard title="Click Rate" value={formatPercent(campaignMetrics.clickRate.value)} change={campaignMetrics.clickRate.change} isPositive={campaignMetrics.clickRate.isPositive} previousValue={campaignMetrics.clickRate.previousValue} previousPeriod={campaignMetrics.clickRate.previousPeriod} dateRange={dateRange} metricKey="clickRate" sparklineData={campaignSeries.clickRate} compareMode={compareMode} category="campaign" />
+                                <MetricCard title="Click-to-Open Rate" value={formatPercent(campaignMetrics.clickToOpenRate.value)} change={campaignMetrics.clickToOpenRate.change} isPositive={campaignMetrics.clickToOpenRate.isPositive} previousValue={campaignMetrics.clickToOpenRate.previousValue} previousPeriod={campaignMetrics.clickToOpenRate.previousPeriod} dateRange={dateRange} metricKey="clickToOpenRate" sparklineData={campaignSeries.clickToOpenRate} compareMode={compareMode} category="campaign" />
+                                <MetricCard title="Revenue per Email" value={formatCurrency(campaignMetrics.revenuePerEmail.value)} change={campaignMetrics.revenuePerEmail.change} isPositive={campaignMetrics.revenuePerEmail.isPositive} previousValue={campaignMetrics.revenuePerEmail.previousValue} previousPeriod={campaignMetrics.revenuePerEmail.previousPeriod} dateRange={dateRange} metricKey="revenuePerEmail" sparklineData={campaignSeries.revenuePerEmail} compareMode={compareMode} category="campaign" />
+                                {/* Row 3 */}
+                                <MetricCard title="Emails Sent" value={formatNumber(campaignMetrics.emailsSent.value)} change={campaignMetrics.emailsSent.change} isPositive={campaignMetrics.emailsSent.isPositive} previousValue={campaignMetrics.emailsSent.previousValue} previousPeriod={campaignMetrics.emailsSent.previousPeriod} dateRange={dateRange} metricKey="emailsSent" sparklineData={campaignSeries.emailsSent} compareMode={compareMode} category="campaign" />
+                                <MetricCard title="Unsubscribe Rate" value={formatPercent(campaignMetrics.unsubscribeRate.value)} change={campaignMetrics.unsubscribeRate.change} isPositive={campaignMetrics.unsubscribeRate.isPositive} previousValue={campaignMetrics.unsubscribeRate.previousValue} previousPeriod={campaignMetrics.unsubscribeRate.previousPeriod} dateRange={dateRange} metricKey="unsubscribeRate" sparklineData={campaignSeries.unsubscribeRate} compareMode={compareMode} category="campaign" />
+                                <MetricCard title="Spam Rate" value={formatPercent(campaignMetrics.spamRate.value)} change={campaignMetrics.spamRate.change} isPositive={campaignMetrics.spamRate.isPositive} previousValue={campaignMetrics.spamRate.previousValue} previousPeriod={campaignMetrics.spamRate.previousPeriod} dateRange={dateRange} metricKey="spamRate" sparklineData={campaignSeries.spamRate} compareMode={compareMode} category="campaign" />
+                                <MetricCard title="Bounce Rate" value={formatPercent(campaignMetrics.bounceRate.value)} change={campaignMetrics.bounceRate.change} isPositive={campaignMetrics.bounceRate.isPositive} previousValue={campaignMetrics.bounceRate.previousValue} previousPeriod={campaignMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={campaignSeries.bounceRate} compareMode={compareMode} category="campaign" />
+                            </div>
+                            {/* Send Frequency Module */}
+                            <CampaignSendFrequency campaigns={filteredCampaigns} onGuidance={(g) => setFrequencyGuidance(g)} />
+                            <AudienceSizePerformance campaigns={filteredCampaigns} />
+                            {/* Subject Analysis Module — Campaigns only */}
+                            <SubjectAnalysis campaigns={filteredCampaigns} />
+                            {/* Campaign Gaps & Losses — placed below Campaign Send Frequency */}
+                            <CampaignGapsAndLosses
+                                dateRange={dateRange}
+                                granularity={granularity}
+                                customFrom={customFrom}
+                                customTo={customTo}
+                                filteredCampaigns={filteredCampaigns}
+                            />
+                        </section>
+                    )}
+                    {/* Day & Hour Performance (placed before Top Campaigns to match legacy ordering) */}
+                    {campaignMetrics && (
+                        <>
+                            <DayOfWeekPerformance filteredCampaigns={filteredCampaigns} dateRange={dateRange} frequencyRecommendation={deriveFrequencyRecommendation(frequencyGuidance)} />
+                            <HourOfDayPerformance filteredCampaigns={filteredCampaigns} dateRange={dateRange} />
+                        </>
+                    )}
+                    {/* Top Campaigns moved directly after Campaign Performance */}
+                    {campaignMetrics && (
+                        <section>
+                            <div className="section-card">
+                                <div className="section-header">
+                                    <div className="flex items-center gap-2"><MailSearch className="w-5 h-5 text-purple-600" /><h3 className="text-base sm:text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Campaign Details
+                                        <InfoTooltipIcon placement="top" content={(
+                                            <div>
+                                                <p className="font-semibold mb-1">What</p>
+                                                <p>Your campaigns listed by the metric you pick.</p>
+                                                <p className="font-semibold mt-2 mb-1">How</p>
+                                                <p>Sort ascending/descending and inspect details to learn what drives outcomes.</p>
+                                                <p className="font-semibold mt-2 mb-1">Why</p>
+                                                <p>Reuse what works like offer, timing, and creative. Iterate on weak ones.</p>
+                                            </div>
+                                        )} />
+                                    </h3></div>
+                                    <div className="section-controls flex-wrap gap-y-2">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Sort:</span>
+                                            <div className="flex gap-1.5 ml-1 flex-nowrap">
+                                                <button onClick={() => setCampaignSortOrder('desc')} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${campaignSortOrder === 'desc' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Desc</button>
+                                                <button onClick={() => setCampaignSortOrder('asc')} className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${campaignSortOrder === 'asc' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Asc</button>
+                                            </div>
+                                        </div>
+                                        <div className="relative min-w-0 w-full sm:w-auto"><SelectBase value={selectedCampaignMetric} onChange={e => setSelectedCampaignMetric((e.target as HTMLSelectElement).value)} className="w-full sm:w-auto px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">{campaignMetricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</SelectBase></div>
+                                    </div>
+                                </div>
+                                <div className="-mt-1 mb-1 text-sm text-gray-600 dark:text-gray-400">You sent {filteredCampaigns.length} {filteredCampaigns.length === 1 ? 'campaign' : 'campaigns'} in this time range.</div>
+                                <div>{getSortedCampaigns().slice(0, displayedCampaigns).map((c, i) => (
+                                    <div key={c.id} className={`group relative p-3 sm:p-4 avoid-break ${i !== 0 ? 'border-t border-gray-200 dark:border-gray-800' : ''} md:grid md:items-center md:gap-4 md:[grid-template-columns:minmax(0,1fr)_400px_max-content]`}>
+                                        {/* Subject (col 1) */}
+                                        <div className="md:col-start-1 md:col-end-2 min-w-0">
+                                            <div className="flex items-center gap-3 mb-1.5"><h4 className="font-medium text-gray-900 dark:text-gray-100 truncate">{c.subject}</h4></div>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1 truncate">{c.campaignName}</p>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">Sent on {c.sentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                            {/* Segments removed per requirements */}
+                                        </div>
+
+                                        {/* Details (col 2 on md+, below on mobile) */}
+                                        <div className="hidden md:block md:col-start-2 md:col-end-3 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-3 text-xs grid grid-cols-2 gap-x-6 gap-y-1">
+                                                {['revenue', 'revenuePerEmail', 'openRate', 'clickRate', 'clickToOpenRate', 'emailsSent', 'totalOrders', 'avgOrderValue', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].map(mk => (
+                                                    <div key={mk} className="flex justify-between gap-4">
+                                                        <span className="text-gray-500 capitalize">{campaignMetricOptions.find(opt => opt.value === mk)?.label || mk}</span>
+                                                        <span className="tabular-nums font-medium text-gray-900 dark:text-gray-100">{formatMetricValue((c as any)[mk] as number, mk)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="md:hidden mt-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                                            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-3 text-xs grid grid-cols-2 gap-x-4 gap-y-1">
+                                                {['revenue', 'revenuePerEmail', 'openRate', 'clickRate', 'clickToOpenRate', 'emailsSent', 'totalOrders', 'avgOrderValue', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].map(mk => (
+                                                    <div key={mk} className="flex justify-between gap-3">
+                                                        <span className="text-gray-500 capitalize">{campaignMetricOptions.find(opt => opt.value === mk)?.label || mk}</span>
+                                                        <span className="tabular-nums font-medium text-gray-900 dark:text-gray-100">{formatMetricValue((c as any)[mk] as number, mk)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Metric (col 3) */}
+                                        <div className="md:col-start-3 md:col-end-4 text-right">
+                                            <p className="text-xl font-semibold text-gray-900 dark:text-gray-100">{formatMetricValue((c as any)[selectedCampaignMetric] as number, selectedCampaignMetric)}</p>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">{campaignMetricOptions.find(m => m.value === selectedCampaignMetric)?.label}</p>
                                         </div>
                                     </div>
-                                    <div className="relative min-w-0 w-full sm:w-auto"><SelectBase value={selectedCampaignMetric} onChange={e => setSelectedCampaignMetric((e.target as HTMLSelectElement).value)} className="w-full sm:w-auto px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">{campaignMetricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</SelectBase></div>
+                                ))}{(() => { const sorted = getSortedCampaigns(); return displayedCampaigns < sorted.length && (<div className="p-4 border-t border-gray-200 dark:border-gray-800 text-center bg-gray-50 dark:bg-gray-900/50"><button onClick={() => setDisplayedCampaigns((n: number) => n + 5)} className="px-4 py-2 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white transition-colors">Load More ({Math.min(5, sorted.length - displayedCampaigns)} more)</button></div>); })()}</div>
+                            </div>
+                        </section>
+                    )}
+                    {flowMetrics && (
+                        <section>
+                            <div className="flex items-center justify-between gap-2 mb-3">
+                                <div className="flex items-center gap-2"><Zap className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Flow Performance
+                                    <InfoTooltipIcon placement="top" content={(
+                                        <div>
+                                            <p className="font-semibold mb-1">What</p>
+                                            <p>KPIs for flows across all flows or one flow.</p>
+                                            <p className="font-semibold mt-2 mb-1">How</p>
+                                            <p>Pick a metric and see trend and compare.</p>
+                                            <p className="font-semibold mt-2 mb-1">Why</p>
+                                            <p>If a key flow underperforms, fix triggers, content, and timing.</p>
+                                        </div>
+                                    )} />
+                                </h2></div>
+                                <div className="relative w-full sm:w-auto">
+                                    <SelectBase value={selectedFlow} onChange={e => { setSelectedFlow((e.target as HTMLSelectElement).value); }} className="w-full sm:w-auto px-3 py-1.5 pr-9 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm" minWidthClass="sm:min-w-[220px]">
+                                        <option value="all">All Flows</option>
+                                        {uniqueFlowNames.map(f => <option key={f} value={f}>{f}</option>)}
+                                    </SelectBase>
                                 </div>
                             </div>
-                            <div className="-mt-1 mb-1 text-sm text-gray-600 dark:text-gray-400">You sent {filteredCampaigns.length} {filteredCampaigns.length === 1 ? 'campaign' : 'campaigns'} in this time range.</div>
-                            <div>{getSortedCampaigns().slice(0, displayedCampaigns).map((c, i) => (
-                                <div key={c.id} className={`group relative p-3 sm:p-4 avoid-break ${i !== 0 ? 'border-t border-gray-200 dark:border-gray-800' : ''} md:grid md:items-center md:gap-4 md:[grid-template-columns:minmax(0,1fr)_400px_max-content]`}>
-                                    {/* Subject (col 1) */}
-                                    <div className="md:col-start-1 md:col-end-2 min-w-0">
-                                        <div className="flex items-center gap-3 mb-1.5"><h4 className="font-medium text-gray-900 dark:text-gray-100 truncate">{c.subject}</h4></div>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1 truncate">{c.campaignName}</p>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">Sent on {c.sentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                                        {/* Segments removed per requirements */}
-                                    </div>
-
-                                    {/* Details (col 2 on md+, below on mobile) */}
-                                    <div className="hidden md:block md:col-start-2 md:col-end-3 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                                        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-3 text-xs grid grid-cols-2 gap-x-6 gap-y-1">
-                                            {['revenue', 'revenuePerEmail', 'openRate', 'clickRate', 'clickToOpenRate', 'emailsSent', 'totalOrders', 'avgOrderValue', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].map(mk => (
-                                                <div key={mk} className="flex justify-between gap-4">
-                                                    <span className="text-gray-500 capitalize">{campaignMetricOptions.find(opt => opt.value === mk)?.label || mk}</span>
-                                                    <span className="tabular-nums font-medium text-gray-900 dark:text-gray-100">{formatMetricValue((c as any)[mk] as number, mk)}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div className="md:hidden mt-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                                        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-3 text-xs grid grid-cols-2 gap-x-4 gap-y-1">
-                                            {['revenue', 'revenuePerEmail', 'openRate', 'clickRate', 'clickToOpenRate', 'emailsSent', 'totalOrders', 'avgOrderValue', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].map(mk => (
-                                                <div key={mk} className="flex justify-between gap-3">
-                                                    <span className="text-gray-500 capitalize">{campaignMetricOptions.find(opt => opt.value === mk)?.label || mk}</span>
-                                                    <span className="tabular-nums font-medium text-gray-900 dark:text-gray-100">{formatMetricValue((c as any)[mk] as number, mk)}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Metric (col 3) */}
-                                    <div className="md:col-start-3 md:col-end-4 text-right">
-                                        <p className="text-xl font-semibold text-gray-900 dark:text-gray-100">{formatMetricValue((c as any)[selectedCampaignMetric] as number, selectedCampaignMetric)}</p>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">{campaignMetricOptions.find(m => m.value === selectedCampaignMetric)?.label}</p>
-                                    </div>
-                                </div>
-                            ))}{(() => { const sorted = getSortedCampaigns(); return displayedCampaigns < sorted.length && (<div className="p-4 border-t border-gray-200 dark:border-gray-800 text-center bg-gray-50 dark:bg-gray-900/50"><button onClick={() => setDisplayedCampaigns((n: number) => n + 5)} className="px-4 py-2 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white transition-colors">Load More ({Math.min(5, sorted.length - displayedCampaigns)} more)</button></div>); })()}</div>
-                        </div>
-                    </section>
-                )}
-                {flowMetrics && (
-                    <section>
-                        <div className="flex items-center justify-between gap-2 mb-3">
-                            <div className="flex items-center gap-2"><Zap className="w-5 h-5 text-purple-600" /><h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Flow Performance
-                                <InfoTooltipIcon placement="top" content={(
-                                    <div>
-                                        <p className="font-semibold mb-1">What</p>
-                                        <p>KPIs for flows across all flows or one flow.</p>
-                                        <p className="font-semibold mt-2 mb-1">How</p>
-                                        <p>Pick a metric and see trend and compare.</p>
-                                        <p className="font-semibold mt-2 mb-1">Why</p>
-                                        <p>If a key flow underperforms, fix triggers, content, and timing.</p>
-                                    </div>
-                                )} />
-                            </h2></div>
-                            <div className="relative w-full sm:w-auto">
-                                <SelectBase value={selectedFlow} onChange={e => { setSelectedFlow((e.target as HTMLSelectElement).value); }} className="w-full sm:w-auto px-3 py-1.5 pr-9 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm" minWidthClass="sm:min-w-[220px]">
-                                    <option value="all">All Flows</option>
-                                    {uniqueFlowNames.map(f => <option key={f} value={f}>{f}</option>)}
-                                </SelectBase>
+                            {/* Flow Timeseries Chart */}
+                            <TimeSeriesChart
+                                title="Flow Performance"
+                                metricKey={flowChartMetric}
+                                metricOptions={campaignMetricOptions as any}
+                                onMetricChange={m => setFlowChartMetric(m)}
+                                bigValue={bigValueForFlows(flowChartMetric)}
+                                primary={flowChartSeries.primary}
+                                compare={flowChartSeries.compare}
+                                valueType={metricValueType(flowChartMetric)}
+                                granularity={granularity}
+                                compareMode={compareMode}
+                                headerChange={flowMetrics[(flowChartMetric === 'revenue' ? 'totalRevenue' : flowChartMetric === 'avgOrderValue' ? 'averageOrderValue' : flowChartMetric) as keyof typeof flowMetrics]?.change as any}
+                                headerIsPositive={flowMetrics[(flowChartMetric === 'revenue' ? 'totalRevenue' : flowChartMetric === 'avgOrderValue' ? 'averageOrderValue' : flowChartMetric) as keyof typeof flowMetrics]?.isPositive as any}
+                                headerPreviousValue={flowMetrics[(flowChartMetric === 'revenue' ? 'totalRevenue' : flowChartMetric === 'avgOrderValue' ? 'averageOrderValue' : flowChartMetric) as keyof typeof flowMetrics]?.previousValue as any}
+                                headerPreviousPeriod={flowMetrics[(flowChartMetric === 'revenue' ? 'totalRevenue' : flowChartMetric === 'avgOrderValue' ? 'averageOrderValue' : flowChartMetric) as keyof typeof flowMetrics]?.previousPeriod as any}
+                                colorHue="#10b981" // emerald (flows)
+                                idSuffix="flows"
+                            />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                {/* Row 1 */}
+                                <MetricCard title="Total Revenue" value={formatCurrency(flowMetrics.totalRevenue.value)} change={flowMetrics.totalRevenue.change} isPositive={flowMetrics.totalRevenue.isPositive} previousValue={flowMetrics.totalRevenue.previousValue} previousPeriod={flowMetrics.totalRevenue.previousPeriod} dateRange={dateRange} metricKey="revenue" sparklineData={flowSeries.totalRevenue} compareMode={compareMode} category="flow" />
+                                <MetricCard title="Average Order Value" value={formatCurrency(flowMetrics.averageOrderValue.value)} change={flowMetrics.averageOrderValue.change} isPositive={flowMetrics.averageOrderValue.isPositive} previousValue={flowMetrics.averageOrderValue.previousValue} previousPeriod={flowMetrics.averageOrderValue.previousPeriod} dateRange={dateRange} metricKey="avgOrderValue" sparklineData={flowSeries.averageOrderValue} compareMode={compareMode} category="flow" />
+                                <MetricCard title="Total Orders" value={formatNumber(flowMetrics.totalOrders.value)} change={flowMetrics.totalOrders.change} isPositive={flowMetrics.totalOrders.isPositive} previousValue={flowMetrics.totalOrders.previousValue} previousPeriod={flowMetrics.totalOrders.previousPeriod} dateRange={dateRange} metricKey="totalOrders" sparklineData={flowSeries.totalOrders} compareMode={compareMode} category="flow" />
+                                <MetricCard title="Conversion Rate" value={formatPercent(flowMetrics.conversionRate.value)} change={flowMetrics.conversionRate.change} isPositive={flowMetrics.conversionRate.isPositive} previousValue={flowMetrics.conversionRate.previousValue} previousPeriod={flowMetrics.conversionRate.previousPeriod} dateRange={dateRange} metricKey="conversionRate" sparklineData={flowSeries.conversionRate} compareMode={compareMode} category="flow" />
+                                {/* Row 2 */}
+                                <MetricCard title="Open Rate" value={formatPercent(flowMetrics.openRate.value)} change={flowMetrics.openRate.change} isPositive={flowMetrics.openRate.isPositive} previousValue={flowMetrics.openRate.previousValue} previousPeriod={flowMetrics.openRate.previousPeriod} dateRange={dateRange} metricKey="openRate" sparklineData={flowSeries.openRate} compareMode={compareMode} category="flow" />
+                                <MetricCard title="Click Rate" value={formatPercent(flowMetrics.clickRate.value)} change={flowMetrics.clickRate.change} isPositive={flowMetrics.clickRate.isPositive} previousValue={flowMetrics.clickRate.previousValue} previousPeriod={flowMetrics.clickRate.previousPeriod} dateRange={dateRange} metricKey="clickRate" sparklineData={flowSeries.clickRate} compareMode={compareMode} category="flow" />
+                                <MetricCard title="Click-to-Open Rate" value={formatPercent(flowMetrics.clickToOpenRate.value)} change={flowMetrics.clickToOpenRate.change} isPositive={flowMetrics.clickToOpenRate.isPositive} previousValue={flowMetrics.clickToOpenRate.previousValue} previousPeriod={flowMetrics.clickToOpenRate.previousPeriod} dateRange={dateRange} metricKey="clickToOpenRate" sparklineData={flowSeries.clickToOpenRate} compareMode={compareMode} category="flow" />
+                                <MetricCard title="Revenue per Email" value={formatCurrency(flowMetrics.revenuePerEmail.value)} change={flowMetrics.revenuePerEmail.change} isPositive={flowMetrics.revenuePerEmail.isPositive} previousValue={flowMetrics.revenuePerEmail.previousValue} previousPeriod={flowMetrics.revenuePerEmail.previousPeriod} dateRange={dateRange} metricKey="revenuePerEmail" sparklineData={flowSeries.revenuePerEmail} compareMode={compareMode} category="flow" />
+                                {/* Row 3 */}
+                                <MetricCard title="Emails Sent" value={formatNumber(flowMetrics.emailsSent.value)} change={flowMetrics.emailsSent.change} isPositive={flowMetrics.emailsSent.isPositive} previousValue={flowMetrics.emailsSent.previousValue} previousPeriod={flowMetrics.emailsSent.previousPeriod} dateRange={dateRange} metricKey="emailsSent" sparklineData={flowSeries.emailsSent} compareMode={compareMode} category="flow" />
+                                <MetricCard title="Unsubscribe Rate" value={formatPercent(flowMetrics.unsubscribeRate.value)} change={flowMetrics.unsubscribeRate.change} isPositive={flowMetrics.unsubscribeRate.isPositive} previousValue={flowMetrics.unsubscribeRate.previousValue} previousPeriod={flowMetrics.unsubscribeRate.previousPeriod} dateRange={dateRange} metricKey="unsubscribeRate" sparklineData={flowSeries.unsubscribeRate} compareMode={compareMode} category="flow" />
+                                <MetricCard title="Spam Rate" value={formatPercent(flowMetrics.spamRate.value)} change={flowMetrics.spamRate.change} isPositive={flowMetrics.spamRate.isPositive} previousValue={flowMetrics.spamRate.previousValue} previousPeriod={flowMetrics.spamRate.previousPeriod} dateRange={dateRange} metricKey="spamRate" sparklineData={flowSeries.spamRate} compareMode={compareMode} category="flow" />
+                                <MetricCard title="Bounce Rate" value={formatPercent(flowMetrics.bounceRate.value)} change={flowMetrics.bounceRate.change} isPositive={flowMetrics.bounceRate.isPositive} previousValue={flowMetrics.bounceRate.previousValue} previousPeriod={flowMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={flowSeries.bounceRate} compareMode={compareMode} category="flow" />
                             </div>
-                        </div>
-                        {/* Flow Timeseries Chart */}
-                        <TimeSeriesChart
-                            title="Flow Performance"
-                            metricKey={flowChartMetric}
-                            metricOptions={campaignMetricOptions as any}
-                            onMetricChange={m => setFlowChartMetric(m)}
-                            bigValue={bigValueForFlows(flowChartMetric)}
-                            primary={flowChartSeries.primary}
-                            compare={flowChartSeries.compare}
-                            valueType={metricValueType(flowChartMetric)}
-                            granularity={granularity}
-                            compareMode={compareMode}
-                            headerChange={flowMetrics[(flowChartMetric === 'revenue' ? 'totalRevenue' : flowChartMetric === 'avgOrderValue' ? 'averageOrderValue' : flowChartMetric) as keyof typeof flowMetrics]?.change as any}
-                            headerIsPositive={flowMetrics[(flowChartMetric === 'revenue' ? 'totalRevenue' : flowChartMetric === 'avgOrderValue' ? 'averageOrderValue' : flowChartMetric) as keyof typeof flowMetrics]?.isPositive as any}
-                            headerPreviousValue={flowMetrics[(flowChartMetric === 'revenue' ? 'totalRevenue' : flowChartMetric === 'avgOrderValue' ? 'averageOrderValue' : flowChartMetric) as keyof typeof flowMetrics]?.previousValue as any}
-                            headerPreviousPeriod={flowMetrics[(flowChartMetric === 'revenue' ? 'totalRevenue' : flowChartMetric === 'avgOrderValue' ? 'averageOrderValue' : flowChartMetric) as keyof typeof flowMetrics]?.previousPeriod as any}
-                            colorHue="#10b981" // emerald (flows)
-                            idSuffix="flows"
-                        />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                            {/* Row 1 */}
-                            <MetricCard title="Total Revenue" value={formatCurrency(flowMetrics.totalRevenue.value)} change={flowMetrics.totalRevenue.change} isPositive={flowMetrics.totalRevenue.isPositive} previousValue={flowMetrics.totalRevenue.previousValue} previousPeriod={flowMetrics.totalRevenue.previousPeriod} dateRange={dateRange} metricKey="revenue" sparklineData={flowSeries.totalRevenue} compareMode={compareMode} category="flow" />
-                            <MetricCard title="Average Order Value" value={formatCurrency(flowMetrics.averageOrderValue.value)} change={flowMetrics.averageOrderValue.change} isPositive={flowMetrics.averageOrderValue.isPositive} previousValue={flowMetrics.averageOrderValue.previousValue} previousPeriod={flowMetrics.averageOrderValue.previousPeriod} dateRange={dateRange} metricKey="avgOrderValue" sparklineData={flowSeries.averageOrderValue} compareMode={compareMode} category="flow" />
-                            <MetricCard title="Total Orders" value={formatNumber(flowMetrics.totalOrders.value)} change={flowMetrics.totalOrders.change} isPositive={flowMetrics.totalOrders.isPositive} previousValue={flowMetrics.totalOrders.previousValue} previousPeriod={flowMetrics.totalOrders.previousPeriod} dateRange={dateRange} metricKey="totalOrders" sparklineData={flowSeries.totalOrders} compareMode={compareMode} category="flow" />
-                            <MetricCard title="Conversion Rate" value={formatPercent(flowMetrics.conversionRate.value)} change={flowMetrics.conversionRate.change} isPositive={flowMetrics.conversionRate.isPositive} previousValue={flowMetrics.conversionRate.previousValue} previousPeriod={flowMetrics.conversionRate.previousPeriod} dateRange={dateRange} metricKey="conversionRate" sparklineData={flowSeries.conversionRate} compareMode={compareMode} category="flow" />
-                            {/* Row 2 */}
-                            <MetricCard title="Open Rate" value={formatPercent(flowMetrics.openRate.value)} change={flowMetrics.openRate.change} isPositive={flowMetrics.openRate.isPositive} previousValue={flowMetrics.openRate.previousValue} previousPeriod={flowMetrics.openRate.previousPeriod} dateRange={dateRange} metricKey="openRate" sparklineData={flowSeries.openRate} compareMode={compareMode} category="flow" />
-                            <MetricCard title="Click Rate" value={formatPercent(flowMetrics.clickRate.value)} change={flowMetrics.clickRate.change} isPositive={flowMetrics.clickRate.isPositive} previousValue={flowMetrics.clickRate.previousValue} previousPeriod={flowMetrics.clickRate.previousPeriod} dateRange={dateRange} metricKey="clickRate" sparklineData={flowSeries.clickRate} compareMode={compareMode} category="flow" />
-                            <MetricCard title="Click-to-Open Rate" value={formatPercent(flowMetrics.clickToOpenRate.value)} change={flowMetrics.clickToOpenRate.change} isPositive={flowMetrics.clickToOpenRate.isPositive} previousValue={flowMetrics.clickToOpenRate.previousValue} previousPeriod={flowMetrics.clickToOpenRate.previousPeriod} dateRange={dateRange} metricKey="clickToOpenRate" sparklineData={flowSeries.clickToOpenRate} compareMode={compareMode} category="flow" />
-                            <MetricCard title="Revenue per Email" value={formatCurrency(flowMetrics.revenuePerEmail.value)} change={flowMetrics.revenuePerEmail.change} isPositive={flowMetrics.revenuePerEmail.isPositive} previousValue={flowMetrics.revenuePerEmail.previousValue} previousPeriod={flowMetrics.revenuePerEmail.previousPeriod} dateRange={dateRange} metricKey="revenuePerEmail" sparklineData={flowSeries.revenuePerEmail} compareMode={compareMode} category="flow" />
-                            {/* Row 3 */}
-                            <MetricCard title="Emails Sent" value={formatNumber(flowMetrics.emailsSent.value)} change={flowMetrics.emailsSent.change} isPositive={flowMetrics.emailsSent.isPositive} previousValue={flowMetrics.emailsSent.previousValue} previousPeriod={flowMetrics.emailsSent.previousPeriod} dateRange={dateRange} metricKey="emailsSent" sparklineData={flowSeries.emailsSent} compareMode={compareMode} category="flow" />
-                            <MetricCard title="Unsubscribe Rate" value={formatPercent(flowMetrics.unsubscribeRate.value)} change={flowMetrics.unsubscribeRate.change} isPositive={flowMetrics.unsubscribeRate.isPositive} previousValue={flowMetrics.unsubscribeRate.previousValue} previousPeriod={flowMetrics.unsubscribeRate.previousPeriod} dateRange={dateRange} metricKey="unsubscribeRate" sparklineData={flowSeries.unsubscribeRate} compareMode={compareMode} category="flow" />
-                            <MetricCard title="Spam Rate" value={formatPercent(flowMetrics.spamRate.value)} change={flowMetrics.spamRate.change} isPositive={flowMetrics.spamRate.isPositive} previousValue={flowMetrics.spamRate.previousValue} previousPeriod={flowMetrics.spamRate.previousPeriod} dateRange={dateRange} metricKey="spamRate" sparklineData={flowSeries.spamRate} compareMode={compareMode} category="flow" />
-                            <MetricCard title="Bounce Rate" value={formatPercent(flowMetrics.bounceRate.value)} change={flowMetrics.bounceRate.change} isPositive={flowMetrics.bounceRate.isPositive} previousValue={flowMetrics.bounceRate.previousValue} previousPeriod={flowMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={flowSeries.bounceRate} compareMode={compareMode} category="flow" />
-                        </div>
-                    </section>
-                )}
+                        </section>
+                    )}
                 </>)}
                 {/* Flow Step Analysis — only when an account is active */}
                 {HAS_ACTIVE_ACCOUNT && (

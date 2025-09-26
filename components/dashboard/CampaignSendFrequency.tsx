@@ -42,6 +42,7 @@ interface BucketAggregate {
 
 interface Props {
     campaigns: ProcessedCampaign[];
+    onGuidance?: (g: GuidanceResult | null) => void;
 }
 
 type GuidanceStatus = 'send-more' | 'keep-as-is' | 'send-less' | 'insufficient';
@@ -78,7 +79,7 @@ function formatCurrency(v: number) {
 function formatPercent(v: number) { return `${(v || 0).toFixed(2)}%`; }
 function formatNumber(v: number) { return v.toLocaleString('en-US', { maximumFractionDigits: 2 }); }
 
-export default function CampaignSendFrequency({ campaigns }: Props) {
+export default function CampaignSendFrequency({ campaigns, onGuidance }: Props) {
     const [mode, setMode] = useState<'week' | 'campaign'>('week');
     // Default metric for each mode
     const [metric, setMetric] = useState<string>('avgWeeklyRevenue');
@@ -171,6 +172,10 @@ export default function CampaignSendFrequency({ campaigns }: Props) {
     }, [mode, metric]);
 
     const guidance = useMemo(() => computeSendFrequencyGuidance(buckets, mode), [buckets, mode]);
+
+    React.useEffect(() => {
+        if (onGuidance) onGuidance(guidance);
+    }, [guidance, onGuidance]);
 
     if (!campaigns.length) {
         return (

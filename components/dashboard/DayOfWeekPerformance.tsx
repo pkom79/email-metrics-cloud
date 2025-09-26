@@ -10,11 +10,13 @@ import { computeCampaignDayPerformance } from '../../lib/analytics/campaignDayPe
 interface DayOfWeekPerformanceProps {
     filteredCampaigns: ProcessedCampaign[];
     dateRange: string;
+    frequencyRecommendation?: number; // 1..4 derived from send frequency action note (4 meaning 4 or more)
 }
 
 const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
     filteredCampaigns,
-    dateRange
+    dateRange,
+    frequencyRecommendation
 }) => {
     const [selectedMetric, setSelectedMetric] = useState('revenue');
     const [hoveredBar, setHoveredBar] = useState<{ day: string; value: number; campaignCount: number } | null>(null);
@@ -91,9 +93,8 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
             }
         }
         if (!minDate || !maxDate) return { recommendation: null } as any;
-        // Let analytics infer frequencyRecommendation from observed cadence (not passed explicitly here)
-        return computeCampaignDayPerformance({ campaigns: filteredCampaigns, rangeStart: minDate, rangeEnd: maxDate });
-    }, [filteredCampaigns]);
+        return computeCampaignDayPerformance({ campaigns: filteredCampaigns, rangeStart: minDate, rangeEnd: maxDate, frequencyRecommendation });
+    }, [filteredCampaigns, frequencyRecommendation]);
 
     return (
         <section className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
