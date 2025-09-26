@@ -5,6 +5,7 @@ import InfoTooltipIcon from "../InfoTooltipIcon";
 import SelectBase from "../ui/SelectBase";
 import { ProcessedCampaign } from '../../lib/data/dataTypes';
 import { DataManager } from '../../lib/data/dataManager';
+import { computeCampaignDayPerformance } from '../../lib/analytics/campaignDayPerformance';
 
 interface DayOfWeekPerformanceProps {
     filteredCampaigns: ProcessedCampaign[];
@@ -78,6 +79,21 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
     };
 
     const currentColorScheme = getColorScheme(selectedMetric);
+
+    // Derive date range bounds from filtered campaigns (fallback if missing)
+    const { recommendation: dowRecommendation } = useMemo(() => {
+        if (!filteredCampaigns.length) return { recommendation: null } as any;
+        let minDate: Date | null = null; let maxDate: Date | null = null;
+        for (const c of filteredCampaigns) {
+            if (c.sentDate instanceof Date && !isNaN(c.sentDate.getTime())) {
+                if (!minDate || c.sentDate < minDate) minDate = c.sentDate;
+                if (!maxDate || c.sentDate > maxDate) maxDate = c.sentDate;
+            }
+        }
+        if (!minDate || !maxDate) return { recommendation: null } as any;
+        // Let analytics infer frequencyRecommendation from observed cadence (not passed explicitly here)
+        return computeCampaignDayPerformance({ campaigns: filteredCampaigns, rangeStart: minDate, rangeEnd: maxDate });
+    }, [filteredCampaigns]);
 
     return (
         <section className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
@@ -232,6 +248,20 @@ const DayOfWeekPerformance: React.FC<DayOfWeekPerformanceProps> = ({
                         );
                     })()}
                 </div>
+                {/* Action Note: Campaign Day Performance Recommendation (brand-standard action note card) */}
+                {dowRecommendation && (
+                    <div className="mt-6">
+                        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{dowRecommendation.headline}</p>
+                            {dowRecommendation.body.map((line: string, idx: number) => (
+                                <p key={idx} className={`mt-${idx === 0 ? 1 : 2} text-sm text-gray-700 dark:text-gray-300 leading-relaxed`}>{line}</p>
+                            ))}
+                            {dowRecommendation.sampleLine && (
+                                <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{dowRecommendation.sampleLine}</p>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
         </section>
     );
