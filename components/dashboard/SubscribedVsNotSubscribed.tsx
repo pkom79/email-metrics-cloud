@@ -74,13 +74,13 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                         Subscribed vs Not Subscribed
                         <InfoTooltipIcon placement="top" content={(
-                            <div className="leading-snug">
+                            <div className="leading-snug text-xs sm:text-sm">
                                 <p className="font-semibold mb-1">What</p>
                                 <p>Compare Subscribed vs Not Subscribed profiles by size, value, and engagement.</p>
-                                <ul className="list-disc list-inside mt-2 space-y-1 text-xs">
-                                    <li>Subscribed: gave explicit consent for email marketing.</li>
-                                    <li>Not Subscribed: often from imports or integrations (e.g. Shopify). If not suppressed, they can still receive emails.</li>
-                                </ul>
+                                <p className="font-semibold mt-2 mb-1">Subscribed</p>
+                                <p>Profiles that gave explicit consent for email marketing.</p>
+                                <p className="font-semibold mt-2 mb-1">Not Subscribed</p>
+                                <p>Profiles from imports or integrations (e.g. Shopify). If not suppressed, they still receive emails.</p>
                                 <p className="font-semibold mt-2 mb-1">How</p>
                                 <p>Last engagement uses the most recent open or click. Profile creation follows the selected time range.</p>
                                 <p className="font-semibold mt-2 mb-1">Why</p>
