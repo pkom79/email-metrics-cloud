@@ -248,7 +248,8 @@ function computeAudienceSizeGuidance(buckets: Bucket[]): AudienceGuidanceResult 
 
     const top = pickTopPerformer();
     if (!top) return null;
-    const topLabel = `${top.rangeLabel} recipients`;
+    const topLabel = `${top.rangeLabel} recipients`; // still used in body copy (leave as-is)
+    const headerRange = (label: string) => `${label} total recipients per campaign`;
     const topValue = top[metricKey] as number;
 
     const evaluate = (candidate: Bucket) => {
@@ -265,7 +266,7 @@ function computeAudienceSizeGuidance(buckets: Bucket[]): AudienceGuidanceResult 
     const engagementSafeTop = top.openRate >= AUDIENCE_OPEN_HEALTHY && top.clickRate >= AUDIENCE_CLICK_HEALTHY;
 
     if (safeTop && engagementSafeTop) {
-        const title = `Send campaigns to ${top.rangeLabel} recipients`;
+        const title = `Send campaigns to ${headerRange(top.rangeLabel)}`;
         const msg = `${top.rangeLabel} audiences generated the most revenue in this range while staying within deliverability guardrails. Scale targeting toward this size.`;
         return { title, message: msg, sample: formatSample(undefined, top) };
     }
@@ -277,13 +278,13 @@ function computeAudienceSizeGuidance(buckets: Bucket[]): AudienceGuidanceResult 
         const riskSafe = candidate.spamRate < AUDIENCE_SPAM_ALERT && candidate.bounceRate < AUDIENCE_BOUNCE_ALERT && spamDelta <= AUDIENCE_SPAM_DELTA_LIMIT && bounceDelta <= AUDIENCE_BOUNCE_DELTA_LIMIT;
         if (riskSafe && engagementSafe) {
             const liftPct = formatDeltaPct((candidate[metricKey] as number - topValue) / topValue);
-            const title = `Send campaigns to ${candidate.rangeLabel} recipients`;
+            const title = `Send campaigns to ${headerRange(candidate.rangeLabel)}`;
             const msg = `${candidate.rangeLabel} recipients deliver strong revenue with safer engagement (${liftPct} vs. the higher-risk ${top.rangeLabel} group). Focus here while improving deliverability.`;
             return { title, message: msg, sample: formatSample(undefined, candidate, top) };
         }
     }
 
-    const title = `Test ${top.rangeLabel} recipients`;
+    const title = `Test ${headerRange(top.rangeLabel)}`;
     const msg = `Revenue peaks at ${top.rangeLabel} recipients, but engagement or deliverability need work. Run targeted tests and monitor spam/bounce closely before fully scaling.`;
     return { title, message: msg, sample: formatSample(undefined, top) };
 }
