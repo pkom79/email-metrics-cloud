@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState } from "react";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, ChevronDown } from "lucide-react";
 import InfoTooltipIcon from "../InfoTooltipIcon";
 import SelectBase from "../ui/SelectBase";
 import { DataManager } from "../../lib/data/dataManager";
@@ -8,8 +8,23 @@ import { getConsentSplitMetrics, formatConsentMetricValue, ConsentSplitMetric } 
 
 interface Props { dateRange: string; customFrom?: string; customTo?: string; referenceDate?: Date }
 
+type ConsentGroupKey = "Subscribed" | "Not Subscribed";
+
+interface ConsentActionNote {
+    headline: string;
+    summary: string;
+    paragraph: string;
+}
+
+const formatPercent = (value: number) => {
+    const formatted = value.toFixed(1);
+    const num = parseFloat(formatted);
+    return num >= 1000 ? `${num.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : `${formatted}%`;
+};
+
 export default function SubscribedVsNotSubscribed({ dateRange, customFrom, customTo, referenceDate }: Props) {
     const dm = DataManager.getInstance();
+    const subscribers = dm.getSubscribers();
     const [metric, setMetric] = useState<ConsentSplitMetric>("count");
     const [hovered, setHovered] = useState<{
         key: string;
@@ -18,13 +33,14 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
         percentOfGroup?: number | null;
         idx: number;
     } | null>(null);
+    const [showActionNoteDetails, setShowActionNoteDetails] = useState(false);
 
     const range = useMemo(() => {
         // Reuse DataManager logic to compute start/end dates analogous to other modules
         try {
             if (dateRange === 'custom' && customFrom && customTo) return { start: new Date(customFrom + 'T00:00:00'), end: new Date(customTo + 'T23:59:59') };
             if (dateRange === 'all') {
-                const subs = dm.getSubscribers();
+                const subs = subscribers;
                 if (!subs.length) return null;
                 const dates = subs.map(s => s.profileCreated.getTime());
                 const min = Math.min(...dates), max = Math.max(...dates);
@@ -36,14 +52,14 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
             const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0);
             return { start, end };
         } catch { return null; }
-    }, [dateRange, customFrom, customTo, dm, referenceDate]);
+    }, [dateRange, customFrom, customTo, dm, referenceDate, subscribers]);
 
     const filteredSubs = useMemo(() => {
-        const all = dm.getSubscribers();
+        const all = subscribers;
         if (!range) return all;
         // Filter by profileCreated inside range; this addresses large imports outside focus window
         return all.filter(s => s.profileCreated >= range.start && s.profileCreated <= range.end);
-    }, [dm, range]);
+    }, [range, subscribers]);
 
     const anchor = useMemo(() => (referenceDate ? new Date(referenceDate) : (dm.getLastEmailDate() || new Date())), [dm, referenceDate]);
     const split = useMemo(() => getConsentSplitMetrics(filteredSubs, metric, anchor), [filteredSubs, metric, anchor]);
@@ -59,6 +75,160 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
         const to = range.end.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
         return `Created between ${from} – ${to}`;
     }, [range, dateRange]);
+
+    const actionNote = useMemo<ConsentActionNote | null>(() => {
+        if (!filteredSubs.length) return null;
+
+        const safeAnchor = Number.isNaN(anchor.getTime()) ? new Date() : anchor;
+
+        const notePeriod = (() => {
+            const currentRange = range;
+            if (!currentRange) return 'the selected window';
+            if (typeof dateRange === 'string' && dateRange.endsWith('d')) {
+                const days = parseInt(dateRange.replace('d', ''), 10) || 30;
+                return `profiles created in the last ${days} days`;
+            }
+            if (dateRange === 'custom' && customFrom && customTo) {
+                const from = new Date(`${customFrom}T00:00:00`).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+                const to = new Date(`${customTo}T23:59:59`).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+                return `profiles created between ${from} and ${to}`;
+            }
+            if (dateRange === 'all') {
+                return 'the full subscriber history';
+            }
+            const from = currentRange.start.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+            const to = currentRange.end.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+            return `profiles created between ${from} and ${to}`;
+        })();
+
+        const toMap = (groups: { key: ConsentGroupKey; value: number; sampleSize: number; percentOfGroup?: number | null }[]) => {
+            return groups.reduce<Record<ConsentGroupKey, { value: number; sampleSize: number; percent?: number }>>((acc, group) => {
+                acc[group.key] = { value: group.value || 0, sampleSize: group.sampleSize || 0, percent: group.percentOfGroup ?? undefined };
+                return acc;
+            }, {
+                Subscribed: { value: 0, sampleSize: 0 },
+                'Not Subscribed': { value: 0, sampleSize: 0 },
+            });
+        };
+
+        const countMap = toMap(getConsentSplitMetrics(filteredSubs, 'count', safeAnchor).groups);
+        const revenueMap = toMap(getConsentSplitMetrics(filteredSubs, 'totalRevenue', safeAnchor).groups);
+        const engagedMap = toMap(getConsentSplitMetrics(filteredSubs, 'engaged30', safeAnchor).groups);
+
+        const subscribedCount = countMap.Subscribed.value;
+        const notSubscribedCount = countMap['Not Subscribed'].value;
+        const totalCount = subscribedCount + notSubscribedCount;
+        if (totalCount === 0) return null;
+
+        const subscribedRevenue = revenueMap.Subscribed.value;
+        const notSubscribedRevenue = revenueMap['Not Subscribed'].value;
+        const totalRevenue = subscribedRevenue + notSubscribedRevenue;
+
+        const subscribedVolumeShare = totalCount > 0 ? (subscribedCount / totalCount) * 100 : 0;
+        const notSubscribedVolumeShare = 100 - subscribedVolumeShare;
+        const subscribedValueShare = totalRevenue > 0 ? (subscribedRevenue / totalRevenue) * 100 : subscribedVolumeShare;
+        const notSubscribedValueShare = 100 - subscribedValueShare;
+
+        const subscribedEngaged = engagedMap.Subscribed.percent ?? 0;
+        const notSubscribedEngaged = engagedMap['Not Subscribed'].percent ?? 0;
+        const engagedDelta = subscribedEngaged - notSubscribedEngaged;
+
+        const valueDiff = subscribedValueShare - notSubscribedValueShare;
+        const volumeDiff = subscribedVolumeShare - notSubscribedVolumeShare;
+
+        const subscribedValueLead = valueDiff >= 5;
+        const notSubscribedValueLead = valueDiff <= -5;
+        const subscribedVolumeLead = volumeDiff >= 5;
+        const notSubscribedVolumeLead = volumeDiff <= -5;
+        const engagedLeadSubscribed = engagedDelta >= 2;
+        const engagedLeadNotSubscribed = engagedDelta <= -2;
+
+        const shareLabel = formatPercent(subscribedValueShare);
+        const headline = `Subscribed profiles drive ${shareLabel} of tracked revenue for ${notePeriod}.`;
+
+        const subscribedValueMeaningful = subscribedValueShare >= 10;
+        const notSubscribedValueMeaningful = notSubscribedValueShare >= 10;
+        const countDelta = subscribedCount - notSubscribedCount;
+
+        let summary: string;
+        if (subscribedValueLead && engagedLeadSubscribed) {
+            summary = 'Subscribed profiles bring the most value and activity, so grow that opted-in list and invite imports to confirm.';
+        } else if (notSubscribedVolumeLead) {
+            summary = 'Not subscribed profiles make up most of the list, so ask them to opt in and remove the ones who stay quiet.';
+        } else if (notSubscribedValueLead) {
+            summary = 'Revenue leans on not subscribed profiles, so turn their spend into opt-ins and tidy up inactive records.';
+        } else {
+            summary = 'Value and engagement are split, so run opt-in pushes and regular clean-up together.';
+        }
+
+        const describeShare = (pct: number) => {
+            if (pct >= 65) return 'Most';
+            if (pct >= 55) return 'More than half';
+            if (pct >= 45) return 'Roughly half';
+            if (pct >= 35) return 'Less than half';
+            return 'A small slice';
+        };
+
+        const sentences: string[] = [];
+        const timeframeDescriptor = notePeriod || 'the selected window';
+
+        const firstSentenceLead = describeShare(subscribedValueShare);
+        sentences.push(`${firstSentenceLead} of the revenue we track still comes from subscribed profiles during ${timeframeDescriptor}.`);
+
+        if (engagedLeadSubscribed) {
+            sentences.push('They also open and click more in the recent window, which shows opted-in readers stay engaged.');
+        } else if (engagedLeadNotSubscribed) {
+            sentences.push('Not subscribed contacts are opening slightly more right now, so recent imports still respond when nudged.');
+        } else {
+            sentences.push('Recent engagement looks similar for both groups, so consent status by itself does not tell you who is active.');
+        }
+
+        if (notSubscribedVolumeLead) {
+            sentences.push('Not subscribed profiles make up more of the list, which boosts reach but adds deliverability risk if they cool off.');
+        } else if (subscribedVolumeLead) {
+            sentences.push('Subscribed profiles also dominate volume, so growth is anchored in permission-based channels.');
+        } else {
+            sentences.push('Overall volume is fairly balanced between consented and imported cohorts.');
+        }
+
+        if (countDelta > 0) {
+            sentences.push(`${Math.abs(countDelta).toLocaleString()} more subscribed profiles were created than not subscribed in this window.`);
+        } else if (countDelta < 0) {
+            sentences.push(`${Math.abs(countDelta).toLocaleString()} more not subscribed profiles were created than subscribed in this window.`);
+        }
+
+        let ltvSentence: string;
+        if (subscribedValueMeaningful && notSubscribedValueMeaningful) {
+            ltvSentence = 'Both groups account for a noticeable share of lifetime value, so keep their journeys active.';
+        } else if (subscribedValueMeaningful) {
+            ltvSentence = 'Subscribed profiles account for a noticeable share of lifetime value, so keep that audience warm.';
+        } else if (notSubscribedValueMeaningful) {
+            ltvSentence = 'Not subscribed contacts still hold a noticeable slice of lifetime value, so move them toward opt-in before they drop off.';
+        } else {
+            ltvSentence = 'Lifetime value is spread thin across both consent groups right now.';
+        }
+        sentences.push(ltvSentence);
+
+        let actionSentence: string;
+        if (subscribedValueLead) {
+            actionSentence = 'Offer simple welcome perks to reward subscribers, and send a short opt-in series to imports so they can join them.';
+        } else if (notSubscribedValueLead) {
+            actionSentence = 'Plan a quick opt-in path for not subscribed buyers and remove imports who stay silent after a few reminders.';
+        } else {
+            actionSentence = 'Run opt-in nudges alongside fast clean-up passes that pause emails to imports who never respond.';
+        }
+        sentences.push(actionSentence);
+
+        sentences.push('If imports start growing faster than revenue from subscribers, slow new imports and focus on collecting consent first.');
+
+        const paragraph = sentences.slice(0, 6).join(' ');
+
+        return {
+            headline,
+            summary,
+            paragraph,
+        };
+    }, [anchor, customFrom, customTo, dateRange, filteredSubs, range]);
 
     if (!filteredSubs.length) return null;
 
@@ -185,6 +355,34 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
                     )}
                 </div>
             </div>
+
+            {actionNote && (
+                <div className="px-6 pb-6 border-t border-gray-100 dark:border-gray-800">
+                    <div className="pt-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="flex-1">
+                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{actionNote.headline}</p>
+                                <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{actionNote.summary}</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowActionNoteDetails(prev => !prev)}
+                                className="inline-flex items-center justify-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
+                                aria-expanded={showActionNoteDetails}
+                                aria-controls="consent-action-note-details"
+                            >
+                                {showActionNoteDetails ? 'Hide Insights' : 'View Insights'}
+                                <ChevronDown className={`w-4 h-4 transition-transform ${showActionNoteDetails ? 'rotate-180' : ''}`} />
+                            </button>
+                        </div>
+                        {showActionNoteDetails && (
+                            <div id="consent-action-note-details" className="mt-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                <p>{actionNote.paragraph}</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </section>
     );
 }
