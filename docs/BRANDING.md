@@ -168,6 +168,7 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Warning template only fires when RPE is ≥30% below baseline on ≥20% of send volume **or** spam/unsub/bounce rates breach the deliverability thresholds (0.5% spam, 1.5% unsub, 4% bounce, each ≥40% above baseline) on ≥10k sends.
 - Wins template fires when a subject-line category or length delivers ≥2× baseline RPE (or ≥1.5× with ≥15% revenue share) on ≥10k emails. Mention open/click lifts only when the cohort hits the same volume guardrail.
 - General template calls out revenue concentration across top sends and nudges the highest-RPE theme/length that clears the volume guardrail, even if lift < wins threshold.
+- When data supports it, the copy also flags underperforming themes/lengths that materially lag baseline so teams know what to retire or refresh.
 - Copy tone: revenue-first, direct, and instructive. Always format percentage changes as `%` (no “pp”/“pts”).
 
 
