@@ -18,6 +18,44 @@ const formatUsd = (value: number) => usdFormatter.format(value || 0);
 
 const MIN_STEP_EMAILS = 250;
 
+const KEEP_NOTE_VARIANTS = [
+    'keeps this flow steady.',
+    'continues to deliver for this flow.',
+    'is pulling its weight right now.'
+];
+
+const IMPROVE_NOTE_VARIANTS = [
+    'is slipping behind.',
+    'needs fresh momentum.',
+    'could use a reset.'
+];
+
+const IMPROVE_GUIDANCE_VARIANTS = [
+    'Test fresher creative or tighten the delay to regain momentum.',
+    'Refresh the content and adjust timing to lift results.',
+    'Swap in a new offer and experiment with a shorter delay.'
+];
+
+const PAUSE_NOTE_VARIANTS = [
+    'is raising red flags.',
+    'is dragging the flow\'s performance down.',
+    'is putting this flow at risk.'
+];
+
+const PAUSE_GUIDANCE_VARIANTS = [
+    'Pause it while you rebuild the trigger and creative.',
+    'Keep it paused until you overhaul the message and retargeting.',
+    'Pause it, rework the content, then relaunch once the metrics recover.'
+];
+
+const LOW_VOLUME_VARIANTS = [
+    (sends: number, min: number) => `Only ${sends.toLocaleString('en-US')} sends so far—let it reach at least ${min.toLocaleString('en-US')} before you judge it.`,
+    (sends: number, min: number) => `${sends.toLocaleString('en-US')} sends isn't enough signal yet; aim for ${min.toLocaleString('en-US')} before you decide.`,
+    (sends: number, min: number) => `Give it time: ${sends.toLocaleString('en-US')} sends logged, but we need about ${min.toLocaleString('en-US')} to call it.`
+];
+
+const pickVariant = <T,>(arr: T[], index: number): T => arr[index % arr.length];
+
 const METRIC_OPTIONS = [
     // Display label changed per request; metric key remains 'revenue'
     { value: 'revenue', label: 'Total Revenue', format: 'currency' },
@@ -676,6 +714,17 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         let pauseCount = 0;
         let lowVolume = 0;
 
+        const renderSentence = (fragments: React.ReactNode[]) => (
+            <span>
+                {fragments.map((fragment, fragmentIdx) => (
+                    <React.Fragment key={fragmentIdx}>
+                        {fragmentIdx > 0 ? ' ' : null}
+                        {fragment}
+                    </React.Fragment>
+                ))}
+            </span>
+        );
+
         const joinWithAnd = (items: string[]) => {
             if (!items.length) return '';
             if (items.length === 1) return items[0];
@@ -693,11 +742,11 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             const emails = step.emailsSent || 0;
             if (res.volumeInsufficient) {
                 lowVolume++;
-                stepItems.push(
-                    <span>
-                        {labelNode} needs more data ({emails.toLocaleString('en-US')} sends so far). Let it reach at least {MIN_STEP_EMAILS.toLocaleString('en-US')} sends before making changes.
-                    </span>
-                );
+                const lowVolumeMessage = pickVariant(LOW_VOLUME_VARIANTS, idx)(emails, MIN_STEP_EMAILS);
+                stepItems.push(renderSentence([
+                    <>{labelNode} needs more data.</>,
+                    lowVolumeMessage
+                ]));
                 return;
             }
 
@@ -714,15 +763,15 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             const perEmailDetail = (() => {
                 if (!isFinite(ri) || !isFinite(riDelta)) return '';
                 const deltaAbs = Math.round(Math.abs(riDelta));
-                if (deltaAbs < 5) return 'Per-email revenue is roughly in line with the flow average';
+                if (deltaAbs < 5) return 'Per-email revenue is roughly in line with this flow\'s median';
                 const direction = riDelta >= 0 ? 'above' : 'below';
-                return `Per-email revenue is about ${deltaAbs}% ${direction} the flow average`;
+                return `Per-email revenue sits about ${deltaAbs}% ${direction} the flow\'s median`;
             })();
 
             const issueSummary = () => {
                 const notes: string[] = [];
                 if (ri < 1) notes.push('per-email revenue trails the flow average');
-                if (ersPct < 0.5) notes.push(`it contributes only ${ersPct.toFixed(1)}% of flow revenue`);
+                if (ersPct < 0.5) notes.push(`it contributed only ${ersPct.toFixed(1)}% of this flow\'s revenue in the selected window`);
                 if (openRate < 20) notes.push(`opens are ${openRate.toFixed(1)}%`);
                 if (clickRate < 1) notes.push(`clicks are ${clickRate.toFixed(1)}%`);
                 if (unsubRate > 1) notes.push(`unsubscribe rate is ${unsubRate.toFixed(2)}%`);
@@ -731,40 +780,55 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 return `${notes.length > 1 ? 'Key issues: ' : 'Key issue: '}${joinWithAnd(notes)}.`;
             };
 
+            const shareSentence = `It drove ${ersPct.toFixed(1)}% of this flow\'s revenue in the selected window.`;
+            const perEmailSentence = perEmailDetail ? `${perEmailDetail}.` : '';
+            const revenueSentence = `Average revenue: ${revenueText} per ${periodLabel}.`;
+            const engagementParts: string[] = [];
+            if (openRate > 0) engagementParts.push(`opens around ${openRate.toFixed(1)}%`);
+            if (clickRate > 0) engagementParts.push(`clicks at ${clickRate.toFixed(1)}%`);
+            const engagementSentence = engagementParts.length ? `Engagement runs with ${joinWithAnd(engagementParts)}.` : '';
+            const detailSentence = [shareSentence, perEmailSentence, revenueSentence, engagementSentence].filter(Boolean).join(' ');
+
             switch (res.action as 'scale' | 'keep' | 'improve' | 'pause' | 'insufficient') {
                 case 'scale':
                 case 'keep': {
                     good++;
-                    const detailParts = [
-                        `It accounts for ${ersPct.toFixed(1)}% of flow revenue`,
-                        perEmailDetail,
-                        `It brings in ${revenueText} per ${periodLabel}`
-                    ].filter(Boolean);
-                    const detailSentence = detailParts.length ? `${detailParts.join('. ')}.` : '';
-                    stepItems.push(
-                        <span>
-                            {labelNode} is performing well.
-                            {detailSentence ? <> {detailSentence}</> : null}
-                        </span>
-                    );
+                    const keepFragments: React.ReactNode[] = [
+                        <>{labelNode} {pickVariant(KEEP_NOTE_VARIANTS, idx)}</>
+                    ];
+                    if (detailSentence) keepFragments.push(detailSentence);
+                    stepItems.push(renderSentence(keepFragments));
                     break;
                 }
                 case 'improve': {
                     needsWork++;
                     const issue = issueSummary();
-                    stepItems.push(
-                        <span>
-                            {labelNode} needs a refresh. {issue} Try new creative or adjust the delay to lift results.
-                        </span>
-                    );
+                    const improveFragments: React.ReactNode[] = [
+                        <>{labelNode} {pickVariant(IMPROVE_NOTE_VARIANTS, idx)}</>,
+                        issue
+                    ];
+                    if (detailSentence) improveFragments.push(detailSentence);
+                    improveFragments.push(pickVariant(IMPROVE_GUIDANCE_VARIANTS, idx));
+                    stepItems.push(renderSentence(improveFragments));
                     break;
                 }
                 case 'pause': {
                     pauseCount++;
                     const issue = issueSummary();
+                    const pauseFragments: React.ReactNode[] = [
+                        <>{labelNode} {pickVariant(PAUSE_NOTE_VARIANTS, idx)}</>,
+                        issue
+                    ];
+                    if (detailSentence) pauseFragments.push(detailSentence);
+                    pauseFragments.push(pickVariant(PAUSE_GUIDANCE_VARIANTS, idx));
                     stepItems.push(
                         <span className="text-rose-700 dark:text-rose-300">
-                            {labelNode} should be paused for now. {issue} Rebuild the trigger or content before turning it back on.
+                            {pauseFragments.map((fragment, fragmentIdx) => (
+                                <React.Fragment key={fragmentIdx}>
+                                    {fragmentIdx > 0 ? ' ' : null}
+                                    {fragment}
+                                </React.Fragment>
+                            ))}
                         </span>
                     );
                     break;
