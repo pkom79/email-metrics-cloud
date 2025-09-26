@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { MailSearch, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import type { ProcessedCampaign } from "../../lib/data/dataTypes";
 import { buildCampaignSubjectLineInsights } from "../../lib/analytics/campaignSubjectLineInsights";
 
@@ -18,18 +18,15 @@ export default function CampaignSubjectLineNote({ campaigns, rangeLabel, classNa
 
     if (!insight) return null;
 
-    const { note } = insight;
+    const { note, totalCampaigns, totalEmails } = insight;
 
     return (
         <div className={className}>
             <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex items-start gap-3">
-                        <MailSearch className="w-5 h-5 text-purple-600 mt-0.5" />
-                        <div>
-                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{note.headline}</p>
-                            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{note.summary}</p>
-                        </div>
+                    <div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{note.headline}</p>
+                        <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{note.summary}</p>
                     </div>
                     <button
                         type="button"
@@ -47,8 +44,8 @@ export default function CampaignSubjectLineNote({ campaigns, rangeLabel, classNa
                         <p>{note.paragraph}</p>
                     </div>
                 )}
+                <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">Results are based on {totalCampaigns.toLocaleString()} campaigns and {totalEmails.toLocaleString()} campaign emails sent in this range.</p>
             </div>
         </div>
     );
 }
-

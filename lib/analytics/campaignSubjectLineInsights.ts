@@ -18,6 +18,7 @@ export interface CampaignSubjectLineInsight {
     topRevenueShare?: number;
     topRevenueCount?: number;
     totalRevenue?: number;
+    totalEmails: number;
     bestLengthRange?: string;
     bestLengthDelta?: number;
     weakLengthRange?: string;
@@ -136,6 +137,15 @@ function formatPercentValue(percent: number): string {
     return PERCENT_FORMATTER.format(percent / 100);
 }
 
+function capitalize(text: string): string {
+    if (!text) return text;
+    return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function approxPercent(value: number): string {
+    return `${Math.round(value * 100)}%`;
+}
+
 function safeDivide(numerator: number, denominator: number): number {
     if (!denominator) return 0;
     return numerator / denominator;
@@ -231,28 +241,28 @@ function evaluateCampaign(campaign: ProcessedCampaign, baseline: BaselineMetrics
 
     const engagementReasons: string[] = [];
     if (openDelta <= OPEN_DROP_THRESHOLD) {
-        engagementReasons.push(`open rate down ${formatPercentValue(Math.abs(openDelta))}`);
+        engagementReasons.push(`open rates fell ${formatPercentValue(Math.abs(openDelta))}`);
     }
     if (clickDelta <= CLICK_DROP_THRESHOLD) {
-        engagementReasons.push(`click rate down ${formatPercentValue(Math.abs(clickDelta))}`);
+        engagementReasons.push(`click rates fell ${formatPercentValue(Math.abs(clickDelta))}`);
     }
     if (ctor < CTOR_THRESHOLD) {
-        engagementReasons.push(`CTOR at ${formatPercent(ctor)}`);
+        engagementReasons.push(`CTOR dipped to ${formatPercent(ctor)}`);
     }
 
     const deliverabilityReasons: string[] = [];
     if (spamRate >= SPAM_CRITICAL) {
-        deliverabilityReasons.push(`spam complaints at ${formatPercent(spamRate)} (critical)`);
+        deliverabilityReasons.push(`spam complaints hit ${formatPercent(spamRate)} (critical)`);
     } else if (spamRate >= SPAM_FLAG) {
-        deliverabilityReasons.push(`spam complaints at ${formatPercent(spamRate)}`);
+        deliverabilityReasons.push(`spam complaints hit ${formatPercent(spamRate)}`);
     }
     if (bounceRate >= BOUNCE_CRITICAL) {
-        deliverabilityReasons.push(`bounces at ${formatPercent(bounceRate)} (critical)`);
+        deliverabilityReasons.push(`bounces hit ${formatPercent(bounceRate)} (critical)`);
     } else if (bounceRate >= BOUNCE_FLAG) {
-        deliverabilityReasons.push(`bounces at ${formatPercent(bounceRate)}`);
+        deliverabilityReasons.push(`bounces hit ${formatPercent(bounceRate)}`);
     }
     if (unsubRate >= UNSUB_FLAG) {
-        deliverabilityReasons.push(`unsubscribes at ${formatPercent(unsubRate)}`);
+        deliverabilityReasons.push(`unsubscribes hit ${formatPercent(unsubRate)}`);
     }
 
     const lowEfficiency = baseline.rpe > 0 && rpe <= baseline.rpe * LOW_REVENUE_MULTIPLIER;
@@ -514,54 +524,56 @@ function detectDeliverabilityWarning(
 }
 
 function buildRevenueWarningCopy(
-    rangeLabel: string,
+    _rangeLabel: string,
     baseline: BaselineMetrics,
     context: PeriodContext | null,
     detail: WarningDetail,
     laggingHighlight: HighlightDetail | null,
     positiveHighlight: HighlightDetail | null,
 ): CampaignSubjectLineNoteCopy {
-    const shareText = formatPercent(detail.volumeShare);
+    const shareText = approxPercent(detail.volumeShare);
     const dropPercent = detail.dropPercent != null ? Math.abs(detail.dropPercent) : 0;
     const dropText = formatPercentValue(dropPercent);
     const baselineText = formatCurrency(baseline.rpe);
     const affectedRpeText = formatCurrency(detail.affectedRpe || 0);
-    const summary = `${shareText} of campaigns in ${rangeLabel} earned ${dropText} less revenue per email than the period baseline (${baselineText}).`;
+    const summary = `About ${shareText} of campaigns this period came in ${dropText} under the period baseline (${baselineText} per email).`;
 
     const sentences: string[] = [];
     sentences.push(`Those sends averaged ${affectedRpeText} per email across ${detail.affectedEmails.toLocaleString()} recipients.`);
 
     if (context) {
-        sentences.push(`Overall, campaigns still delivered about ${formatCurrency(context.perBucketRevenue)} per ${context.bucketLabel}.`);
+        sentences.push(`Across the window you still generated roughly ${formatCurrency(context.perBucketRevenue)} per ${context.bucketLabel}.`);
     }
 
     if (detail.reasons.length) {
-        sentences.push(`Key issues: ${formatReasonList(detail.reasons)}.`);
+        sentences.push(`Main issues: ${formatReasonList(detail.reasons)}.`);
     }
 
     if (laggingHighlight) {
-        sentences.push(`${laggingHighlight.label} subject lines leaned ${formatPercentValue(Math.abs(laggingHighlight.rpeLift))} below baseline on ${laggingHighlight.totalEmails.toLocaleString()} sends—refresh that angle before you repeat it.`);
+        sentences.push(`${laggingHighlight.label} subject lines leaned ${formatPercentValue(Math.abs(laggingHighlight.rpeLift))} below baseline on ${laggingHighlight.totalEmails.toLocaleString()} sends—refresh that story before you repeat it.`);
     }
 
     if (positiveHighlight && positiveHighlight !== laggingHighlight) {
-        sentences.push(`${positiveHighlight.label} still held ${formatPercentValue(positiveHighlight.rpeLift)} above baseline on ${positiveHighlight.totalEmails.toLocaleString()} sends; recycle that playbook as you adjust underperformers.`);
+        sentences.push(`${positiveHighlight.label} still held ${formatPercentValue(positiveHighlight.rpeLift)} above baseline on ${positiveHighlight.totalEmails.toLocaleString()} sends—reuse that playbook while you tune the weak spots.`);
     }
 
+    const headlineReason = detail.reasons[0] ? capitalize(detail.reasons[0]) : "Revenue efficiency slipped";
+
     return {
-        headline: `Revenue & Reputation Warning (${rangeLabel})`,
+        headline: `Revenue Warning: ${headlineReason}`,
         summary,
         paragraph: sentences.join(" "),
     };
 }
 
 function buildDeliverabilityWarningCopy(
-    rangeLabel: string,
+    _rangeLabel: string,
     context: PeriodContext | null,
     detail: WarningDetail,
     positiveHighlight: HighlightDetail | null,
 ): CampaignSubjectLineNoteCopy {
     const metricName = detail.metricLabel ? detail.metricLabel.replace(/^./, ch => ch.toUpperCase()) : "Deliverability";
-    const summary = `${metricName} issues touched ${formatPercent(detail.volumeShare)} of sends in ${rangeLabel}, spiking to ${formatPercent(detail.metricRate || 0)}.`;
+    const summary = `${metricName} issues touched ${approxPercent(detail.volumeShare)} of sends this period, peaking at ${formatPercent(detail.metricRate || 0)}.`;
 
     const sentences: string[] = [];
     if (detail.baselineMetric != null) {
@@ -582,8 +594,10 @@ function buildDeliverabilityWarningCopy(
         sentences.push(`When volumes resume, lean on ${positiveHighlight.label.toLowerCase()} subject lines; they stayed above baseline through the period.`);
     }
 
+    const headline = `Deliverability Warning: ${metricName} spike`;
+
     return {
-        headline: `Revenue & Reputation Warning (${rangeLabel})`,
+        headline,
         summary,
         paragraph: sentences.join(" "),
     };
@@ -607,17 +621,17 @@ function describeHighlightSentence(highlight: HighlightDetail, baselineRpe: numb
 }
 
 function buildWinsCopy(
-    rangeLabel: string,
+    _rangeLabel: string,
     baseline: BaselineMetrics,
     context: PeriodContext | null,
     highlight: HighlightDetail,
     laggingHighlight: HighlightDetail | null,
 ): CampaignSubjectLineNoteCopy {
-    const summary = `${highlight.label} lifted revenue per email by ${formatPercentValue(highlight.rpeLift)} on ${highlight.totalEmails.toLocaleString()} sends (${formatPercent(highlight.revenueShare)} of period revenue).`;
+    const summary = `${highlight.label} lifted revenue per email by ${formatPercentValue(highlight.rpeLift)} on ${highlight.totalEmails.toLocaleString()} sends (${approxPercent(highlight.revenueShare)} of period revenue).`;
 
     const sentences: string[] = [];
     if (context) {
-        sentences.push(`Campaigns across ${rangeLabel} averaged about ${formatCurrency(context.perBucketRevenue)} per ${context.bucketLabel}.`);
+        sentences.push(`Campaigns across this window averaged about ${formatCurrency(context.perBucketRevenue)} per ${context.bucketLabel}.`);
     }
 
     sentences.push(describeHighlightSentence(highlight, baseline.rpe));
@@ -633,14 +647,14 @@ function buildWinsCopy(
     }
 
     return {
-        headline: `Revenue Wins from Subject Lines (${rangeLabel})`,
+        headline: `Revenue Win: ${highlight.label}`,
         summary,
         paragraph: sentences.join(" "),
     };
 }
 
 function buildGeneralCopy(
-    rangeLabel: string,
+    _rangeLabel: string,
     baseline: BaselineMetrics,
     context: PeriodContext | null,
     topRevenueShare: number | undefined,
@@ -654,7 +668,7 @@ function buildGeneralCopy(
         : undefined;
 
     const summaryParts = [shareText, `baseline revenue per email is ${baselineText}`].filter(Boolean);
-    const summary = summaryParts.join("; ") || `Campaigns in ${rangeLabel} averaged ${baselineText} per email.`;
+    const summary = summaryParts.join("; ") || `Campaigns in this period averaged ${baselineText} per email.`;
 
     const sentences: string[] = [];
     if (context) {
@@ -671,16 +685,20 @@ function buildGeneralCopy(
         sentences.push("Mix your top-performing themes with new tests so more of the list sees high-revenue sends.");
     }
 
+    const headline = positiveHighlight
+        ? `Revenue Insights: ${positiveHighlight.label}`
+        : "Revenue Insights: Subject line mix";
+
     return {
-        headline: `Campaign & Subject Line Revenue Insights (${rangeLabel})`,
+        headline,
         summary,
         paragraph: sentences.join(" "),
     };
 }
 
-function buildInsufficientCopy(rangeLabel: string): CampaignSubjectLineNoteCopy {
+function buildInsufficientCopy(_rangeLabel: string): CampaignSubjectLineNoteCopy {
     return {
-        headline: `More Data Needed (${rangeLabel})`,
+        headline: "More Data Needed",
         summary: "Not enough campaigns in this window to trust subject line revenue patterns.",
         paragraph: "Run a few broader sends or A/B tests, then revisit these insights once volume passes 5,000 recipients.",
     };
@@ -698,6 +716,7 @@ export function buildCampaignSubjectLineInsights(
         return {
             template: "insufficient",
             totalCampaigns,
+            totalEmails: baseline.totalEmails,
             note: buildInsufficientCopy(rangeLabel),
         };
     }
@@ -748,6 +767,7 @@ export function buildCampaignSubjectLineInsights(
         return {
             template: "warning",
             totalCampaigns,
+            totalEmails: baseline.totalEmails,
             totalRevenue: baseline.totalRevenue,
             topRevenueShare,
             topRevenueCount: topN,
@@ -760,6 +780,7 @@ export function buildCampaignSubjectLineInsights(
         return {
             template: "warning",
             totalCampaigns,
+            totalEmails: baseline.totalEmails,
             totalRevenue: baseline.totalRevenue,
             topRevenueShare,
             topRevenueCount: topN,
@@ -772,6 +793,7 @@ export function buildCampaignSubjectLineInsights(
         return {
             template: "wins",
             totalCampaigns,
+            totalEmails: baseline.totalEmails,
             totalRevenue: baseline.totalRevenue,
             topRevenueShare,
             topRevenueCount: topN,
@@ -788,6 +810,7 @@ export function buildCampaignSubjectLineInsights(
     return {
         template: "general",
         totalCampaigns,
+        totalEmails: baseline.totalEmails,
         totalRevenue: baseline.totalRevenue,
         topRevenueShare,
         topRevenueCount: topN,

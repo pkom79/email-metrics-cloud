@@ -114,6 +114,8 @@ export default function EngagementByTenure({ subscribers, dateRange, customTo, n
         return { engDefs, table };
     }, [subscribers, anchor]);
 
+    const [showDetails, setShowDetails] = React.useState(false);
+
     if (!model) return null;
 
     const { engDefs, table } = model;
@@ -136,8 +138,6 @@ export default function EngagementByTenure({ subscribers, dateRange, customTo, n
         if (abs >= 1) return v.toFixed(1) + '%';
         return v.toFixed(2) + '%';
     };
-
-    const [showDetails, setShowDetails] = React.useState(false);
 
     return (
         <div className="mt-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
