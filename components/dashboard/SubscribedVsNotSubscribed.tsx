@@ -34,7 +34,6 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
         idx: number;
     } | null>(null);
     const [showActionNoteDetails, setShowActionNoteDetails] = useState(false);
-    const [allowActionNote, setAllowActionNote] = useState(true);
 
     const range = useMemo(() => {
         // Reuse DataManager logic to compute start/end dates analogous to other modules
@@ -249,20 +248,6 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
         return () => clearTimeout(t);
     }, [actionNote]);
 
-    // Global guard: only permit first mounted instance to render the card
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const w = window as any;
-        if (w.__SVNS_NOTE_RENDERED) {
-            setAllowActionNote(false);
-        } else {
-            w.__SVNS_NOTE_RENDERED = true;
-            setAllowActionNote(true);
-        }
-        return () => {
-            // do not unset on unmount to avoid flicker during fast refresh; comment out if needed
-        };
-    }, []);
 
     if (!filteredSubs.length) return null;
 
@@ -390,7 +375,7 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
                 </div>
             </div>
 
-            {actionNote && allowActionNote && (
+            {actionNote && (
                 <div className="px-6 pb-6 border-t border-gray-100 dark:border-gray-800">
                     <div className="mt-4 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4" data-consent-action-note="svns">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
