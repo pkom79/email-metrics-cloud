@@ -794,7 +794,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 const created = sub.profileCreated instanceof Date ? sub.profileCreated : null;
                 if (created && lastEmailDate) {
                     const diff = Math.floor((lastEmailDate.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
-                        if (diff >= 30) neverActiveOlderThan30++;
+                    if (diff >= 30) neverActiveOlderThan30++;
                 }
             }
         });
