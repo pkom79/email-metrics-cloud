@@ -1542,8 +1542,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             {/* Send Frequency Module */}
                             <CampaignSendFrequency campaigns={filteredCampaigns} onGuidance={(g) => setFrequencyGuidance(g)} />
                             <AudienceSizePerformance campaigns={filteredCampaigns} />
-                            {/* Subject Analysis Module — Campaigns only */}
-                            <SubjectAnalysis campaigns={filteredCampaigns} />
                             {/* Campaign Gaps & Losses — placed below Campaign Send Frequency */}
                             <CampaignGapsAndLosses
                                 dateRange={dateRange}
@@ -1559,6 +1557,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <>
                             <DayOfWeekPerformance filteredCampaigns={filteredCampaigns} dateRange={dateRange} frequencyRecommendation={deriveFrequencyRecommendation(frequencyGuidance)} />
                             <HourOfDayPerformance filteredCampaigns={filteredCampaigns} dateRange={dateRange} />
+                            {/* Subject Line Analysis moved here (just above Campaign Details) */}
+                            <SubjectAnalysis campaigns={filteredCampaigns} />
                         </>
                     )}
                     {/* Top Campaigns moved directly after Campaign Performance */}
