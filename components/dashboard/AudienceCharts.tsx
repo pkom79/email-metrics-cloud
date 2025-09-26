@@ -680,6 +680,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
 
         const subscribedValueMeaningful = subscribedValueShare >= 10;
         const notSubscribedValueMeaningful = notSubscribedValueShare >= 10;
+        const countDelta = subscribedCount - notSubscribedCount;
 
         let summary: string;
         if (subscribedValueLead && engagedLeadSubscribed) {
@@ -720,6 +721,12 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             sentences.push('Subscribed profiles also dominate volume, so growth is anchored in permission-based channels.');
         } else {
             sentences.push('Overall volume is fairly balanced between consented and imported cohorts.');
+        }
+
+        if (countDelta > 0) {
+            sentences.push(`${Math.abs(countDelta).toLocaleString()} more subscribed profiles were created than not subscribed in this window.`);
+        } else if (countDelta < 0) {
+            sentences.push(`${Math.abs(countDelta).toLocaleString()} more not subscribed profiles were created than subscribed in this window.`);
         }
 
         let ltvSentence: string;

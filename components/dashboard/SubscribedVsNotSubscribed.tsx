@@ -76,14 +76,15 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
                         <InfoTooltipIcon placement="top" content={(
                             <div className="leading-snug">
                                 <p className="font-semibold mb-1">What</p>
-                                <p>Compare Subscribed vs Not Subscribed profiles across size, value, and engagement.</p>
+                                <p>Compare Subscribed vs Not Subscribed profiles by size, value, and engagement.</p>
+                                <ul className="list-disc list-inside mt-2 space-y-1 text-xs">
+                                    <li>Subscribed: gave explicit consent for email marketing.</li>
+                                    <li>Not Subscribed: often from imports or integrations (e.g. Shopify). If not suppressed, they can still receive emails.</li>
+                                </ul>
                                 <p className="font-semibold mt-2 mb-1">How</p>
-                                <p>We use the Email Marketing Consent column: exact text “SUBSCRIBED” vs anything else. Engagement uses last open or last click within the selected window. Values respect your time filter based on when profiles were created.</p>
+                                <p>Last engagement uses the most recent open or click. Profile creation follows the selected time range.</p>
                                 <p className="font-semibold mt-2 mb-1">Why</p>
-                                <p>This helps you see if Subscribed members are much more valuable than Unsubscribed.</p>
-                                <p className="mt-2"><span className="font-semibold">Subscribed:</span> the person has explicitly given consent to receive marketing messages.</p>
-                                <p><span className="font-semibold">Not Subscribed:</span> can occur when a profile is imported or added through an integration like Shopify. Profiles that are not suppressed can receive emails.</p>
-                                <p className="mt-2 text-gray-500 dark:text-gray-400">Note: Opens may be inflated by Apple MPP.</p>
+                                <p>Shows whether Subscribed profiles drive more value than Not Subscribed.</p>
                             </div>
                         )} />
                     </h3>
