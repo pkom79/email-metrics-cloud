@@ -975,13 +975,11 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 </h2>
             </div>
             <div className="mb-6">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Snapshot data collected through {(referenceDate ? new Date(referenceDate) : dataManager.getLastEmailDate()).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                    })}
-                </p>
+                <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-2.5">
+                    <p className="text-xs text-purple-900 dark:text-purple-100">
+                        <span className="font-medium">Note:</span> Profile data through Sept 22, 2025. Active profiles only. Revenue reflects total CLV, not just Klaviyo-attributed.
+                    </p>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
