@@ -17,6 +17,7 @@ import DataCoverageNotice from './DataCoverageNotice';
 import CampaignSendFrequency from './CampaignSendFrequency';
 import AudienceSizePerformance from './AudienceSizePerformance';
 import CampaignGapsAndLosses from './CampaignGapsAndLosses';
+import CampaignSubjectLineNote from './CampaignSubjectLineNote';
 // Helper: map guidance cadence label to numeric recommendation for Day-of-Week note
 function deriveFrequencyRecommendation(g: any): number | undefined {
     if (!g || !g.cadenceLabel) return undefined;
@@ -27,7 +28,6 @@ function deriveFrequencyRecommendation(g: any): number | undefined {
     if (label.startsWith('4')) return 4; // treat 4+ as 4 (cap logic in analytics already)
     return undefined;
 }
-import SubjectAnalysis from './SubjectAnalysis';
 import { BarChart3, Calendar, GitCompare, Mail, Send, Zap, MailSearch, Upload as UploadIcon, X, Share2, RefreshCcw, Key } from 'lucide-react';
 import { buildLlmExportJson } from '../../lib/export/exportBuilder';
 import InfoTooltipIcon from '../InfoTooltipIcon';
@@ -699,6 +699,32 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     // Filters
     const filteredCampaigns = useMemo(() => { if (!hasData) return [] as typeof ALL_CAMPAIGNS; let list = ALL_CAMPAIGNS; if (dateRange === 'custom' && customActive) { const from = new Date(customFrom! + 'T00:00:00'); const to = new Date(customTo! + 'T23:59:59'); list = list.filter(c => c.sentDate >= from && c.sentDate <= to); } else if (dateRange !== 'all') { const days = parseInt(dateRange.replace('d', '')); const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999); const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0); list = list.filter(c => c.sentDate >= start && c.sentDate <= end); } return list; }, [ALL_CAMPAIGNS, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
+    const campaignRangeLabel = useMemo(() => {
+        const formatDate = (date: Date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        if (dateRange === 'custom') {
+            if (customActive && customFrom && customTo) {
+                const start = new Date(`${customFrom}T00:00:00`);
+                const end = new Date(`${customTo}T23:59:59`);
+                return `${formatDate(start)} – ${formatDate(end)}`;
+            }
+            return 'custom range';
+        }
+        if (dateRange === 'all') {
+            const validDates = filteredCampaigns
+                .map(c => c.sentDate)
+                .filter((d): d is Date => d instanceof Date && !Number.isNaN(d.getTime()))
+                .sort((a, b) => a.getTime() - b.getTime());
+            if (validDates.length >= 2) {
+                return `${formatDate(validDates[0])} – ${formatDate(validDates[validDates.length - 1])}`;
+            }
+            return 'full available history';
+        }
+        if (typeof dateRange === 'string' && dateRange.endsWith('d')) {
+            const days = parseInt(dateRange.replace('d', ''), 10) || 30;
+            return `last ${days} days`;
+        }
+        return 'selected range';
+    }, [dateRange, customActive, customFrom, customTo, filteredCampaigns]);
     const filteredFlowEmails = useMemo(() => {
         if (!hasData) return [] as typeof ALL_FLOWS;
         let flows = ALL_FLOWS;
@@ -1557,8 +1583,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <>
                             <DayOfWeekPerformance filteredCampaigns={filteredCampaigns} dateRange={dateRange} frequencyRecommendation={deriveFrequencyRecommendation(frequencyGuidance)} />
                             <HourOfDayPerformance filteredCampaigns={filteredCampaigns} dateRange={dateRange} />
-                            {/* Subject Line Analysis moved here (just above Campaign Details) */}
-                            <SubjectAnalysis campaigns={filteredCampaigns} />
                         </>
                     )}
                     {/* Top Campaigns moved directly after Campaign Performance */}
@@ -1590,6 +1614,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     </div>
                                 </div>
                                 <div className="-mt-1 mb-1 text-sm text-gray-600 dark:text-gray-400">You sent {filteredCampaigns.length} {filteredCampaigns.length === 1 ? 'campaign' : 'campaigns'} in this time range.</div>
+                                <CampaignSubjectLineNote campaigns={filteredCampaigns} rangeLabel={campaignRangeLabel} className="mb-4" />
                                 <div>{getSortedCampaigns().slice(0, displayedCampaigns).map((c, i) => (
                                     <div key={c.id} className={`group relative p-3 sm:p-4 avoid-break ${i !== 0 ? 'border-t border-gray-200 dark:border-gray-800' : ''} md:grid md:items-center md:gap-4 md:[grid-template-columns:minmax(0,1fr)_400px_max-content]`}>
                                         {/* Subject (col 1) */}

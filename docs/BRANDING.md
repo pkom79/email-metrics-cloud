@@ -155,6 +155,21 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Sample line format: “Based on X weeks / Y campaigns (Z emails).” Mirrors existing modules.
 - No new colors, icons, or layout patterns introduced; the section header uses `CalendarDays` icon with purple accent consistent with scope icons.
 
+#### Campaign & Subject Line Action Note (new)
+- Placement: lives inside the Campaign Details card, directly above the campaign list and below the “You sent X campaigns…” line. Always uses the action-note shell (`rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4`) with the standard View/Hide toggle in the upper-right.
+- Icon & headline: pair the `MailSearch` icon (purple accent) with headlines that reflect the active template.
+  - General template: “Campaign & Subject Line Insights ({{range}})”
+  - Warning template: “Subject Line Performance Warning ({{range}})”
+  - Wins template: “Subject Line Wins ({{range}})”
+- Summary text: one sentence summarising revenue concentration and overall subject engagement health for the selected range.
+- Expanded paragraph: 3–4 concise sentences covering (1) the recommended subject length window, (2) weak categories or long-form risks to dial back, (3) high-performing categories or combos to scale, and (4) a closing reminder to apply learnings to upcoming tests.
+- Logic inputs: reuse the subject line analysis engine (length bins + category lifts) along with campaign revenue concentration metrics. Guardrail: require ≥5 campaigns in range; otherwise show the “Not enough campaigns…” fallback copy.
+- Triggers:
+  - Warning when any category underperforms baseline by ≥1.0 pp or the longest length bin trails baseline by ≥0.8 pp.
+  - Wins when no warning fires and any category beats baseline by ≥0.5 pp with enough volume.
+  - General when neither warning nor wins criteria are met but data volume is sufficient, emphasising mix discipline.
+- Copy tone: concise, direct, and instructive—mirror the voice used in other dashboard action notes. Avoid bullet lists inside the paragraph.
+
 
 ### Export controls
 
