@@ -10,13 +10,6 @@ import { computeCampaignGapsAndLosses } from '../../lib/analytics/campaignGapsLo
 
 const currencyFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatCurrency = (v: number) => currencyFormatter.format(v || 0);
-const formatShortCurrency = (v: number) => {
-    if (!Number.isFinite(v)) return formatCurrency(0);
-    const abs = Math.abs(v);
-    if (abs >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-    if (abs >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
-    return formatCurrency(v);
-};
 const formatWeeks = (n: number) => `${n} ${n === 1 ? 'week' : 'weeks'}`;
 
 interface Props {
@@ -61,8 +54,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
         const zeroWeeks = result.zeroCampaignSendWeeks;
         const longestGap = result.longestZeroSendGap;
         const pctCoverage = Number.isFinite(result.pctWeeksWithCampaignsSent) ? result.pctWeeksWithCampaignsSent : 0;
-        const lostRevenue = result.estimatedLostRevenue ?? 0;
-        const avgPerWeek = result.avgCampaignsPerWeek;
+        const lostRevenueRaw = result.estimatedLostRevenue;
         const totalWeeks = result.weeksInRangeFull;
 
         const sample = totalWeeks > 0 ? `Based on ${formatWeeks(totalWeeks)} in this date range.` : null;
@@ -75,24 +67,128 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
             };
         }
 
-        const longestText = longestGap > 0 ? formatWeeks(longestGap) : null;
-        const coverageText = `${pctCoverage.toFixed(1)}% coverage`;
+        const coverageText = `${pctCoverage.toFixed(1)}%`;
+        const missedWeeksText = zeroWeeks.toLocaleString('en-US');
+        const missedRevenueText = lostRevenueRaw != null ? formatCurrency(lostRevenueRaw) : 'an unestimated amount';
 
-        if (lostRevenue > 0) {
-            const title = `Prevent another ${formatShortCurrency(lostRevenue)} loss`;
-            const messageParts = [
-                `You skipped ${formatWeeks(zeroWeeks)} (${coverageText}).`,
-                longestText ? `The longest break was ${longestText}, but those ${formatWeeks(zeroWeeks)} still added up to ${formatCurrency(lostRevenue)} in missed revenue.` : `Those gaps still added up to ${formatCurrency(lostRevenue)} in missed revenue.`,
-                `Set a safety send or automated campaign to keep future weeks covered—you already average ${avgPerWeek.toFixed(2)} sends when active.`
-            ];
-            return { title, message: messageParts.join(' '), sample };
+        const weekStarts = result.zeroSendWeekStarts ?? [];
+        const runLengths = (() => {
+            if (!weekStarts.length) {
+                return longestGap > 0 ? [longestGap] : [zeroWeeks];
+            }
+            const sorted = [...weekStarts].sort();
+            const runs: number[] = [];
+            const toDate = (iso: string) => {
+                const date = new Date(iso);
+                date.setHours(0, 0, 0, 0);
+                return date;
+            };
+            let currentLen = 1;
+            let prev = toDate(sorted[0]);
+            for (let i = 1; i < sorted.length; i++) {
+                const curr = toDate(sorted[i]);
+                const diffDays = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
+                if (diffDays === 7) {
+                    currentLen += 1;
+                } else {
+                    runs.push(currentLen);
+                    currentLen = 1;
+                }
+                prev = curr;
+            }
+            runs.push(currentLen);
+            const total = runs.reduce((sum, len) => sum + len, 0);
+            if (total !== zeroWeeks && zeroWeeks > 0) {
+                return [zeroWeeks];
+            }
+            return runs;
+        })();
+
+        const runCount = runLengths.length;
+        const maxLen = Math.max(...runLengths);
+        const averageLen = runLengths.reduce((sum, len) => sum + len, 0) / runCount;
+        const medianLen = (() => {
+            const sorted = [...runLengths].sort((a, b) => a - b);
+            const mid = Math.floor(sorted.length / 2);
+            if (sorted.length % 2 === 0) return (sorted[mid - 1] + sorted[mid]) / 2;
+            return sorted[mid];
+        })();
+
+        const shortRuns = runLengths.filter(len => len <= 2);
+        const longRuns = runLengths.filter(len => len >= 3);
+        const hasShort = shortRuns.length > 0;
+        const hasLong = longRuns.length > 0;
+
+        const typicalGapLengthWeeks = Math.max(1, Math.round(medianLen || averageLen || maxLen || 1));
+        const typicalGapLengthText = formatWeeks(typicalGapLengthWeeks);
+        const maxGapText = formatWeeks(maxLen);
+        const avgLongGapText = formatWeeks(Math.max(1, Math.round(longRuns.length ? (longRuns.reduce((sum, len) => sum + len, 0) / longRuns.length) : maxLen)));
+        const shortGapText = formatWeeks(Math.max(1, shortRuns.length ? Math.min(...shortRuns) : 1));
+        const longGapText = formatWeeks(Math.max(1, longRuns.length ? Math.max(...longRuns) : maxLen));
+
+        type TemplateKey = 'fewSmall' | 'manySmall' | 'oneLong' | 'fewLong' | 'mixed' | 'backToBack' | 'intermittent';
+        let template: TemplateKey;
+
+        if (runCount === 1) {
+            if (maxLen >= 4) template = 'backToBack';
+            else if (maxLen >= 2) template = 'oneLong';
+            else template = 'fewSmall';
+        } else if (!hasLong) {
+            if (runCount <= 3) template = 'fewSmall';
+            else if (pctCoverage >= 75) template = 'manySmall';
+            else template = 'intermittent';
+        } else if (!hasShort) {
+            template = 'fewLong';
+        } else if (hasShort && hasLong) {
+            template = 'mixed';
+        } else {
+            template = 'intermittent';
         }
 
-        const title = `Fill the ${formatWeeks(zeroWeeks)} without campaigns`;
-        const message = [
-            `Coverage sits at ${coverageText}, and the longest break was ${longestText ?? 'short'}.`,
-            `Spread your ${avgPerWeek.toFixed(2)} campaigns-per-week average so each week has at least one send to keep revenue steady.`
-        ].join(' ');
+        const buildMessage = (): { title: string; message: string } => {
+            switch (template) {
+                case 'fewSmall':
+                    return {
+                        title: 'A few small breaks',
+                        message: `You missed ${missedWeeksText} scattered weeks (coverage ${coverageText}). Each gap was about ${typicalGapLengthText} long, adding up to ${missedRevenueText} in lost revenue. Set up an automated backup campaign so the occasional off week still generates returns.`
+                    };
+                case 'manySmall':
+                    return {
+                        title: 'Many small breaks',
+                        message: `You missed ${missedWeeksText} short weeks here and there (coverage ${coverageText}). None lasted more than ${maxGapText}, yet the repeated pauses added up to ${missedRevenueText} in lost revenue. A safety send will smooth out these dips and keep coverage steady.`
+                    };
+                case 'oneLong': {
+                    const descriptor = runCount === 1 ? 'one' : missedWeeksText;
+                    return {
+                        title: 'One longer gap',
+                        message: `You missed ${descriptor} stretch of ${formatWeeks(maxLen)} (coverage ${coverageText}). That single break cost ${missedRevenueText}. Add a fallback send to prevent long gaps like this from draining revenue again.`
+                    };
+                }
+                case 'fewLong':
+                    return {
+                        title: 'A few longer gaps',
+                        message: `You missed ${missedWeeksText} longer breaks of about ${avgLongGapText} each (coverage ${coverageText}). Those gaps added up to ${missedRevenueText} in missed revenue. Automated campaigns will keep the calendar full even during extended pauses.`
+                    };
+                case 'mixed':
+                    return {
+                        title: 'Mixed short and long gaps',
+                        message: `You missed ${missedWeeksText} weeks overall (coverage ${coverageText}). Some gaps were only ${shortGapText}, while one stretched ${longGapText}. Together they cost ${missedRevenueText}. A safety send ensures both small and long breaks are covered.`
+                    };
+                case 'backToBack':
+                    return {
+                        title: 'Back-to-back gaps',
+                        message: `You missed ${missedWeeksText} consecutive weeks (coverage ${coverageText}). Consecutive downtime hurts the most, adding up to ${missedRevenueText} in lost revenue. Automating a fallback campaign will keep revenue flowing even when you step away.`
+                    };
+                case 'intermittent':
+                default:
+                    return {
+                        title: 'Intermittent scattered gaps',
+                        message: `You missed ${missedWeeksText} weeks spread across the year (coverage ${coverageText}). No single gap was longer than ${maxGapText}, but the irregular pattern still chipped away at ${missedRevenueText}. Keep the calendar steady with a backup send.`
+                    };
+            }
+        };
+
+        const { title, message } = buildMessage();
         return { title, message, sample };
     }, [result]);
 
