@@ -806,7 +806,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             if (needsWork > 0) parts.push(`${needsWork === 1 ? 'One email needs testing' : `${needsWork} emails need testing`} to improve timing or creative.`);
             if (pauseCount > 0) parts.push(`${pauseCount === 1 ? 'Pause the flagged email' : 'Pause the flagged emails'} until you rebuild them.`);
             if (lowVolume > 0) parts.push(`Collect more sends for the ${lowVolume === 1 ? 'low-volume email' : 'low-volume emails'}.`);
-            bodyParts = parts;
+            bodyParts = parts.length ? [parts.join(' ')] : [];
         }
 
         if ((addStepSuggestion as any)?.suggested && (addStepSuggestion as any)?.estimate) {
