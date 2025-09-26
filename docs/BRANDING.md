@@ -4,6 +4,8 @@ This guide defines the design tokens, components, and patterns used across the a
 
 Last updated: 2025-09-14 (Flow Step Analysis: Money pillar labels switched to RI/ERS; Deliverability tooltip formatting standardized to arrow; Score N/A rule)
 
+> 2025-09-26: Campaign Subject Line insight headlines switched to narrative sentences (no prefixed labels like "Revenue Win:" / "Revenue Warning:"). Headlines now state the observed outcome using "Rev per Email" phrasing (never the RPE acronym) and avoid colons/semicolons/em dashes per readability guidance.
+
 ## theme and modes
 - Tailwind: v3.x, darkMode: class
 - Color mode: Light and Dark (toggled via `class="dark"` on the root)
@@ -100,6 +102,18 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Structure: same card shell as Send Volume Guidance (`rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4`). Content starts with a `text-sm font-semibold` sentence—no separate "Action Note" label—spaced from the header with `mt-3`.
 - Leading line: bold sentence summarizing the recommendation (`text-sm font-semibold text-gray-900 dark:text-gray-100`). Follow with body copy in `text-sm text-gray-700 dark:text-gray-300 leading-relaxed` describing the why and next step.
 - Sample line: optional `text-xs text-gray-500 dark:text-gray-400` reminder formatted as “Based on X weeks of campaign data.” Count all weeks used in the comparison (e.g., baseline + challenger) so the note reflects the total observation window.
+
+#### Narrative Headlines (Subject Line Insights)
+- Use a single descriptive sentence instead of a prefixed tag (e.g., avoid "Revenue Win:").
+- Must describe what happened in the observed period (e.g., volume share below baseline, lift achieved) and end with a period.
+- Use the phrase “Rev per Email” (capital R) instead of the acronym RPE.
+- Do not use colon `:`, semicolon `;`, or em dash `—` characters; keep punctuation simple (period only).
+- Example patterns (actual selection logic handled in analytics layer):
+  - "42% of sends were 18% below baseline Rev per Email ($0.34)."
+  - "Scarcity & Low Stock subject lines lifted Rev per Email 26% on 145,000 sends (38% of revenue)."
+  - "Campaigns averaged $0.41 Rev per Email this period."
+- When referencing a percentage lift/dip, show it as an absolute percent (e.g., "26%" not "+26%" unless clarity improves in edge comparisons).
+
 - No status badges for frequency guidance; the recommendation itself must include the cadence (“Send 3 campaigns per week”) so the user gets a clear action without extra chrome.
 - Guardrails: when computing recommendations, require ≥4 full weeks and ≥1k emails per cadence before comparing buckets. Treat revenue lift ≥10% as meaningful, only approve higher cadence when open/click drops stay within -5% and spam/bounce stay within +0.05/+0.10 percentage points. The inverse guardrails apply when lowering cadence.
 - Sparse data handling: if only one cadence meets the sample bar, surface an exploratory message (“Test 2 campaigns per week”) when engagement is healthy; otherwise show “Not enough data for a recommendation.”

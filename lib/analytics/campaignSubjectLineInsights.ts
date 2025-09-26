@@ -596,9 +596,10 @@ function buildRevenueWarningCopy(
     }
 
     const headlineReason = detail.reasons[0] ? capitalize(detail.reasons[0]) : "Revenue efficiency slipped";
-
+    // Narrative headline (no prefixed label, no punctuation like ':' ';' or '—')
+    const narrativeHeadline = `${approxPercent(detail.volumeShare)} of sends were ${dropText} below baseline Rev per Email (${baselineText})`;
     return {
-        headline: `Revenue Warning: ${headlineReason}`,
+        headline: narrativeHeadline.endsWith('.') ? narrativeHeadline : narrativeHeadline + '.',
         summary,
         paragraph: sentences.join(" "),
     };
@@ -632,10 +633,10 @@ function buildDeliverabilityWarningCopy(
         sentences.push(`When volumes resume, lean on ${positiveHighlight.label.toLowerCase()} subject lines; they stayed above baseline through the period.`);
     }
 
-    const headline = `Deliverability Warning: ${metricName} spike`;
-
+    // Narrative headline (descriptive sentence, no prefixed label)
+    const narrativeHeadline = `${metricName} reached ${formatPercent(detail.metricRate || 0)} impacting ${approxPercent(detail.volumeShare)} of sends this period`;
     return {
-        headline,
+        headline: narrativeHeadline.endsWith('.') ? narrativeHeadline : narrativeHeadline + '.',
         summary,
         paragraph: sentences.join(" "),
     };
@@ -687,8 +688,10 @@ function buildWinsCopy(
 
     appendWatchlist(sentences, watchlist);
 
+    // Narrative headline for a positive highlight
+    const headlineSentence = `${highlight.label} subject lines lifted Rev per Email ${formatPercentValue(highlight.rpeLift)} on ${highlight.totalEmails.toLocaleString()} sends (${approxPercent(highlight.revenueShare)} of revenue).`;
     return {
-        headline: `Revenue Win: ${highlight.label}`,
+        headline: headlineSentence,
         summary,
         paragraph: sentences.join(" "),
     };
@@ -729,12 +732,17 @@ function buildGeneralCopy(
 
     appendWatchlist(sentences, watchlist);
 
-    const headline = positiveHighlight
-        ? `Revenue Insights: ${positiveHighlight.label}`
-        : "Revenue Insights: Subject line mix";
-
+    let narrativeHeadline: string;
+    if (positiveHighlight) {
+        narrativeHeadline = `${positiveHighlight.label} subject lines delivered ${formatPercentValue(positiveHighlight.rpeLift)} Rev per Email lift on ${positiveHighlight.totalEmails.toLocaleString()} sends.`;
+    } else if (shareText) {
+        narrativeHeadline = `${shareText} with baseline Rev per Email ${baselineText}`;
+    } else {
+        narrativeHeadline = `Campaigns averaged ${baselineText} Rev per Email this period`;
+    }
+    if (!narrativeHeadline.endsWith('.')) narrativeHeadline += '.';
     return {
-        headline,
+        headline: narrativeHeadline,
         summary,
         paragraph: sentences.join(" "),
     };
@@ -742,7 +750,7 @@ function buildGeneralCopy(
 
 function buildInsufficientCopy(_rangeLabel: string): CampaignSubjectLineNoteCopy {
     return {
-        headline: "More Data Needed",
+        headline: "More data needed to summarize subject line Rev per Email this period.",
         summary: "Not enough campaigns in this window to trust subject line revenue patterns.",
         paragraph: "Run a few broader sends or A/B tests, then revisit these insights once volume passes 5,000 recipients.",
     };
