@@ -87,6 +87,11 @@ interface WarningDetail {
     reasons: string[];
 }
 
+interface SignalSummary {
+    warning?: WarningDetail;
+    watchReasons: string[];
+}
+
 const CURRENCY_FORMATTER = new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -107,6 +112,8 @@ const MIN_EMAILS_FOR_HIGHLIGHT_ABSOLUTE = 10000;
 const MIN_EMAILS_FOR_WARNING = 10000;
 const LOW_REVENUE_MULTIPLIER = 0.7; // 30% below baseline RPE
 const LOW_REVENUE_VOLUME_THRESHOLD = 0.2; // 20% of emails in range
+const LOW_REVENUE_REVENUE_THRESHOLD = 0.2; // 20% of revenue
+const REVENUE_WATCH_VOLUME_THRESHOLD = 0.05; // 5% of emails for watch
 const WINS_STRICT_MULTIPLIER = 2.0; // 2x baseline RPE
 const WINS_FLEX_MULTIPLIER = 1.5; // 1.5x baseline when share >= threshold
 const WINS_SHARE_THRESHOLD = 0.15; // 15% of revenue
@@ -425,22 +432,30 @@ function findGeneralHighlight(
     return candidates.sort((a, b) => b.rpeLift - a.rpeLift)[0];
 }
 
-function detectRevenueWarning(
+function appendWatchlist(sentences: string[], watchlist: string[]) {
+    if (!watchlist.length) return;
+    const formatted = watchlist
+        .map(item => (item.endsWith('.') ? item : `${item}.`))
+        .join(' ');
+    sentences.push(`Keep an eye on ${formatted}`);
+}
+
+function detectRevenueSignals(
     diagnostics: CampaignDiagnostic[],
     baseline: BaselineMetrics,
-): WarningDetail | null {
+): SignalSummary {
     const lagging = diagnostics.filter(d => d.lowEfficiency && (d.engagementFlag || d.deliverabilityFlag));
-    if (!lagging.length) return null;
+    if (!lagging.length) return { watchReasons: [] };
 
     const affectedEmails = sum(lagging, d => d.emails);
-    if (affectedEmails < MIN_EMAILS_FOR_WARNING) return null;
+    if (affectedEmails < MIN_EMAILS_FOR_WARNING) return { watchReasons: [] };
 
     const volumeShare = safeDivide(affectedEmails, baseline.totalEmails);
-    if (volumeShare < LOW_REVENUE_VOLUME_THRESHOLD) return null;
 
     const affectedRevenue = sum(lagging, d => d.revenue);
     const affectedRpe = safeDivide(affectedRevenue, affectedEmails);
     const dropPercent = baseline.rpe > 0 ? ((affectedRpe - baseline.rpe) / baseline.rpe) * 100 : 0;
+    const revenueShare = safeDivide(affectedRevenue, baseline.totalRevenue);
 
     const reasonWeights = new Map<string, number>();
     for (const diag of lagging) {
@@ -454,28 +469,40 @@ function detectRevenueWarning(
         .slice(0, 2)
         .map(([reason]) => reason);
 
-    return {
-        type: "revenue",
-        volumeShare,
-        affectedEmails,
-        affectedRevenue,
-        affectedRpe,
-        baselineRpe: baseline.rpe,
-        dropPercent,
-        severity: "flag",
-        reasons,
-    };
+    if (volumeShare >= LOW_REVENUE_VOLUME_THRESHOLD && revenueShare >= LOW_REVENUE_REVENUE_THRESHOLD) {
+        return {
+            warning: {
+                type: "revenue",
+                volumeShare,
+                affectedEmails,
+                affectedRevenue,
+                affectedRpe,
+                baselineRpe: baseline.rpe,
+                dropPercent,
+                severity: "flag",
+                reasons,
+            },
+            watchReasons: [],
+        };
+    }
+
+    if (volumeShare >= REVENUE_WATCH_VOLUME_THRESHOLD) {
+        const sentence = `${approxPercent(volumeShare)} of sends trailed baseline by ${formatPercentValue(Math.abs(dropPercent))}`;
+        return { watchReasons: [sentence] };
+    }
+
+    return { watchReasons: [] };
 }
 
-function detectDeliverabilityWarning(
+function detectDeliverabilitySignals(
     diagnostics: CampaignDiagnostic[],
     baseline: BaselineMetrics,
-): WarningDetail | null {
+): SignalSummary {
     const flagged = diagnostics.filter(d => d.deliverabilityFlag);
-    if (!flagged.length) return null;
+    if (!flagged.length) return { watchReasons: [] };
 
     const affectedEmails = sum(flagged, d => d.emails);
-    if (affectedEmails < MIN_EMAILS_FOR_WARNING) return null;
+    if (affectedEmails < MIN_EMAILS_FOR_WARNING) return { watchReasons: [] };
 
     const volumeShare = safeDivide(affectedEmails, baseline.totalEmails);
 
@@ -492,11 +519,14 @@ function detectDeliverabilityWarning(
         }
     }
 
-    if (!dominantMetric) return null;
+    if (!dominantMetric) return { watchReasons: [] };
 
     const severity = flagged.some(d => d.deliverabilityCritical || d.spamRate >= SPAM_CRITICAL || d.bounceRate >= BOUNCE_CRITICAL)
         ? "critical"
         : "flag";
+
+    const affectedRevenue = sum(flagged, d => d.revenue);
+    const revenueShare = safeDivide(affectedRevenue, baseline.totalRevenue);
 
     const reasonWeights = new Map<string, number>();
     for (const diag of flagged) {
@@ -509,18 +539,26 @@ function detectDeliverabilityWarning(
         .slice(0, 2)
         .map(([reason]) => reason);
 
-    return {
-        type: "deliverability",
-        volumeShare,
-        affectedEmails,
-        affectedRevenue: sum(flagged, d => d.revenue),
-        baselineRpe: baseline.rpe,
-        severity,
-        metricLabel: dominantMetric.label,
-        metricRate: dominantMetric.rate,
-        baselineMetric: dominantMetric.baseline,
-        reasons,
-    };
+    if (severity === "critical" || (volumeShare >= LOW_REVENUE_VOLUME_THRESHOLD && revenueShare >= LOW_REVENUE_REVENUE_THRESHOLD)) {
+        return {
+            warning: {
+                type: "deliverability",
+                volumeShare,
+                affectedEmails,
+                affectedRevenue,
+                baselineRpe: baseline.rpe,
+                severity,
+                metricLabel: dominantMetric.label,
+                metricRate: dominantMetric.rate,
+                baselineMetric: dominantMetric.baseline,
+                reasons,
+            },
+            watchReasons: [],
+        };
+    }
+
+    const sentence = `${capitalize(dominantMetric.label)} briefly reached ${formatPercent(dominantMetric.rate)} on ${approxPercent(volumeShare)} of sends`;
+    return { watchReasons: [sentence] };
 }
 
 function buildRevenueWarningCopy(
@@ -626,6 +664,7 @@ function buildWinsCopy(
     context: PeriodContext | null,
     highlight: HighlightDetail,
     laggingHighlight: HighlightDetail | null,
+    watchlist: string[],
 ): CampaignSubjectLineNoteCopy {
     const summary = `${highlight.label} lifted revenue per email by ${formatPercentValue(highlight.rpeLift)} on ${highlight.totalEmails.toLocaleString()} sends (${approxPercent(highlight.revenueShare)} of period revenue).`;
 
@@ -646,6 +685,8 @@ function buildWinsCopy(
         sentences.push("Carry these learnings into the next broad test with similar positioning.");
     }
 
+    appendWatchlist(sentences, watchlist);
+
     return {
         headline: `Revenue Win: ${highlight.label}`,
         summary,
@@ -661,6 +702,7 @@ function buildGeneralCopy(
     topRevenueCount: number | undefined,
     positiveHighlight: HighlightDetail | null,
     laggingHighlight: HighlightDetail | null,
+    watchlist: string[],
 ): CampaignSubjectLineNoteCopy {
     const baselineText = formatCurrency(baseline.rpe);
     const shareText = topRevenueShare != null && topRevenueCount != null
@@ -684,6 +726,8 @@ function buildGeneralCopy(
     } else {
         sentences.push("Mix your top-performing themes with new tests so more of the list sees high-revenue sends.");
     }
+
+    appendWatchlist(sentences, watchlist);
 
     const headline = positiveHighlight
         ? `Revenue Insights: ${positiveHighlight.label}`
@@ -752,8 +796,9 @@ export function buildCampaignSubjectLineInsights(
         .sort((a, b) => a.rpeLift - b.rpeLift)[0] || null;
 
     const diagnostics = campaigns.map(c => evaluateCampaign(c, baseline));
-    const revenueWarning = detectRevenueWarning(diagnostics, baseline);
-    const deliverabilityWarning = detectDeliverabilityWarning(diagnostics, baseline);
+    const revenueSignals = detectRevenueSignals(diagnostics, baseline);
+    const deliverabilitySignals = detectDeliverabilitySignals(diagnostics, baseline);
+    const watchlist = [...deliverabilitySignals.watchReasons, ...revenueSignals.watchReasons];
 
     const topN = Math.min(options?.maxTopCount ?? 3, totalCampaigns);
     const sortedByRevenue = campaigns.slice().sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
@@ -762,8 +807,8 @@ export function buildCampaignSubjectLineInsights(
 
     const positiveHighlight = positiveWinsHighlight ?? generalHighlight;
 
-    if (deliverabilityWarning) {
-        const note = buildDeliverabilityWarningCopy(rangeLabel, periodContext, deliverabilityWarning, positiveHighlight);
+    if (deliverabilitySignals.warning) {
+        const note = buildDeliverabilityWarningCopy(rangeLabel, periodContext, deliverabilitySignals.warning, positiveHighlight);
         return {
             template: "warning",
             totalCampaigns,
@@ -775,8 +820,8 @@ export function buildCampaignSubjectLineInsights(
         };
     }
 
-    if (revenueWarning) {
-        const note = buildRevenueWarningCopy(rangeLabel, baseline, periodContext, revenueWarning, laggingHighlight, positiveHighlight);
+    if (revenueSignals.warning) {
+        const note = buildRevenueWarningCopy(rangeLabel, baseline, periodContext, revenueSignals.warning, laggingHighlight, positiveHighlight);
         return {
             template: "warning",
             totalCampaigns,
@@ -789,7 +834,7 @@ export function buildCampaignSubjectLineInsights(
     }
 
     if (positiveWinsHighlight) {
-        const note = buildWinsCopy(rangeLabel, baseline, periodContext, positiveWinsHighlight, laggingHighlight);
+        const note = buildWinsCopy(rangeLabel, baseline, periodContext, positiveWinsHighlight, laggingHighlight, watchlist);
         return {
             template: "wins",
             totalCampaigns,
@@ -805,7 +850,7 @@ export function buildCampaignSubjectLineInsights(
         };
     }
 
-    const note = buildGeneralCopy(rangeLabel, baseline, periodContext, topRevenueShare, topN, positiveHighlight, laggingHighlight);
+    const note = buildGeneralCopy(rangeLabel, baseline, periodContext, topRevenueShare, topN, positiveHighlight, laggingHighlight, watchlist);
 
     return {
         template: "general",
