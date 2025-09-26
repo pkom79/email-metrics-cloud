@@ -388,7 +388,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
             } else if (share === topShare && diffTop >= 2) {
                 summary = `Largest share of high-value revenue (${shareLabel}).`;
             } else if (share === minShare) {
-                summary = `Smallest share (${shareLabel}); individual spend is high but scale is limited.`;
+                summary = `Smallest share (${shareLabel}); individual spend is high but scale is limited`;
             } else {
                 summary = `Meaningful mid-tier contribution (${shareLabel}).`;
             }
