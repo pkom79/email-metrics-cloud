@@ -588,11 +588,11 @@ function buildRevenueWarningCopy(
     }
 
     if (laggingHighlight) {
-        sentences.push(`${laggingHighlight.label} subject lines leaned ${formatPercentValue(Math.abs(laggingHighlight.rpeLift))} below baseline on ${laggingHighlight.totalEmails.toLocaleString()} sends—refresh that story before you repeat it.`);
+        sentences.push(`${laggingHighlight.label} subject lines leaned ${formatPercentValue(Math.abs(laggingHighlight.rpeLift))} below baseline on ${laggingHighlight.totalEmails.toLocaleString()} sends. Refresh that story before you repeat it.`);
     }
 
     if (positiveHighlight && positiveHighlight !== laggingHighlight) {
-        sentences.push(`${positiveHighlight.label} still held ${formatPercentValue(positiveHighlight.rpeLift)} above baseline on ${positiveHighlight.totalEmails.toLocaleString()} sends—reuse that playbook while you tune the weak spots.`);
+        sentences.push(`${positiveHighlight.label} still held ${formatPercentValue(positiveHighlight.rpeLift)} above baseline on ${positiveHighlight.totalEmails.toLocaleString()} sends. Reuse that playbook while you tune the weak spots.`);
     }
 
     const headlineReason = detail.reasons[0] ? capitalize(detail.reasons[0]) : "Revenue efficiency slipped";
@@ -627,7 +627,7 @@ function buildDeliverabilityWarningCopy(
         sentences.push(`Key drivers: ${formatReasonList(detail.reasons)}.`);
     }
 
-    sentences.push(`Pause or narrow sends until complaints drop—these sends hit ${detail.affectedEmails.toLocaleString()} inboxes.`);
+    sentences.push(`Pause or narrow sends until complaints drop. These sends hit ${detail.affectedEmails.toLocaleString()} inboxes.`);
 
     if (positiveHighlight) {
         sentences.push(`When volumes resume, lean on ${positiveHighlight.label.toLowerCase()} subject lines; they stayed above baseline through the period.`);
@@ -651,10 +651,7 @@ function describeHighlightSentence(highlight: HighlightDetail, baselineRpe: numb
     if (highlight.openRateValue != null && highlight.openRateChange != null) {
         tail.push(`opens at ${highlight.openRateValue.toFixed(1)}% (${formatPercentValue(highlight.openRateChange)} vs baseline)`);
     }
-    if (highlight.clickRateValue != null && highlight.clickRateChange != null) {
-        tail.push(`clicks at ${highlight.clickRateValue.toFixed(1)}% (${formatPercentValue(highlight.clickRateChange)} vs baseline)`);
-    }
-    const detail = tail.length ? `, with ${tail.join(" and ")}` : "";
+    const detail = tail.length ? `, with ${tail.join(" ")}` : ""; // single metric now
     const baselineText = formatCurrency(baselineRpe);
     return `${intro}${detail}. Baseline sits at ${baselineText} per email.`;
 }
@@ -677,7 +674,7 @@ function buildWinsCopy(
     sentences.push(describeHighlightSentence(highlight, baseline.rpe));
 
     if (laggingHighlight) {
-        sentences.push(`${laggingHighlight.label} trailed by ${formatPercentValue(Math.abs(laggingHighlight.rpeLift))} on ${laggingHighlight.totalEmails.toLocaleString()} sends—refine that story while you scale the winners.`);
+        sentences.push(`${laggingHighlight.label} trailed by ${formatPercentValue(Math.abs(laggingHighlight.rpeLift))} on ${laggingHighlight.totalEmails.toLocaleString()} sends. Refine that story while you scale the winners.`);
     }
 
     if (highlight.rpeLift >= (IMPRESSIVE_RPE_MULTIPLIER - 1) * 100) {
@@ -725,7 +722,7 @@ function buildGeneralCopy(
     }
 
     if (laggingHighlight) {
-        sentences.push(`${laggingHighlight.label} subject lines lagged baseline by ${formatPercentValue(Math.abs(laggingHighlight.rpeLift))} on ${laggingHighlight.totalEmails.toLocaleString()} sends—refresh the offer or framing before running them again.`);
+        sentences.push(`${laggingHighlight.label} subject lines lagged baseline by ${formatPercentValue(Math.abs(laggingHighlight.rpeLift))} on ${laggingHighlight.totalEmails.toLocaleString()} sends. Refresh the offer or framing before running them again.`);
     } else {
         sentences.push("Mix your top-performing themes with new tests so more of the list sees high-revenue sends.");
     }
@@ -834,10 +831,11 @@ function buildDeliverabilityStatusSummary(baseline: BaselineMetrics, previous: P
 }
 
 function buildRevenuePerformanceHeadline(currentRevenue: number, previous: PreviousPeriodStats | null): string {
-    if (!previous || previous.totalRevenue <= 0) {
-        if (!previous || previous.totalRevenue === 0) {
-            return `This period's campaigns produced ${formatCurrency(currentRevenue)} in revenue (no prior period revenue).`;
-        }
+    if (!previous) {
+        return `Campaigns produced ${formatCurrency(currentRevenue)} in revenue this period.`;
+    }
+    if (previous.totalRevenue <= 0) {
+        return `Campaigns generated ${formatCurrency(currentRevenue)} in revenue (no prior period revenue).`;
     }
     const { amountLabel, direction } = formatDeltaThousands(currentRevenue, previous.totalRevenue);
     if (direction === "same") return "Campaign revenue was roughly unchanged versus the previous period.";
@@ -968,17 +966,7 @@ export function buildCampaignSubjectLineInsights(
     const headline = buildRevenuePerformanceHeadline(baseline.totalRevenue, previousStats);
     const deliverabilitySummary = buildDeliverabilityStatusSummary(baseline, previousStats);
 
-    // Winners / laggards by revenue
-    const { winners, laggards, dominantCategory, underCategory } = selectRevenueWinnersAndLaggards(campaigns);
-    function campaignLabel(c: ProcessedCampaign): string {
-        return (c.subject || c.campaignName || "(untitled)").trim().replace(/\s+/g, " ");
-    }
-    const winnerSentence = winners.length ? `Top campaigns: ${winners.map(c => `“${campaignLabel(c)}” (${formatCurrency(c.revenue || 0)})`).join(", ")}${winners.length ? "." : ""}` : "";
-    const laggardSentence = laggards.length ? `Underperformers: ${laggards.map(c => `“${campaignLabel(c)}” (${formatCurrency(c.revenue || 0)})`).join(", ")}.` : "";
-    const themeSentenceParts: string[] = [];
-    if (dominantCategory) themeSentenceParts.push(`Dominant theme: ${dominantCategory}.`);
-    if (underCategory) themeSentenceParts.push(`Underperforming theme: ${underCategory}.`);
-    const themesSentence = themeSentenceParts.join(" ");
+    // Winners / laggards lists intentionally removed per updated guidance (focus shift to concise narrative).
 
     // Reuse existing template logic for paragraph assembly but override headline & summary after
     let baseInsight: CampaignSubjectLineInsight;
@@ -1043,11 +1031,8 @@ export function buildCampaignSubjectLineInsights(
     // Override headline & summary, prepend winners/laggards/theme sentences to paragraph (without removing existing content)
     baseInsight.note.headline = headline;
     const rpeChange = previousStats && previousStats.rpe > 0 ? ((baseline.rpe - previousStats.rpe) / previousStats.rpe) * 100 : 0;
-    const rpePhrase = previousStats ? `Rev per Email ${rpeChange === 0 ? "unchanged" : (rpeChange > 0 ? `up ${formatPercentValue(Math.abs(rpeChange))}` : `down ${formatPercentValue(Math.abs(rpeChange))}`)}` : `Rev per Email ${formatCurrency(baseline.rpe)}`;
-    baseInsight.note.summary = `${rpePhrase}. ${deliverabilitySummary}`;
-    const prefixParts = [winnerSentence, laggardSentence, themesSentence].filter(Boolean).join(" ");
-    if (prefixParts) {
-        baseInsight.note.paragraph = `${prefixParts} ${baseInsight.note.paragraph}`.trim();
-    }
+    const rpeValue = formatCurrency(baseline.rpe);
+    const rpePhrase = `Average revenue per email in this period was ${rpeValue}.`;
+    baseInsight.note.summary = `${rpePhrase} ${deliverabilitySummary}`.trim();
     return baseInsight;
 }
