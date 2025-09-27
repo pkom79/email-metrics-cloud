@@ -5,6 +5,7 @@ This guide defines the design tokens, components, and patterns used across the a
 Last updated: 2025-09-14 (Flow Step Analysis: Money pillar labels switched to RI/ERS; Deliverability tooltip formatting standardized to arrow; Score N/A rule)
 
 > 2025-09-26: Campaign Subject Line insight headlines switched to narrative sentences (no prefixed labels like "Revenue Win:" / "Revenue Warning:"). Headlines now state the observed outcome using "Rev per Email" phrasing (never the RPE acronym) and avoid colons/semicolons/em dashes per readability guidance.
+> 2025-09-26 (later): Headline simplified to period revenue delta sentence ("Campaigns generated $12k more revenue this period than the previous one."). Summary now standardizes deliverability status phrases (Critical / Elevated) with thresholds: Open <30% critical, <40% low; Spam ≥0.3% critical (≥0.1% elevated); Unsubs ≥2% critical (≥1% elevated); Bounces ≥5% critical (≥2% elevated).
 
 ## theme and modes
 - Tailwind: v3.x, darkMode: class

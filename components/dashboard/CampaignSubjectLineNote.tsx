@@ -6,12 +6,13 @@ import { buildCampaignSubjectLineInsights } from "../../lib/analytics/campaignSu
 
 interface Props {
     campaigns: ProcessedCampaign[];
+    previousCampaigns?: ProcessedCampaign[]; // optional previous period campaigns for revenue delta
     rangeLabel: string;
     className?: string;
 }
 
-export default function CampaignSubjectLineNote({ campaigns, rangeLabel, className }: Props) {
-    const insight = React.useMemo(() => buildCampaignSubjectLineInsights(campaigns, rangeLabel, { maxTopCount: 3 }), [campaigns, rangeLabel]);
+export default function CampaignSubjectLineNote({ campaigns, previousCampaigns, rangeLabel, className }: Props) {
+    const insight = React.useMemo(() => buildCampaignSubjectLineInsights(campaigns, rangeLabel, { maxTopCount: 3, previousCampaigns }), [campaigns, previousCampaigns, rangeLabel]);
     const [expanded, setExpanded] = React.useState(false);
 
     React.useEffect(() => { setExpanded(false); }, [rangeLabel, campaigns]);

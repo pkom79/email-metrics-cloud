@@ -756,13 +756,162 @@ function buildInsufficientCopy(_rangeLabel: string): CampaignSubjectLineNoteCopy
     };
 }
 
+interface PreviousPeriodStats {
+    totalRevenue: number;
+    totalEmails: number;
+    rpe: number;
+    openRate: number;
+    spamRate: number;
+    unsubRate: number;
+    bounceRate: number;
+}
+
+function computePreviousPeriodStats(previousCampaigns?: ProcessedCampaign[] | null): PreviousPeriodStats | null {
+    if (!previousCampaigns || !previousCampaigns.length) return null;
+    const prevBaseline = collectBaseline(previousCampaigns);
+    return {
+        totalRevenue: prevBaseline.totalRevenue,
+        totalEmails: prevBaseline.totalEmails,
+        rpe: prevBaseline.rpe,
+        openRate: prevBaseline.openRate,
+        spamRate: prevBaseline.spamRate,
+        unsubRate: prevBaseline.unsubRate,
+        bounceRate: prevBaseline.bounceRate,
+    };
+}
+
+function formatDeltaThousands(current: number, previous: number): { amountLabel: string; direction: "more" | "less" | "same"; rawDiff: number } {
+    const diff = current - previous;
+    if (Math.abs(diff) < 1) {
+        return { amountLabel: "$0", direction: "same", rawDiff: 0 };
+    }
+    const sign = diff >= 0 ? 1 : -1;
+    const abs = Math.abs(diff);
+    // Represent in thousands with k suffix; use one decimal only if >=100k and decimal adds meaning
+    let thousands = abs / 1000;
+    let label: string;
+    if (thousands >= 100) {
+        label = `$${Math.round(thousands)}k`;
+    } else if (thousands >= 10) {
+        label = `$${thousands.toFixed(0)}k`;
+    } else {
+        label = `$${thousands.toFixed(1)}k`;
+    }
+    return { amountLabel: label, direction: sign >= 0 ? (diff === 0 ? "same" : "more") : "less", rawDiff: diff };
+}
+
+function buildDeliverabilityStatusSummary(baseline: BaselineMetrics, previous: PreviousPeriodStats | null): string {
+    // Thresholds from user request
+    const open = baseline.openRate; // fraction
+    const spam = baseline.spamRate;
+    const unsub = baseline.unsubRate;
+    const bounce = baseline.bounceRate;
+    const statuses: string[] = [];
+
+    function pct(v: number) { return formatPercent(v); }
+
+    // Engagement (open rate)
+    if (open < 0.30) {
+        statuses.push(`Critical open rate (${pct(open)})`);
+    } else if (open < 0.40) {
+        statuses.push(`Low open rate (${pct(open)})`);
+    }
+
+    function pushMetric(label: string, rate: number, flag: number, critical: number) {
+        if (rate >= critical) {
+            statuses.push(`Critical ${label.toLowerCase()} (${pct(rate)})`);
+        } else if (rate >= flag) {
+            statuses.push(`Elevated ${label.toLowerCase()} (${pct(rate)})`);
+        }
+    }
+    pushMetric("Spam", spam, 0.001, 0.003);
+    pushMetric("Unsubscribes", unsub, 0.01, 0.02);
+    pushMetric("Bounces", bounce, 0.02, 0.05);
+
+    if (!statuses.length) return "No deliverability concerns.";
+    if (statuses.length === 1) return statuses[0] + ".";
+    return statuses.slice(0, -1).join(", ") + " and " + statuses[statuses.length - 1] + ".";
+}
+
+function buildRevenuePerformanceHeadline(currentRevenue: number, previous: PreviousPeriodStats | null): string {
+    if (!previous || previous.totalRevenue <= 0) {
+        if (!previous || previous.totalRevenue === 0) {
+            return `This period's campaigns produced ${formatCurrency(currentRevenue)} in revenue (no prior period revenue).`;
+        }
+    }
+    const { amountLabel, direction } = formatDeltaThousands(currentRevenue, previous.totalRevenue);
+    if (direction === "same") return "Campaign revenue was roughly unchanged versus the previous period.";
+    return `Campaigns generated ${amountLabel} ${direction} revenue this period than the previous one.`;
+}
+
+function selectRevenueWinnersAndLaggards(campaigns: ProcessedCampaign[]): { winners: ProcessedCampaign[]; laggards: ProcessedCampaign[]; dominantCategory?: string; underCategory?: string } {
+    if (campaigns.length < 5) return { winners: [], laggards: [] };
+    const totalRevenue = sum(campaigns, c => c.revenue || 0) || 0;
+    if (!totalRevenue) return { winners: [], laggards: [] };
+    const avg = totalRevenue / campaigns.length;
+    const sorted = campaigns.slice().sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
+    const winners: ProcessedCampaign[] = [];
+    let cumulative = 0;
+    for (const c of sorted) {
+        const rev = c.revenue || 0;
+        if (rev >= 1.25 * avg) {
+            winners.push(c);
+            cumulative += rev;
+        }
+        if (cumulative / totalRevenue >= 0.30 || winners.length >= 3) break;
+    }
+    const reverse = sorted.slice().reverse();
+    const laggards: ProcessedCampaign[] = [];
+    for (const c of reverse) {
+        const rev = c.revenue || 0;
+        const emails = c.emailsSent || 0;
+        if (rev <= 0.4 * avg && emails >= ((sorted[Math.floor(sorted.length / 2)].emailsSent) || 0) * 0.5) {
+            laggards.push(c);
+        }
+        if (laggards.length >= 3) break;
+    }
+    // Simple category detection based on subject keywords (reuse existing highlight categories is complex; keep basic heuristic here without altering existing structures)
+    function extractCategory(subject?: string | null): string | null {
+        if (!subject) return null;
+        const s = subject.toLowerCase();
+        if (/(last chance|final|ending)/.test(s)) return "Urgency";
+        if (/(sale|deal|discount|% off)/.test(s)) return "Offer";
+        if (/(new|just launched|introducing)/.test(s)) return "Newness";
+        if (/(low stock|running out|almost gone)/.test(s)) return "Scarcity";
+        return null;
+    }
+    function dominant(items: ProcessedCampaign[]): string | undefined {
+        const counts: Record<string, number> = {};
+        let total = 0;
+        for (const c of items) {
+            const cat = extractCategory(c.subject) || extractCategory(c.campaignName);
+            if (cat) {
+                counts[cat] = (counts[cat] || 0) + (c.revenue || 0);
+                total += c.revenue || 0;
+            }
+        }
+        let best: string | undefined;
+        let bestShare = 0;
+        for (const k of Object.keys(counts)) {
+            const share = counts[k] / (total || 1);
+            if (share > bestShare) { bestShare = share; best = k; }
+        }
+        if (best && bestShare >= 0.60) return best;
+        return undefined;
+    }
+    const dominantCategory = dominant(winners);
+    const underCategory = dominant(laggards);
+    return { winners, laggards, dominantCategory, underCategory };
+}
+
 export function buildCampaignSubjectLineInsights(
     campaigns: ProcessedCampaign[],
     rangeLabel: string,
-    options?: { maxTopCount?: number },
+    options?: { maxTopCount?: number; previousCampaigns?: ProcessedCampaign[] },
 ): CampaignSubjectLineInsight | null {
     const totalCampaigns = campaigns.length;
     const baseline = collectBaseline(campaigns);
+    const previousStats = computePreviousPeriodStats(options?.previousCampaigns);
 
     if (totalCampaigns < MIN_CAMPAIGNS_REQUIRED || baseline.totalEmails < MIN_EMAILS_REQUIRED) {
         return {
@@ -815,9 +964,27 @@ export function buildCampaignSubjectLineInsights(
 
     const positiveHighlight = positiveWinsHighlight ?? generalHighlight;
 
+    // Build unified headline & summary additions
+    const headline = buildRevenuePerformanceHeadline(baseline.totalRevenue, previousStats);
+    const deliverabilitySummary = buildDeliverabilityStatusSummary(baseline, previousStats);
+
+    // Winners / laggards by revenue
+    const { winners, laggards, dominantCategory, underCategory } = selectRevenueWinnersAndLaggards(campaigns);
+    function campaignLabel(c: ProcessedCampaign): string {
+        return (c.subject || c.campaignName || "(untitled)").trim().replace(/\s+/g, " ");
+    }
+    const winnerSentence = winners.length ? `Top campaigns: ${winners.map(c => `“${campaignLabel(c)}” (${formatCurrency(c.revenue || 0)})`).join(", ")}${winners.length ? "." : ""}` : "";
+    const laggardSentence = laggards.length ? `Underperformers: ${laggards.map(c => `“${campaignLabel(c)}” (${formatCurrency(c.revenue || 0)})`).join(", ")}.` : "";
+    const themeSentenceParts: string[] = [];
+    if (dominantCategory) themeSentenceParts.push(`Dominant theme: ${dominantCategory}.`);
+    if (underCategory) themeSentenceParts.push(`Underperforming theme: ${underCategory}.`);
+    const themesSentence = themeSentenceParts.join(" ");
+
+    // Reuse existing template logic for paragraph assembly but override headline & summary after
+    let baseInsight: CampaignSubjectLineInsight;
     if (deliverabilitySignals.warning) {
         const note = buildDeliverabilityWarningCopy(rangeLabel, periodContext, deliverabilitySignals.warning, positiveHighlight);
-        return {
+        baseInsight = {
             template: "warning",
             totalCampaigns,
             totalEmails: baseline.totalEmails,
@@ -826,11 +993,9 @@ export function buildCampaignSubjectLineInsights(
             topRevenueCount: topN,
             note,
         };
-    }
-
-    if (revenueSignals.warning) {
+    } else if (revenueSignals.warning) {
         const note = buildRevenueWarningCopy(rangeLabel, baseline, periodContext, revenueSignals.warning, laggingHighlight, positiveHighlight);
-        return {
+        baseInsight = {
             template: "warning",
             totalCampaigns,
             totalEmails: baseline.totalEmails,
@@ -839,11 +1004,9 @@ export function buildCampaignSubjectLineInsights(
             topRevenueCount: topN,
             note,
         };
-    }
-
-    if (positiveWinsHighlight) {
+    } else if (positiveWinsHighlight) {
         const note = buildWinsCopy(rangeLabel, baseline, periodContext, positiveWinsHighlight, laggingHighlight, watchlist);
-        return {
+        baseInsight = {
             template: "wins",
             totalCampaigns,
             totalEmails: baseline.totalEmails,
@@ -856,25 +1019,35 @@ export function buildCampaignSubjectLineInsights(
             strongCategoryDelta: positiveWinsHighlight.scope === "category" ? positiveWinsHighlight.rpeLift : undefined,
             note,
         };
+    } else {
+        const note = buildGeneralCopy(rangeLabel, baseline, periodContext, topRevenueShare, topN, positiveHighlight, laggingHighlight, watchlist);
+        baseInsight = {
+            template: "general",
+            totalCampaigns,
+            totalEmails: baseline.totalEmails,
+            totalRevenue: baseline.totalRevenue,
+            topRevenueShare,
+            topRevenueCount: topN,
+            bestLengthRange: positiveHighlight?.scope === "length" ? positiveHighlight.label : undefined,
+            bestLengthDelta: positiveHighlight?.scope === "length" ? positiveHighlight.rpeLift : undefined,
+            strongCategory: positiveHighlight?.scope === "category" ? positiveHighlight.label : undefined,
+            strongCategoryDelta: positiveHighlight?.scope === "category" ? positiveHighlight.rpeLift : undefined,
+            weakCategory: laggingHighlight?.scope === "category" ? laggingHighlight.label : undefined,
+            weakCategoryDelta: laggingHighlight?.scope === "category" ? laggingHighlight.rpeLift : undefined,
+            weakLengthRange: laggingHighlight?.scope === "length" ? laggingHighlight.label : undefined,
+            weakLengthDelta: laggingHighlight?.scope === "length" ? laggingHighlight.rpeLift : undefined,
+            note,
+        };
     }
 
-    const note = buildGeneralCopy(rangeLabel, baseline, periodContext, topRevenueShare, topN, positiveHighlight, laggingHighlight, watchlist);
-
-    return {
-        template: "general",
-        totalCampaigns,
-        totalEmails: baseline.totalEmails,
-        totalRevenue: baseline.totalRevenue,
-        topRevenueShare,
-        topRevenueCount: topN,
-        bestLengthRange: positiveHighlight?.scope === "length" ? positiveHighlight.label : undefined,
-        bestLengthDelta: positiveHighlight?.scope === "length" ? positiveHighlight.rpeLift : undefined,
-        strongCategory: positiveHighlight?.scope === "category" ? positiveHighlight.label : undefined,
-        strongCategoryDelta: positiveHighlight?.scope === "category" ? positiveHighlight.rpeLift : undefined,
-        weakCategory: laggingHighlight?.scope === "category" ? laggingHighlight.label : undefined,
-        weakCategoryDelta: laggingHighlight?.scope === "category" ? laggingHighlight.rpeLift : undefined,
-        weakLengthRange: laggingHighlight?.scope === "length" ? laggingHighlight.label : undefined,
-        weakLengthDelta: laggingHighlight?.scope === "length" ? laggingHighlight.rpeLift : undefined,
-        note,
-    };
+    // Override headline & summary, prepend winners/laggards/theme sentences to paragraph (without removing existing content)
+    baseInsight.note.headline = headline;
+    const rpeChange = previousStats && previousStats.rpe > 0 ? ((baseline.rpe - previousStats.rpe) / previousStats.rpe) * 100 : 0;
+    const rpePhrase = previousStats ? `Rev per Email ${rpeChange === 0 ? "unchanged" : (rpeChange > 0 ? `up ${formatPercentValue(Math.abs(rpeChange))}` : `down ${formatPercentValue(Math.abs(rpeChange))}`)}` : `Rev per Email ${formatCurrency(baseline.rpe)}`;
+    baseInsight.note.summary = `${rpePhrase}. ${deliverabilitySummary}`;
+    const prefixParts = [winnerSentence, laggardSentence, themesSentence].filter(Boolean).join(" ");
+    if (prefixParts) {
+        baseInsight.note.paragraph = `${prefixParts} ${baseInsight.note.paragraph}`.trim();
+    }
+    return baseInsight;
 }
