@@ -1,3 +1,11 @@
+// DEPRECATED 2025-09-27: Campaign Subject Line Action Note removed. Original implementation retained below in a comment for short-term reference and will be fully deleted after branch merges stabilize.
+// Provide dummy export in case of lingering imports during branch sync.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildCampaignSubjectLineInsights(): any { return null; }
+// Alias const (belt & suspenders for any import forms)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const buildCampaignSubjectLineInsightsAlias: any = null;
+/*
 import type { ProcessedCampaign } from "../data/dataTypes";
 import {
     computeSubjectAnalysis,
@@ -1031,3 +1039,4 @@ export function buildCampaignSubjectLineInsights(
     baseInsight.note.summary = `${rpePhrase} ${deliverabilitySummary}`.trim();
     return baseInsight;
 }
+*/

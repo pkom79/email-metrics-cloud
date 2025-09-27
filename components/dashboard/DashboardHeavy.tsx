@@ -17,7 +17,6 @@ import DataCoverageNotice from './DataCoverageNotice';
 import CampaignSendFrequency from './CampaignSendFrequency';
 import AudienceSizePerformance from './AudienceSizePerformance';
 import CampaignGapsAndLosses from './CampaignGapsAndLosses';
-import CampaignSubjectLineNote from './CampaignSubjectLineNote';
 // Helper: map guidance cadence label to numeric recommendation for Day-of-Week note
 function deriveFrequencyRecommendation(g: any): number | undefined {
     if (!g || !g.cadenceLabel) return undefined;
@@ -1613,7 +1612,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                         <div className="relative min-w-0 w-full sm:w-auto"><SelectBase value={selectedCampaignMetric} onChange={e => setSelectedCampaignMetric((e.target as HTMLSelectElement).value)} className="w-full sm:w-auto px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">{campaignMetricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</SelectBase></div>
                                     </div>
                                 </div>
-                                <CampaignSubjectLineNote campaigns={filteredCampaigns} rangeLabel={campaignRangeLabel} className="mb-4" />
+                                {/* Campaign Subject Line Action Note removed (2025-09-27) */}
                                 <div>{getSortedCampaigns().slice(0, displayedCampaigns).map((c, i) => (
                                     <div key={c.id} className={`group relative p-3 sm:p-4 avoid-break ${i !== 0 ? 'border-t border-gray-200 dark:border-gray-800' : ''} md:grid md:items-center md:gap-4 md:[grid-template-columns:minmax(0,1fr)_400px_max-content]`}>
                                         {/* Subject (col 1) */}

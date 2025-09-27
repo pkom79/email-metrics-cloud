@@ -35,6 +35,7 @@
   ],
   "exclude": [
     "node_modules",
-    ".next"
+    ".next",
+    "components/dashboard/CampaignSubjectLineNote.tsx"
   ]
 }

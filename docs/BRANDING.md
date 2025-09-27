@@ -170,22 +170,8 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Sample line format: “Based on X weeks / Y campaigns (Z emails).” Mirrors existing modules.
 - No new colors, icons, or layout patterns introduced; the section header uses `CalendarDays` icon with purple accent consistent with scope icons.
 
-#### Campaign & Subject Line Action Note (new)
-- Placement: lives inside the Campaign Details card, directly above the campaign list and below the “You sent X campaigns…” line. Uses the standard action-note shell (`rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4`) with the View/Hide toggle on the right.
-- Icon & headline: keep the `MailSearch` icon in purple. Headline adapts per template:
-  - General: “Campaign & Subject Line Revenue Insights ({{range}})”
-  - Wins: “Revenue Wins from Subject Lines ({{range}})”
-  - Warning: “Revenue & Reputation Warning ({{range}})”
-  - Insufficient data: “More Data Needed ({{range}})”
-- Summary line: always lead with revenue per email / total revenue context (e.g., share of revenue, % lift, or warning trigger). Support with a short clause on subject line structure only when the cohort passes the volume guardrails.
-- Expanded paragraph: 3–4 sentences max—highlight cohort volume (recipients + revenue share), the RPE gap vs baseline, and any meaningful open/click lift while reminding the user to reuse or adjust. No bullets.
-- Logic inputs: reuse subject analysis for revenue-per-email, open rate, and click rate plus campaign-level unsub/spam/bounce metrics. Guardrails: ≥5 campaigns and ≥5k emails; otherwise show the “More Data Needed” fallback.
-- Warning template only fires when RPE is ≥30% below baseline on ≥20% of send volume **or** spam/unsub/bounce rates breach the deliverability thresholds (0.5% spam, 1.5% unsub, 4% bounce, each ≥40% above baseline) on ≥10k sends.
-- Wins template fires when a subject-line category or length delivers ≥2× baseline RPE (or ≥1.5× with ≥15% revenue share) on ≥10k emails. Mention open/click lifts only when the cohort hits the same volume guardrail.
-- General template calls out revenue concentration across top sends and nudges the highest-RPE theme/length that clears the volume guardrail, even if lift < wins threshold.
-- When data supports it, the copy also flags underperforming themes/lengths that materially lag baseline so teams know what to retire or refresh.
-- Minor issues (e.g., small unsub spikes) show up only in the expanded copy as a “keep an eye on …” watchlist; the headline never leads with inconsequential warnings.
-- Copy tone: revenue-first, direct, and instructive. Always format percentage changes as `%` (no “pp”/“pts”).
+#### (Removed) Campaign & Subject Line Action Note
+2025-09-27: This experimental note was removed from the Campaign Details card after evaluation showed low incremental value (redundant with existing per-campaign metrics and day/hour performance modules). Narrative headline guidelines above are retained for potential future reuse in other summarization contexts.
 
 
 ### Export controls
