@@ -433,11 +433,8 @@ function findGeneralHighlight(
 }
 
 function appendWatchlist(sentences: string[], watchlist: string[]) {
-    if (!watchlist.length) return;
-    const formatted = watchlist
-        .map(item => (item.endsWith('.') ? item : `${item}.`))
-        .join(' ');
-    sentences.push(`Keep an eye on ${formatted}`);
+    // Watchlist output suppressed per updated guidance (avoid confusing generic sentences)
+    return;
 }
 
 function detectRevenueSignals(
@@ -486,10 +483,7 @@ function detectRevenueSignals(
         };
     }
 
-    if (volumeShare >= REVENUE_WATCH_VOLUME_THRESHOLD) {
-        const sentence = `${approxPercent(volumeShare)} of sends trailed baseline by ${formatPercentValue(Math.abs(dropPercent))}`;
-        return { watchReasons: [sentence] };
-    }
+    // Suppress revenue watch sentence (removed for clarity)
 
     return { watchReasons: [] };
 }
@@ -557,8 +551,8 @@ function detectDeliverabilitySignals(
         };
     }
 
-    const sentence = `${capitalize(dominantMetric.label)} briefly reached ${formatPercent(dominantMetric.rate)} on ${approxPercent(volumeShare)} of sends`;
-    return { watchReasons: [sentence] };
+    // Suppress deliverability watch sentence except when multiple flagged could warrant future use; currently removed
+    return { watchReasons: [] };
 }
 
 function buildRevenueWarningCopy(
@@ -649,11 +643,12 @@ function describeHighlightSentence(highlight: HighlightDetail, baselineRpe: numb
     const intro = `${highlight.label} subject lines delivered ${liftText} on ${highlight.totalEmails.toLocaleString()} sends`;
     const tail: string[] = [];
     if (highlight.openRateValue != null && highlight.openRateChange != null) {
-        tail.push(`opens at ${highlight.openRateValue.toFixed(1)}% (${formatPercentValue(highlight.openRateChange)} vs baseline)`);
+        const change = highlight.openRateChange;
+        const changeText = `${change > 0 ? '+' : ''}${formatPercentValue(Math.abs(change))}`;
+        tail.push(`opens at ${highlight.openRateValue.toFixed(1)}% (${changeText} vs baseline)`);
     }
     const detail = tail.length ? `, with ${tail.join(" ")}` : ""; // single metric now
-    const baselineText = formatCurrency(baselineRpe);
-    return `${intro}${detail}. Baseline sits at ${baselineText} per email.`;
+    return `${intro}${detail}.`;
 }
 
 function buildWinsCopy(
