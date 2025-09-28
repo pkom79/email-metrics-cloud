@@ -232,8 +232,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     }, [isAdmin, allAccounts, selectedAccountId, businessName, memberAccounts, memberSelectedId]);
     const billingStatusValue = (billingState.status || 'inactive').toLowerCase();
     const billingLoading = billingState.loading;
-    const billingRequiresPlan = !isAdmin && !billingLoading && !['active', 'trialing'].includes(billingStatusValue);
+    const billingRequiresPlan = !isAdmin && !['active', 'trialing'].includes(billingStatusValue);
     const showBillingPrompt = billingModalOpen || (billingRequiresPlan && !billingLoading);
+    const shouldSkipInitialSkeleton = !isAdmin && showBillingPrompt;
 
     const handleRefreshBillingStatus = useCallback(() => {
         setBillingRefreshTick(t => t + 1);
@@ -559,7 +560,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         if (!adminCheckComplete) return;
         if (isAdmin) return;
         if (billingLoading) return;
-        if (billingRequiresPlan) {
+        if (billingRequiresPlan && !billingLoading) {
             try { (dm as any).clearAllData?.(); } catch { }
             setIsInitialLoading(false);
             setInitialLoadComplete(true);
@@ -1168,7 +1169,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     // If admin and there are zero accounts, don't block UI with overlay after initial load
     const noAccounts = isAdmin && (allAccounts?.length === 0);
-    const showOverlay = isInitialLoading && !noAccounts;
+    const showOverlay = isInitialLoading && !noAccounts && !shouldSkipInitialSkeleton;
 
     if (dashboardError) { return <div className="min-h-screen flex items-center justify-center p-6"><div className="max-w-md mx-auto text-center"><h2 className="text-lg font-semibold text-red-600 mb-4">Dashboard Error</h2><p className="text-gray-600 dark:text-gray-300 mb-6">{dashboardError}</p><div className="space-x-4"><button onClick={() => { setDashboardError(null); setDataVersion(v => v + 1); }} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Retry</button><button onClick={() => window.location.reload()} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Reload Page</button></div></div></div>; }
 
@@ -1176,7 +1177,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     if (forceEmpty) return <div className="min-h-screen" />;
 
     // Unified loading gate: ensure initial hydration attempts (or fallback) ran
-    if ((!initialLoadComplete && !isAdmin) || (isAdmin && isInitialLoading)) {
+    if ((!initialLoadComplete && !isAdmin && !shouldSkipInitialSkeleton) || (isAdmin && isInitialLoading)) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
                 <div className="flex flex-col items-center gap-4 text-center">
