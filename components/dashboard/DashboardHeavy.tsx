@@ -1254,16 +1254,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                                 {memberAccounts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
                                             </SelectBase>
                                         )}
-                                        {!billingRequiresPlan && billingState.hasCustomer && (
-                                            <button
-                                                type="button"
-                                                onClick={handleManageBillingPortal}
-                                                disabled={billingPortalBusy}
-                                                className="inline-flex items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-600 transition hover:border-indigo-300 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
-                                            >
-                                                <span>{billingPortalBusy ? 'Opening billing…' : 'Manage billing'}</span>
-                                            </button>
-                                        )}
                                     </>
                                 )}
                                 {isAdmin && (<>
