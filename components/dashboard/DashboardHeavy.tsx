@@ -398,23 +398,19 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     useEffect(() => {
         if (!adminCheckComplete) return;
-        if (isAdmin) {
+        if (isAdmin && !activeAccountId) {
             setBillingModalOpen(false);
             setBillingState(prev => ({ ...prev, loading: false }));
             return;
         }
-        if (!activeAccountId) {
-            setBillingModalOpen(false);
-            setBillingState({ status: 'unknown', trialEndsAt: null, currentPeriodEnd: null, loading: false, hasCustomer: false });
-            return;
-        }
         let cancelled = false;
-            setBillingState(prev => ({ ...prev, loading: true }));
+        setBillingState(prev => ({ ...prev, loading: true }));
         setBillingActionCadence(null);
         setBillingError(null);
         (async () => {
             try {
-                const resp = await fetch(`/api/payments/status?account_id=${activeAccountId}`, { cache: 'no-store' });
+                const statusUrl = activeAccountId ? `/api/payments/status?account_id=${activeAccountId}` : '/api/payments/status';
+                const resp = await fetch(statusUrl, { cache: 'no-store' });
                 if (!resp.ok) {
                     throw new Error(resp.status === 403 ? 'You need owner access to manage billing.' : 'Unable to load billing status.');
                 }
@@ -424,6 +420,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 const trialEnds = subscription.trialEndsAt || null;
                 const currentEnd = subscription.currentPeriodEnd || null;
                 const hasCustomer = Boolean(subscription.hasCustomer);
+                const derivedAccountId: string | undefined = json.accountId || undefined;
+                if (!activeAccountId && derivedAccountId) {
+                    if (isAdmin) {
+                        setSelectedAccountId(prev => prev || derivedAccountId);
+                    } else {
+                        setMemberSelectedId(prev => prev || derivedAccountId);
+                    }
+                }
                 if (cancelled) return;
                 setBillingState({ status, trialEndsAt: trialEnds, currentPeriodEnd: currentEnd, loading: false, hasCustomer });
                 const active = ['active', 'trialing'].includes(status);

@@ -11,12 +11,28 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
         const url = new URL(req.url);
-        const accountId = url.searchParams.get('account_id') || '';
-        if (!accountId) {
-            return NextResponse.json({ error: 'Missing account_id' }, { status: 400 });
-        }
+        let accountId = url.searchParams.get('account_id') || '';
 
         const svc = createServiceClient();
+        if (!accountId) {
+            const { data: fallback } = await svc
+                .from('accounts')
+                .select('id')
+                .eq('owner_user_id', user.id)
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .maybeSingle();
+            accountId = fallback?.id || '';
+        }
+
+        if (!accountId) {
+            return NextResponse.json({
+                accountId: null,
+                subscription: { status: 'inactive' },
+                portalLoginUrl: process.env.NEXT_PUBLIC_STRIPE_PORTAL_LOGIN_URL || null
+            });
+        }
+
         const { data: account, error } = await svc
             .from('accounts')
             .select('id, owner_user_id, stripe_customer_id, stripe_subscription_status, stripe_current_period_end, stripe_price_id, stripe_trial_ends_at, stripe_subscription_id')
@@ -37,6 +53,7 @@ export async function GET(req: NextRequest) {
         }
 
         return NextResponse.json({
+            accountId: account.id,
             subscription: {
                 status: account.stripe_subscription_status || 'inactive',
                 currentPeriodEnd: account.stripe_current_period_end,
@@ -44,7 +61,8 @@ export async function GET(req: NextRequest) {
                 priceId: account.stripe_price_id,
                 subscriptionId: account.stripe_subscription_id,
                 hasCustomer: !!account.stripe_customer_id
-            }
+            },
+            portalLoginUrl: process.env.NEXT_PUBLIC_STRIPE_PORTAL_LOGIN_URL || null
         });
     } catch (err: any) {
         console.error('Stripe status error', err);

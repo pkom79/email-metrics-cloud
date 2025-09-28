@@ -35,6 +35,7 @@ STRIPE_ANNUAL_PRICE_ID=price_annual
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_or_live
 NEXT_PUBLIC_APP_URL=https://emailmetrics.io
 STRIPE_PORTAL_CONFIGURATION_ID=bpc_xxxxx
+NEXT_PUBLIC_STRIPE_PORTAL_LOGIN_URL=https://billing.stripe.com/p/login/your_portal_link
 ```
 
 ### Account Model

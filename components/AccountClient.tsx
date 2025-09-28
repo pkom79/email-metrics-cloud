@@ -40,6 +40,17 @@ export default function AccountClient({ initial }: Props) {
     const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
     const [adminError, setAdminError] = useState<string | null>(null);
 
+    const [billingInfo, setBillingInfo] = useState({
+        loading: true,
+        accountId: '',
+        status: 'unknown',
+        trialEndsAt: null as string | null,
+        error: null as string | null,
+        portalBusy: false,
+        canManage: false,
+        portalLoginUrl: process.env.NEXT_PUBLIC_STRIPE_PORTAL_LOGIN_URL || ''
+    });
+
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -60,6 +71,35 @@ export default function AccountClient({ initial }: Props) {
                 })));
             } catch (e: any) {
                 if (!cancelled) setAdminError(e?.message || 'Failed to load accounts');
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const resp = await fetch('/api/payments/status', { cache: 'no-store' });
+                if (!resp.ok) {
+                    if (resp.status === 403) throw new Error('Billing is only available to the account owner.');
+                    throw new Error('Unable to load billing details.');
+                }
+                const json = await resp.json().catch(() => ({}));
+                if (cancelled) return;
+                const subscription = json.subscription || {};
+                setBillingInfo(prev => ({
+                    ...prev,
+                    loading: false,
+                    accountId: json.accountId || '',
+                    status: (subscription.status || 'inactive').toLowerCase(),
+                    trialEndsAt: subscription.trialEndsAt || null,
+                    canManage: Boolean(subscription.hasCustomer),
+                    portalLoginUrl: json.portalLoginUrl || prev.portalLoginUrl || ''
+                }));
+            } catch (err: any) {
+                if (cancelled) return;
+                setBillingInfo(prev => ({ ...prev, loading: false, error: err?.message || 'Unable to load billing details.' }));
             }
         })();
         return () => { cancelled = true; };
@@ -162,6 +202,36 @@ export default function AccountClient({ initial }: Props) {
         }
     };
 
+    const openBillingPortal = async () => {
+        if (billingInfo.portalBusy) return;
+        const direct = billingInfo.portalLoginUrl;
+        if (direct) {
+            window.open(direct, '_blank', 'noopener,noreferrer');
+            return;
+        }
+        if (!billingInfo.accountId) {
+            setBillingInfo(prev => ({ ...prev, error: 'No billing account available.' }));
+            return;
+        }
+        try {
+            setBillingInfo(prev => ({ ...prev, portalBusy: true, error: null }));
+            const resp = await fetch('/api/payments/portal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accountId: billingInfo.accountId })
+            });
+            const json = await resp.json().catch(() => ({}));
+            if (!resp.ok || !json?.url) {
+                throw new Error(json?.error || 'Unable to open billing portal.');
+            }
+            window.location.href = json.url as string;
+        } catch (error: any) {
+            setBillingInfo(prev => ({ ...prev, error: error?.message || 'Unable to open billing portal.' }));
+        } finally {
+            setBillingInfo(prev => ({ ...prev, portalBusy: false }));
+        }
+    };
+
     return (
         <div className="max-w-2xl mx-auto space-y-8">
             <h1 className="text-2xl font-bold">Account</h1>
@@ -242,6 +312,45 @@ export default function AccountClient({ initial }: Props) {
                             </button>
                         )}
                     </div>
+                </div>
+            </section>
+
+            <section className="space-y-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+                <header className="space-y-1">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Billing</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Manage your Email Metrics subscription, payment methods, and invoices.</p>
+                </header>
+                {billingInfo.error && <div className="rounded border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-600 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200">{billingInfo.error}</div>}
+                <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                    <div>
+                        <span className="font-medium text-gray-900 dark:text-gray-100">Status:</span>{' '}
+                        <span className="uppercase tracking-wide text-xs inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 font-semibold text-gray-700 dark:text-gray-200">
+                            {billingInfo.loading ? 'Checking…' : billingInfo.status.replace(/_/g, ' ')}
+                        </span>
+                    </div>
+                    {billingInfo.trialEndsAt && (
+                        <div>Trial ends on {new Date(billingInfo.trialEndsAt).toLocaleDateString()}</div>
+                    )}
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={openBillingPortal}
+                        disabled={billingInfo.portalBusy || billingInfo.loading}
+                        className="inline-flex items-center justify-center rounded bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-60"
+                    >
+                        {billingInfo.portalBusy ? 'Opening portal…' : 'Open billing portal'}
+                    </button>
+                    {billingInfo.portalLoginUrl && (
+                        <a
+                            href={billingInfo.portalLoginUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center rounded border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
+                        >
+                            Stripe portal login
+                        </a>
+                    )}
                 </div>
             </section>
 
