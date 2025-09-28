@@ -39,6 +39,11 @@
     }
 
     /* Utility for stripping legacy channel indicator pseudo elements */
+    .no-channel-indicator {
+        list-style: none !important;
+        padding-left: 0 !important;
+    }
+
     .no-channel-indicator::before,
     .no-channel-indicator::after {
         content: none !important;

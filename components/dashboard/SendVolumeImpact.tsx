@@ -480,8 +480,8 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     const sample = formatSampleText(card.result);
                     return (
                         <div key={card.key} className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
-                            <div className="flex items-start justify-between gap-3">
-                                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight no-channel-indicator">{card.label}</span>
+                            <div className="flex items-start justify-between gap-3 no-channel-indicator">
+                                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight">{card.label}</span>
                                 <span className={`px-2 py-1 rounded-md text-xs font-semibold ${badgeClass}`}>{statusText}</span>
                             </div>
                             <p className="mt-3 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{card.result.message}</p>
