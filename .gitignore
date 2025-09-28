@@ -15,3 +15,9 @@ out
 dist/
 tsconfig.tsbuildinfo
 email-metrics-cloud-tmp/
+
+# Legacy removed feature (Campaign Subject Line Insights) – prevent accidental re-add
+components/dashboard/CampaignSubjectLineNote.tsx
+lib/analytics/campaignSubjectLineInsights.ts
+lib/analytics/campaignSubjectLineInsights.d.ts
+types/campaignSubjectLineInsights.d.ts
