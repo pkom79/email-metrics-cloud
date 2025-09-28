@@ -39,13 +39,37 @@
     }
 
     /* Utility for stripping legacy channel indicator pseudo elements */
-    .no-channel-indicator {
+    .no-channel-indicator,
+    .no-channel-indicator *,
+    span.no-channel-indicator,
+    div.no-channel-indicator>* {
+        position: relative;
         list-style: none !important;
         padding-left: 0 !important;
     }
 
     .no-channel-indicator::before,
-    .no-channel-indicator::after {
+    .no-channel-indicator::after,
+    .no-channel-indicator *::before,
+    .no-channel-indicator *::after,
+    span.no-channel-indicator::before,
+    span.no-channel-indicator::after,
+    div.no-channel-indicator>*::before,
+    div.no-channel-indicator>*::after {
+        content: none !important;
+        display: none !important;
+        background: none !important;
+        width: 0 !important;
+        height: 0 !important;
+    }
+
+    /* Additional specificity to override any channel-based styling */
+    [class*="campaign"] .no-channel-indicator::before,
+    [class*="campaign"] .no-channel-indicator::after,
+    [class*="flow"] .no-channel-indicator::before,
+    [class*="flow"] .no-channel-indicator::after,
+    .no-channel-indicator[data-channel]::before,
+    .no-channel-indicator[data-channel]::after {
         content: none !important;
         display: none !important;
     }
