@@ -36,6 +36,7 @@ import UploadWizard from '../../components/UploadWizard';
 import EmptyStateCard from '../EmptyStateCard';
 import { usePendingUploadsLinker } from '../../lib/utils/usePendingUploadsLinker';
 import { supabase } from '../../lib/supabase/client';
+import SubscriptionRequiredOverlay, { PlanCadence } from '../billing/SubscriptionRequiredOverlay';
 
 function formatCurrency(value: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value); }
 function formatPercent(value: number) {
@@ -203,15 +204,91 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [allAccounts, setAllAccounts] = useState<any[] | null>(null);
     const [accountsError, setAccountsError] = useState<string | null>(null);
     const [selectedAccountId, setSelectedAccountId] = useState<string>('');
-    // Human readable label for currently selected admin account
-    const [selectedAccountLabel, setSelectedAccountLabel] = useState<string>('');
     // Member brand switcher
     const [memberAccounts, setMemberAccounts] = useState<Array<{ id: string; label: string }>>([]);
     const [memberSelectedId, setMemberSelectedId] = useState<string>('');
     const [memberBrandsLoaded, setMemberBrandsLoaded] = useState<boolean>(false);
+    const [billingState, setBillingState] = useState<{ status: string; trialEndsAt: string | null; currentPeriodEnd: string | null; loading: boolean; hasCustomer: boolean }>({ status: 'unknown', trialEndsAt: null, currentPeriodEnd: null, loading: false, hasCustomer: false });
+    const [billingModalOpen, setBillingModalOpen] = useState(false);
+    const [billingActionCadence, setBillingActionCadence] = useState<PlanCadence | null>(null);
+    const [billingError, setBillingError] = useState<string | null>(null);
+    const [billingRefreshTick, setBillingRefreshTick] = useState(0);
+    const [billingPortalBusy, setBillingPortalBusy] = useState(false);
     // Removed API integration modal/state (CSV-only ingestion)
     const [showKeyModal, setShowKeyModal] = useState(false);
     const [keyInput, setKeyInput] = useState('');
+
+    const activeAccountId = useMemo(() => (isAdmin ? (selectedAccountId || '') : (memberSelectedId || '')), [isAdmin, selectedAccountId, memberSelectedId]);
+    const activeAccountLabel = useMemo(() => {
+        if (isAdmin) {
+            const a = (allAccounts || []).find(x => x.id === selectedAccountId);
+            return a?.label || a?.businessName || businessName || '';
+        }
+        if (memberSelectedId) {
+            const sel = memberAccounts.find(a => a.id === memberSelectedId);
+            if (sel?.label) return sel.label;
+        }
+        return businessName || '';
+    }, [isAdmin, allAccounts, selectedAccountId, businessName, memberAccounts, memberSelectedId]);
+    const billingStatusValue = (billingState.status || 'inactive').toLowerCase();
+    const billingLoading = billingState.loading;
+    const billingRequiresPlan = !isAdmin && !billingLoading && !['active', 'trialing'].includes(billingStatusValue);
+
+    const handleRefreshBillingStatus = useCallback(() => {
+        setBillingRefreshTick(t => t + 1);
+    }, []);
+
+    const handleSelectBillingPlan = useCallback(async (cadence: PlanCadence) => {
+        if (!activeAccountId) return;
+        try {
+            setBillingActionCadence(cadence);
+            setBillingError(null);
+            const resp = await fetch('/api/payments/create-checkout-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accountId: activeAccountId, cadence })
+            });
+            const json = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+                throw new Error(json?.error || 'Unable to start checkout.');
+            }
+            if (json?.url) {
+                window.location.href = json.url as string;
+                return;
+            }
+            throw new Error('Checkout URL missing.');
+        } catch (err: any) {
+            setBillingError(err?.message || 'Unable to start checkout.');
+        } finally {
+            setBillingActionCadence(null);
+        }
+    }, [activeAccountId]);
+
+    const handleManageBillingPortal = useCallback(async () => {
+        if (!activeAccountId) return;
+        try {
+            setBillingPortalBusy(true);
+            setBillingError(null);
+            const resp = await fetch('/api/payments/portal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accountId: activeAccountId })
+            });
+            const json = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+                throw new Error(json?.error || 'Unable to open billing portal.');
+            }
+            if (json?.url) {
+                window.location.href = json.url as string;
+                return;
+            }
+            throw new Error('Billing portal URL missing.');
+        } catch (err: any) {
+            setBillingError(err?.message || 'Unable to open billing portal.');
+        } finally {
+            setBillingPortalBusy(false);
+        }
+    }, [activeAccountId]);
 
     const checkKeyAndSync = useCallback(async () => {
         // API sync removed; guide user to upload CSVs instead
@@ -316,6 +393,56 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         })();
         return () => { cancelled = true; };
     }, []);
+
+    useEffect(() => {
+        if (!adminCheckComplete) return;
+        if (isAdmin) {
+            setBillingModalOpen(false);
+            setBillingState(prev => ({ ...prev, loading: false }));
+            return;
+        }
+        if (!activeAccountId) {
+            setBillingModalOpen(false);
+            setBillingState({ status: 'unknown', trialEndsAt: null, currentPeriodEnd: null, loading: false, hasCustomer: false });
+            return;
+        }
+        let cancelled = false;
+        setBillingState(prev => ({ ...prev, loading: true }));
+        setBillingActionCadence(null);
+        setBillingError(null);
+        (async () => {
+            try {
+                const resp = await fetch(`/api/payments/status?account_id=${activeAccountId}`, { cache: 'no-store' });
+                if (!resp.ok) {
+                    throw new Error(resp.status === 403 ? 'You need owner access to manage billing.' : 'Unable to load billing status.');
+                }
+                const json = await resp.json().catch(() => ({}));
+                const subscription = json.subscription || {};
+                const status = (subscription.status || 'inactive').toLowerCase();
+                const trialEnds = subscription.trialEndsAt || null;
+                const currentEnd = subscription.currentPeriodEnd || null;
+                const hasCustomer = Boolean(subscription.hasCustomer);
+                if (cancelled) return;
+                setBillingState({ status, trialEndsAt: trialEnds, currentPeriodEnd: currentEnd, loading: false, hasCustomer });
+                const active = ['active', 'trialing'].includes(status);
+                setBillingModalOpen(!active);
+                if (active) {
+                    setBillingError(null);
+                } else {
+                    setIsInitialLoading(false);
+                    setInitialLoadComplete(true);
+                }
+            } catch (err: any) {
+                if (cancelled) return;
+                setBillingState({ status: 'inactive', trialEndsAt: null, currentPeriodEnd: null, loading: false, hasCustomer: false });
+                setBillingModalOpen(true);
+                setBillingError(err?.message || 'Unable to load billing status.');
+                setIsInitialLoading(false);
+                setInitialLoadComplete(true);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [activeAccountId, adminCheckComplete, isAdmin, billingRefreshTick]);
 
     // Admin: reload data when selectedAccountId changes (stable, uses helper)
     useEffect(() => {
@@ -430,6 +557,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         // Wait for admin check; only for non-admin users (user auto-load of latest snapshot)
         if (!adminCheckComplete) return;
         if (isAdmin) return;
+        if (billingLoading) return;
+        if (billingRequiresPlan) {
+            try { (dm as any).clearAllData?.(); } catch { }
+            setIsInitialLoading(false);
+            setInitialLoadComplete(true);
+            return;
+        }
         let cancelled = false;
         (async () => {
             // If user picked a brand, hydrate from cache first; fall back to server CSVs
@@ -493,7 +627,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             }
         })();
         return () => { cancelled = true };
-    }, [dm, isAdmin, adminCheckComplete, memberSelectedId]);
+    }, [dm, isAdmin, adminCheckComplete, memberSelectedId, billingLoading, billingRequiresPlan]);
 
     // Safe granularity
     const safeGranularity = useMemo(() => { try { if (dm.getCampaigns().length === 0 && dm.getFlowEmails().length === 0) return 'daily'; if (customActive && customDays > 0) return dm.getGranularityForDateRange(`${customDays}d`); if (dateRange === 'all') return dm.getGranularityForDateRange('all'); return dm.getGranularityForDateRange(dateRange === 'custom' ? '30d' : dateRange); } catch { return 'daily'; } }, [dateRange, customActive, customDays, dm]);
@@ -1058,6 +1192,19 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     return (
         <div className="min-h-screen relative">
+            <SubscriptionRequiredOverlay
+                open={billingModalOpen}
+                businessName={activeAccountLabel || businessName}
+                selecting={billingActionCadence}
+                onSelectPlan={handleSelectBillingPlan}
+                onManageBilling={handleManageBillingPortal}
+                canManageBilling={billingState.hasCustomer}
+                onRefreshStatus={handleRefreshBillingStatus}
+                error={billingError}
+                status={billingState.status}
+                trialEndsAt={billingState.trialEndsAt || billingState.currentPeriodEnd}
+                portalBusy={billingPortalBusy}
+            />
             {showOverlay && (
                 <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/30 backdrop-blur-sm">
                     <div className="bg-white dark:bg-gray-800 rounded-xl px-8 py-6 shadow-2xl border border-gray-200 dark:border-gray-700 flex items-center gap-3">
@@ -1074,21 +1221,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                             <div>
                                 <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>
-                                {(() => {
-                                    // Show brand label below the title. Prefer explicit prop, otherwise
-                                    // fall back to the currently selected account label for admin or member.
-                                    let label: string | undefined = businessName;
-                                    if (!label) {
-                                        if (isAdmin) {
-                                            label = selectedAccountLabel || undefined;
-                                        } else {
-                                            const sel = memberAccounts.find(a => a.id === memberSelectedId);
-                                            label = sel?.label;
-                                        }
-                                    }
-                                    // Resolve role tag: Admin/Owner/Member with colors similar to Admin badge
-                                    return label ? (<p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{label}</p>) : null;
-                                })()}
+                                {activeAccountLabel ? (<p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{activeAccountLabel}</p>) : null}
                             </div>
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 relative ml-auto">
                                 {isAdmin ? null : (
@@ -1102,7 +1235,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 )}
                                 {isAdmin && (<>
                                     <div className="relative">
-                                        <SelectBase value={selectedAccountId} onChange={e => { const val = (e.target as HTMLSelectElement).value; setSelectedAccountId(val); const a = (allAccounts || []).find(x => x.id === val); setSelectedAccountLabel(a?.label || a?.businessName || a?.id || ''); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="w-full sm:w-auto text-sm" minWidthClass="sm:min-w-[240px]">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</SelectBase>
+                                        <SelectBase value={selectedAccountId} onChange={e => { const val = (e.target as HTMLSelectElement).value; setSelectedAccountId(val); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="w-full sm:w-auto text-sm" minWidthClass="sm:min-w-[240px]">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</SelectBase>
                                     </div>
                                     {/* Export JSON hidden for now (admin) */}
                                     <span className="hidden"><button onClick={handleExportJson} disabled={exportBusy || !selectedAccountId} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button></span>

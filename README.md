@@ -26,6 +26,15 @@ NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_key
 SUPABASE_JWT_SECRET=your_jwt_secret
+
+# Stripe Billing
+STRIPE_SECRET_KEY=your_stripe_secret
+STRIPE_WEBHOOK_SECRET=whsec_from_stripe
+STRIPE_MONTHLY_PRICE_ID=price_monthly
+STRIPE_ANNUAL_PRICE_ID=price_annual
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_or_live
+NEXT_PUBLIC_APP_URL=https://emailmetrics.io
+STRIPE_PORTAL_CONFIGURATION_ID=bpc_xxxxx
 ```
 
 ### Account Model
