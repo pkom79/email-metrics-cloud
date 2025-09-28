@@ -1274,7 +1274,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                     } catch { }
 
                                     const formatTooltipValue = (value: number): string => {
-                                    const metricConfig = METRIC_OPTIONS.find(m => m.value === selectedMetric);
+                                        const metricConfig = METRIC_OPTIONS.find(m => m.value === selectedMetric);
                                         switch (metricConfig?.format) {
                                             case 'currency':
                                                 return value >= 1000
@@ -1357,7 +1357,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 >
                                     <div className="font-semibold mb-0.5">{hoveredPoint.date}</div>
                                     <div className="tabular-nums mb-1.5">{(() => {
-                                    const metricConfig = METRIC_OPTIONS.find(m => m.value === selectedMetric);
+                                        const metricConfig = METRIC_OPTIONS.find(m => m.value === selectedMetric);
                                         switch (metricConfig?.format) {
                                             case 'currency':
                                                 return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(hoveredPoint.value);
@@ -1482,7 +1482,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-2.5">
                     <div className="flex items-start gap-2.5 text-purple-700 dark:text-purple-200">
                         <div className="flex-1">
-                            <span className="text-[11px]"><span className="font-medium">Naming Note:</span> Email names define flow steps. A/B tests often reuse names, which breaks order. Use suffixes like “-A” and “-B”.</span>
+                            <span className="text-[11px]">Email names define flow steps. A/B tests often reuse names, which breaks order. Use suffixes like “-A” and “-B”.</span>
                         </div>
                     </div>
                 </div>
