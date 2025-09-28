@@ -6,6 +6,8 @@ export interface ProcessedCampaign {
     campaignName: string;
     subject: string;
     sentDate: Date;
+    // Original raw timestamp string from CSV (for audit / reprocessing)
+    rawSentDateString?: string;
     dayOfWeek: number;
     hourOfDay: number;
     // Segment/list names used for the send (parsed from CSV "Lists"/"List")
@@ -38,6 +40,8 @@ export interface ProcessedFlowEmail {
     emailName: string;
     sequencePosition: number;
     sentDate: Date;
+    // Original raw timestamp string from CSV (for audit / reprocessing)
+    rawSentDateString?: string;
     status: string;
     emailsSent: number;
     uniqueOpens: number;

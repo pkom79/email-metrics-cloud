@@ -72,7 +72,8 @@ export class CampaignTransformer {
             return out;
         })();
         const sendVal = this.findAnyField(raw, ['Message send date time', 'Send Time', 'Send Time (UTC)', 'Send Date', 'Sent At', 'Send Date (UTC)', 'Send Date (GMT)', 'Date']);
-        const sentDate = this.parseDateStrict(sendVal);
+    const rawSentDateString = sendVal != null ? String(sendVal) : undefined;
+    const sentDate = this.parseDateStrict(sendVal);
         if (!sentDate) return null; // skip if date unparseable
 
         const emailsSent = this.parseNumber(this.findAnyField(raw, ['Total recipients', 'Total Recipients', 'Recipients']));
@@ -100,8 +101,10 @@ export class CampaignTransformer {
             campaignName: name,
             subject,
             sentDate,
-            dayOfWeek: sentDate.getDay(),
-            hourOfDay: sentDate.getHours(),
+            rawSentDateString,
+            // We intentionally treat CSV timestamps as naive account-local wall time anchored to UTC components.
+            dayOfWeek: sentDate.getUTCDay(),
+            hourOfDay: sentDate.getUTCHours(),
             segmentsUsed,
             emailsSent,
             uniqueOpens,
@@ -145,10 +148,19 @@ export class CampaignTransformer {
             if (!s) return null;
             // Normalize: remove commas and the word 'at'
             s = s.replace(/,/g, ' ').replace(/\bat\b/ig, ' ').replace(/\s+/g, ' ').trim();
-            // Remove timezone abbreviations and offsets like UTC, GMT, PST, +00:00, +0000, (UTC), (GMT)
+            // Remove timezone abbreviations (but KEEP numeric offset characters so we can ignore them explicitly without shifting)
             s = s.replace(/\b(UTC|GMT|EST|EDT|CST|CDT|PST|PDT)\b/ig, '').trim();
             s = s.replace(/\([^)]+\)/g, '').trim();
-            s = s.replace(/([+-]\d{2}:?\d{2})$/, '').trim();
+            // Pattern: YYYY-MM-DD HH:mm[:ss][offset]
+            const naiveWithOffset = s.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?([+-]\d{2}:?\d{2})$/);
+            if (naiveWithOffset) {
+                const [_, Y, M, D, h, m, sec] = naiveWithOffset;
+                const year = parseInt(Y, 10); const month = parseInt(M, 10) - 1; const day = parseInt(D, 10);
+                const hour = parseInt(h, 10); const minute = parseInt(m, 10); const second = parseInt(sec || '0', 10);
+                // Build Date using UTC components == CSV wall time (ignore actual offset deliberately)
+                const d = new Date(Date.UTC(year, month, day, hour, minute, second));
+                if (!isNaN(d.getTime())) return d;
+            }
             // Handle common MM/DD/YYYY[ HH:mm[:ss]] [AM|PM] formats explicitly in UTC to avoid locale ambiguity
             const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i);
             if (mdy) {
@@ -167,18 +179,21 @@ export class CampaignTransformer {
                 const d = new Date(Date.UTC(year, mm - 1, dd, hours, mins, secs));
                 if (!isNaN(d.getTime())) return d;
             }
-            // ISO-like with space separator (YYYY-MM-DD HH:mm[:ss]) -> convert to ISO Z
+            // ISO-like with space separator (YYYY-MM-DD HH:mm[:ss]) -> treat as naive wall time anchored to UTC
             if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2})?$/.test(s)) {
-                const d = new Date(s.replace(' ', 'T') + 'Z');
+                const parts = s.split(/[ T]/);
+                const [datePart, timePart] = parts.length === 2 ? parts : [parts[0], parts[1]];
+                const [Y, M, D] = datePart.split('-').map(n => parseInt(n, 10));
+                const [h, m, sec] = timePart.split(':').map(n => parseInt(n, 10));
+                const d = new Date(Date.UTC(Y, M - 1, D, h, m, sec || 0));
                 if (!isNaN(d.getTime())) return d;
             }
             // Try native parse
-            const d1 = new Date(s);
-            if (!isNaN(d1.getTime())) return d1;
-            // Try adding Z if it looks like ISO without timezone
-            if (/^\d{4}-\d{2}-\d{2}T\d{2}:.+$/i.test(s)) {
-                const dz = new Date(s + 'Z');
-                if (!isNaN(dz.getTime())) return dz;
+            // Avoid native parsing that may apply local timezone; treat any bare YYYY-MM-DD as midnight naive UTC
+            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+                const [Y, M, D] = s.split('-').map(n => parseInt(n, 10));
+                const d = new Date(Date.UTC(Y, M - 1, D, 0, 0, 0));
+                if (!isNaN(d.getTime())) return d;
             }
             // Fallback to Date.parse
             const d2 = new Date(Date.parse(s));

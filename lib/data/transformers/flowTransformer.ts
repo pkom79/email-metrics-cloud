@@ -50,7 +50,8 @@ export class FlowTransformer {
     }
 
     private transformSingle(raw: RawFlowCSV, id: number, sequencePosition: number): ProcessedFlowEmail | null {
-        const sentDate = this.parseDateStrict((raw as any)['Day']);
+    const rawSentDateString = (raw as any)['Day'] != null ? String((raw as any)['Day']) : undefined;
+    const sentDate = this.parseDateStrict((raw as any)['Day']);
         if (!sentDate) return null; // skip rows with invalid date
 
         const emailsSent = this.parseNumber((raw as any)['Delivered']);
@@ -85,6 +86,7 @@ export class FlowTransformer {
             emailName,
             sequencePosition,
             sentDate,
+            rawSentDateString,
             status: (raw as any)['Status'] || 'unknown',
             emailsSent,
             uniqueOpens,
@@ -116,13 +118,19 @@ export class FlowTransformer {
             s = s.replace(/,/g, ' ').replace(/\bat\b/ig, ' ').replace(/\s+/g, ' ').trim();
             s = s.replace(/\b(UTC|GMT|EST|EDT|CST|CDT|PST|PDT)\b/ig, '').trim();
             s = s.replace(/\([^)]+\)/g, '').trim();
-            s = s.replace(/([+-]\d{2}:?\d{2})$/, '').trim();
-            // Common YYYY-MM-DD or MM/DD/YYYY
-            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) { const d = new Date(s + 'T00:00:00Z'); return isNaN(d.getTime()) ? null : d; }
+            // Pattern: YYYY-MM-DD HH:mm[:ss][offset]
+            const dt = s.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?([+-]\d{2}:?\d{2})?$/);
+            if (dt) {
+                const Y = parseInt(dt[1],10), M = parseInt(dt[2],10)-1, D = parseInt(dt[3],10);
+                const h = parseInt(dt[4],10), m = parseInt(dt[5],10), sec = parseInt(dt[6]||'0',10);
+                const d = new Date(Date.UTC(Y,M,D,h,m,sec));
+                if (!isNaN(d.getTime())) return d;
+            }
+            // Bare YYYY-MM-DD -> midnight naive
+            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) { const [Y,M,D] = s.split('-').map(n=>parseInt(n,10)); const d=new Date(Date.UTC(Y,M-1,D)); if(!isNaN(d.getTime())) return d; }
+            // MM/DD/YYYY
             const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-            if (mdy) { const mm = +mdy[1], dd = +mdy[2], yy = +mdy[3]; const year = mdy[3].length === 2 ? (yy > 70 ? 1900 + yy : 2000 + yy) : yy; const d = new Date(Date.UTC(year, mm - 1, dd)); return isNaN(d.getTime()) ? null : d; }
-            const d1 = new Date(s); if (!isNaN(d1.getTime())) return d1;
-            const dz = new Date(s + 'Z'); if (!isNaN(dz.getTime())) return dz;
+            if (mdy) { const mm = +mdy[1], dd = +mdy[2], yy = +mdy[3]; const year = mdy[3].length===2 ? (yy>70?1900+yy:2000+yy):yy; const d=new Date(Date.UTC(year,mm-1,dd)); if(!isNaN(d.getTime())) return d; }
             return null;
         } catch { return null; }
     }
