@@ -233,6 +233,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const billingStatusValue = (billingState.status || 'inactive').toLowerCase();
     const billingLoading = billingState.loading;
     const billingRequiresPlan = !isAdmin && !billingLoading && !['active', 'trialing'].includes(billingStatusValue);
+    const showBillingPrompt = billingModalOpen || (billingRequiresPlan && !billingLoading);
 
     const handleRefreshBillingStatus = useCallback(() => {
         setBillingRefreshTick(t => t + 1);
@@ -407,7 +408,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             return;
         }
         let cancelled = false;
-        setBillingState(prev => ({ ...prev, loading: true }));
+            setBillingState(prev => ({ ...prev, loading: true }));
         setBillingActionCadence(null);
         setBillingError(null);
         (async () => {
@@ -1193,7 +1194,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     return (
         <div className="min-h-screen relative">
             <SubscriptionRequiredOverlay
-                open={billingModalOpen}
+                open={showBillingPrompt}
                 businessName={activeAccountLabel || businessName}
                 selecting={billingActionCadence}
                 onSelectPlan={handleSelectBillingPlan}
@@ -1230,6 +1231,16 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                             <SelectBase value={memberSelectedId} onChange={e => { const v = (e.target as HTMLSelectElement).value; setMemberSelectedId(v); const url = new URL(window.location.href); if (v) url.searchParams.set('account', v); else url.searchParams.delete('account'); window.history.replaceState(null, '', url.toString()); }} className="w-full sm:w-auto text-sm" minWidthClass="sm:min-w-[240px]">
                                                 {memberAccounts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
                                             </SelectBase>
+                                        )}
+                                        {!billingRequiresPlan && billingState.hasCustomer && (
+                                            <button
+                                                type="button"
+                                                onClick={handleManageBillingPortal}
+                                                disabled={billingPortalBusy}
+                                                className="inline-flex items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-600 transition hover:border-indigo-300 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                            >
+                                                <span>{billingPortalBusy ? 'Opening billing…' : 'Manage billing'}</span>
+                                            </button>
                                         )}
                                     </>
                                 )}
