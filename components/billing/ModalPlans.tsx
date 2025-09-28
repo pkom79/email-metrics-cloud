@@ -147,12 +147,14 @@ export default function ModalPlans({ open, status, onClose, onSelect, onRefresh,
                                 key={plan.id}
                                 className={`rounded-2xl p-5 transition ${plan.highlight ? 'bg-indigo-50/30 dark:bg-indigo-900/20 ring-2 ring-indigo-500 dark:ring-indigo-400' : 'bg-white dark:bg-gray-900 ring-1 ring-gray-200 dark:ring-gray-800'}`}
                             >
-                                {plan.highlight && (
-                                    <div className="mb-3 inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
-                                        Best Value – Save 12% vs monthly
-                                    </div>
-                                )}
-                                <div className="flex flex-col gap-2">
+                                <div className="min-h-[28px]">
+                                    {plan.highlight ? (
+                                        <div className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
+                                            Best Value – Save 12% vs monthly
+                                        </div>
+                                    ) : null}
+                                </div>
+                                <div className="mt-2 flex flex-col gap-2">
                                     <div className="text-base font-medium text-gray-900 dark:text-gray-100">{plan.title}</div>
                                     <div className="flex flex-col">
                                         <span className="text-xl font-semibold text-emerald-600">{plan.pricePrimary}</span>
