@@ -49,10 +49,7 @@ const STATUS_BADGE_CLASSES: Record<SendVolumeStatus, string> = {
     'insufficient': 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
 };
 
-const CHANNEL_ACCENTS: Record<'campaigns' | 'flows', string> = {
-    campaigns: 'bg-indigo-500',
-    flows: 'bg-emerald-500'
-};
+// Channel accent colors removed (previously used for dot indicators).
 
 // Guardrails (approx industry heuristics) per 1k emails
 const THRESHOLDS = {
