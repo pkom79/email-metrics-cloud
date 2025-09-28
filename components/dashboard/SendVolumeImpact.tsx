@@ -484,8 +484,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     return (
                         <div key={card.key} className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
                             <div className="flex items-start justify-between gap-3">
-                                <div className="flex items-center gap-2">
-                                    <span className={`w-2.5 h-2.5 rounded-full ${CHANNEL_ACCENTS[card.key]}`}></span>
+                                <div className="flex items-center">
                                     <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{card.label}</span>
                                 </div>
                                 <span className={`px-2 py-1 rounded-md text-xs font-semibold ${badgeClass}`}>{statusText}</span>
