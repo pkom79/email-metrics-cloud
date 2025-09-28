@@ -36,7 +36,7 @@ import UploadWizard from '../../components/UploadWizard';
 import EmptyStateCard from '../EmptyStateCard';
 import { usePendingUploadsLinker } from '../../lib/utils/usePendingUploadsLinker';
 import { supabase } from '../../lib/supabase/client';
-import SubscriptionRequiredOverlay, { PlanCadence } from '../billing/SubscriptionRequiredOverlay';
+import ModalPlans, { PlanId } from '../billing/ModalPlans';
 
 function formatCurrency(value: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value); }
 function formatPercent(value: number) {
@@ -210,7 +210,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [memberBrandsLoaded, setMemberBrandsLoaded] = useState<boolean>(false);
     const [billingState, setBillingState] = useState<{ status: string; trialEndsAt: string | null; currentPeriodEnd: string | null; loading: boolean; hasCustomer: boolean }>({ status: 'unknown', trialEndsAt: null, currentPeriodEnd: null, loading: false, hasCustomer: false });
     const [billingModalOpen, setBillingModalOpen] = useState(false);
-    const [billingActionCadence, setBillingActionCadence] = useState<PlanCadence | null>(null);
+    const [billingActionCadence, setBillingActionCadence] = useState<PlanId | null>(null);
     const [billingError, setBillingError] = useState<string | null>(null);
     const [billingRefreshTick, setBillingRefreshTick] = useState(0);
     const [billingPortalBusy, setBillingPortalBusy] = useState(false);
@@ -233,14 +233,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const billingStatusValue = (billingState.status || 'inactive').toLowerCase();
     const billingLoading = billingState.loading;
     const billingRequiresPlan = !isAdmin && !['active', 'trialing'].includes(billingStatusValue);
-    const showBillingPrompt = billingModalOpen || (billingRequiresPlan && !billingLoading);
-    const shouldSkipInitialSkeleton = !isAdmin && showBillingPrompt;
+    const blockDashboard = !isAdmin && (billingLoading || billingRequiresPlan || billingModalOpen);
+    const showPlansModal = !isAdmin && !billingLoading && (billingModalOpen || billingRequiresPlan);
 
     const handleRefreshBillingStatus = useCallback(() => {
         setBillingRefreshTick(t => t + 1);
     }, []);
 
-    const handleSelectBillingPlan = useCallback(async (cadence: PlanCadence) => {
+    const handleSelectBillingPlan = useCallback(async (cadence: PlanId) => {
         if (!activeAccountId) return;
         try {
             setBillingActionCadence(cadence);
@@ -398,11 +398,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     useEffect(() => {
         if (!adminCheckComplete) return;
-        if (isAdmin && !activeAccountId) {
-            setBillingModalOpen(false);
-            setBillingState(prev => ({ ...prev, loading: false }));
-            return;
-        }
         let cancelled = false;
         setBillingState(prev => ({ ...prev, loading: true }));
         setBillingActionCadence(null);
@@ -431,20 +426,26 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 if (cancelled) return;
                 setBillingState({ status, trialEndsAt: trialEnds, currentPeriodEnd: currentEnd, loading: false, hasCustomer });
                 const active = ['active', 'trialing'].includes(status);
-                setBillingModalOpen(!active);
-                if (active) {
-                    setBillingError(null);
+                if (isAdmin) {
+                    setBillingModalOpen(false);
                 } else {
-                    setIsInitialLoading(false);
-                    setInitialLoadComplete(true);
+                    setBillingModalOpen(!active);
+                    if (!active) {
+                        setIsInitialLoading(false);
+                        setInitialLoadComplete(true);
+                    } else {
+                        setBillingError(null);
+                    }
                 }
             } catch (err: any) {
                 if (cancelled) return;
                 setBillingState({ status: 'inactive', trialEndsAt: null, currentPeriodEnd: null, loading: false, hasCustomer: false });
-                setBillingModalOpen(true);
-                setBillingError(err?.message || 'Unable to load billing status.');
-                setIsInitialLoading(false);
-                setInitialLoadComplete(true);
+                if (!isAdmin) {
+                    setBillingModalOpen(true);
+                    setBillingError(err?.message || 'Unable to load billing status.');
+                    setIsInitialLoading(false);
+                    setInitialLoadComplete(true);
+                }
             }
         })();
         return () => { cancelled = true; };
@@ -1173,7 +1174,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     // If admin and there are zero accounts, don't block UI with overlay after initial load
     const noAccounts = isAdmin && (allAccounts?.length === 0);
-    const showOverlay = isInitialLoading && !noAccounts && !shouldSkipInitialSkeleton;
+    const showOverlay = isInitialLoading && !noAccounts && !blockDashboard;
 
     if (dashboardError) { return <div className="min-h-screen flex items-center justify-center p-6"><div className="max-w-md mx-auto text-center"><h2 className="text-lg font-semibold text-red-600 mb-4">Dashboard Error</h2><p className="text-gray-600 dark:text-gray-300 mb-6">{dashboardError}</p><div className="space-x-4"><button onClick={() => { setDashboardError(null); setDataVersion(v => v + 1); }} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Retry</button><button onClick={() => window.location.reload()} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Reload Page</button></div></div></div>; }
 
@@ -1181,7 +1182,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     if (forceEmpty) return <div className="min-h-screen" />;
 
     // Unified loading gate: ensure initial hydration attempts (or fallback) ran
-    if ((!initialLoadComplete && !isAdmin && !shouldSkipInitialSkeleton) || (isAdmin && isInitialLoading)) {
+    if ((!initialLoadComplete && !isAdmin && !blockDashboard) || (isAdmin && isInitialLoading)) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
                 <div className="flex flex-col items-center gap-4 text-center">
@@ -1196,21 +1197,37 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         );
     }
 
+    if (blockDashboard) {
+        const planStatusText = billingStatusValue === 'inactive'
+            ? 'Current status: No active plan'
+            : `Current status: ${billingStatusValue}`;
+        return (
+            <div className="min-h-screen relative bg-gray-50 dark:bg-gray-900">
+                <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center">
+                    <div className="relative h-12 w-12">
+                        <div className="absolute inset-0 rounded-full border-4 border-indigo-200 border-t-indigo-500 animate-spin" />
+                        <div className="absolute inset-2 rounded-full bg-white dark:bg-gray-900" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Preparing your dashboard…</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs">We’re loading your latest reports and metrics. This usually takes just a few moments.</p>
+                </div>
+                {showPlansModal && (
+                    <ModalPlans
+                        open={showPlansModal}
+                        status={planStatusText}
+                        onClose={() => setBillingModalOpen(false)}
+                        onSelect={handleSelectBillingPlan}
+                        onRefresh={handleRefreshBillingStatus}
+                        busyPlan={billingActionCadence}
+                        error={billingError}
+                    />
+                )}
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen relative">
-            <SubscriptionRequiredOverlay
-                open={showBillingPrompt}
-                businessName={activeAccountLabel || businessName}
-                selecting={billingActionCadence}
-                onSelectPlan={handleSelectBillingPlan}
-                onManageBilling={handleManageBillingPortal}
-                canManageBilling={billingState.hasCustomer}
-                onRefreshStatus={handleRefreshBillingStatus}
-                error={billingError}
-                status={billingState.status}
-                trialEndsAt={billingState.trialEndsAt || billingState.currentPeriodEnd}
-                portalBusy={billingPortalBusy}
-            />
             {showOverlay && (
                 <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/30 backdrop-blur-sm">
                     <div className="bg-white dark:bg-gray-800 rounded-xl px-8 py-6 shadow-2xl border border-gray-200 dark:border-gray-700 flex items-center gap-3">
