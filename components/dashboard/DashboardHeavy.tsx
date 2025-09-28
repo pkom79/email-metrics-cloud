@@ -1173,7 +1173,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-medium text-gray-900 dark:text-gray-100 shadow-sm"
                                 aria-label="Open Filters"
                             >
-                                <span className="w-2 h-2 rounded-full bg-purple-600" aria-hidden></span>
+                                {/* Decorative colored dot removed per brand simplification (BRANDING.md §Indicators). */}
                                 Filters
                             </button>
                         </div>

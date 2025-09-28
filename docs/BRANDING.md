@@ -376,7 +376,7 @@ Trigger (mobile only):
 - Placement: Right-aligned in the header area under the page title.
 - Style: Compact pill button `rounded-full` with subtle border and light surface.
   - Classes: `inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-medium text-gray-900 dark:text-gray-100 shadow-sm`
-  - Indicator: Small purple dot `w-2 h-2 rounded-full bg-purple-600` at the left.
+  - (Sept 2025 update) Removed legacy decorative purple dot indicator (was `w-2 h-2 rounded-full bg-purple-600`) to reduce visual noise; rely on layout and section iconography instead.
 - Label: "Filters".
 
 Bottom Sheet:
