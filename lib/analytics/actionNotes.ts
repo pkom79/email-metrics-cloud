@@ -1172,49 +1172,8 @@ export function computeOpportunitySummary(params: {
   customTo?: string;
 }): OpportunitySummary {
   const dm = DataManager.getInstance();
-  const campaigns = dm.getCampaigns();
-
-  const collectedNotes: ModuleActionNote[] = [];
-
-  if (campaigns.length) {
-    collectedNotes.push(
-      buildSendFrequencyNote({
-        campaigns,
-        dateRange: params.dateRange,
-        customFrom: params.customFrom,
-        customTo: params.customTo,
-      })
-    );
-
-    collectedNotes.push(
-      buildAudienceSizeNote({
-        campaigns,
-        dateRange: params.dateRange,
-        customFrom: params.customFrom,
-        customTo: params.customTo,
-      })
-    );
-
-    collectedNotes.push(
-      buildCampaignGapsNote({
-        campaigns,
-        dateRange: params.dateRange,
-        customFrom: params.customFrom,
-        customTo: params.customTo,
-      })
-    );
-  }
-
-  collectedNotes.push(
-    ...buildFlowAddStepNotes({
-      dateRange: params.dateRange,
-      customFrom: params.customFrom,
-      customTo: params.customTo,
-    })
-  );
-
-  const deadWeightNote = buildDeadWeightNote();
-  if (deadWeightNote) collectedNotes.push(deadWeightNote);
+  const allCampaigns = dm.getCampaigns();
+  const allFlows = dm.getFlowEmails();
 
   const resolveRange = () => {
     const resolved = dm.getResolvedDateRange(params.dateRange, params.customFrom, params.customTo);
@@ -1234,9 +1193,23 @@ export function computeOpportunitySummary(params: {
 
   const { start, end } = resolveRange();
 
-  const overallAgg = dm.getAggregatedMetricsForPeriod(dm.getCampaigns(), dm.getFlowEmails(), start, end);
-  const campaignAgg = dm.getAggregatedMetricsForPeriod(dm.getCampaigns(), [], start, end);
-  const flowAgg = dm.getAggregatedMetricsForPeriod([], dm.getFlowEmails(), start, end);
+  const isWithinRange = (date: Date | null | undefined, rangeStart: Date | null, rangeEnd: Date | null) => {
+    if (!(date instanceof Date) || isNaN(date.getTime())) return false;
+    if (rangeStart && date < rangeStart) return false;
+    if (rangeEnd && date > rangeEnd) return false;
+    return true;
+  };
+
+  const campaignsInRange = start && end
+    ? allCampaigns.filter((c) => isWithinRange(c.sentDate, start, end))
+    : [...allCampaigns];
+  const flowsInRange = start && end
+    ? allFlows.filter((f) => isWithinRange(f.sentDate, start, end))
+    : [...allFlows];
+
+  const overallAgg = dm.getAggregatedMetricsForPeriod(campaignsInRange, flowsInRange, start, end);
+  const campaignAgg = dm.getAggregatedMetricsForPeriod(campaignsInRange, [], start, end);
+  const flowAgg = dm.getAggregatedMetricsForPeriod([], flowsInRange, start, end);
 
   const emailRevenue = overallAgg.totalRevenue || 0;
   const campaignRevenue = campaignAgg.totalRevenue || 0;
@@ -1246,14 +1219,64 @@ export function computeOpportunitySummary(params: {
   const baselineStart = new Date(baselineEnd);
   baselineStart.setDate(baselineStart.getDate() - 364);
 
-  const baselineCampaignAgg = dm.getAggregatedMetricsForPeriod(dm.getCampaigns(), [], baselineStart, baselineEnd);
-  const baselineFlowAgg = dm.getAggregatedMetricsForPeriod([], dm.getFlowEmails(), baselineStart, baselineEnd);
+  const campaignsBaseline = baselineStart && baselineEnd
+    ? allCampaigns.filter((c) => isWithinRange(c.sentDate, baselineStart, baselineEnd))
+    : [...allCampaigns];
+  const flowsBaseline = baselineStart && baselineEnd
+    ? allFlows.filter((f) => isWithinRange(f.sentDate, baselineStart, baselineEnd))
+    : [...allFlows];
+  const baselineCampaignAgg = dm.getAggregatedMetricsForPeriod(campaignsBaseline, [], baselineStart, baselineEnd);
+  const baselineFlowAgg = dm.getAggregatedMetricsForPeriod([], flowsBaseline, baselineStart, baselineEnd);
   const baselineCampaignRevenueRaw = baselineCampaignAgg.totalRevenue || 0;
   const baselineFlowRevenueRaw = baselineFlowAgg.totalRevenue || 0;
   const baselineCampaignRevenue = baselineCampaignRevenueRaw > 0 ? baselineCampaignRevenueRaw : null;
   const baselineFlowRevenue = baselineFlowRevenueRaw > 0 ? baselineFlowRevenueRaw : null;
   const baselineEmailRevenueRaw = baselineCampaignRevenueRaw + baselineFlowRevenueRaw;
   const baselineEmailRevenue = baselineEmailRevenueRaw > 0 ? baselineEmailRevenueRaw : null;
+
+  const collectedNotes: ModuleActionNote[] = [];
+
+  if (campaignsInRange.length) {
+    collectedNotes.push(
+      buildSendFrequencyNote({
+        campaigns: campaignsInRange,
+        dateRange: params.dateRange,
+        customFrom: params.customFrom,
+        customTo: params.customTo,
+      })
+    );
+
+    collectedNotes.push(
+      buildAudienceSizeNote({
+        campaigns: campaignsInRange,
+        dateRange: params.dateRange,
+        customFrom: params.customFrom,
+        customTo: params.customTo,
+      })
+    );
+
+    const baselineFromIso = baselineStart.toISOString().slice(0, 10);
+    const baselineToIso = baselineEnd.toISOString().slice(0, 10);
+    collectedNotes.push(
+      buildCampaignGapsNote({
+        campaigns: campaignsBaseline,
+        dateRange: 'custom',
+        customFrom: baselineFromIso,
+        customTo: baselineToIso,
+      })
+    );
+  }
+
+  collectedNotes.push(
+    ...buildFlowAddStepNotes({
+      dateRange: params.dateRange,
+      customFrom: params.customFrom,
+      customTo: params.customTo,
+    })
+  );
+
+  const deadWeightNote = buildDeadWeightNote();
+  if (deadWeightNote) collectedNotes.push(deadWeightNote);
 
   const toAnnual = (impact?: OpportunityEstimate | null): number => {
     if (!impact) return 0;
