@@ -17,7 +17,7 @@ import DataCoverageNotice from './DataCoverageNotice';
 import CampaignSendFrequency from './CampaignSendFrequency';
 import AudienceSizePerformance from './AudienceSizePerformance';
 import CampaignGapsAndLosses from './CampaignGapsAndLosses';
-import { computeOpportunitySummary, OpportunitySummary } from '../../lib/analytics/actionNotes';
+import { computeOpportunitySummary, OpportunitySummary, OpportunitySummaryCategory } from '../../lib/analytics/actionNotes';
 // Helper: map guidance cadence label to numeric recommendation for Day-of-Week note
 function deriveFrequencyRecommendation(g: any): number | undefined {
     if (!g || !g.cadenceLabel) return undefined;
@@ -53,29 +53,46 @@ const IMPACT_TIMEFRAME_SUFFIX: Record<ImpactTimeframe, string> = {
     weekly: 'per week'
 };
 
-const CATEGORY_STYLES: Record<'campaigns' | 'flows' | 'audience', { bg: string; border: string; dot: string; label: string; accent: string }> = {
+const CATEGORY_STYLES: Record<'campaigns' | 'flows' | 'audience', {
+    bg: string;
+    border: string;
+    dot: string;
+    label: string;
+    barBg: string;
+    barFill: string;
+}> = {
     campaigns: {
         bg: 'bg-indigo-50 dark:bg-indigo-950/40',
         border: 'border-indigo-100 dark:border-indigo-900/60',
         dot: 'bg-indigo-500 dark:bg-indigo-300',
         label: 'text-indigo-700 dark:text-indigo-200',
-        accent: 'text-indigo-500 dark:text-indigo-300'
+        barBg: 'bg-indigo-100 dark:bg-indigo-900/50',
+        barFill: 'bg-indigo-500 dark:bg-indigo-300'
     },
     flows: {
         bg: 'bg-emerald-50 dark:bg-emerald-950/40',
         border: 'border-emerald-100 dark:border-emerald-900/60',
         dot: 'bg-emerald-500 dark:bg-emerald-300',
         label: 'text-emerald-700 dark:text-emerald-200',
-        accent: 'text-emerald-500 dark:text-emerald-300'
+        barBg: 'bg-emerald-100 dark:bg-emerald-900/40',
+        barFill: 'bg-emerald-500 dark:bg-emerald-300'
     },
     audience: {
         bg: 'bg-purple-50 dark:bg-purple-950/40',
         border: 'border-purple-100 dark:border-purple-900/60',
         dot: 'bg-purple-500 dark:bg-purple-300',
         label: 'text-purple-700 dark:text-purple-200',
-        accent: 'text-purple-500 dark:text-purple-300'
+        barBg: 'bg-purple-100 dark:bg-purple-900/40',
+        barFill: 'bg-purple-500 dark:bg-purple-300'
     }
 };
+
+function getCategoryBaseline(category: OpportunitySummaryCategory, timeframe: ImpactTimeframe): number | null {
+    if (!category) return null;
+    if (timeframe === 'annual') return category.baselineAnnual ?? null;
+    if (timeframe === 'monthly') return category.baselineMonthly ?? null;
+    return category.baselineWeekly ?? null;
+}
 
 function convertAnnualAmount(amount: number, timeframe: ImpactTimeframe): number {
     const safe = Number.isFinite(amount) ? amount : 0;
@@ -273,7 +290,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [keyInput, setKeyInput] = useState('');
 
     const [impactTimeframe, setImpactTimeframe] = useState<ImpactTimeframe>('annual');
-    const [breakdownExpanded, setBreakdownExpanded] = useState<boolean>(true);
+    const [breakdownOpen, setBreakdownOpen] = useState(false);
 
     const opportunitySummary = useMemo<OpportunitySummary>(() => {
         return computeOpportunitySummary({
@@ -284,7 +301,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     }, [dateRange, customFrom, customTo, dataVersion]);
 
     const opportunityCategories = opportunitySummary?.categories ?? [];
-    const hasOpportunities = (opportunitySummary?.breakdown?.length ?? 0) > 0;
+    const hasOpportunities = opportunityCategories.length > 0;
 
     const convertAmount = useCallback((annual: number | null | undefined) => {
         if (!annual || !Number.isFinite(annual)) return 0;
@@ -293,8 +310,26 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     const totalAnnualImpact = opportunitySummary?.totals?.annual ?? 0;
     const totalImpactValue = convertAmount(totalAnnualImpact);
-    const percentOfEmailRevenue = opportunitySummary?.totals?.percentOfEmailRevenue ?? null;
-    const emailRevenue = opportunitySummary?.totals?.emailRevenue ?? 0;
+    const baselineAnnual = opportunitySummary?.totals?.baselineAnnual ?? null;
+    const baselineMonthly = opportunitySummary?.totals?.baselineMonthly ?? null;
+    const baselineWeekly = opportunitySummary?.totals?.baselineWeekly ?? null;
+    const baselineByTimeframe: Record<ImpactTimeframe, number | null> = {
+        annual: baselineAnnual,
+        monthly: baselineMonthly,
+        weekly: baselineWeekly
+    };
+    const selectedBaseline = baselineByTimeframe[impactTimeframe];
+    const shareOfBaseline = selectedBaseline && selectedBaseline > 0 ? (totalImpactValue / selectedBaseline) * 100 : null;
+    const totalCategories = opportunityCategories.length;
+    const hasCampaignCategory = opportunityCategories.some(cat => cat.key === 'campaigns');
+    useEffect(() => {
+        if (!breakdownOpen) return;
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setBreakdownOpen(false);
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [breakdownOpen]);
 
     const activeAccountId = useMemo(() => (isAdmin ? (selectedAccountId || '') : (memberSelectedId || '')), [isAdmin, selectedAccountId, memberSelectedId]);
     const activeAccountLabel = useMemo(() => {
@@ -1429,21 +1464,22 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
                         {isAdmin && hasOpportunities && (
                             <div className="mt-4 rounded-xl border border-purple-100 dark:border-purple-900/40 bg-gradient-to-br from-purple-50 via-white to-white dark:from-purple-950/40 dark:via-gray-900 dark:to-gray-900 p-4 sm:p-5">
-                                <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-                                    <div className="flex-1 space-y-6">
-                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                            <div>
-                                                <p className="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300">Total Potential Revenue Impact</p>
-                                                <div className="mt-2 flex flex-wrap items-end gap-3 text-gray-700 dark:text-gray-200">
-                                                    <span className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(totalImpactValue)}</span>
-                                                    <span className="text-sm text-gray-600 dark:text-gray-400">{IMPACT_TIMEFRAME_SUFFIX[impactTimeframe]}</span>
-                                                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                                                        {percentOfEmailRevenue != null
-                                                            ? `${formatPercent(percentOfEmailRevenue)} of email revenue${emailRevenue ? ` (${formatCurrency(emailRevenue)} baseline)` : ''}`
-                                                            : 'Baseline revenue unavailable'}
-                                                    </span>
-                                                </div>
+                                <div className="flex flex-col gap-6">
+                                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                        <div>
+                                            <p className="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300">Total Potential Revenue Impact</p>
+                                            <div className="mt-2 flex flex-wrap items-end gap-3 text-gray-700 dark:text-gray-200">
+                                                <span className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(totalImpactValue)}</span>
+                                                <span className="text-sm text-gray-600 dark:text-gray-400">{IMPACT_TIMEFRAME_SUFFIX[impactTimeframe]}</span>
+                                                {shareOfBaseline != null ? (
+                                                    <span className="text-sm text-gray-600 dark:text-gray-400">Share of baseline: {formatPercent(shareOfBaseline)}</span>
+                                                ) : null}
                                             </div>
+                                            {selectedBaseline != null ? (
+                                                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Baseline (last 365 days): {formatCurrency(selectedBaseline)} {IMPACT_TIMEFRAME_SUFFIX[impactTimeframe]}</p>
+                                            ) : null}
+                                        </div>
+                                        <div className="flex flex-col items-start gap-2 md:items-end">
                                             <div className="flex flex-col items-start sm:items-end gap-1">
                                                 <span className="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Timeframe</span>
                                                 <SelectBase
@@ -1457,122 +1493,119 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                                     ))}
                                                 </SelectBase>
                                             </div>
-                                        </div>
-                                        <div className="grid gap-3 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                                            {opportunityCategories.map(category => {
-                                                const styles = CATEGORY_STYLES[category.key];
-                                                const metadata = (category.metadata ?? {}) as Record<string, any>;
-                                                const categoryAmount = convertAmount(category.totalAnnual);
-                                                const percentOfOverall = category.percentOfOverall ?? 0;
-                                                const percentOfBaseline = category.percentOfBaseline ?? null;
-                                                const tagClass = category.key === 'audience'
-                                                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
-                                                    : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200';
-                                                const suppressedCount = metadata?.deadWeightCount != null ? formatNumber(Number(metadata.deadWeightCount)) : '—';
-                                                const currentPlan = metadata?.currentMonthlyPrice != null ? formatCurrency(Number(metadata.currentMonthlyPrice)) : '—';
-                                                const projectedPlan = metadata?.projectedMonthlyPrice != null ? formatCurrency(Number(metadata.projectedMonthlyPrice)) : '—';
-                                                const tooltipContent = (
-                                                    <div className="space-y-2 max-w-xs">
-                                                        {category.key === 'audience' ? (
-                                                            <div className="space-y-1">
-                                                                <div className="font-semibold text-purple-700 dark:text-purple-200">Dead Weight Audience</div>
-                                                                <div>Suppressed profiles: {suppressedCount}</div>
-                                                                <div>Plan cost: {currentPlan} → {projectedPlan}</div>
-                                                                <div>Savings: {category.percentOfBaseline != null ? formatPercent(category.percentOfBaseline) : '—'}</div>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="space-y-1">
-                                                                {category.items.map(item => (
-                                                                    <div key={`${item.module}-${item.scope || 'default'}`} className="flex items-center justify-between gap-3">
-                                                                        <span className="font-medium text-gray-800 dark:text-gray-100">{item.label}</span>
-                                                                        <span className="text-right text-gray-700 dark:text-gray-200">{formatCurrency(convertAmount(item.amountAnnual))}</span>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                        <div className="pt-2 border-t border-gray-200 dark:border-gray-800 text-[10px] text-gray-500 dark:text-gray-400">
-                                                            Values reflect the selected timeframe.
-                                                        </div>
-                                                    </div>
-                                                );
-                                                return (
-                                                    <TooltipPortal key={category.key} content={tooltipContent}>
-                                                        <div className={`cursor-help rounded-xl border p-4 transition-colors ${styles.border} ${styles.bg}`}>
-                                                            <div className="flex items-center justify-between gap-2">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className={`inline-flex h-2.5 w-2.5 rounded-full ${styles.dot}`} />
-                                                                    <span className={`text-sm font-semibold ${styles.label}`}>{category.label}</span>
-                                                                </div>
-                                                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${tagClass}`}>
-                                                                    {category.key === 'audience' ? 'Savings' : 'Lift'}
-                                                                </span>
-                                                            </div>
-                                                            <div className="mt-4 flex items-start justify-between gap-3">
-                                                                <div>
-                                                                    <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(categoryAmount)}</div>
-                                                                    <div className="text-xs text-gray-500 dark:text-gray-400">{IMPACT_TIMEFRAME_SUFFIX[impactTimeframe]}</div>
-                                                                </div>
-                                                                <div className="text-right text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                                                                    <div>{formatPercent(percentOfOverall)} of total impact</div>
-                                                                    {percentOfBaseline != null && (
-                                                                        <div>{formatPercent(percentOfBaseline)} vs. {category.key === 'audience' ? 'plan spend' : `${category.label.toLowerCase()} revenue`}</div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </TooltipPortal>
-                                                );
-                                            })}
+                                            <button
+                                                type="button"
+                                                onClick={() => setBreakdownOpen(true)}
+                                                className="inline-flex items-center gap-2 rounded-lg border border-purple-200 dark:border-purple-700 bg-white dark:bg-gray-900 px-3 py-1.5 text-xs font-semibold text-purple-700 dark:text-purple-200 hover:bg-purple-50 dark:hover:bg-purple-900/40"
+                                            >
+                                                View breakdown
+                                            </button>
                                         </div>
                                     </div>
-                                    <div className="lg:w-72 flex-shrink-0">
-                                        <div className="rounded-xl border border-purple-100 dark:border-purple-900/40 bg-white dark:bg-gray-900 p-4 shadow-sm">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Breakdown</p>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setBreakdownExpanded(prev => !prev)}
-                                                    className="text-xs font-medium text-purple-700 dark:text-purple-300 hover:underline"
-                                                >
-                                                    {breakdownExpanded ? 'Hide details' : 'Show details'}
-                                                </button>
-                                            </div>
-                                            {breakdownExpanded ? (
-                                                <div className="mt-3 space-y-4 text-sm text-gray-700 dark:text-gray-200">
-                                                    {opportunityCategories.map(category => (
-                                                        <div key={`breakdown-${category.key}`}>
-                                                            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{category.label}</div>
-                                                            <ul className="mt-2 space-y-2">
-                                                                {category.items.map(item => {
-                                                                    const itemAmount = convertAmount(item.amountAnnual);
-                                                                    const percentOfCategory = item.percentOfCategory ?? 0;
-                                                                    const percentOfOverallItem = totalAnnualImpact > 0 ? (item.amountAnnual / totalAnnualImpact) * 100 : 0;
-                                                                    const badgeClass = item.type === 'savings'
-                                                                        ? 'text-emerald-600 dark:text-emerald-300'
-                                                                        : 'text-indigo-600 dark:text-indigo-300';
-                                                                    return (
-                                                                        <li key={`breakdown-${item.module}-${item.scope || 'default'}`} className="flex items-start justify-between gap-3 rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 px-3 py-2">
-                                                                            <div>
-                                                                                <div className="font-medium text-gray-900 dark:text-gray-100">{item.label}</div>
-                                                                                <div className="text-[11px] text-gray-500 dark:text-gray-400">
-                                                                                    {formatPercent(percentOfCategory)} of {category.label.toLowerCase()} · {formatPercent(percentOfOverallItem)} overall
-                                                                                </div>
-                                                                            </div>
-                                                                            <div className="text-right">
-                                                                                <div className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(itemAmount)}</div>
-                                                                                <div className={`text-[11px] font-semibold ${badgeClass}`}>{item.type === 'savings' ? 'Savings' : 'Lift'}</div>
-                                                                            </div>
-                                                                        </li>
-                                                                    );
-                                                                })}
-                                                            </ul>
+                                    <div className="grid gap-4 lg:grid-cols-4">
+                                        {opportunityCategories.map(category => {
+                                            const styles = CATEGORY_STYLES[category.key];
+                                            const metadata = (category.metadata ?? {}) as Record<string, any>;
+                                            const categoryAmount = convertAmount(category.totalAnnual);
+                                            const shareTotal = category.percentOfOverall ?? 0;
+                                            const baselineValue = getCategoryBaseline(category, impactTimeframe);
+                                            const isSavings = category.key === 'audience';
+                                            const tagClass = isSavings
+                                                ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
+                                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300';
+                                            const baselineRatio = !isSavings && category.percentOfBaseline != null
+                                                ? category.percentOfBaseline - 100
+                                                : null;
+                                            const baselineDeltaDisplay = baselineRatio != null
+                                                ? `${baselineRatio >= 0 ? '+' : ''}${formatPercent(baselineRatio)}`
+                                                : null;
+                                            const suppressedCount = metadata?.deadWeightCount != null ? formatNumber(Number(metadata.deadWeightCount)) : '—';
+                                            const currentPlan = metadata?.currentMonthlyPrice != null ? formatCurrency(Number(metadata.currentMonthlyPrice)) : null;
+                                            const projectedPlan = metadata?.projectedMonthlyPrice != null ? formatCurrency(Number(metadata.projectedMonthlyPrice)) : null;
+                                            const savingsPct = isSavings && category.percentOfBaseline != null ? category.percentOfBaseline : null;
+                                            const sortedItems = [...category.items].sort((a, b) => b.amountAnnual - a.amountAnnual);
+                                            const cardSpan = (() => {
+                                                if (totalCategories <= 1) return 'lg:col-span-4';
+                                                if (totalCategories === 2) {
+                                                    if (hasCampaignCategory) {
+                                                        return category.key === 'campaigns' ? 'lg:col-span-3' : 'lg:col-span-1';
+                                                    }
+                                                    return 'lg:col-span-2';
+                                                }
+                                                if (hasCampaignCategory && category.key === 'campaigns') {
+                                                    return 'lg:col-span-2';
+                                                }
+                                                return 'lg:col-span-1';
+                                            })();
+                                            const tooltipContent = (
+                                                <div className="space-y-2 max-w-xs">
+                                                    {isSavings ? (
+                                                        <div className="space-y-1">
+                                                            <div className="font-semibold text-purple-700 dark:text-purple-200">Dead Weight Audience</div>
+                                                            <div>Suppressed profiles: {suppressedCount}</div>
+                                                            <div>{currentPlan && projectedPlan ? <>Plan: {currentPlan}/mo → {projectedPlan}/mo</> : 'Plan savings available after purge'}</div>
+                                                            <div>Savings: {savingsPct != null ? formatPercent(savingsPct) : '—'}</div>
                                                         </div>
-                                                    ))}
+                                                    ) : (
+                                                        <div className="space-y-1">
+                                                            {sortedItems.map(item => (
+                                                                <div key={`${item.module}-${item.scope || 'default'}`} className="flex items-center justify-between gap-3">
+                                                                    <span className="font-medium text-gray-800 dark:text-gray-100 text-xs">{item.label}</span>
+                                                                    <span className="text-xs text-gray-700 dark:text-gray-200">{formatCurrency(convertAmount(item.amountAnnual))}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    <div className="pt-2 border-t border-gray-200 dark:border-gray-800 text-[10px] text-gray-500 dark:text-gray-400">
+                                                        Values reflect the selected timeframe.
+                                                    </div>
                                                 </div>
-                                            ) : (
-                                                <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">Expand to see module-level contributions.</p>
-                                            )}
-                                        </div>
+                                            );
+                                            return (
+                                                <TooltipPortal key={category.key} content={tooltipContent}>
+                                                    <div className={`${cardSpan} cursor-help`}>
+                                                        <div className={`relative h-full rounded-2xl border ${styles.border} ${styles.bg} p-5 shadow-sm transition hover:shadow-md`}>
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className={`inline-flex h-2.5 w-2.5 rounded-full ${styles.dot}`} />
+                                                                    <span className={`text-sm font-semibold uppercase tracking-wide ${styles.label}`}>{category.label}</span>
+                                                                </div>
+                                                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${tagClass}`}>
+                                                                    {isSavings ? 'Savings' : 'Lift'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="mt-4 flex items-baseline gap-2">
+                                                                <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(categoryAmount)}</span>
+                                                                <span className="text-xs text-gray-500 dark:text-gray-400">{IMPACT_TIMEFRAME_SUFFIX[impactTimeframe]}</span>
+                                                            </div>
+                                                            <div className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-300">
+                                                                <div>Share of total: {formatPercent(shareTotal)}</div>
+                                                                {!isSavings && baselineDeltaDisplay ? (
+                                                                    <div>Vs baseline: {baselineDeltaDisplay}</div>
+                                                                ) : null}
+                                                            </div>
+                                                            {isSavings ? (
+                                                                <div className="mt-3 space-y-1 text-sm text-gray-700 dark:text-gray-200">
+                                                                    <div>Current plan: {currentPlan ?? '—'}</div>
+                                                                    <div>After purge: {projectedPlan ?? '—'}</div>
+                                                                    <div>Savings: {savingsPct != null ? formatPercent(savingsPct) : '—'}</div>
+                                                                </div>
+                                                            ) : baselineValue != null ? (
+                                                                <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">Baseline (365d): {formatCurrency(baselineValue)} {IMPACT_TIMEFRAME_SUFFIX[impactTimeframe]}</div>
+                                                            ) : null}
+                                                            <div className="mt-4">
+                                                                <div className={`h-2 w-full rounded-full ${styles.barBg}`}>
+                                                                    <div
+                                                                        className={`h-2 rounded-full ${styles.barFill}`}
+                                                                        style={{ width: `${Math.min(100, Math.max(0, shareTotal))}%` }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </TooltipPortal>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>
@@ -1588,6 +1621,68 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     )}
                 </div>
             </div>
+
+            {breakdownOpen && (
+                <div className="fixed inset-0 z-[90] flex">
+                    <button
+                        type="button"
+                        aria-label="Close breakdown"
+                        className="flex-1 bg-black/30 backdrop-blur-sm"
+                        onClick={() => setBreakdownOpen(false)}
+                    />
+                    <div className="relative h-full w-full max-w-md bg-white dark:bg-gray-900 border-l border-purple-200 dark:border-purple-800 shadow-2xl">
+                        <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 px-5 py-4">
+                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Total Potential Revenue Impact</p>
+                            <button
+                                type="button"
+                                onClick={() => setBreakdownOpen(false)}
+                                className="rounded-md p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                                aria-label="Close breakdown drawer"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                        <div className="h-full overflow-y-auto px-5 py-4 space-y-6">
+                            {opportunityCategories.map(category => {
+                                const styles = CATEGORY_STYLES[category.key];
+                                const sortedItems = [...category.items].sort((a, b) => b.amountAnnual - a.amountAnnual);
+                                return (
+                                    <div key={`drawer-${category.key}`}>
+                                        <div className={`text-xs font-semibold uppercase tracking-wide ${styles.label}`}>{category.label}</div>
+                                        <div className="mt-3 space-y-3">
+                                            {sortedItems.length === 0 ? (
+                                                <div className="text-xs text-gray-500 dark:text-gray-400">No line items to show.</div>
+                                            ) : sortedItems.map(item => {
+                                                const itemAmount = convertAmount(item.amountAnnual);
+                                                const percentOfCategory = Math.max(0, Math.min(100, item.percentOfCategory ?? 0));
+                                                const percentOfOverallItem = Math.max(0, Math.min(100, item.percentOfOverall ?? 0));
+                                                return (
+                                                    <div key={`drawer-${category.key}-${item.module}-${item.scope || 'default'}`} className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950/40 p-3 transition hover:border-purple-200 dark:hover:border-purple-700">
+                                                        <div className="flex items-center justify-between text-sm text-gray-900 dark:text-gray-100">
+                                                            <span className="font-medium">{item.label}</span>
+                                                            <span className="font-semibold">{formatCurrency(itemAmount)}</span>
+                                                        </div>
+                                                        <div className="mt-2 flex items-center gap-3">
+                                                            <div className="h-2 flex-1 rounded-full bg-gray-200 dark:bg-gray-800 overflow-hidden">
+                                                                <div className={`h-2 ${styles.barFill}`} style={{ width: `${percentOfCategory}%` }} />
+                                                            </div>
+                                                            <span className="text-[11px] text-gray-500 dark:text-gray-400">{formatPercent(percentOfCategory)}</span>
+                                                        </div>
+                                                        <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Share of total: {formatPercent(percentOfOverallItem)}</div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {opportunityCategories.length === 0 && (
+                                <div className="text-sm text-gray-500 dark:text-gray-400">No opportunity data available.</div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Debug panel for link errors */}
             {linkDebugInfo && (

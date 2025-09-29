@@ -32,6 +32,7 @@ export interface OpportunitySummaryItem {
   type: "lift" | "savings";
   category: OpportunityCategoryKey;
   percentOfCategory?: number;
+  percentOfOverall?: number;
   metadata?: Record<string, unknown>;
 }
 
@@ -42,7 +43,9 @@ export interface OpportunitySummaryCategory {
   totalAnnual: number;
   percentOfOverall: number;
   percentOfBaseline?: number | null;
-  baselineAmount?: number | null;
+  baselineAnnual?: number | null;
+  baselineMonthly?: number | null;
+  baselineWeekly?: number | null;
   items: OpportunitySummaryItem[];
   metadata?: Record<string, unknown>;
 }
@@ -54,6 +57,9 @@ export interface OpportunitySummary {
     weekly: number;
     percentOfEmailRevenue: number | null;
     emailRevenue: number;
+    baselineAnnual: number | null;
+    baselineMonthly: number | null;
+    baselineWeekly: number | null;
   };
   categories: OpportunitySummaryCategory[];
   breakdown: OpportunitySummaryItem[];
@@ -1236,6 +1242,19 @@ export function computeOpportunitySummary(params: {
   const campaignRevenue = campaignAgg.totalRevenue || 0;
   const flowRevenue = flowAgg.totalRevenue || 0;
 
+  const baselineEnd = new Date(end);
+  const baselineStart = new Date(baselineEnd);
+  baselineStart.setDate(baselineStart.getDate() - 364);
+
+  const baselineCampaignAgg = dm.getAggregatedMetricsForPeriod(dm.getCampaigns(), [], baselineStart, baselineEnd);
+  const baselineFlowAgg = dm.getAggregatedMetricsForPeriod([], dm.getFlowEmails(), baselineStart, baselineEnd);
+  const baselineCampaignRevenueRaw = baselineCampaignAgg.totalRevenue || 0;
+  const baselineFlowRevenueRaw = baselineFlowAgg.totalRevenue || 0;
+  const baselineCampaignRevenue = baselineCampaignRevenueRaw > 0 ? baselineCampaignRevenueRaw : null;
+  const baselineFlowRevenue = baselineFlowRevenueRaw > 0 ? baselineFlowRevenueRaw : null;
+  const baselineEmailRevenueRaw = baselineCampaignRevenueRaw + baselineFlowRevenueRaw;
+  const baselineEmailRevenue = baselineEmailRevenueRaw > 0 ? baselineEmailRevenueRaw : null;
+
   const toAnnual = (impact?: OpportunityEstimate | null): number => {
     if (!impact) return 0;
     if (typeof impact.annual === "number") return Math.max(0, impact.annual);
@@ -1276,10 +1295,10 @@ export function computeOpportunitySummary(params: {
     },
   };
 
-  const categoryMeta: Record<OpportunityCategoryKey, { label: string; color: "indigo" | "emerald" | "purple"; baselineAmount: number | null }> = {
-    campaigns: { label: "Campaigns", color: "indigo", baselineAmount: campaignRevenue },
-    flows: { label: "Flows", color: "emerald", baselineAmount: flowRevenue },
-    audience: { label: "Audience", color: "purple", baselineAmount: null },
+  const categoryMeta: Record<OpportunityCategoryKey, { label: string; color: "indigo" | "emerald" | "purple"; baselineAnnual: number | null }> = {
+    campaigns: { label: "Campaigns", color: "indigo", baselineAnnual: baselineCampaignRevenue },
+    flows: { label: "Flows", color: "emerald", baselineAnnual: baselineFlowRevenue },
+    audience: { label: "Audience", color: "purple", baselineAnnual: null },
   };
 
   type MutableCategory = {
@@ -1287,7 +1306,7 @@ export function computeOpportunitySummary(params: {
     label: string;
     color: "indigo" | "emerald" | "purple";
     totalAnnual: number;
-    baselineAmount: number | null;
+    baselineAnnual: number | null;
     items: OpportunitySummaryItem[];
     metadata?: Record<string, unknown>;
   };
@@ -1300,7 +1319,7 @@ export function computeOpportunitySummary(params: {
         key,
         label: meta.label,
         color: meta.color,
-        baselineAmount: meta.baselineAmount,
+        baselineAnnual: meta.baselineAnnual,
         totalAnnual: 0,
         items: [],
         metadata: {},
@@ -1325,6 +1344,8 @@ export function computeOpportunitySummary(params: {
       amountAnnual,
       type: meta.type,
       category: meta.category,
+      percentOfCategory: 0,
+      percentOfOverall: 0,
       metadata: note.metadata || undefined,
     };
 
@@ -1343,16 +1364,11 @@ export function computeOpportunitySummary(params: {
   const categories: OpportunitySummaryCategory[] = Array.from(categoriesMap.values())
     .filter((cat) => cat.totalAnnual > 0)
     .map((cat) => {
-      const itemsWithPercent = cat.items.map((item) => ({
-        ...item,
-        percentOfCategory: cat.totalAnnual > 0 ? (item.amountAnnual / cat.totalAnnual) * 100 : 0,
-      }));
-
       let percentOfBaseline: number | null = null;
-      if (cat.key === "campaigns" && cat.baselineAmount) {
-        percentOfBaseline = cat.baselineAmount > 0 ? (cat.totalAnnual / cat.baselineAmount) * 100 : null;
-      } else if (cat.key === "flows" && cat.baselineAmount) {
-        percentOfBaseline = cat.baselineAmount > 0 ? (cat.totalAnnual / cat.baselineAmount) * 100 : null;
+      if (cat.key === "campaigns" && cat.baselineAnnual) {
+        percentOfBaseline = cat.baselineAnnual > 0 ? (cat.totalAnnual / cat.baselineAnnual) * 100 : null;
+      } else if (cat.key === "flows" && cat.baselineAnnual) {
+        percentOfBaseline = cat.baselineAnnual > 0 ? (cat.totalAnnual / cat.baselineAnnual) * 100 : null;
       } else if (cat.key === "audience" && cat.metadata) {
         const current = Number((cat.metadata as any).currentMonthlyPrice) || 0;
         const projected = Number((cat.metadata as any).projectedMonthlyPrice) || 0;
@@ -1366,8 +1382,10 @@ export function computeOpportunitySummary(params: {
         totalAnnual: cat.totalAnnual,
         percentOfOverall: 0,
         percentOfBaseline,
-        baselineAmount: cat.baselineAmount,
-        items: itemsWithPercent,
+        baselineAnnual: cat.baselineAnnual,
+        baselineMonthly: null,
+        baselineWeekly: null,
+        items: cat.items,
         metadata: cat.metadata,
       } satisfies OpportunitySummaryCategory;
     });
@@ -1375,20 +1393,25 @@ export function computeOpportunitySummary(params: {
   const totalAnnual = categories.reduce((sum, cat) => sum + cat.totalAnnual, 0);
   const totalMonthly = totalAnnual / 12;
   const totalWeekly = totalAnnual / 52;
-  const percentOfEmailRevenue = emailRevenue > 0 ? (totalAnnual / emailRevenue) * 100 : null;
+  const percentOfEmailRevenue = baselineEmailRevenue && baselineEmailRevenue > 0 ? (totalAnnual / baselineEmailRevenue) * 100 : null;
 
   categories.forEach((cat) => {
     cat.percentOfOverall = totalAnnual > 0 ? (cat.totalAnnual / totalAnnual) * 100 : 0;
-    cat.items = cat.items.map((item) => ({
-      ...item,
-      percentOfCategory: cat.totalAnnual > 0 ? (item.amountAnnual / cat.totalAnnual) * 100 : 0,
-    }));
+    if (cat.baselineAnnual != null) {
+      cat.baselineMonthly = cat.baselineAnnual / 12;
+      cat.baselineWeekly = cat.baselineAnnual / 52;
+    }
+    cat.items.forEach((item) => {
+      item.percentOfCategory = cat.totalAnnual > 0 ? (item.amountAnnual / cat.totalAnnual) * 100 : 0;
+      item.percentOfOverall = totalAnnual > 0 ? (item.amountAnnual / totalAnnual) * 100 : 0;
+    });
   });
 
   breakdown.forEach((item) => {
     const category = categories.find((cat) => cat.key === item.category);
     if (!category) return;
     item.percentOfCategory = category.totalAnnual > 0 ? (item.amountAnnual / category.totalAnnual) * 100 : 0;
+    item.percentOfOverall = totalAnnual > 0 ? (item.amountAnnual / totalAnnual) * 100 : 0;
   });
 
   return {
@@ -1398,6 +1421,9 @@ export function computeOpportunitySummary(params: {
       weekly: totalWeekly,
       percentOfEmailRevenue,
       emailRevenue,
+      baselineAnnual: baselineEmailRevenue,
+      baselineMonthly: baselineEmailRevenue != null ? baselineEmailRevenue / 12 : null,
+      baselineWeekly: baselineEmailRevenue != null ? baselineEmailRevenue / 52 : null,
     },
     categories,
     breakdown,
