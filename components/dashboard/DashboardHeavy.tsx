@@ -521,6 +521,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         let cancelled = false;
         (async () => {
             setIsInitialLoading(true);
+            setInitialLoadComplete(false);
             try {
                 (dm as any).clearAllData?.();
             } catch { /* ignore */ }
@@ -729,7 +730,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const ALL_CAMPAIGNS = useMemo(() => dm.getCampaigns(), [dm, dataVersion]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const ALL_FLOWS = useMemo(() => dm.getFlowEmails(), [dm, dataVersion]);
-    const hasData = ALL_CAMPAIGNS.length > 0 || ALL_FLOWS.length > 0;
+    const dataHydrated = useMemo(() => dm.hasRealData(), [dm, dataVersion]);
+    const hasData = dataHydrated;
     // Active account resolution
     const EFFECTIVE_ACCOUNT_ID = useMemo(
         () => (isAdmin ? (selectedAccountId || '') : (memberSelectedId || '')),
@@ -964,6 +966,19 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         }
         return flows;
     }, [ALL_FLOWS, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
+
+    useEffect(() => {
+        if (dataHydrated && !initialLoadComplete) {
+            setInitialLoadComplete(true);
+        }
+    }, [dataHydrated, initialLoadComplete]);
+
+    useEffect(() => {
+        if (!dataHydrated && !isInitialLoading && !initialLoadComplete) {
+            const timeout = setTimeout(() => setInitialLoadComplete(true), 2000);
+            return () => clearTimeout(timeout);
+        }
+    }, [dataHydrated, isInitialLoading, initialLoadComplete]);
 
     // Delayed loading of heavy flow components after main dashboard stabilizes
     useEffect(() => {
@@ -1238,7 +1253,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     // If admin and there are zero accounts, don't block UI with overlay after initial load
     const noAccounts = isAdmin && (allAccounts?.length === 0);
-    const showOverlay = isInitialLoading && !noAccounts && !blockDashboard;
+    const showOverlay = ((isInitialLoading || (!dataHydrated && !initialLoadComplete)) && !noAccounts && !blockDashboard);
 
     if (dashboardError) { return <div className="min-h-screen flex items-center justify-center p-6"><div className="max-w-md mx-auto text-center"><h2 className="text-lg font-semibold text-red-600 mb-4">Dashboard Error</h2><p className="text-gray-600 dark:text-gray-300 mb-6">{dashboardError}</p><div className="space-x-4"><button onClick={() => { setDashboardError(null); setDataVersion(v => v + 1); }} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Retry</button><button onClick={() => window.location.reload()} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Reload Page</button></div></div></div>; }
 
