@@ -551,8 +551,8 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                                 <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Correlation</div>
                                 <AutoFitText
                                     text={labelText}
-                                    className={`w-full ${colorClass}`}
-                                    maxPx={24}
+                                    className={`w-full font-semibold whitespace-nowrap ${colorClass}`}
+                                    maxPx={22}
                                     minPx={14}
                                     stepPx={1}
                                 />
