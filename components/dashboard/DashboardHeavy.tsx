@@ -17,6 +17,7 @@ import DataCoverageNotice from './DataCoverageNotice';
 import CampaignSendFrequency from './CampaignSendFrequency';
 import AudienceSizePerformance from './AudienceSizePerformance';
 import CampaignGapsAndLosses from './CampaignGapsAndLosses';
+import { computeOpportunitySummary } from '../../lib/analytics/actionNotes';
 // Helper: map guidance cadence label to numeric recommendation for Day-of-Week note
 function deriveFrequencyRecommendation(g: any): number | undefined {
     if (!g || !g.cadenceLabel) return undefined;
@@ -47,6 +48,13 @@ function formatPercent(value: number) {
 }
 function formatNumber(value: number) { return Math.round(value).toLocaleString('en-US'); }
 // Compact currency removed per requirement; always show full US currency with 2 decimals
+
+const OPPORTUNITY_LABELS: Record<string, string> = {
+    campaignSendFrequency: 'Campaign Send Frequency',
+    audienceSizePerformance: 'Audience Size Performance',
+    campaignGapsLosses: 'Campaign Gaps & Losses',
+    deadWeightAudience: 'Dead Weight Audience',
+};
 
 // Consolidated data loading function to prevent race conditions
 async function loadAccountData(dm: any, accountId: string): Promise<boolean> {
@@ -218,6 +226,24 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [showKeyModal, setShowKeyModal] = useState(false);
     const [keyInput, setKeyInput] = useState('');
 
+    const opportunitySummary = useMemo(() => {
+        void dataVersion; // ensure recompute after data reload
+        return computeOpportunitySummary({
+            dateRange,
+            customFrom,
+            customTo,
+            granularity,
+        });
+    }, [dateRange, customFrom, customTo, granularity, dataVersion]);
+
+    const opportunityBreakdown = useMemo(() =>
+        opportunitySummary.notes.filter(note => {
+            const impact = note.estimatedImpact;
+            return impact && typeof impact.annual === 'number' && impact.annual > 0;
+        }),
+        [opportunitySummary]
+    );
+
     const activeAccountId = useMemo(() => (isAdmin ? (selectedAccountId || '') : (memberSelectedId || '')), [isAdmin, selectedAccountId, memberSelectedId]);
     const activeAccountLabel = useMemo(() => {
         if (isAdmin) {
@@ -365,7 +391,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             try {
                 const sessionResp = await supabase.auth.getSession();
                 const s = sessionResp.data.session;
-                const admin = s?.user?.app_metadata?.role === 'admin';
+                const adminMeta = s?.user?.app_metadata;
+                const admin = adminMeta?.role === 'admin' || adminMeta?.app_role === 'admin';
                 if (cancelled) return;
                 if (admin) {
                     setIsAdmin(true);
@@ -1260,8 +1287,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     <div className="relative">
                                         <SelectBase value={selectedAccountId} onChange={e => { const val = (e.target as HTMLSelectElement).value; setSelectedAccountId(val); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="w-full sm:w-auto text-sm" minWidthClass="sm:min-w-[240px]">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</SelectBase>
                                     </div>
-                                    {/* Export JSON hidden for now (admin) */}
-                                    <span className="hidden"><button onClick={handleExportJson} disabled={exportBusy || !selectedAccountId} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none disabled:opacity-60 disabled:cursor-not-allowed"><Share2 className="h-4 w-4" />{exportBusy ? 'Exporting…' : 'Export JSON'}</button></span>
+                                    <button
+                                        onClick={handleExportJson}
+                                        disabled={exportBusy || !selectedAccountId}
+                                        className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap leading-none disabled:opacity-60 disabled:cursor-not-allowed"
+                                    >
+                                        <Share2 className="h-4 w-4" />
+                                        {exportBusy ? 'Exporting…' : 'Export JSON'}
+                                    </button>
                                 </>)}
                                 <button
                                     type="button"
@@ -1275,6 +1308,38 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             </div>
                             {/* Status line removed per spec */}
                         </div>
+
+                        {opportunityBreakdown.length > 0 && (
+                            <div className="mt-4 rounded-xl border border-purple-100 dark:border-purple-900/40 bg-gradient-to-br from-purple-50 via-white to-white dark:from-purple-950/40 dark:via-gray-900 dark:to-gray-900 p-4 sm:p-5">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300">Estimated Gain (Conservative)</p>
+                                        <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-700 dark:text-gray-200">
+                                            <span><span className="font-semibold">Annual:</span> {formatCurrency(opportunitySummary.totals.annual)}</span>
+                                            <span><span className="font-semibold">Monthly:</span> {formatCurrency(opportunitySummary.totals.monthly)}</span>
+                                            <span><span className="font-semibold">Weekly:</span> {formatCurrency(opportunitySummary.totals.weekly)}</span>
+                                        </div>
+                                    </div>
+                                    <div className="sm:text-right text-sm text-gray-600 dark:text-gray-400">
+                                        <p className="font-semibold text-gray-900 dark:text-gray-100">Breakdown (per year)</p>
+                                        <ul className="mt-2 space-y-1 text-sm">
+                                            {opportunityBreakdown.map(note => {
+                                                const impact = note.estimatedImpact;
+                                                if (!impact || typeof impact.annual !== 'number') return null;
+                                                const label = OPPORTUNITY_LABELS[note.module] || note.module;
+                                                const tag = impact.type === 'savings' ? 'savings' : 'lift';
+                                                return (
+                                                    <li key={`${note.module}-${note.scope || 'default'}`} className="flex items-center justify-between gap-4">
+                                                        <span className="text-gray-700 dark:text-gray-300">{label}</span>
+                                                        <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(impact.annual)} / {tag}</span>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                     </div>
                     {/* Data Coverage & Age — only when an account is active */}

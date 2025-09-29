@@ -7,6 +7,8 @@ import { computeSubjectAnalysis } from "../analytics/subjectAnalysis";
 import { computeCampaignGapsAndLosses } from "../analytics/campaignGapsLosses";
 import type { AggregatedMetrics } from "../data/dataTypes";
 import { computeDeadWeightSavings } from "../analytics/deadWeightSavings";
+import { computeOpportunitySummary } from "../analytics/actionNotes";
+import type { ModuleActionNote } from "../analytics/actionNotes";
 
 export interface LlmExportJson {
   // Metadata about this export and helpful descriptions
@@ -241,6 +243,8 @@ export interface LlmExportJson {
     usedCustomPricingEstimate?: boolean;
     note?: string;
   };
+  actionNotes?: ModuleActionNote[];
+  opportunityTotals?: { weekly: number; monthly: number; annual: number };
 }
 
 type CorrelationValue = { r: number | null; n: number };
@@ -751,6 +755,18 @@ export async function buildLlmExportJson(params: {
         note,
       };
     }
+  } catch {}
+
+  // Action notes + opportunity summary
+  try {
+    const opportunities = computeOpportunitySummary({
+      dateRange,
+      customFrom,
+      customTo,
+      granularity,
+    });
+    json.actionNotes = opportunities.notes;
+    json.opportunityTotals = opportunities.totals;
   } catch {}
 
   // Campaign Performance by Send Frequency (lookback period as selected, not full-month trimmed)

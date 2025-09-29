@@ -69,6 +69,10 @@ interface AudienceGuidanceResult {
     title: string;
     message: string;
     sample: string | null;
+    baselineRange?: string;
+    targetRange?: string;
+    estimatedWeeklyGain?: number | null;
+    estimatedMonthlyGain?: number | null;
 }
 
 function niceRangeLabel(min: number, max: number) {
@@ -84,8 +88,8 @@ function niceRangeLabel(min: number, max: number) {
     return `${formatEmailsShort(a)}–${formatEmailsShort(b)}`;
 }
 
-function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; limited: boolean } {
-    if (!campaigns.length) return { buckets: [], limited: true };
+function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; limited: boolean; lookbackWeeks: number } {
+    if (!campaigns.length) return { buckets: [], limited: true, lookbackWeeks: 0 };
 
     const valid = campaigns.filter(c => typeof c.emailsSent === 'number' && c.emailsSent >= 0);
     const total = valid.length;
@@ -103,7 +107,7 @@ function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; li
     const sample = filtered.length;
     const limited = sample < 12; // display limited data notice
 
-    if (sample === 0) return { buckets: [], limited: true };
+    if (sample === 0) return { buckets: [], limited: true, lookbackWeeks: 0 };
 
     // Determine bucket boundaries: quantiles if sample >= 12, else linear
     const sorted = [...filtered].sort((a, b) => a.emailsSent - b.emailsSent);
@@ -186,7 +190,22 @@ function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; li
         };
     }).filter(b => b.campaigns.length > 0);
 
-    return { buckets, limited };
+    let minDate = Number.POSITIVE_INFINITY;
+    let maxDate = Number.NEGATIVE_INFINITY;
+    for (const c of filtered) {
+        if (!(c.sentDate instanceof Date)) continue;
+        const t = c.sentDate.getTime();
+        if (!Number.isFinite(t)) continue;
+        if (t < minDate) minDate = t;
+        if (t > maxDate) maxDate = t;
+    }
+    let lookbackWeeks = 0;
+    if (Number.isFinite(minDate) && Number.isFinite(maxDate) && maxDate >= minDate) {
+        const days = Math.max(1, Math.round((maxDate - minDate) / (1000 * 60 * 60 * 24))) + 1;
+        lookbackWeeks = Math.max(1, Math.round(days / 7));
+    }
+
+    return { buckets, limited, lookbackWeeks };
 }
 
 const AUDIENCE_MIN_TOTAL_CAMPAIGNS = 12;
@@ -202,8 +221,9 @@ const AUDIENCE_SPAM_ALERT = 0.3;
 const AUDIENCE_BOUNCE_ALERT = 0.5;
 const AUDIENCE_OPEN_HEALTHY = 10;
 const AUDIENCE_CLICK_HEALTHY = 1;
+const AUDIENCE_CONSERVATIVE_FACTOR = 0.5;
 
-function computeAudienceSizeGuidance(buckets: Bucket[]): AudienceGuidanceResult | null {
+function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): AudienceGuidanceResult | null {
     if (!buckets.length) return null;
 
     const totalCampaigns = buckets.reduce((sum, b) => sum + b.campaigns.length, 0);
@@ -224,7 +244,13 @@ function computeAudienceSizeGuidance(buckets: Bucket[]): AudienceGuidanceResult 
 
     if (totalCampaigns < AUDIENCE_MIN_TOTAL_CAMPAIGNS || totalEmails < AUDIENCE_MIN_TOTAL_EMAILS) {
         const message = `This date range includes only ${totalCampaigns} ${pluralize('campaign', totalCampaigns)} across distinct audience sizes. Expand the range or keep sending before adjusting targeting.`;
-        return { title: 'Not enough data for a recommendation', message, sample: formatSample(totalCampaigns) };
+        return {
+            title: 'Not enough data for a recommendation',
+            message,
+            sample: formatSample(totalCampaigns),
+            estimatedWeeklyGain: null,
+            estimatedMonthlyGain: null,
+        };
     }
 
     const orderMap = (b: Bucket) => parseInt(b.key, 10);
@@ -233,7 +259,13 @@ function computeAudienceSizeGuidance(buckets: Bucket[]): AudienceGuidanceResult 
     const qualified = buckets.filter(b => b.campaigns.length >= AUDIENCE_MIN_BUCKET_CAMPAIGNS && b.sumEmails >= AUDIENCE_MIN_BUCKET_EMAILS);
     if (!qualified.length) {
         const message = 'Campaigns at each audience size are too sparse to compare. Gather more sends per size before changing targeting.';
-        return { title: 'Not enough data for a recommendation', message, sample: formatSample(totalCampaigns) };
+        return {
+            title: 'Not enough data for a recommendation',
+            message,
+            sample: formatSample(totalCampaigns),
+            estimatedWeeklyGain: null,
+            estimatedMonthlyGain: null,
+        };
     }
 
     const pickTopPerformer = () => {
@@ -248,7 +280,6 @@ function computeAudienceSizeGuidance(buckets: Bucket[]): AudienceGuidanceResult 
 
     const top = pickTopPerformer();
     if (!top) return null;
-    const topLabel = `${top.rangeLabel} recipients`; // still used in body copy (leave as-is)
     const headerRange = (label: string) => `${label} total recipients per campaign`;
     const topValue = top[metricKey] as number;
 
@@ -262,13 +293,32 @@ function computeAudienceSizeGuidance(buckets: Bucket[]): AudienceGuidanceResult 
         return { lift, openDelta, clickDelta, spamDelta, bounceDelta };
     };
 
+    const computeGain = (baseline: Bucket, target: Bucket): number | null => {
+        if (!lookbackWeeks || lookbackWeeks <= 0) return null;
+        const weeklyCampaigns = target.campaigns.length / lookbackWeeks;
+        if (!Number.isFinite(weeklyCampaigns) || weeklyCampaigns <= 0) return null;
+        const deltaPerCampaign = (target.avgCampaignRevenue - baseline.avgCampaignRevenue) * AUDIENCE_CONSERVATIVE_FACTOR;
+        if (!Number.isFinite(deltaPerCampaign)) return null;
+        const gain = deltaPerCampaign * weeklyCampaigns;
+        return gain > 0 ? gain : null;
+    };
+
     const safeTop = top.spamRate < AUDIENCE_SPAM_ALERT && top.bounceRate < AUDIENCE_BOUNCE_ALERT;
     const engagementSafeTop = top.openRate >= AUDIENCE_OPEN_HEALTHY && top.clickRate >= AUDIENCE_CLICK_HEALTHY;
 
     if (safeTop && engagementSafeTop) {
         const title = `Send campaigns to ${headerRange(top.rangeLabel)}`;
         const msg = `${top.rangeLabel} audiences generated the most revenue in this range while staying within deliverability guardrails. Scale targeting toward this size.`;
-        return { title, message: msg, sample: formatSample(undefined, top) };
+        const weeklyGain = computeGain(top, top);
+        return {
+            title,
+            message: msg,
+            sample: formatSample(undefined, top),
+            baselineRange: top.rangeLabel,
+            targetRange: top.rangeLabel,
+            estimatedWeeklyGain: weeklyGain,
+            estimatedMonthlyGain: weeklyGain != null ? weeklyGain * 4 : null,
+        };
     }
 
     const saferCandidates = qualified.filter(b => b !== top).sort((a, b) => (b[metricKey] as number) - (a[metricKey] as number));
@@ -280,13 +330,30 @@ function computeAudienceSizeGuidance(buckets: Bucket[]): AudienceGuidanceResult 
             const liftPct = formatDeltaPct((candidate[metricKey] as number - topValue) / topValue);
             const title = `Send campaigns to ${headerRange(candidate.rangeLabel)}`;
             const msg = `${candidate.rangeLabel} recipients deliver strong revenue with safer engagement (${liftPct} vs. the higher-risk ${top.rangeLabel} group). Focus here while improving deliverability.`;
-            return { title, message: msg, sample: formatSample(undefined, candidate, top) };
+            const weeklyGain = computeGain(top, candidate);
+            return {
+                title,
+                message: msg,
+                sample: formatSample(undefined, candidate, top),
+                baselineRange: top.rangeLabel,
+                targetRange: candidate.rangeLabel,
+                estimatedWeeklyGain: weeklyGain,
+                estimatedMonthlyGain: weeklyGain != null ? weeklyGain * 4 : null,
+            };
         }
     }
 
     const title = `Test ${headerRange(top.rangeLabel)}`;
     const msg = `Revenue peaks at ${top.rangeLabel} recipients, but engagement or deliverability need work. Run targeted tests and monitor spam/bounce closely before fully scaling.`;
-    return { title, message: msg, sample: formatSample(undefined, top) };
+    return {
+        title,
+        message: msg,
+        sample: formatSample(undefined, top),
+        baselineRange: top.rangeLabel,
+        targetRange: top.rangeLabel,
+        estimatedWeeklyGain: null,
+        estimatedMonthlyGain: null,
+    };
 }
 
 function ratioDelta(candidate: number, baseline: number) {
@@ -322,8 +389,8 @@ function pluralize(word: string, count: number) {
 export default function AudienceSizePerformance({ campaigns }: Props) {
     const [metric, setMetric] = useState<string>('avgCampaignRevenue');
 
-    const { buckets, limited } = useMemo(() => computeBuckets(campaigns || []), [campaigns]);
-    const guidance = useMemo(() => computeAudienceSizeGuidance(buckets), [buckets]);
+    const { buckets, limited, lookbackWeeks } = useMemo(() => computeBuckets(campaigns || []), [campaigns]);
+    const guidance = useMemo(() => computeAudienceSizeGuidance(buckets, lookbackWeeks), [buckets, lookbackWeeks]);
 
     if (!campaigns?.length) {
         return (
@@ -371,6 +438,11 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                 <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4 mb-6">
                     <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{guidance.title}</p>
                     <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{guidance.message}</p>
+                    {guidance.estimatedMonthlyGain != null && guidance.estimatedMonthlyGain > 0 && (
+                        <p className="mt-3 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                            ≈ {formatCurrency(guidance.estimatedMonthlyGain)} per month (conservative).
+                        </p>
+                    )}
                     {guidance.sample && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{guidance.sample}</p>}
                 </div>
             )}
