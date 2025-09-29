@@ -763,7 +763,6 @@ export async function buildLlmExportJson(params: {
       dateRange,
       customFrom,
       customTo,
-      granularity,
     });
     json.actionNotes = opportunities.notes;
     json.opportunityTotals = opportunities.totals;

@@ -52,7 +52,7 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 ### Section Containers
 - `.section-card`: Rounded card with border and padding.
 - `.section-header`: Title at left, controls at right.
-- Dashboard opportunity summary card: sits directly under the header row when gains are available. Use `rounded-xl` border with a subtle purple gradient (`from-purple-50 via-white to-white` light, `from-purple-950/40 via-gray-900 to-gray-900` dark). Padding `p-4 sm:p-5`. Totals row uses `text-xs font-semibold uppercase` label and `text-sm` values separated by 24px gaps. Breakdown list aligns right on desktop with `text-sm`, showing `{formatCurrency(value)} / {lift|savings}` in `font-medium`.
+- Dashboard opportunity summary card (admin only): sits directly under the header row when gains are available. Use `rounded-xl` border with a subtle purple gradient (`from-purple-50 via-white to-white` light, `from-purple-950/40 via-gray-900 to-gray-900` dark). Padding `p-4 sm:p-5`. Totals row uses `text-xs font-semibold uppercase` label and `text-sm` values separated by 24px gaps. Breakdown list aligns right on desktop with `text-sm`, showing `{formatCurrency(value)} / {lift|savings}` in `font-medium`.
 ### Empty states (standardized)
 - Use a dashed border card when a module is gated by view/range or has no sufficient data for the section:
   - Container: `rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-10 bg-white dark:bg-gray-900`

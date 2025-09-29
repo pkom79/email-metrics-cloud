@@ -51,8 +51,9 @@ function formatNumber(value: number) { return Math.round(value).toLocaleString('
 
 const OPPORTUNITY_LABELS: Record<string, string> = {
     campaignSendFrequency: 'Campaign Send Frequency',
-    audienceSizePerformance: 'Audience Size Performance',
+    audienceSizePerformance: 'Campaign Performance by Audience Size',
     campaignGapsLosses: 'Campaign Gaps & Losses',
+    flowStepAnalysis: 'Flow Step Analysis',
     deadWeightAudience: 'Dead Weight Audience',
 };
 
@@ -230,14 +231,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [keyInput, setKeyInput] = useState('');
 
     const opportunitySummary = useMemo(() => {
-        void dataVersion; // ensure recompute after data reload
         return computeOpportunitySummary({
             dateRange,
             customFrom,
             customTo,
-            granularity,
         });
-    }, [dateRange, customFrom, customTo, granularity, dataVersion]);
+    }, [dateRange, customFrom, customTo, dataVersion]);
 
     const opportunityBreakdown = useMemo(() =>
         opportunitySummary.notes.filter(note => {
@@ -1363,11 +1362,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             {/* Status line removed per spec */}
                         </div>
 
-                        {opportunityBreakdown.length > 0 && (
+                        {isAdmin && opportunityBreakdown.length > 0 && (
                             <div className="mt-4 rounded-xl border border-purple-100 dark:border-purple-900/40 bg-gradient-to-br from-purple-50 via-white to-white dark:from-purple-950/40 dark:via-gray-900 dark:to-gray-900 p-4 sm:p-5">
                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                     <div>
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300">Estimated Gain (Conservative)</p>
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300">Estimated Gain</p>
                                         <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-700 dark:text-gray-200">
                                             <span><span className="font-semibold">Annual:</span> {formatCurrency(opportunitySummary.totals.annual)}</span>
                                             <span><span className="font-semibold">Monthly:</span> {formatCurrency(opportunitySummary.totals.monthly)}</span>
@@ -1380,7 +1379,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                             {opportunityBreakdown.map(note => {
                                                 const impact = note.estimatedImpact;
                                                 if (!impact || typeof impact.annual !== 'number') return null;
-                                                const label = OPPORTUNITY_LABELS[note.module] || note.module;
+                                                const baseLabel = OPPORTUNITY_LABELS[note.module] || note.module;
+                                                const label = note.scope ? `${baseLabel} – ${note.scope}` : baseLabel;
                                                 const tag = impact.type === 'savings' ? 'savings' : 'lift';
                                                 return (
                                                     <li key={`${note.module}-${note.scope || 'default'}`} className="flex items-center justify-between gap-4">

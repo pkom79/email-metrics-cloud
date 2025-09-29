@@ -241,7 +241,7 @@ export default function CampaignSendFrequency({ campaigns, onGuidance }: Props) 
                     <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{guidance.message}</p>
                     {guidance.estimatedMonthlyGain != null && guidance.estimatedMonthlyGain > 0 && (
                         <p className="mt-3 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                            ≈ {formatCurrency(guidance.estimatedMonthlyGain)} per month (conservative).
+                            Monthly revenue could increase by an estimated {formatCurrency(guidance.estimatedMonthlyGain)} with optimized send frequency.
                         </p>
                     )}
                     {guidance.sample && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{guidance.sample}</p>}

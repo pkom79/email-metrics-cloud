@@ -1,6 +1,6 @@
 import type { FrequencyBucketAggregate } from "./campaignSendFrequency";
 import type { SendVolumeGuidanceResult } from "./sendVolumeGuidance";
-import type { ProcessedCampaign } from "../data/dataTypes";
+import type { ProcessedCampaign, ProcessedFlowEmail } from "../data/dataTypes";
 import { computeCampaignSendFrequency } from "./campaignSendFrequency";
 import { computeAudienceSizeBuckets } from "./audienceSizeBuckets";
 import type { AudienceSizeBucket } from "./audienceSizeBuckets";
@@ -45,6 +45,9 @@ export interface ModuleActionNote {
 }
 
 const CONSERVATIVE_FACTOR = 0.5; // halve theoretical uplifts when extrapolating
+const FLOW_ADD_STEP_CONSERVATIVE_SHARE = 0.5;
+const FLOW_MIN_TOTAL_SENDS = 2000;
+const FLOW_MIN_STEP_EMAILS = 250;
 
 const weeksToMonthly = (weekly: number) => weekly * 4; // conservative 4 weeks/month
 const weeksToAnnual = (weekly: number) => weekly * 52;
@@ -462,6 +465,446 @@ export function buildAudienceSizeNote(params: {
 }
 
 // ------------------------------
+// Flow Step Analysis (Add Step)
+// ------------------------------
+
+type FlowStepMetric = {
+  sequencePosition: number;
+  emailName?: string;
+  emailsSent: number;
+  revenue: number;
+  openRate: number;
+  clickRate: number;
+  clickToOpenRate: number;
+  conversionRate: number;
+  unsubscribeRate: number;
+  avgOrderValue: number;
+  bounceRate: number;
+  spamRate: number;
+  revenuePerEmail: number;
+  totalOrders: number;
+  totalClicks: number;
+};
+
+type FlowStepScoreResult = {
+  score: number;
+  volumeInsufficient: boolean;
+  notes: string[];
+  pillars: {
+    money: { points: number; ri: number; riPts: number; storeSharePts: number; storeShare: number };
+    deliverability: { points: number; base: number; lowVolumeAdjusted: boolean; riskHigh: boolean };
+    confidence: { points: number };
+  };
+  baselines: { flowRevenueTotal: number; storeRevenueTotal: number };
+};
+
+type FlowStepScoreContext = {
+  results: FlowStepScoreResult[];
+  context: { s1Sends: number; storeRevenueTotal: number; accountSendsTotal: number };
+};
+
+function buildFlowStepMetricsForNotes(
+  flowName: string,
+  flowEmails: ProcessedFlowEmail[],
+  sequenceInfo: any
+): FlowStepMetric[] {
+  if (!sequenceInfo) return [];
+  const metrics: FlowStepMetric[] = [];
+
+  for (let idx = 0; idx < (sequenceInfo.sequenceLength || 0); idx++) {
+    const stepIndex = idx + 1;
+    const messageId = sequenceInfo.messageIds?.[idx];
+    let stepEmails = flowEmails.filter((email) => email.flowName === flowName && email.flowMessageId === messageId);
+    if (!stepEmails.length) {
+      stepEmails = flowEmails.filter((email) => email.flowName === flowName && Number(email.sequencePosition) === stepIndex);
+    }
+
+    if (!stepEmails.length) {
+      metrics.push({
+        sequencePosition: stepIndex,
+        emailName: sequenceInfo.emailNames?.[idx] || `Step ${stepIndex}`,
+        emailsSent: 0,
+        revenue: 0,
+        openRate: 0,
+        clickRate: 0,
+        clickToOpenRate: 0,
+        conversionRate: 0,
+        unsubscribeRate: 0,
+        avgOrderValue: 0,
+        bounceRate: 0,
+        spamRate: 0,
+        revenuePerEmail: 0,
+        totalOrders: 0,
+        totalClicks: 0,
+      });
+      continue;
+    }
+
+    const totalEmails = stepEmails.reduce((sum, email) => sum + (email.emailsSent || 0), 0);
+    const totalRevenue = stepEmails.reduce((sum, email) => sum + (email.revenue || 0), 0);
+    const totalOrders = stepEmails.reduce((sum, email) => sum + (email.totalOrders || 0), 0);
+    const totalOpens = stepEmails.reduce((sum, email) => sum + (email.uniqueOpens || 0), 0);
+    const totalClicks = stepEmails.reduce((sum, email) => sum + (email.uniqueClicks || 0), 0);
+    const totalUnsubs = stepEmails.reduce((sum, email) => sum + (email.unsubscribesCount || 0), 0);
+    const totalBounces = stepEmails.reduce((sum, email) => sum + (email.bouncesCount || 0), 0);
+    const totalSpam = stepEmails.reduce((sum, email) => sum + (email.spamComplaintsCount || 0), 0);
+
+    const openRate = totalEmails > 0 ? (totalOpens / totalEmails) * 100 : 0;
+    const clickRate = totalEmails > 0 ? (totalClicks / totalEmails) * 100 : 0;
+    const clickToOpenRate = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0;
+    const conversionRate = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0;
+    const unsubscribeRate = totalEmails > 0 ? (totalUnsubs / totalEmails) * 100 : 0;
+    const bounceRate = totalEmails > 0 ? (totalBounces / totalEmails) * 100 : 0;
+    const spamRate = totalEmails > 0 ? (totalSpam / totalEmails) * 100 : 0;
+    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    const revenuePerEmail = totalEmails > 0 ? totalRevenue / totalEmails : 0;
+
+    const emailName = sequenceInfo.emailNames?.[idx]
+      || stepEmails[stepEmails.length - 1]?.emailName
+      || `Step ${stepIndex}`;
+
+    metrics.push({
+      sequencePosition: stepIndex,
+      emailName,
+      emailsSent: totalEmails,
+      revenue: totalRevenue,
+      openRate,
+      clickRate,
+      clickToOpenRate,
+      conversionRate,
+      unsubscribeRate,
+      avgOrderValue,
+      bounceRate,
+      spamRate,
+      revenuePerEmail,
+      totalOrders,
+      totalClicks,
+    });
+  }
+
+  return metrics;
+}
+
+function computeFlowStepScoresForNotes(
+  flowStepMetrics: FlowStepMetric[],
+  dm: DataManager,
+  dateRange: string,
+  customFrom?: string,
+  customTo?: string
+): FlowStepScoreContext {
+  if (!flowStepMetrics.length) {
+    return { results: [], context: { s1Sends: 0, storeRevenueTotal: 0, accountSendsTotal: 0 } };
+  }
+
+  const s1Sends = flowStepMetrics[0]?.emailsSent || 0;
+  const flowRevenueTotal = flowStepMetrics.reduce((sum, s) => sum + (s.revenue || 0), 0);
+  const totalFlowSendsInWindow = flowStepMetrics.reduce((sum, s) => sum + (s.emailsSent || 0), 0);
+
+  const resolved = dm.getResolvedDateRange(dateRange, customFrom, customTo);
+  const start = resolved?.startDate ?? new Date(0);
+  const end = resolved?.endDate ?? new Date();
+  const accountAgg = dm.getAggregatedMetricsForPeriod(dm.getCampaigns(), dm.getFlowEmails(), start, end);
+  const storeRevenueTotal = accountAgg.totalRevenue || 0;
+  const accountSendsTotal = accountAgg.emailsSent || 0;
+
+  const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
+
+  const storeShareToPoints = (share: number): number => {
+    if (!isFinite(share) || share <= 0) return 5;
+    const pct = share * 100;
+    if (pct >= 5) return 35;
+    if (pct >= 3) return 30;
+    if (pct >= 2) return 25;
+    if (pct >= 1) return 20;
+    if (pct >= 0.5) return 15;
+    if (pct >= 0.25) return 10;
+    return 5;
+  };
+
+  const rpesForBaseline = flowStepMetrics
+    .filter((s) => (s.emailsSent || 0) > 0)
+    .map((s) => {
+      const emails = s.emailsSent || 0;
+      const revenue = s.revenue || 0;
+      return emails > 0 ? revenue / emails : 0;
+    })
+    .filter((v) => isFinite(v) && v >= 0)
+    .sort((a, b) => a - b);
+
+  const midIndex = Math.floor(rpesForBaseline.length / 2);
+  let medianRPE = rpesForBaseline.length
+    ? (rpesForBaseline.length % 2 === 0
+        ? (rpesForBaseline[midIndex - 1] + rpesForBaseline[midIndex]) / 2
+        : rpesForBaseline[midIndex])
+    : 0;
+
+  if (flowStepMetrics.length === 1) {
+    try {
+      const flowsOnlyAgg = dm.getAggregatedMetricsForPeriod([], dm.getFlowEmails(), start, end);
+      medianRPE = flowsOnlyAgg.revenuePerEmail || medianRPE;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const results: FlowStepScoreResult[] = [];
+
+  flowStepMetrics.forEach((s) => {
+    const emailsSent = s.emailsSent || 0;
+    const volumeSufficient = emailsSent >= FLOW_MIN_STEP_EMAILS;
+    const notes: string[] = [];
+    const clampScore = (val: number, max: number) => clamp(val, 0, max);
+
+    const rpe = emailsSent > 0 ? (s.revenue || 0) / emailsSent : 0;
+    const riRaw = medianRPE > 0 ? rpe / medianRPE : 0;
+    const riClipped = clamp(riRaw, 0, 2.0);
+    const riPts = 35 * (riClipped / 2);
+    const storeShare = storeRevenueTotal > 0 ? (s.revenue / storeRevenueTotal) : 0;
+    const storeSharePts = clamp(storeShareToPoints(storeShare), 0, 35);
+    if (riClipped >= 1.4) notes.push('High Revenue Index');
+    if (storeRevenueTotal <= 0) notes.push('No store revenue in window');
+    const moneyPoints = clampScore(riPts + storeSharePts, 70);
+
+    const unsub = s.unsubscribeRate;
+    const spam = s.spamRate;
+    const bounce = s.bounceRate;
+    const openPct = s.openRate;
+    const clickPct = s.clickRate;
+
+    const spamPts = (() => {
+      if (spam < 0.05) return 7;
+      if (spam < 0.10) return 6;
+      if (spam < 0.20) return 3;
+      if (spam < 0.30) return 1;
+      return 0;
+    })();
+    const bouncePts = (() => {
+      if (bounce < 1.0) return 7;
+      if (bounce < 2.0) return 6;
+      if (bounce < 3.0) return 3;
+      if (bounce < 5.0) return 1;
+      return 0;
+    })();
+    const unsubPts = (() => {
+      if (unsub < 0.20) return 3;
+      if (unsub < 0.50) return 2.5;
+      if (unsub < 1.00) return 1;
+      return 0;
+    })();
+    const openPts = (() => {
+      if (openPct >= 30) return 2;
+      if (openPct >= 20) return 1;
+      return 0;
+    })();
+    const clickPts = (() => {
+      if (clickPct > 3) return 1;
+      if (clickPct >= 1) return 0.5;
+      return 0;
+    })();
+
+    const baseD = clamp(spamPts + bouncePts + unsubPts + openPts + clickPts, 0, 20);
+    const sendShareOfAccount = accountSendsTotal > 0 ? (emailsSent / accountSendsTotal) : 0;
+    const applyVolumeAdj = baseD < 15 && sendShareOfAccount > 0 && sendShareOfAccount < 0.005;
+    const volumeFactor = applyVolumeAdj ? (1 - (sendShareOfAccount / 0.005)) : 0;
+    const adjustedD = applyVolumeAdj ? (baseD + (20 - baseD) * volumeFactor) : baseD;
+    const lowVolumeAdjusted = applyVolumeAdj;
+    const deliverabilityPoints = clamp(adjustedD, 0, 20);
+
+    const scPoints = volumeSufficient ? clamp(Math.floor(emailsSent / 100), 0, 10) : 0;
+
+    const riskHigh = spam >= 0.30 || unsub > 1.0 || bounce >= 5.0 || openPct < 20 || clickPct < 1;
+    const highMoney = moneyPoints >= 55 || riClipped >= 1.4;
+    const lowMoney = moneyPoints <= 35;
+
+    let score = clamp(moneyPoints + deliverabilityPoints + scPoints, 0, 100);
+    let action: 'scale' | 'keep' | 'improve' | 'pause' | 'insufficient' = 'improve';
+    if (lowMoney && riskHigh) action = 'pause';
+    else if (riskHigh && highMoney) action = 'keep';
+    else if (score >= 75) action = 'scale';
+    else if (score >= 60) action = 'keep';
+    else if (score >= 40) action = 'improve';
+    else action = 'pause';
+
+    const flowShare = flowRevenueTotal > 0 ? (s.revenue / flowRevenueTotal) : 0;
+    if (!riskHigh && action === 'pause' && (s.revenue >= 5000 || flowShare >= 0.10)) {
+      action = 'keep';
+      notes.push('High revenue guardrail');
+    }
+
+    if (!volumeSufficient) {
+      action = 'insufficient';
+      notes.push('Needs ≥250 sends for reliable read');
+    }
+
+    results.push({
+      score,
+      volumeInsufficient: !volumeSufficient,
+      notes,
+      pillars: {
+        money: { points: moneyPoints, ri: riClipped, riPts, storeSharePts, storeShare },
+        deliverability: { points: deliverabilityPoints, base: baseD, lowVolumeAdjusted, riskHigh },
+        confidence: { points: scPoints },
+      },
+      baselines: { flowRevenueTotal, storeRevenueTotal },
+    });
+  });
+
+  return {
+    results,
+    context: { s1Sends, storeRevenueTotal, accountSendsTotal },
+  };
+}
+
+function computeAddStepSuggestionForNotes(
+  flowStepMetrics: FlowStepMetric[],
+  scoreContext: FlowStepScoreContext,
+  dm: DataManager,
+  dateRange: string,
+  customFrom?: string,
+  customTo?: string
+) {
+  if (!flowStepMetrics.length) return null;
+
+  const totalFlowSends = flowStepMetrics.reduce((sum, s) => sum + (s.emailsSent || 0), 0);
+  if (totalFlowSends < FLOW_MIN_TOTAL_SENDS) return null;
+
+  const lastIdx = flowStepMetrics.length - 1;
+  const last = flowStepMetrics[lastIdx];
+  const s1Sends = scoreContext.context.s1Sends;
+  const lastRes = scoreContext.results[lastIdx];
+  const lastScoreVal = Number(lastRes?.score) || 0;
+  const volumeOk = last.emailsSent >= Math.max(FLOW_MIN_STEP_EMAILS, Math.round(0.05 * s1Sends));
+
+  const rpesAll = flowStepMetrics
+    .map((s) => s.revenuePerEmail)
+    .filter((v) => isFinite(v) && v >= 0)
+    .sort((a, b) => a - b);
+  const rpeMedian = rpesAll.length
+    ? (rpesAll.length % 2
+        ? rpesAll[(rpesAll.length - 1) / 2]
+        : (rpesAll[rpesAll.length / 2 - 1] + rpesAll[rpesAll.length / 2]) / 2)
+    : last.revenuePerEmail;
+
+  const prev = lastIdx > 0 ? flowStepMetrics[lastIdx - 1] : null;
+  const deltaRpeOk = prev ? (last.revenuePerEmail - prev.revenuePerEmail) >= 0 : true;
+  const lastStepRevenue = last.revenue || 0;
+  const flowRevenue = flowStepMetrics.reduce((sum, s) => sum + (s.revenue || 0), 0);
+  const lastRevenuePct = flowRevenue > 0 ? (lastStepRevenue / flowRevenue) * 100 : 0;
+  const absoluteRevenueOk = lastStepRevenue >= 500 || lastRevenuePct >= 5;
+
+  const lastEmailDate = dm.getLastEmailDate();
+  const endsAtLast = dateRange === 'custom'
+    ? (customTo ? new Date(customTo).toDateString() === lastEmailDate.toDateString() : false)
+    : true;
+  const resolved = dm.getResolvedDateRange(dateRange, customFrom, customTo);
+  const days = resolved ? Math.max(1, Math.ceil((resolved.endDate.getTime() - resolved.startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1) : 0;
+  const isRecentWindow = endsAtLast;
+
+  const rpeOk = last.revenuePerEmail >= rpeMedian;
+  const suggested = lastScoreVal >= 75 && rpeOk && deltaRpeOk && volumeOk && absoluteRevenueOk && isRecentWindow;
+
+  if (!suggested) return null;
+
+  const rpes = flowStepMetrics
+    .map((s) => s.revenuePerEmail)
+    .filter((v) => isFinite(v) && v >= 0)
+    .sort((a, b) => a - b);
+  const idx = rpes.length ? Math.floor(0.25 * (rpes.length - 1)) : 0;
+  let floor = rpes.length ? rpes[idx] : last.revenuePerEmail;
+  if (!isFinite(floor)) floor = last.revenuePerEmail;
+  const rpeFloor = Math.min(floor, last.revenuePerEmail);
+  const projectedReach = Math.round(last.emailsSent * FLOW_ADD_STEP_CONSERVATIVE_SHARE);
+  const estimatedRevenue = Math.round(projectedReach * rpeFloor * 100) / 100;
+
+  const reason = flowStepMetrics.length === 1
+    ? 'Strong RPE and healthy deliverability'
+    : `Step ${last.sequencePosition} is performing well; a follow-up could add value`;
+
+  return {
+    suggested: true,
+    reason,
+    horizonDays: isRecentWindow ? days : undefined,
+    estimate: {
+      projectedReach,
+      rpeFloor,
+      estimatedRevenue,
+    },
+    lastStepLabel: last.emailName || `Step ${last.sequencePosition}`,
+  };
+}
+
+export function buildFlowAddStepNotes(params: {
+  dateRange: string;
+  customFrom?: string;
+  customTo?: string;
+}): ModuleActionNote[] {
+  const dm = DataManager.getInstance();
+  const resolved = dm.getResolvedDateRange(params.dateRange, params.customFrom, params.customTo);
+  const start = resolved?.startDate ?? null;
+  const end = resolved?.endDate ?? null;
+
+  const flowsAll = dm
+    .getFlowEmails()
+    .filter((email) => (email.status || '').toLowerCase() === 'live');
+
+  const flowGroups = new Map<string, ProcessedFlowEmail[]>();
+  for (const email of flowsAll) {
+    if (!email.flowName) continue;
+    const sentDate = email.sentDate instanceof Date ? email.sentDate : new Date(email.sentDate);
+    if (start && sentDate < start) continue;
+    if (end && sentDate > end) continue;
+    const arr = flowGroups.get(email.flowName) || [];
+    arr.push(email);
+    flowGroups.set(email.flowName, arr);
+  }
+
+  const MS_PER_DAY = 1000 * 60 * 60 * 24;
+  const notes: ModuleActionNote[] = [];
+
+  for (const [flowName, emails] of flowGroups.entries()) {
+    if (!emails.length) continue;
+    const sequenceInfo = dm.getFlowSequenceInfo(flowName);
+    if (!sequenceInfo) continue;
+
+    const metrics = buildFlowStepMetricsForNotes(flowName, emails, sequenceInfo);
+    const totalFlowSends = metrics.reduce((sum, m) => sum + (m.emailsSent || 0), 0);
+    if (!metrics.length || totalFlowSends < FLOW_MIN_TOTAL_SENDS) continue;
+
+    const scoreContext = computeFlowStepScoresForNotes(metrics, dm, params.dateRange, params.customFrom, params.customTo);
+    const suggestion = computeAddStepSuggestionForNotes(metrics, scoreContext, dm, params.dateRange, params.customFrom, params.customTo);
+    if (!suggestion || !suggestion.estimate?.estimatedRevenue) continue;
+
+    const rangeStart = start ? start : new Date(Math.min(...emails.map((e) => (e.sentDate instanceof Date ? e.sentDate.getTime() : new Date(e.sentDate).getTime()))));
+    const rangeEnd = end ? end : new Date(Math.max(...emails.map((e) => (e.sentDate instanceof Date ? e.sentDate.getTime() : new Date(e.sentDate).getTime()))));
+    const days = Math.max(1, Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / MS_PER_DAY) + 1);
+    const weeksObserved = Math.max(1, days / 7);
+    const weeklyGain = suggestion.estimate.estimatedRevenue / weeksObserved;
+    if (!Number.isFinite(weeklyGain) || weeklyGain <= 0) continue;
+
+    const noteImpact = makeEstimate(weeklyGain, "increase", "Estimated revenue from extending this flow", `Flow: ${flowName}`);
+    if (!noteImpact) continue;
+
+    const sample = `Based on ${totalFlowSends.toLocaleString('en-US')} emails in ${flowName} during the selected range.`;
+
+    notes.push({
+      module: "flowStepAnalysis",
+      scope: flowName,
+      title: `Add a follow-up to ${flowName}`,
+      message: suggestion.reason,
+      sample,
+      estimatedImpact: noteImpact,
+      metadata: {
+        flowName,
+        weeklyGain,
+        lastStepLabel: suggestion.lastStepLabel,
+      },
+    });
+  }
+
+  return notes;
+}
+
+// ------------------------------
 // Campaign Gaps & Losses
 // ------------------------------
 
@@ -516,32 +959,48 @@ export function buildCampaignGapsNote(params: {
     };
   }
 
-  const lost = sanitizeCurrency(result.estimatedLostRevenue) ?? 0;
-  const weeklyDelta = result.weeksInRangeFull
-    ? (lost / Math.max(1, result.zeroCampaignSendWeeks)) * CONSERVATIVE_FACTOR
-    : lost * CONSERVATIVE_FACTOR;
+  const baseLost = sanitizeCurrency(result.estimatedLostRevenue) ?? 0;
+  const MS_PER_DAY = 1000 * 60 * 60 * 24;
+  const rangeDays = Math.max(1, Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / MS_PER_DAY) + 1);
+  const coverageWeeks = result.weeksWithCampaignsSent || 0;
+  const coverageFactor = result.weeksInRangeFull > 0 ? coverageWeeks / result.weeksInRangeFull : 0;
+  const rangeFactor = rangeDays > 0 ? 365 / Math.min(rangeDays, 365) : 1;
+  const adjustedLost = baseLost * rangeFactor * Math.max(0, coverageFactor);
+  const annualEstimate = roundCurrency(adjustedLost);
+  const monthlyEstimate = annualEstimate != null ? roundCurrency((annualEstimate || 0) / 12) : null;
+  const weeklyEstimate = annualEstimate != null ? roundCurrency((annualEstimate || 0) / 52) : null;
+
+  const currencyFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+  const annualDisplay = annualEstimate != null ? currencyFormatter.format(annualEstimate) : null;
 
   return {
     module: "campaignGapsLosses",
     title: `Fill ${result.zeroCampaignSendWeeks.toLocaleString()} missed ${
       result.zeroCampaignSendWeeks === 1 ? "week" : "weeks"
     } to claw back revenue`,
-    message: lost
+    message: annualDisplay
       ? `Skipping ${result.zeroCampaignSendWeeks} ${
           result.zeroCampaignSendWeeks === 1 ? "week" : "weeks"
-        } cost an estimated $${Math.round(lost).toLocaleString()}. Build a backup send to protect that revenue.`
+        } could be costing roughly ${annualDisplay} per year. Build a backup send to protect that revenue.`
       : `Skipping ${result.zeroCampaignSendWeeks} ${
           result.zeroCampaignSendWeeks === 1 ? "week" : "weeks"
-        } likely cost meaningful revenue. Build a backup send to protect that revenue.`,
+        } likely costs meaningful revenue. Build a backup send to protect that revenue.`,
     sample,
-    estimatedImpact: makeEstimate(
-      weeklyDelta,
-      "increase",
-      "Estimated revenue recovered by eliminating zero-send weeks",
-      `${result.weeksInRangeFull} full weeks analysed`
-    ),
+    estimatedImpact: annualEstimate != null
+      ? {
+          weekly: weeklyEstimate,
+          monthly: monthlyEstimate,
+          annual: annualEstimate,
+          type: "increase",
+          description: "Estimated revenue recovered by eliminating zero-send weeks",
+          basis: `${Math.min(rangeDays, 365)} days analysed`,
+        }
+      : null,
     metadata: {
-      estimatedLostRevenue: lost,
+      estimatedLostRevenue: baseLost,
+      adjustedLost: annualEstimate,
+      coverageFactor,
+      rangeFactor,
     },
   };
 }
@@ -648,7 +1107,6 @@ export function computeOpportunitySummary(params: {
   dateRange: string;
   customFrom?: string;
   customTo?: string;
-  granularity?: "daily" | "weekly" | "monthly";
 }): OpportunitySummary {
   const dm = DataManager.getInstance();
   const campaigns = dm.getCampaigns();
@@ -688,6 +1146,13 @@ export function computeOpportunitySummary(params: {
       })
     );
   }
+
+  // Flow Step Analysis opportunities
+  notes.push(...buildFlowAddStepNotes({
+    dateRange: params.dateRange,
+    customFrom: params.customFrom,
+    customTo: params.customTo,
+  }));
 
   // Dead-Weight Audience
   const deadWeightNote = buildDeadWeightNote();
