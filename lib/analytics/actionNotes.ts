@@ -363,28 +363,20 @@ export function buildSendFrequencyNote(params: {
   const buckets = computeCampaignSendFrequency(campaigns);
   const { note, baseline, target } = pickFrequencyLift(buckets);
 
-  const estimatedImpact = (() => {
+  const weeklyDelta = (() => {
     if (note.status !== "send-more" || !baseline || !target) return null;
 
-    const weeklyDeltaRaw =
-      (target.avgWeeklyRevenue - baseline.avgWeeklyRevenue) * CONSERVATIVE_FACTOR;
-    if (!weeklyDeltaRaw || weeklyDeltaRaw <= 0) return null;
-
-    const estimate = makeEstimate(
-      weeklyDeltaRaw,
-      "increase",
-      "Estimated incremental revenue from adopting recommended cadence",
-      `${weeksInRange} weeks analysed`
-    );
-
-    if (!estimate?.monthly || estimate.monthly < MIN_OPPORTUNITY_MONTHLY_GAIN) {
-      return null;
-    }
-
-    return estimate;
+    const delta = (target.avgWeeklyRevenue - baseline.avgWeeklyRevenue) * CONSERVATIVE_FACTOR;
+    return delta > 0 ? delta : null;
   })();
 
-  note.estimatedImpact = estimatedImpact;
+  note.metadata = {
+    ...(note.metadata || {}),
+    weeksAnalysed: weeksInRange,
+    weeklyDelta,
+  };
+
+  note.estimatedImpact = null;
 
   return note;
 }
@@ -1066,6 +1058,9 @@ export function buildCampaignGapsNote(params: {
       adjustedLost: annualEstimate,
       coverageFactor,
       rangeFactor,
+      zeroCampaignSendWeeks: result.zeroCampaignSendWeeks,
+      weeksInRangeFull: result.weeksInRangeFull,
+      weeksWithCampaignsSent: result.weeksWithCampaignsSent,
     },
   };
 }
@@ -1236,6 +1231,75 @@ export function computeOpportunitySummary(params: {
 
   const collectedNotes: ModuleActionNote[] = [];
 
+  const applySendFrequencyAdjustment = (gapMetadata?: Record<string, unknown>) => {
+    const frequencyNote = collectedNotes.find((n) => n.module === "campaignSendFrequency");
+    if (!frequencyNote) return;
+
+    const meta: Record<string, unknown> = {
+      ...(frequencyNote.metadata || {}),
+    };
+    const weeklyDeltaValue = meta["weeklyDelta"];
+    const weeklyDelta = typeof weeklyDeltaValue === "number" ? weeklyDeltaValue : null;
+    if (weeklyDelta == null || weeklyDelta <= 0) {
+      frequencyNote.estimatedImpact = null;
+      return;
+    }
+
+    const zeroWeeksRaw = gapMetadata && typeof gapMetadata["zeroCampaignSendWeeks"] === "number"
+      ? (gapMetadata["zeroCampaignSendWeeks"] as number)
+      : 0;
+    const zeroWeeks = Math.min(52, Math.max(0, Math.round(zeroWeeksRaw)));
+    const annualWeeks = Math.max(0, 52 - zeroWeeks);
+    if (annualWeeks <= 0) {
+      frequencyNote.estimatedImpact = null;
+      frequencyNote.metadata = {
+        ...meta,
+        adjustedAnnualWeeks: annualWeeks,
+        zeroCampaignSendWeeks: zeroWeeks,
+      };
+      return;
+    }
+
+    const rawAnnual = weeklyDelta * annualWeeks;
+    const rawMonthly = rawAnnual / 12;
+    const rawWeekly = rawAnnual / 52;
+    const annual = roundCurrency(rawAnnual);
+    const monthly = roundCurrency(rawMonthly);
+    const weekly = roundCurrency(rawWeekly);
+
+    if (annual == null || monthly == null || weekly == null || monthly < MIN_OPPORTUNITY_MONTHLY_GAIN) {
+      frequencyNote.estimatedImpact = null;
+      frequencyNote.metadata = { ...meta, adjustedAnnualWeeks: annualWeeks, zeroCampaignSendWeeks: zeroWeeks };
+      return;
+    }
+
+    const basisParts: string[] = [];
+    basisParts.push(`${annualWeeks} active week${annualWeeks === 1 ? "" : "s"} modelled`);
+    const analysedValue = meta["weeksAnalysed"];
+    if (typeof analysedValue === "number" && analysedValue > 0) {
+      const analysed = Math.round(analysedValue);
+      basisParts.push(`${analysed} observed week${analysed === 1 ? "" : "s"}`);
+    }
+    if (zeroWeeks > 0) {
+      basisParts.push(`${zeroWeeks} zero-send week${zeroWeeks === 1 ? "" : "s"} excluded`);
+    }
+
+    frequencyNote.estimatedImpact = {
+      weekly,
+      monthly,
+      annual,
+      type: "increase",
+      description: "Estimated incremental revenue from adopting recommended cadence",
+      basis: basisParts.join(" · ") || undefined,
+    };
+
+    frequencyNote.metadata = {
+      ...meta,
+      adjustedAnnualWeeks: annualWeeks,
+      zeroCampaignSendWeeks: zeroWeeks,
+    };
+  };
+
   if (campaignsInRange.length) {
     collectedNotes.push(
       buildSendFrequencyNote({
@@ -1257,14 +1321,16 @@ export function computeOpportunitySummary(params: {
 
     const baselineFromIso = baselineStart.toISOString().slice(0, 10);
     const baselineToIso = baselineEnd.toISOString().slice(0, 10);
-    collectedNotes.push(
-      buildCampaignGapsNote({
+    const gapNote = buildCampaignGapsNote({
         campaigns: campaignsBaseline,
         dateRange: 'custom',
         customFrom: baselineFromIso,
         customTo: baselineToIso,
-      })
-    );
+      });
+    collectedNotes.push(gapNote);
+    applySendFrequencyAdjustment(gapNote.metadata as Record<string, unknown> | undefined);
+  } else {
+    applySendFrequencyAdjustment();
   }
 
   collectedNotes.push(
