@@ -1513,11 +1513,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                             const tagClass = isSavings
                                                 ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
                                                 : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300';
-                                            const baselineRatio = !isSavings && category.percentOfBaseline != null
-                                                ? category.percentOfBaseline - 100
+                                            const baselineShare = !isSavings && category.percentOfBaseline != null
+                                                ? category.percentOfBaseline
                                                 : null;
-                                            const baselineDeltaDisplay = baselineRatio != null
-                                                ? `${baselineRatio >= 0 ? '+' : ''}${formatPercent(baselineRatio)}`
+                                            const baselineShareDisplay = baselineShare != null
+                                                ? `+${formatPercent(baselineShare)}`
                                                 : null;
                                             const suppressedCount = metadata?.deadWeightCount != null ? formatNumber(Number(metadata.deadWeightCount)) : '—';
                                             const currentPlan = metadata?.currentMonthlyPrice != null ? formatCurrency(Number(metadata.currentMonthlyPrice)) : null;
@@ -1580,8 +1580,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                                             </div>
                                                             <div className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-300">
                                                                 <div>Share of total: {formatPercent(shareTotal)}</div>
-                                                                {!isSavings && baselineDeltaDisplay ? (
-                                                                    <div>Vs baseline: {baselineDeltaDisplay}</div>
+                                                                {!isSavings && baselineShareDisplay ? (
+                                                                    <div>Adds {baselineShareDisplay} vs baseline</div>
                                                                 ) : null}
                                                             </div>
                                                             {isSavings ? (
