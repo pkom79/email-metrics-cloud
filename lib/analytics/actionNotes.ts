@@ -448,12 +448,14 @@ export function buildAudienceSizeNote(params: {
   );
   const { note, baseline, target } = pickAudienceSizeNote(context);
   if (baseline && target) {
-    const weeklyCampaigns = context.lookbackWeeks
+    const totalCampaigns = context.buckets.reduce((sum, b) => sum + (b.totalCampaigns || 0), 0);
+    const totalRevenue = context.buckets.reduce((sum, b) => sum + (b.totalRevenue || 0), 0);
+    const overallAvg = totalCampaigns > 0 ? totalRevenue / totalCampaigns : 0;
+    const weeklyCampaigns = context.lookbackWeeks > 0
       ? (target.totalCampaigns || 0) / context.lookbackWeeks
       : 0;
-    const deltaPerCampaign =
-      (target.avgCampaignRevenue - baseline.avgCampaignRevenue) * CONSERVATIVE_FACTOR;
-    const weeklyDelta = weeklyCampaigns > 0 ? deltaPerCampaign * weeklyCampaigns : 0;
+    const deltaPerCampaign = (target.avgCampaignRevenue - overallAvg) * CONSERVATIVE_FACTOR;
+    const weeklyDelta = weeklyCampaigns > 0 && deltaPerCampaign > 0 ? deltaPerCampaign * weeklyCampaigns : 0;
     note.estimatedImpact = makeEstimate(
       weeklyDelta,
       "increase",

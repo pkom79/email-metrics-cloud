@@ -228,6 +228,8 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
 
     const totalCampaigns = buckets.reduce((sum, b) => sum + b.campaigns.length, 0);
     const totalEmails = buckets.reduce((sum, b) => sum + b.sumEmails, 0);
+    const totalRevenue = buckets.reduce((sum, b) => sum + b.sumRevenue, 0);
+    const overallAvgCampaignRevenue = totalCampaigns > 0 ? totalRevenue / totalCampaigns : 0;
 
     const formatSample = (override?: number, a?: Bucket | null, b?: Bucket | null) => {
         let count: number;
@@ -293,12 +295,12 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
         return { lift, openDelta, clickDelta, spamDelta, bounceDelta };
     };
 
-    const computeGain = (baseline: Bucket, target: Bucket): number | null => {
+    const computeGain = (target: Bucket): number | null => {
         if (!lookbackWeeks || lookbackWeeks <= 0) return null;
         const weeklyCampaigns = target.campaigns.length / lookbackWeeks;
         if (!Number.isFinite(weeklyCampaigns) || weeklyCampaigns <= 0) return null;
-        const deltaPerCampaign = (target.avgCampaignRevenue - baseline.avgCampaignRevenue) * AUDIENCE_CONSERVATIVE_FACTOR;
-        if (!Number.isFinite(deltaPerCampaign)) return null;
+        const deltaPerCampaign = (target.avgCampaignRevenue - overallAvgCampaignRevenue) * AUDIENCE_CONSERVATIVE_FACTOR;
+        if (!Number.isFinite(deltaPerCampaign) || deltaPerCampaign <= 0) return null;
         const gain = deltaPerCampaign * weeklyCampaigns;
         return gain > 0 ? gain : null;
     };
@@ -309,7 +311,7 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
     if (safeTop && engagementSafeTop) {
         const title = `Send campaigns to ${headerRange(top.rangeLabel)}`;
         const msg = `${top.rangeLabel} audiences generated the most revenue in this range while staying within deliverability guardrails. Scale targeting toward this size.`;
-        const weeklyGain = computeGain(top, top);
+        const weeklyGain = computeGain(top);
         return {
             title,
             message: msg,
@@ -330,7 +332,7 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
             const liftPct = formatDeltaPct((candidate[metricKey] as number - topValue) / topValue);
             const title = `Send campaigns to ${headerRange(candidate.rangeLabel)}`;
             const msg = `${candidate.rangeLabel} recipients deliver strong revenue with safer engagement (${liftPct} vs. the higher-risk ${top.rangeLabel} group). Focus here while improving deliverability.`;
-            const weeklyGain = computeGain(top, candidate);
+            const weeklyGain = computeGain(candidate);
             return {
                 title,
                 message: msg,
