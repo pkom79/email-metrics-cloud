@@ -29,6 +29,12 @@ const ANNUAL_BENEFITS = [
     'Boost ROI with proven strategies at scale'
 ];
 
+const MONTHLY_PRICE = 19;
+const ANNUAL_PRICE = 99;
+const annualMonthlyEquivalent = MONTHLY_PRICE * 12;
+const annualSavingsValue = annualMonthlyEquivalent - ANNUAL_PRICE;
+const annualSavingsPercent = Math.round((annualSavingsValue / annualMonthlyEquivalent) * 100);
+
 export default function ModalPlans({ open, status, onClose, onSelect, onRefresh, busyPlan, error }: Props) {
     const overlayRef = useRef<HTMLDivElement | null>(null);
 
@@ -89,7 +95,7 @@ export default function ModalPlans({ open, status, onClose, onSelect, onRefresh,
             id: 'monthly' as PlanId,
             title: 'Monthly',
             pricePrimary: '$0 today',
-            priceSecondary: 'then $19 / month',
+            priceSecondary: `then $${MONTHLY_PRICE} / month`,
             tagline: 'Flexible access with no long-term commitment',
             benefits: MONTHLY_BENEFITS,
             buttonTone: 'violet',
@@ -100,12 +106,13 @@ export default function ModalPlans({ open, status, onClose, onSelect, onRefresh,
             id: 'annual' as PlanId,
             title: 'Annual',
             pricePrimary: '$0 today',
-            priceSecondary: 'then $199 / year',
+            priceSecondary: `then $${ANNUAL_PRICE} / year`,
             tagline: 'Lock in savings and maximize long-term growth',
             benefits: ANNUAL_BENEFITS,
             buttonTone: 'indigo',
             microcopy: 'Your card won’t be charged until the trial ends.',
-            highlight: true
+            highlight: true,
+            highlightLabel: `Best Value – Save ${annualSavingsPercent}% vs monthly`
         }
     ]), []);
 
@@ -150,7 +157,7 @@ export default function ModalPlans({ open, status, onClose, onSelect, onRefresh,
                                 <div className="min-h-[28px]">
                                     {plan.highlight ? (
                                         <div className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
-                                            Best Value – Save 12% vs monthly
+                                            {plan.highlightLabel ?? 'Best Value pricing'}
                                         </div>
                                     ) : null}
                                 </div>
