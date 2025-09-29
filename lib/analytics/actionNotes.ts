@@ -48,6 +48,7 @@ const CONSERVATIVE_FACTOR = 0.5; // halve theoretical uplifts when extrapolating
 const FLOW_ADD_STEP_CONSERVATIVE_SHARE = 0.5;
 const FLOW_MIN_TOTAL_SENDS = 2000;
 const FLOW_MIN_STEP_EMAILS = 250;
+const AUDIENCE_MIN_MONTHLY_GAIN = 500;
 
 const weeksToMonthly = (weekly: number) => weekly * 4; // conservative 4 weeks/month
 const weeksToAnnual = (weekly: number) => weekly * 52;
@@ -204,6 +205,7 @@ function pickFrequencyLift(
     return {
       note: {
         module: "campaignSendFrequency",
+        status: "insufficient",
         title: "Not enough data for a recommendation",
         message:
           "Each cadence ran too few weeks or emails to compare. Extend testing before changing frequency.",
@@ -248,6 +250,7 @@ function pickFrequencyLift(
           )} by ${liftPct}. Drop cadence to recover revenue and reduce fatigue.`;
     return {
       module: "campaignSendFrequency",
+      status: direction === "more" ? "send-more" : "send-less",
       title,
       message,
       sample,
@@ -287,6 +290,7 @@ function pickFrequencyLift(
   return {
     note: {
       module: "campaignSendFrequency",
+      status: "keep-as-is",
       title: `Stay with ${labelFor(baseline.key)}`,
       message: `${labelFor(
         baseline.key
@@ -316,15 +320,22 @@ export function buildSendFrequencyNote(params: {
   const buckets = computeCampaignSendFrequency(campaigns);
   const { note, baseline, target } = pickFrequencyLift(buckets);
 
-  if (baseline && target) {
+  if (note.status === "send-more" && baseline && target) {
     const weeklyDelta =
       (target.avgWeeklyRevenue - baseline.avgWeeklyRevenue) * CONSERVATIVE_FACTOR;
-    note.estimatedImpact = makeEstimate(
+    const estimate = makeEstimate(
       weeklyDelta,
       "increase",
       "Estimated incremental revenue from adopting recommended cadence",
       `${weeksInRange} weeks analysed`
     );
+    if (estimate?.monthly && estimate.monthly < 500) {
+      note.estimatedImpact = null;
+    } else {
+      note.estimatedImpact = estimate;
+    }
+  } else {
+    note.estimatedImpact = null;
   }
 
   return note;
@@ -456,12 +467,13 @@ export function buildAudienceSizeNote(params: {
       : 0;
     const deltaPerCampaign = (target.avgCampaignRevenue - overallAvg) * CONSERVATIVE_FACTOR;
     const weeklyDelta = weeklyCampaigns > 0 && deltaPerCampaign > 0 ? deltaPerCampaign * weeklyCampaigns : 0;
-    note.estimatedImpact = makeEstimate(
+    const estimate = makeEstimate(
       weeklyDelta,
       "increase",
       "Estimated incremental revenue by leaning into the recommended audience size",
       `${context.sampleCampaigns} campaigns analysed`
     );
+    note.estimatedImpact = estimate && estimate.monthly && estimate.monthly >= AUDIENCE_MIN_MONTHLY_GAIN ? estimate : null;
   }
   return note;
 }

@@ -312,14 +312,16 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
         const title = `Send campaigns to ${headerRange(top.rangeLabel)}`;
         const msg = `${top.rangeLabel} audiences generated the most revenue in this range while staying within deliverability guardrails. Scale targeting toward this size.`;
         const weeklyGain = computeGain(top);
+        const monthlyGain = weeklyGain != null ? weeklyGain * 4 : null;
+        const showGain = monthlyGain != null && monthlyGain >= 500;
         return {
             title,
             message: msg,
             sample: formatSample(undefined, top),
             baselineRange: top.rangeLabel,
             targetRange: top.rangeLabel,
-            estimatedWeeklyGain: weeklyGain,
-            estimatedMonthlyGain: weeklyGain != null ? weeklyGain * 4 : null,
+            estimatedWeeklyGain: showGain ? weeklyGain : null,
+            estimatedMonthlyGain: showGain ? monthlyGain : null,
         };
     }
 
@@ -333,14 +335,16 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
             const title = `Send campaigns to ${headerRange(candidate.rangeLabel)}`;
             const msg = `${candidate.rangeLabel} recipients deliver strong revenue with safer engagement (${liftPct} vs. the higher-risk ${top.rangeLabel} group). Focus here while improving deliverability.`;
             const weeklyGain = computeGain(candidate);
+            const monthlyGain = weeklyGain != null ? weeklyGain * 4 : null;
+            const showGain = monthlyGain != null && monthlyGain >= 500;
             return {
                 title,
                 message: msg,
                 sample: formatSample(undefined, candidate, top),
                 baselineRange: top.rangeLabel,
                 targetRange: candidate.rangeLabel,
-                estimatedWeeklyGain: weeklyGain,
-                estimatedMonthlyGain: weeklyGain != null ? weeklyGain * 4 : null,
+                estimatedWeeklyGain: showGain ? weeklyGain : null,
+                estimatedMonthlyGain: showGain ? monthlyGain : null,
             };
         }
     }
@@ -440,7 +444,7 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                 <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4 mb-6">
                     <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{guidance.title}</p>
                     <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{guidance.message}</p>
-                    {guidance.estimatedMonthlyGain != null && guidance.estimatedMonthlyGain > 0 && (
+                    {guidance.estimatedMonthlyGain != null && guidance.estimatedMonthlyGain >= 500 && (
                         <p className="mt-3 text-xs font-medium text-emerald-700 dark:text-emerald-300">
                             Monthly revenue could increase by an estimated {formatCurrency(guidance.estimatedMonthlyGain)} by leaning into this audience size.
                         </p>
