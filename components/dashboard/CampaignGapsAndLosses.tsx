@@ -200,7 +200,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
     if (!weekly90Plus) {
         return (
             <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
-                <div className="flex items-center gap-2 mb-4"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Gaps & Losses</h3></div>
+                <div className="flex items-center gap-2 mb-4"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Gap Week Elimination</h3></div>
                 <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-10 bg-white dark:bg-gray-900 flex flex-col items-center justify-center text-center">
                     <CalendarRange className="w-10 h-10 text-gray-300 mb-3" />
                     <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Weekly view and 90+ days required</h4>
@@ -214,7 +214,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
     if (result.allWeeksSent) {
         return (
             <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
-                <div className="flex items-center gap-2 mb-2"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Gaps & Losses</h3></div>
+                <div className="flex items-center gap-2 mb-2"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Gap Week Elimination</h3></div>
                 <div className="text-sm text-emerald-700 dark:text-emerald-400 font-medium">Good job! You ran campaigns each week during this period.</div>
             </div>
         );
@@ -224,7 +224,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
     if (result.weeksInRangeFull === 0) {
         return (
             <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
-                <div className="flex items-center gap-2 mb-4"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Gaps & Losses</h3></div>
+                <div className="flex items-center gap-2 mb-4"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Gap Week Elimination</h3></div>
                 <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-10 bg-white dark:bg-gray-900 flex flex-col items-center justify-center text-center">
                     <MailX className="w-10 h-10 text-gray-300 mb-3" />
                     <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">Not enough data in this period</h4>
@@ -240,7 +240,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
     return (
         <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Campaign Gaps & Losses</h3></div>
+                <div className="flex items-center gap-2"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Gap Week Elimination</h3></div>
             </div>
             {showInsufficientBanner && (
                 <div className="mb-4 rounded-md border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 p-3">

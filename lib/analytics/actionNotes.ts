@@ -22,6 +22,43 @@ export type ModuleSlug =
   | "inactivityRevenueDrain"
   | "deadWeightAudience";
 
+export type OpportunityCategoryKey = "campaigns" | "flows" | "audience";
+
+export interface OpportunitySummaryItem {
+  module: ModuleSlug;
+  label: string;
+  scope?: string;
+  amountAnnual: number;
+  type: "lift" | "savings";
+  category: OpportunityCategoryKey;
+  percentOfCategory?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface OpportunitySummaryCategory {
+  key: OpportunityCategoryKey;
+  label: string;
+  color: "indigo" | "emerald" | "purple";
+  totalAnnual: number;
+  percentOfOverall: number;
+  percentOfBaseline?: number | null;
+  baselineAmount?: number | null;
+  items: OpportunitySummaryItem[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface OpportunitySummary {
+  totals: {
+    annual: number;
+    monthly: number;
+    weekly: number;
+    percentOfEmailRevenue: number | null;
+    emailRevenue: number;
+  };
+  categories: OpportunitySummaryCategory[];
+  breakdown: OpportunitySummaryItem[];
+}
+
 export interface OpportunityEstimate {
   weekly?: number | null;
   monthly?: number | null;
@@ -48,7 +85,7 @@ const CONSERVATIVE_FACTOR = 0.5; // halve theoretical uplifts when extrapolating
 const FLOW_ADD_STEP_CONSERVATIVE_SHARE = 0.5;
 const FLOW_MIN_TOTAL_SENDS = 2000;
 const FLOW_MIN_STEP_EMAILS = 250;
-const AUDIENCE_MIN_MONTHLY_GAIN = 500;
+const MIN_OPPORTUNITY_MONTHLY_GAIN = 500;
 
 const weeksToMonthly = (weekly: number) => weekly * 4; // conservative 4 weeks/month
 const weeksToAnnual = (weekly: number) => weekly * 52;
@@ -320,23 +357,28 @@ export function buildSendFrequencyNote(params: {
   const buckets = computeCampaignSendFrequency(campaigns);
   const { note, baseline, target } = pickFrequencyLift(buckets);
 
-  if (note.status === "send-more" && baseline && target) {
-    const weeklyDelta =
+  const estimatedImpact = (() => {
+    if (note.status !== "send-more" || !baseline || !target) return null;
+
+    const weeklyDeltaRaw =
       (target.avgWeeklyRevenue - baseline.avgWeeklyRevenue) * CONSERVATIVE_FACTOR;
+    if (!weeklyDeltaRaw || weeklyDeltaRaw <= 0) return null;
+
     const estimate = makeEstimate(
-      weeklyDelta,
+      weeklyDeltaRaw,
       "increase",
       "Estimated incremental revenue from adopting recommended cadence",
       `${weeksInRange} weeks analysed`
     );
-    if (estimate?.monthly && estimate.monthly < 500) {
-      note.estimatedImpact = null;
-    } else {
-      note.estimatedImpact = estimate;
+
+    if (!estimate?.monthly || estimate.monthly < MIN_OPPORTUNITY_MONTHLY_GAIN) {
+      return null;
     }
-  } else {
-    note.estimatedImpact = null;
-  }
+
+    return estimate;
+  })();
+
+  note.estimatedImpact = estimatedImpact;
 
   return note;
 }
@@ -473,7 +515,10 @@ export function buildAudienceSizeNote(params: {
       "Estimated incremental revenue by leaning into the recommended audience size",
       `${context.sampleCampaigns} campaigns analysed`
     );
-    note.estimatedImpact = estimate && estimate.monthly && estimate.monthly >= AUDIENCE_MIN_MONTHLY_GAIN ? estimate : null;
+    note.estimatedImpact =
+      estimate && estimate.monthly && estimate.monthly >= MIN_OPPORTUNITY_MONTHLY_GAIN
+        ? estimate
+        : null;
   }
   return note;
 }
@@ -919,7 +964,7 @@ export function buildFlowAddStepNotes(params: {
 }
 
 // ------------------------------
-// Campaign Gaps & Losses
+// Gap Week Elimination
 // ------------------------------
 
 export function buildCampaignGapsNote(params: {
@@ -1078,7 +1123,11 @@ export function buildDeadWeightNote(): ModuleActionNote | null {
     annualSavings,
     projectedSubscribers,
     usedCustomPricingEstimate,
+    currentMonthlyPrice,
+    projectedMonthlyPrice,
   } = summary;
+
+  const deadWeightPct = currentSubscribers > 0 ? (deadWeightCount / currentSubscribers) * 100 : null;
 
   const monthly = sanitizeCurrency(monthlySavings) ?? null;
   const annual = sanitizeCurrency(annualSavings) ?? (monthly != null ? monthly * 12 : null);
@@ -1104,16 +1153,10 @@ export function buildDeadWeightNote(): ModuleActionNote | null {
       deadWeightCount,
       projectedSubscribers,
       usedCustomPricingEstimate,
+      currentMonthlyPrice,
+      projectedMonthlyPrice,
+      deadWeightPct,
     },
-  };
-}
-
-export interface OpportunitySummary {
-  notes: ModuleActionNote[];
-  totals: {
-    weekly: number;
-    monthly: number;
-    annual: number;
   };
 }
 
@@ -1125,33 +1168,28 @@ export function computeOpportunitySummary(params: {
   const dm = DataManager.getInstance();
   const campaigns = dm.getCampaigns();
 
-  const notes: ModuleActionNote[] = [];
+  const collectedNotes: ModuleActionNote[] = [];
 
-  // Send Frequency
   if (campaigns.length) {
-    const freqNote = buildSendFrequencyNote({
-      campaigns,
-      dateRange: params.dateRange,
-      customFrom: params.customFrom,
-      customTo: params.customTo,
-    });
-    notes.push(freqNote);
-  }
+    collectedNotes.push(
+      buildSendFrequencyNote({
+        campaigns,
+        dateRange: params.dateRange,
+        customFrom: params.customFrom,
+        customTo: params.customTo,
+      })
+    );
 
-  // Audience Size
-  if (campaigns.length) {
-    const audienceNote = buildAudienceSizeNote({
-      campaigns,
-      dateRange: params.dateRange,
-      customFrom: params.customFrom,
-      customTo: params.customTo,
-    });
-    notes.push(audienceNote);
-  }
+    collectedNotes.push(
+      buildAudienceSizeNote({
+        campaigns,
+        dateRange: params.dateRange,
+        customFrom: params.customFrom,
+        customTo: params.customTo,
+      })
+    );
 
-  // Campaign Gaps & Losses
-  if (campaigns.length) {
-    notes.push(
+    collectedNotes.push(
       buildCampaignGapsNote({
         campaigns,
         dateRange: params.dateRange,
@@ -1161,30 +1199,209 @@ export function computeOpportunitySummary(params: {
     );
   }
 
-  // Flow Step Analysis opportunities
-  notes.push(...buildFlowAddStepNotes({
-    dateRange: params.dateRange,
-    customFrom: params.customFrom,
-    customTo: params.customTo,
-  }));
-
-  // Dead-Weight Audience
-  const deadWeightNote = buildDeadWeightNote();
-  if (deadWeightNote) notes.push(deadWeightNote);
-
-  const totals = notes.reduce(
-    (acc, note) => {
-      const impact = note.estimatedImpact;
-      if (!impact) return acc;
-      if (typeof impact.weekly === "number") acc.weekly += Math.max(0, impact.weekly);
-      if (typeof impact.monthly === "number") acc.monthly += Math.max(0, impact.monthly);
-      if (typeof impact.annual === "number") acc.annual += Math.max(0, impact.annual);
-      return acc;
-    },
-    { weekly: 0, monthly: 0, annual: 0 }
+  collectedNotes.push(
+    ...buildFlowAddStepNotes({
+      dateRange: params.dateRange,
+      customFrom: params.customFrom,
+      customTo: params.customTo,
+    })
   );
 
-  return { notes, totals };
+  const deadWeightNote = buildDeadWeightNote();
+  if (deadWeightNote) collectedNotes.push(deadWeightNote);
+
+  const resolveRange = () => {
+    const resolved = dm.getResolvedDateRange(params.dateRange, params.customFrom, params.customTo);
+    let start = resolved?.startDate || null;
+    let end = resolved?.endDate || null;
+    const lastEmail = dm.getLastEmailDate?.();
+    const fallbackEnd = lastEmail ? new Date(lastEmail) : new Date();
+    if (!end) {
+      end = new Date(fallbackEnd);
+    }
+    if (!start) {
+      start = new Date(end);
+      start.setMonth(start.getMonth() - 6);
+    }
+    return { start, end };
+  };
+
+  const { start, end } = resolveRange();
+
+  const overallAgg = dm.getAggregatedMetricsForPeriod(dm.getCampaigns(), dm.getFlowEmails(), start, end);
+  const campaignAgg = dm.getAggregatedMetricsForPeriod(dm.getCampaigns(), [], start, end);
+  const flowAgg = dm.getAggregatedMetricsForPeriod([], dm.getFlowEmails(), start, end);
+
+  const emailRevenue = overallAgg.totalRevenue || 0;
+  const campaignRevenue = campaignAgg.totalRevenue || 0;
+  const flowRevenue = flowAgg.totalRevenue || 0;
+
+  const toAnnual = (impact?: OpportunityEstimate | null): number => {
+    if (!impact) return 0;
+    if (typeof impact.annual === "number") return Math.max(0, impact.annual);
+    if (typeof impact.monthly === "number") return Math.max(0, impact.monthly * 12);
+    if (typeof impact.weekly === "number") return Math.max(0, impact.weekly * 52);
+    return 0;
+  };
+
+  const moduleMap: Partial<Record<ModuleSlug, {
+    category: OpportunityCategoryKey;
+    label: (note: ModuleActionNote) => string;
+    type: "lift" | "savings";
+  }>> = {
+    campaignSendFrequency: {
+      category: "campaigns",
+      label: () => "Send Frequency Optimization",
+      type: "lift",
+    },
+    audienceSizePerformance: {
+      category: "campaigns",
+      label: () => "Campaign Performance by Audience Size",
+      type: "lift",
+    },
+    campaignGapsLosses: {
+      category: "campaigns",
+      label: () => "Gap Week Elimination",
+      type: "lift",
+    },
+    flowStepAnalysis: {
+      category: "flows",
+      label: (note) => note.metadata?.flowName ? `Add Step — ${String(note.metadata.flowName)}` : `Flow Step Optimization`,
+      type: "lift",
+    },
+    deadWeightAudience: {
+      category: "audience",
+      label: () => "Dead Weight Audience",
+      type: "savings",
+    },
+  };
+
+  const categoryMeta: Record<OpportunityCategoryKey, { label: string; color: "indigo" | "emerald" | "purple"; baselineAmount: number | null }> = {
+    campaigns: { label: "Campaigns", color: "indigo", baselineAmount: campaignRevenue },
+    flows: { label: "Flows", color: "emerald", baselineAmount: flowRevenue },
+    audience: { label: "Audience", color: "purple", baselineAmount: null },
+  };
+
+  type MutableCategory = {
+    key: OpportunityCategoryKey;
+    label: string;
+    color: "indigo" | "emerald" | "purple";
+    totalAnnual: number;
+    baselineAmount: number | null;
+    items: OpportunitySummaryItem[];
+    metadata?: Record<string, unknown>;
+  };
+
+  const categoriesMap = new Map<OpportunityCategoryKey, MutableCategory>();
+  const ensureCategory = (key: OpportunityCategoryKey): MutableCategory => {
+    if (!categoriesMap.has(key)) {
+      const meta = categoryMeta[key];
+      categoriesMap.set(key, {
+        key,
+        label: meta.label,
+        color: meta.color,
+        baselineAmount: meta.baselineAmount,
+        totalAnnual: 0,
+        items: [],
+        metadata: {},
+      });
+    }
+    return categoriesMap.get(key)!;
+  };
+
+  const breakdown: OpportunitySummaryItem[] = [];
+
+  for (const note of collectedNotes) {
+    const meta = moduleMap[note.module];
+    if (!meta) continue;
+    const amountAnnual = toAnnual(note.estimatedImpact);
+    if (!amountAnnual || amountAnnual <= 0) continue;
+
+    const category = ensureCategory(meta.category);
+    const item: OpportunitySummaryItem = {
+      module: note.module,
+      label: meta.label(note),
+      scope: note.scope,
+      amountAnnual,
+      type: meta.type,
+      category: meta.category,
+      metadata: note.metadata || undefined,
+    };
+
+    breakdown.push(item);
+    category.items.push(item);
+    category.totalAnnual += amountAnnual;
+
+    if (meta.category === "audience" && note.metadata) {
+      category.metadata = {
+        ...(category.metadata || {}),
+        ...note.metadata,
+      };
+    }
+  }
+
+  const categories: OpportunitySummaryCategory[] = Array.from(categoriesMap.values())
+    .filter((cat) => cat.totalAnnual > 0)
+    .map((cat) => {
+      const itemsWithPercent = cat.items.map((item) => ({
+        ...item,
+        percentOfCategory: cat.totalAnnual > 0 ? (item.amountAnnual / cat.totalAnnual) * 100 : 0,
+      }));
+
+      let percentOfBaseline: number | null = null;
+      if (cat.key === "campaigns" && cat.baselineAmount) {
+        percentOfBaseline = cat.baselineAmount > 0 ? (cat.totalAnnual / cat.baselineAmount) * 100 : null;
+      } else if (cat.key === "flows" && cat.baselineAmount) {
+        percentOfBaseline = cat.baselineAmount > 0 ? (cat.totalAnnual / cat.baselineAmount) * 100 : null;
+      } else if (cat.key === "audience" && cat.metadata) {
+        const current = Number((cat.metadata as any).currentMonthlyPrice) || 0;
+        const projected = Number((cat.metadata as any).projectedMonthlyPrice) || 0;
+        percentOfBaseline = current > 0 ? ((current - projected) / current) * 100 : null;
+      }
+
+      return {
+        key: cat.key,
+        label: cat.label,
+        color: cat.color,
+        totalAnnual: cat.totalAnnual,
+        percentOfOverall: 0,
+        percentOfBaseline,
+        baselineAmount: cat.baselineAmount,
+        items: itemsWithPercent,
+        metadata: cat.metadata,
+      } satisfies OpportunitySummaryCategory;
+    });
+
+  const totalAnnual = categories.reduce((sum, cat) => sum + cat.totalAnnual, 0);
+  const totalMonthly = totalAnnual / 12;
+  const totalWeekly = totalAnnual / 52;
+  const percentOfEmailRevenue = emailRevenue > 0 ? (totalAnnual / emailRevenue) * 100 : null;
+
+  categories.forEach((cat) => {
+    cat.percentOfOverall = totalAnnual > 0 ? (cat.totalAnnual / totalAnnual) * 100 : 0;
+    cat.items = cat.items.map((item) => ({
+      ...item,
+      percentOfCategory: cat.totalAnnual > 0 ? (item.amountAnnual / cat.totalAnnual) * 100 : 0,
+    }));
+  });
+
+  breakdown.forEach((item) => {
+    const category = categories.find((cat) => cat.key === item.category);
+    if (!category) return;
+    item.percentOfCategory = category.totalAnnual > 0 ? (item.amountAnnual / category.totalAnnual) * 100 : 0;
+  });
+
+  return {
+    totals: {
+      annual: totalAnnual,
+      monthly: totalMonthly,
+      weekly: totalWeekly,
+      percentOfEmailRevenue,
+      emailRevenue,
+    },
+    categories,
+    breakdown,
+  };
 }
 
 // Remaining modules (flowStepAnalysis, subscribed vs not subscribed, engagement by profile age, inactivity revenue drain, dead weight audience)

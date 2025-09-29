@@ -8,7 +8,7 @@ import { computeCampaignGapsAndLosses } from "../analytics/campaignGapsLosses";
 import type { AggregatedMetrics } from "../data/dataTypes";
 import { computeDeadWeightSavings } from "../analytics/deadWeightSavings";
 import { computeOpportunitySummary } from "../analytics/actionNotes";
-import type { ModuleActionNote } from "../analytics/actionNotes";
+import type { OpportunitySummary, OpportunitySummaryItem } from "../analytics/actionNotes";
 
 export interface LlmExportJson {
   // Metadata about this export and helpful descriptions
@@ -53,7 +53,7 @@ export interface LlmExportJson {
       flows: CorrelationSet;
     };
   };
-  // Campaign Performance by Send Frequency over the selected lookback period (not trimmed to full months)
+  // Send Frequency Optimization over the selected lookback period (not trimmed to full months)
   campaignSendFrequency?: {
     buckets: Array<{
       key: '1' | '2' | '3' | '4+';
@@ -100,7 +100,7 @@ export interface LlmExportJson {
       bounceRate: number;
     }>;
   };
-  // Campaign Gaps & Losses (weekly-only analysis over lookback period)
+  // Gap Week Elimination (weekly-only analysis over lookback period)
   campaignGapsAndLosses?: {
     zeroCampaignSendWeeks: number;
     longestGapWithoutCampaign: number;
@@ -243,8 +243,9 @@ export interface LlmExportJson {
     usedCustomPricingEstimate?: boolean;
     note?: string;
   };
-  actionNotes?: ModuleActionNote[];
+  actionNotes?: OpportunitySummaryItem[];
   opportunityTotals?: { weekly: number; monthly: number; annual: number };
+  opportunitySummary?: OpportunitySummary;
 }
 
 type CorrelationValue = { r: number | null; n: number };
@@ -764,11 +765,12 @@ export async function buildLlmExportJson(params: {
       customFrom,
       customTo,
     });
-    json.actionNotes = opportunities.notes;
+    json.actionNotes = opportunities.breakdown;
     json.opportunityTotals = opportunities.totals;
+    json.opportunitySummary = opportunities;
   } catch {}
 
-  // Campaign Performance by Send Frequency (lookback period as selected, not full-month trimmed)
+      // Send Frequency Optimization (lookback period as selected, not full-month trimmed)
   try {
     const resolvedRange = dm.getResolvedDateRange(dateRange, customFrom, customTo);
     const s = resolvedRange?.startDate;
@@ -941,7 +943,7 @@ export async function buildLlmExportJson(params: {
         json.audienceSizePerformance = asp as any;
       }
 
-      // Campaign Gaps & Losses — weekly-only analysis over lookback
+      // Gap Week Elimination — weekly-only analysis over lookback
       try {
         const gaps = computeCampaignGapsAndLosses({ campaigns: campaigns as any, flows: [], rangeStart: s, rangeEnd: e });
         json.campaignGapsAndLosses = {

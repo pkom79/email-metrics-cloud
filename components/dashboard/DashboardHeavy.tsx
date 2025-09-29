@@ -17,7 +17,7 @@ import DataCoverageNotice from './DataCoverageNotice';
 import CampaignSendFrequency from './CampaignSendFrequency';
 import AudienceSizePerformance from './AudienceSizePerformance';
 import CampaignGapsAndLosses from './CampaignGapsAndLosses';
-import { computeOpportunitySummary } from '../../lib/analytics/actionNotes';
+import { computeOpportunitySummary, OpportunitySummary } from '../../lib/analytics/actionNotes';
 // Helper: map guidance cadence label to numeric recommendation for Day-of-Week note
 function deriveFrequencyRecommendation(g: any): number | undefined {
     if (!g || !g.cadenceLabel) return undefined;
@@ -39,6 +39,56 @@ import { usePendingUploadsLinker } from '../../lib/utils/usePendingUploadsLinker
 import { supabase } from '../../lib/supabase/client';
 import ModalPlans, { PlanId } from '../billing/ModalPlans';
 
+type ImpactTimeframe = 'annual' | 'monthly' | 'weekly';
+
+const IMPACT_TIMEFRAME_OPTIONS: Array<{ key: ImpactTimeframe; label: string }> = [
+    { key: 'annual', label: 'Yearly' },
+    { key: 'monthly', label: 'Monthly' },
+    { key: 'weekly', label: 'Weekly' }
+];
+
+const IMPACT_TIMEFRAME_SUFFIX: Record<ImpactTimeframe, string> = {
+    annual: 'per year',
+    monthly: 'per month',
+    weekly: 'per week'
+};
+
+const CATEGORY_STYLES: Record<'campaigns' | 'flows' | 'audience', { bg: string; border: string; dot: string; label: string; accent: string }> = {
+    campaigns: {
+        bg: 'bg-indigo-50 dark:bg-indigo-950/40',
+        border: 'border-indigo-100 dark:border-indigo-900/60',
+        dot: 'bg-indigo-500 dark:bg-indigo-300',
+        label: 'text-indigo-700 dark:text-indigo-200',
+        accent: 'text-indigo-500 dark:text-indigo-300'
+    },
+    flows: {
+        bg: 'bg-emerald-50 dark:bg-emerald-950/40',
+        border: 'border-emerald-100 dark:border-emerald-900/60',
+        dot: 'bg-emerald-500 dark:bg-emerald-300',
+        label: 'text-emerald-700 dark:text-emerald-200',
+        accent: 'text-emerald-500 dark:text-emerald-300'
+    },
+    audience: {
+        bg: 'bg-purple-50 dark:bg-purple-950/40',
+        border: 'border-purple-100 dark:border-purple-900/60',
+        dot: 'bg-purple-500 dark:bg-purple-300',
+        label: 'text-purple-700 dark:text-purple-200',
+        accent: 'text-purple-500 dark:text-purple-300'
+    }
+};
+
+function convertAnnualAmount(amount: number, timeframe: ImpactTimeframe): number {
+    const safe = Number.isFinite(amount) ? amount : 0;
+    switch (timeframe) {
+        case 'monthly':
+            return safe / 12;
+        case 'weekly':
+            return safe / 52;
+        default:
+            return safe;
+    }
+}
+
 function formatCurrency(value: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value); }
 function formatPercent(value: number) {
     const abs = Math.abs(value);
@@ -48,14 +98,6 @@ function formatPercent(value: number) {
 }
 function formatNumber(value: number) { return Math.round(value).toLocaleString('en-US'); }
 // Compact currency removed per requirement; always show full US currency with 2 decimals
-
-const OPPORTUNITY_LABELS: Record<string, string> = {
-    campaignSendFrequency: 'Campaign Send Frequency',
-    audienceSizePerformance: 'Campaign Performance by Audience Size',
-    campaignGapsLosses: 'Campaign Gaps & Losses',
-    flowStepAnalysis: 'Flow Step Analysis',
-    deadWeightAudience: 'Dead Weight Audience',
-};
 
 // Consolidated data loading function to prevent race conditions
 async function loadAccountData(dm: any, accountId: string): Promise<boolean> {
@@ -230,7 +272,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [showKeyModal, setShowKeyModal] = useState(false);
     const [keyInput, setKeyInput] = useState('');
 
-    const opportunitySummary = useMemo(() => {
+    const [impactTimeframe, setImpactTimeframe] = useState<ImpactTimeframe>('annual');
+    const [breakdownExpanded, setBreakdownExpanded] = useState<boolean>(true);
+
+    const opportunitySummary = useMemo<OpportunitySummary>(() => {
         return computeOpportunitySummary({
             dateRange,
             customFrom,
@@ -238,13 +283,18 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         });
     }, [dateRange, customFrom, customTo, dataVersion]);
 
-    const opportunityBreakdown = useMemo(() =>
-        opportunitySummary.notes.filter(note => {
-            const impact = note.estimatedImpact;
-            return impact && typeof impact.annual === 'number' && impact.annual > 0;
-        }),
-        [opportunitySummary]
-    );
+    const opportunityCategories = opportunitySummary?.categories ?? [];
+    const hasOpportunities = (opportunitySummary?.breakdown?.length ?? 0) > 0;
+
+    const convertAmount = useCallback((annual: number | null | undefined) => {
+        if (!annual || !Number.isFinite(annual)) return 0;
+        return convertAnnualAmount(annual, impactTimeframe);
+    }, [impactTimeframe]);
+
+    const totalAnnualImpact = opportunitySummary?.totals?.annual ?? 0;
+    const totalImpactValue = convertAmount(totalAnnualImpact);
+    const percentOfEmailRevenue = opportunitySummary?.totals?.percentOfEmailRevenue ?? null;
+    const emailRevenue = opportunitySummary?.totals?.emailRevenue ?? 0;
 
     const activeAccountId = useMemo(() => (isAdmin ? (selectedAccountId || '') : (memberSelectedId || '')), [isAdmin, selectedAccountId, memberSelectedId]);
     const activeAccountLabel = useMemo(() => {
@@ -1377,34 +1427,152 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             {/* Status line removed per spec */}
                         </div>
 
-                        {isAdmin && opportunityBreakdown.length > 0 && (
+                        {isAdmin && hasOpportunities && (
                             <div className="mt-4 rounded-xl border border-purple-100 dark:border-purple-900/40 bg-gradient-to-br from-purple-50 via-white to-white dark:from-purple-950/40 dark:via-gray-900 dark:to-gray-900 p-4 sm:p-5">
-                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                                    <div>
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300">Estimated Gain</p>
-                                        <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-700 dark:text-gray-200">
-                                            <span><span className="font-semibold">Annual:</span> {formatCurrency(opportunitySummary.totals.annual)}</span>
-                                            <span><span className="font-semibold">Monthly:</span> {formatCurrency(opportunitySummary.totals.monthly)}</span>
-                                            <span><span className="font-semibold">Weekly:</span> {formatCurrency(opportunitySummary.totals.weekly)}</span>
+                                <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+                                    <div className="flex-1 space-y-6">
+                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                            <div>
+                                                <p className="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-300">Total Potential Revenue Impact</p>
+                                                <div className="mt-2 flex flex-wrap items-end gap-3 text-gray-700 dark:text-gray-200">
+                                                    <span className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(totalImpactValue)}</span>
+                                                    <span className="text-sm text-gray-600 dark:text-gray-400">{IMPACT_TIMEFRAME_SUFFIX[impactTimeframe]}</span>
+                                                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                                                        {percentOfEmailRevenue != null
+                                                            ? `${formatPercent(percentOfEmailRevenue)} of email revenue${emailRevenue ? ` (${formatCurrency(emailRevenue)} baseline)` : ''}`
+                                                            : 'Baseline revenue unavailable'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col items-start sm:items-end gap-1">
+                                                <span className="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Timeframe</span>
+                                                <SelectBase
+                                                    value={impactTimeframe}
+                                                    onChange={e => setImpactTimeframe((e.target as HTMLSelectElement).value as ImpactTimeframe)}
+                                                    className="text-xs h-8"
+                                                    minWidthClass="min-w-[130px]"
+                                                >
+                                                    {IMPACT_TIMEFRAME_OPTIONS.map(opt => (
+                                                        <option key={opt.key} value={opt.key}>{opt.label}</option>
+                                                    ))}
+                                                </SelectBase>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="sm:text-right text-sm text-gray-600 dark:text-gray-400">
-                                        <p className="font-semibold text-gray-900 dark:text-gray-100">Breakdown (per year)</p>
-                                        <ul className="mt-2 space-y-1 text-sm">
-                                            {opportunityBreakdown.map(note => {
-                                                const impact = note.estimatedImpact;
-                                                if (!impact || typeof impact.annual !== 'number') return null;
-                                                const baseLabel = OPPORTUNITY_LABELS[note.module] || note.module;
-                                                const label = note.scope ? `${baseLabel} – ${note.scope}` : baseLabel;
-                                                const tag = impact.type === 'savings' ? 'savings' : 'lift';
+                                        <div className="grid gap-3 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                                            {opportunityCategories.map(category => {
+                                                const styles = CATEGORY_STYLES[category.key];
+                                                const metadata = (category.metadata ?? {}) as Record<string, any>;
+                                                const categoryAmount = convertAmount(category.totalAnnual);
+                                                const percentOfOverall = category.percentOfOverall ?? 0;
+                                                const percentOfBaseline = category.percentOfBaseline ?? null;
+                                                const tagClass = category.key === 'audience'
+                                                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200'
+                                                    : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200';
+                                                const suppressedCount = metadata?.deadWeightCount != null ? formatNumber(Number(metadata.deadWeightCount)) : '—';
+                                                const currentPlan = metadata?.currentMonthlyPrice != null ? formatCurrency(Number(metadata.currentMonthlyPrice)) : '—';
+                                                const projectedPlan = metadata?.projectedMonthlyPrice != null ? formatCurrency(Number(metadata.projectedMonthlyPrice)) : '—';
+                                                const tooltipContent = (
+                                                    <div className="space-y-2 max-w-xs">
+                                                        {category.key === 'audience' ? (
+                                                            <div className="space-y-1">
+                                                                <div className="font-semibold text-purple-700 dark:text-purple-200">Dead Weight Audience</div>
+                                                                <div>Suppressed profiles: {suppressedCount}</div>
+                                                                <div>Plan cost: {currentPlan} → {projectedPlan}</div>
+                                                                <div>Savings: {category.percentOfBaseline != null ? formatPercent(category.percentOfBaseline) : '—'}</div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="space-y-1">
+                                                                {category.items.map(item => (
+                                                                    <div key={`${item.module}-${item.scope || 'default'}`} className="flex items-center justify-between gap-3">
+                                                                        <span className="font-medium text-gray-800 dark:text-gray-100">{item.label}</span>
+                                                                        <span className="text-right text-gray-700 dark:text-gray-200">{formatCurrency(convertAmount(item.amountAnnual))}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        <div className="pt-2 border-t border-gray-200 dark:border-gray-800 text-[10px] text-gray-500 dark:text-gray-400">
+                                                            Values reflect the selected timeframe.
+                                                        </div>
+                                                    </div>
+                                                );
                                                 return (
-                                                    <li key={`${note.module}-${note.scope || 'default'}`} className="flex items-center justify-between gap-4">
-                                                        <span className="text-gray-700 dark:text-gray-300">{label}</span>
-                                                        <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(impact.annual)} / {tag}</span>
-                                                    </li>
+                                                    <TooltipPortal key={category.key} content={tooltipContent}>
+                                                        <div className={`cursor-help rounded-xl border p-4 transition-colors ${styles.border} ${styles.bg}`}>
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className={`inline-flex h-2.5 w-2.5 rounded-full ${styles.dot}`} />
+                                                                    <span className={`text-sm font-semibold ${styles.label}`}>{category.label}</span>
+                                                                </div>
+                                                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${tagClass}`}>
+                                                                    {category.key === 'audience' ? 'Savings' : 'Lift'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="mt-4 flex items-start justify-between gap-3">
+                                                                <div>
+                                                                    <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(categoryAmount)}</div>
+                                                                    <div className="text-xs text-gray-500 dark:text-gray-400">{IMPACT_TIMEFRAME_SUFFIX[impactTimeframe]}</div>
+                                                                </div>
+                                                                <div className="text-right text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                                                                    <div>{formatPercent(percentOfOverall)} of total impact</div>
+                                                                    {percentOfBaseline != null && (
+                                                                        <div>{formatPercent(percentOfBaseline)} vs. {category.key === 'audience' ? 'plan spend' : `${category.label.toLowerCase()} revenue`}</div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </TooltipPortal>
                                                 );
                                             })}
-                                        </ul>
+                                        </div>
+                                    </div>
+                                    <div className="lg:w-72 flex-shrink-0">
+                                        <div className="rounded-xl border border-purple-100 dark:border-purple-900/40 bg-white dark:bg-gray-900 p-4 shadow-sm">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Breakdown</p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setBreakdownExpanded(prev => !prev)}
+                                                    className="text-xs font-medium text-purple-700 dark:text-purple-300 hover:underline"
+                                                >
+                                                    {breakdownExpanded ? 'Hide details' : 'Show details'}
+                                                </button>
+                                            </div>
+                                            {breakdownExpanded ? (
+                                                <div className="mt-3 space-y-4 text-sm text-gray-700 dark:text-gray-200">
+                                                    {opportunityCategories.map(category => (
+                                                        <div key={`breakdown-${category.key}`}>
+                                                            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{category.label}</div>
+                                                            <ul className="mt-2 space-y-2">
+                                                                {category.items.map(item => {
+                                                                    const itemAmount = convertAmount(item.amountAnnual);
+                                                                    const percentOfCategory = item.percentOfCategory ?? 0;
+                                                                    const percentOfOverallItem = totalAnnualImpact > 0 ? (item.amountAnnual / totalAnnualImpact) * 100 : 0;
+                                                                    const badgeClass = item.type === 'savings'
+                                                                        ? 'text-emerald-600 dark:text-emerald-300'
+                                                                        : 'text-indigo-600 dark:text-indigo-300';
+                                                                    return (
+                                                                        <li key={`breakdown-${item.module}-${item.scope || 'default'}`} className="flex items-start justify-between gap-3 rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 px-3 py-2">
+                                                                            <div>
+                                                                                <div className="font-medium text-gray-900 dark:text-gray-100">{item.label}</div>
+                                                                                <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                                                                                    {formatPercent(percentOfCategory)} of {category.label.toLowerCase()} · {formatPercent(percentOfOverallItem)} overall
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="text-right">
+                                                                                <div className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(itemAmount)}</div>
+                                                                                <div className={`text-[11px] font-semibold ${badgeClass}`}>{item.type === 'savings' ? 'Savings' : 'Lift'}</div>
+                                                                            </div>
+                                                                        </li>
+                                                                    );
+                                                                })}
+                                                            </ul>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">Expand to see module-level contributions.</p>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1857,7 +2025,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             {/* Send Frequency Module */}
                             <CampaignSendFrequency campaigns={filteredCampaigns} onGuidance={(g) => setFrequencyGuidance(g)} />
                             <AudienceSizePerformance campaigns={filteredCampaigns} />
-                            {/* Campaign Gaps & Losses — placed below Campaign Send Frequency */}
+                            {/* Gap Week Elimination — placed below Send Frequency Optimization */}
                             <CampaignGapsAndLosses
                                 dateRange={dateRange}
                                 granularity={granularity}
