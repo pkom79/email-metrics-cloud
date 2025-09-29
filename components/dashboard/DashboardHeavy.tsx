@@ -216,7 +216,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [memberAccounts, setMemberAccounts] = useState<Array<{ id: string; label: string }>>([]);
     const [memberSelectedId, setMemberSelectedId] = useState<string>('');
     const [memberBrandsLoaded, setMemberBrandsLoaded] = useState<boolean>(false);
-    const [billingState, setBillingState] = useState<{ status: string; trialEndsAt: string | null; currentPeriodEnd: string | null; loading: boolean; hasCustomer: boolean }>({ status: 'unknown', trialEndsAt: null, currentPeriodEnd: null, loading: false, hasCustomer: false });
+    // Billing state: start in loading state to avoid first-paint plan modal flash
+    const [billingState, setBillingState] = useState<{ status: string; trialEndsAt: string | null; currentPeriodEnd: string | null; loading: boolean; hasCustomer: boolean }>({ status: 'unknown', trialEndsAt: null, currentPeriodEnd: null, loading: true, hasCustomer: false });
+    const [billingStatusKnown, setBillingStatusKnown] = useState(false); // becomes true after first fetch resolves (success or error)
+    const [billingWatchdogFired, setBillingWatchdogFired] = useState(false); // watchdog fallback if fetch stalls
     const [billingModalOpen, setBillingModalOpen] = useState(false);
     const [billingActionCadence, setBillingActionCadence] = useState<PlanId | null>(null);
     const [billingError, setBillingError] = useState<string | null>(null);
@@ -258,9 +261,25 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     }, [isAdmin, allAccounts, selectedAccountId, businessName, memberAccounts, memberSelectedId]);
     const billingStatusValue = (billingState.status || 'inactive').toLowerCase();
     const billingLoading = billingState.loading;
-    const billingRequiresPlan = !isAdmin && !['active', 'trialing'].includes(billingStatusValue);
-    const blockDashboard = !isAdmin && (billingLoading || billingRequiresPlan || billingModalOpen);
-    const showPlansModal = !isAdmin && !billingLoading && (billingModalOpen || billingRequiresPlan);
+    // Classify status for gating nuance (issue vs none vs ok)
+    const classifyBilling = (s: string): 'ok' | 'issue' | 'none' | 'unknown' => {
+        if (s === 'unknown') return 'unknown';
+        if (['active', 'trialing'].includes(s)) return 'ok';
+        if (['past_due', 'incomplete', 'incomplete_expired', 'unpaid'].includes(s)) return 'issue';
+        return 'none'; // paused, canceled, inactive, etc.
+    };
+    const billingClass = classifyBilling(billingStatusValue);
+    const billingRequiresPlan = !isAdmin && billingClass === 'none' && billingStatusValue !== 'unknown';
+    const billingIssue = !isAdmin && billingClass === 'issue' && billingStatusValue !== 'unknown';
+    const blockDashboard = !isAdmin && (
+        billingLoading ||
+        !billingStatusKnown ||
+        billingRequiresPlan ||
+        billingIssue ||
+        billingModalOpen
+    );
+    const showPlansModal = !isAdmin && billingStatusKnown && !billingLoading && (billingModalOpen || billingRequiresPlan || billingIssue);
+    const emitTelemetry = (name: string, detail: any) => { try { window.dispatchEvent(new CustomEvent(name, { detail })); } catch { /* noop */ } };
 
     const handleRefreshBillingStatus = useCallback(() => {
         setBillingRefreshTick(t => t + 1);
@@ -423,19 +442,37 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         return () => { cancelled = true; };
     }, []);
 
+    // Watchdog: if status never resolves, fail open with retry UI
+    useEffect(() => {
+        if (billingStatusKnown) return;
+        const id = setTimeout(() => {
+            if (!billingStatusKnown) {
+                setBillingWatchdogFired(true);
+                setBillingState(prev => ({ ...prev, loading: false }));
+                setBillingError(e => e || 'Billing status is taking longer than expected.');
+            }
+        }, 8000);
+        return () => clearTimeout(id);
+    }, [billingStatusKnown]);
+
+    const retryBillingStatus = useCallback(() => {
+        setBillingWatchdogFired(false);
+        setBillingError(null);
+        setBillingState(prev => ({ ...prev, loading: true }));
+        setBillingRefreshTick(t => t + 1);
+    }, []);
+
     useEffect(() => {
         if (!adminCheckComplete) return;
         let cancelled = false;
         setBillingState(prev => ({ ...prev, loading: true }));
         setBillingActionCadence(null);
-        setBillingError(null);
+        if (!billingWatchdogFired) setBillingError(null);
         (async () => {
             try {
                 const statusUrl = activeAccountId ? `/api/payments/status?account_id=${activeAccountId}` : '/api/payments/status';
                 const resp = await fetch(statusUrl, { cache: 'no-store' });
-                if (!resp.ok) {
-                    throw new Error(resp.status === 403 ? 'You need owner access to manage billing.' : 'Unable to load billing status.');
-                }
+                if (!resp.ok) throw new Error(resp.status === 403 ? 'You need owner access to manage billing.' : 'Unable to load billing status.');
                 const json = await resp.json().catch(() => ({}));
                 const subscription = json.subscription || {};
                 const status = (subscription.status || 'inactive').toLowerCase();
@@ -444,39 +481,40 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 const hasCustomer = Boolean(subscription.hasCustomer);
                 const derivedAccountId: string | undefined = json.accountId || undefined;
                 if (!activeAccountId && derivedAccountId) {
-                    if (isAdmin) {
-                        setSelectedAccountId(prev => prev || derivedAccountId);
-                    } else {
-                        setMemberSelectedId(prev => prev || derivedAccountId);
-                    }
+                    if (isAdmin) setSelectedAccountId(prev => prev || derivedAccountId); else setMemberSelectedId(prev => prev || derivedAccountId);
                 }
                 if (cancelled) return;
-                setBillingState({ status, trialEndsAt: trialEnds, currentPeriodEnd: currentEnd, loading: false, hasCustomer });
-                const active = ['active', 'trialing'].includes(status);
-                if (isAdmin) {
-                    setBillingModalOpen(false);
-                } else {
-                    setBillingModalOpen(!active);
-                    if (!active) {
+                setBillingState(prev => ({ ...prev, status, trialEndsAt: trialEnds, currentPeriodEnd: currentEnd, loading: false, hasCustomer }));
+                setBillingStatusKnown(true);
+                if (!isAdmin) {
+                    const cls = classifyBilling(status);
+                    const shouldOpen = cls !== 'ok';
+                    setBillingModalOpen(shouldOpen);
+                    if (!shouldOpen) {
+                        setBillingError(null);
+                    } else {
+                        emitTelemetry('em:plans-modal-opened', { reason: cls === 'none' ? 'requires_plan' : 'billing_issue', status, at: Date.now() });
                         setIsInitialLoading(false);
                         setInitialLoadComplete(true);
-                    } else {
-                        setBillingError(null);
                     }
+                } else {
+                    setBillingModalOpen(false);
                 }
             } catch (err: any) {
                 if (cancelled) return;
-                setBillingState({ status: 'inactive', trialEndsAt: null, currentPeriodEnd: null, loading: false, hasCustomer: false });
+                setBillingState(prev => ({ ...prev, status: prev.status === 'unknown' ? 'inactive' : prev.status, trialEndsAt: null, currentPeriodEnd: null, loading: false, hasCustomer: false }));
+                setBillingStatusKnown(true);
                 if (!isAdmin) {
                     setBillingModalOpen(true);
                     setBillingError(err?.message || 'Unable to load billing status.');
+                    emitTelemetry('em:plans-modal-opened', { reason: 'requires_plan', status: 'error', at: Date.now() });
                     setIsInitialLoading(false);
                     setInitialLoadComplete(true);
                 }
             }
         })();
         return () => { cancelled = true; };
-    }, [activeAccountId, adminCheckComplete, isAdmin, billingRefreshTick]);
+    }, [activeAccountId, adminCheckComplete, isAdmin, billingRefreshTick, billingWatchdogFired]);
 
     // Admin: reload data when selectedAccountId changes (stable, uses helper)
     useEffect(() => {
@@ -1225,6 +1263,22 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     }
 
     if (blockDashboard) {
+        // Watchdog fallback (billing fetch stalled)
+        if (!billingStatusKnown && billingWatchdogFired) {
+            return (
+                <div className="min-h-screen flex items-center justify-center px-6 text-center bg-gray-50 dark:bg-gray-900">
+                    <div className="max-w-sm space-y-4">
+                        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Billing Status Delayed</h2>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">We’re having trouble confirming your plan. Please retry below. Your data is safe.</p>
+                        {billingError && <p className="text-xs text-red-600 dark:text-red-400">{billingError}</p>}
+                        <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                            <button onClick={retryBillingStatus} className="px-4 py-2 rounded-md bg-purple-600 text-white text-sm font-medium hover:bg-purple-700">Retry</button>
+                            <button onClick={() => window.location.reload()} className="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600">Reload</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
         const planStatusText = billingStatusValue === 'inactive'
             ? 'Current status: No active plan'
             : `Current status: ${billingStatusValue}`;
