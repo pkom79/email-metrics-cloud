@@ -140,6 +140,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   endMonday.setUTCHours(0,0,0,0);
   const altMap: Record<string, number> = {};
     let campaignsInRange = 0;
+    let julyWeeks = 0;
     for (const c of campaigns) {
       if (!(c.sentDate instanceof Date)) continue;
       const dt = c.sentDate;
@@ -151,9 +152,25 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   ws.setUTCDate(ws.getUTCDate() - diffUTC);
   ws.setUTCHours(0,0,0,0);
       if (ws < startMonday || ws > endMonday) continue;
+      
+      // Debug July 2025 specifically
+      if (dt.getFullYear() === 2025 && dt.getMonth() === 6) { // July is month 6
+        julyWeeks++;
+      }
+      
       const key = ws.toISOString();
       altMap[key] = (altMap[key] || 0) + 1;
     }
+    
+    // Debug log campaigns and July analysis
+    console.debug('[CampaignGaps&Losses] campaigns debug', { 
+      totalCampaigns: campaigns.length, 
+      campaignsInRange, 
+      julyWeeks,
+      rangeStart: rangeStart.toISOString(), 
+      rangeEnd: rangeEnd.toISOString(),
+      altMapKeys: Object.keys(altMap).sort()
+    });
   const altWeeks = fullInRangeWeeks.map(w => ({ key: w.weekStart.toISOString(), sent: (altMap[w.weekStart.toISOString()]||0) > 0, count: (altMap[w.weekStart.toISOString()]||0) }));
   const altSentWeeks = altWeeks.filter(w => w.sent).length;
   const mismatches = fullInRangeWeeks.filter(w => ((w.campaignsSent||0)>0) !== ((altMap[w.weekStart.toISOString()]||0)>0)).map(w => w.weekStart.toISOString().slice(0,10));
