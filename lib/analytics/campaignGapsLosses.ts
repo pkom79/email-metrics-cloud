@@ -58,10 +58,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   let zeroWeekOverride: string[] | null = null;
   let longestGapOverride: string[] | null = null;
   let suspectedCsvCoverageGap: { weeks: number; start: string; end: string } | null = null;
-  try {
-    // eslint-disable-next-line no-console
-  console.debug('[CampaignGaps&Losses] inputs', { rangeStart: rangeStart.toISOString(), rangeEnd: rangeEnd.toISOString(), weeks: weeks.length, campaigns: campaigns.length });
-  } catch {}
+
   // Use same week filtering as Reliability module for consistency
   // Include weeks where the week start is within the range (matches other dashboard components)
   const fullInRangeWeeks = weeks.filter(w => {
@@ -166,37 +163,20 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   ws.setUTCHours(0,0,0,0);
       if (ws < startMonday || ws > endMonday) continue;
       
-      // Debug July 2025 specifically
-      if (dt.getFullYear() === 2025 && dt.getMonth() === 6) { // July is month 6
-        julyWeeks++;
-        console.debug('[CampaignGaps&Losses] July campaign found', {
-          date: dt.toISOString(),
-          title: c.subject || 'Untitled',
-          weekStart: ws.toISOString()
-        });
-      }
+
       
       const key = ws.toISOString();
       altMap[key] = (altMap[key] || 0) + 1;
     }
     
-    // Debug log campaigns and July analysis
-    console.debug('[CampaignGaps&Losses] campaigns debug', { 
-      totalCampaigns: campaigns.length, 
-      campaignsInRange, 
-      julyWeeks,
-      rangeStart: rangeStart.toISOString(), 
-      rangeEnd: rangeEnd.toISOString(),
-      altMapKeys: Object.keys(altMap).sort()
-    });
+
   const altWeeks = fullInRangeWeeks.map(w => ({ key: w.weekStart.toISOString(), sent: (altMap[w.weekStart.toISOString()]||0) > 0, count: (altMap[w.weekStart.toISOString()]||0) }));
   const altSentWeeks = altWeeks.filter(w => w.sent).length;
   const mismatches = fullInRangeWeeks.filter(w => ((w.campaignsSent||0)>0) !== ((altMap[w.weekStart.toISOString()]||0)>0)).map(w => w.weekStart.toISOString().slice(0,10));
   // Prefer raw-campaign-derived count for gating and display to avoid aggregation inconsistencies
   sentWeeksAll = altSentWeeks;
   pctWeeksWithCampaignsSent = coverageDenom > 0 ? (sentWeeksAll / coverageDenom) * 100 : 0;
-  console.debug('[CampaignGaps&Losses] coverage', { coverageDenom, sentWeeksAll, pctWeeksWithCampaignsSent: Number(pctWeeksWithCampaignsSent.toFixed?.(2) ?? pctWeeksWithCampaignsSent), totalWeeksInRange, totalCompleteWeeks });
-    console.debug('[CampaignGaps&Losses] coverageWeeks', sample);
+
     // Build a tiny histogram: how many weeks had N campaigns (within full in-range weeks)
     const hist: Record<string, number> = { '0': 0 };
     for (const w of altWeeks) {
@@ -264,7 +244,14 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
       }
       }
     }
-  console.debug('[CampaignGaps&Losses] altSentWeeks', { altSentWeeks, campaignsInRange, coverageDenom, hist, zeroWeeksFromAlt: zeroWeeksFromAlt.map(w => w.key.slice(0,10)), mismatches, weeksWithCounts: altWeeks.map(w => ({ start: w.key.slice(0,10), count: w.count })) });
+    // Show final comparison
+    const zeroWeeksList = zeroWeeksFromAlt.map(w => w.key.slice(0,10));
+    console.log('🔍 GAP ANALYSIS FINAL:', {
+      reliabilityWeeks: weeks.length,
+      gapAnalysisWeeks: fullInRangeWeeks.length, 
+      zeroSendWeeks: zeroSendWeeks,
+      gapsDetected: zeroWeeksList.length > 0 ? zeroWeeksList : 'NONE - showing Good job message'
+    });
   } catch {}
 
   // Low-Effectiveness Campaigns: count individual campaigns with revenue==0 in the selected range
