@@ -170,10 +170,15 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
       hist[key] = (hist[key] || 0) + 1;
     }
     const zeroWeeksFromAlt = altWeeks.filter(w => !w.sent);
+    
+    // Always use the alternative method if it finds any zero weeks, regardless of comparison
+    if (zeroWeeksFromAlt.length > 0) {
+      // Fix: if there are ANY zero weeks from alt calculation, allWeeksSent must be false
+      allWeeksSent = false;
+    }
+    
     if (zeroWeeksFromAlt.length > zeroSendWeeks) {
       zeroSendWeeks = zeroWeeksFromAlt.length;
-      // Fix: if there are zero weeks from alt calculation, allWeeksSent must be false
-      allWeeksSent = false;
       zeroWeekOverride = zeroWeeksFromAlt.map(w => w.key.slice(0, 10));
 
       let bestLen = 0;
