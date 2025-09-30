@@ -34,10 +34,21 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
         console.log('📊 CAMPAIGN vs FLOW SPLIT DATA:', {
             totalCampaigns: campaigns.length,
             july2025Count: july2025Campaigns.length,
-            july2025Dates: july2025Campaigns.map(c => c.sentDate.toISOString().slice(0, 10))
+            july2025Dates: july2025Campaigns.map(c => c.sentDate.toISOString().slice(0, 10)),
+            filteredCampaignsProvided: !!filteredCampaigns,
+            filteredCampaignsLength: filteredCampaigns?.length || 0,
+            usingFiltered: campaigns === filteredCampaigns,
+            usingUnfiltered: campaigns === dm.getCampaigns()
         });
 
         // Build campaign-only and flow-only series with compare; always aggregate all flows
+        console.log('📊 Calling getMetricTimeSeriesWithCompare with:', {
+            campaignCount: campaigns.length,
+            dateRange,
+            granularity,
+            metric,
+            campaignsReference: campaigns === dm.getCampaigns() ? 'SAME_REF' : 'DIFFERENT_REF'
+        });
         const camp = dm.getMetricTimeSeriesWithCompare(campaigns as any, [], metric, dateRange, granularity, compareMode, customFrom, customTo);
         const flo = dm.getMetricTimeSeriesWithCompare([], flows as any, metric, dateRange, granularity, compareMode, customFrom, customTo);
         const primaryLen = Math.min(camp.primary.length, flo.primary.length);
