@@ -198,19 +198,20 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
         if (bestLen >= 5) hasLongGaps = true;
         longestGapOverride = altWeeks.slice(bestStart, bestStart + bestLen).map(w => w.key.slice(0, 10));
 
-        if (bestLen >= 10) {
-          const startIso = altWeeks[bestStart].key.slice(0, 10);
-          const endDate = new Date(altWeeks[bestStart + bestLen - 1].key);
-          const endInclusive = new Date(endDate); endInclusive.setUTCDate(endInclusive.getUTCDate() + 6);
-          const fallbackGap = {
-            weeks: bestLen,
-            start: startIso,
-            end: endInclusive.toISOString().slice(0, 10),
-          };
-          if (!suspectedCsvCoverageGap || fallbackGap.weeks > suspectedCsvCoverageGap.weeks) {
-            suspectedCsvCoverageGap = fallbackGap;
-          }
+      if (bestLen >= 10) {
+        const startIso = altWeeks[bestStart].key.slice(0, 10);
+        const endDate = new Date(altWeeks[bestStart + bestLen - 1].key);
+        const endInclusive = new Date(endDate); endInclusive.setUTCDate(endInclusive.getUTCDate() + 6);
+        const fallbackGap: { weeks: number; start: string; end: string } = {
+          weeks: bestLen,
+          start: startIso,
+          end: endInclusive.toISOString().slice(0, 10),
+        };
+        const currentWeeks = suspectedCsvCoverageGap?.weeks ?? 0;
+        if (!suspectedCsvCoverageGap || fallbackGap.weeks > currentWeeks) {
+          suspectedCsvCoverageGap = fallbackGap;
         }
+      }
       }
     }
   console.debug('[CampaignGaps&Losses] altSentWeeks', { altSentWeeks, campaignsInRange, coverageDenom, hist, zeroWeeksFromAlt: zeroWeeksFromAlt.map(w => w.key.slice(0,10)), mismatches, weeksWithCounts: altWeeks.map(w => ({ start: w.key.slice(0,10), count: w.count })) });
