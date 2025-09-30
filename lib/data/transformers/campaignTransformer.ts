@@ -79,8 +79,16 @@ export class CampaignTransformer {
         const emailsSent = this.parseNumber(this.findAnyField(raw, ['Total recipients', 'Total Recipients', 'Recipients']));
         const uniqueOpens = this.parseNumber(this.findAnyField(raw, ['Unique opens', 'Unique Opens']));
         const uniqueClicks = this.parseNumber(this.findAnyField(raw, ['Unique clicks', 'Unique Clicks']));
-        const totalOrders = this.parseNumber(this.findAnyField(raw, ['Count of unique conversions', 'Unique Placed Order', 'Total Placed Orders', 'Placed Orders']));
-        const revenue = this.parseNumber(this.findAnyField(raw, ['Conversion value', 'Revenue']));
+        const totalOrders = this.parseNumber(this.findAnyField(raw, [
+            'Count of unique conversions',
+            'Unique Placed Order',
+            'Unique Ordered Product',
+            'Total Placed Orders',
+            'Placed Order',
+            'Placed Orders',
+            'Ordered Product',
+        ]));
+        const revenue = this.parseNumber(this.findAnyField(raw, ['Conversion value', 'Revenue', 'Ordered Product Value']));
         const unsubscribesCount = this.parseNumber(this.findAnyField(raw, ['Unique unsubscribes', 'Unsubscribes']));
         const spamComplaintsCount = this.parseNumber(this.findAnyField(raw, ['Total spam complaints', 'Spam Complaints']));
         const bouncesCount = this.parseNumber(this.findAnyField(raw, ['Total bounced', 'Bounces']));

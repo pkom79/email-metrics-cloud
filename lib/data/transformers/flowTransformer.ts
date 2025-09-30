@@ -57,8 +57,18 @@ export class FlowTransformer {
         const emailsSent = this.parseNumber((raw as any)['Delivered']);
         const uniqueOpens = this.parseNumber((raw as any)['Unique Opens']);
         const uniqueClicks = this.parseNumber((raw as any)['Unique Clicks']);
-        const totalOrders = this.parseNumber((raw as any)['Unique Placed Order'] || (raw as any)['Placed Order'] || 0);
-        const revenue = this.parseNumber((raw as any)['Revenue'] || 0);
+        const totalOrders = this.parseNumber(
+            (raw as any)['Unique Placed Order'] ||
+            (raw as any)['Unique Ordered Product'] ||
+            (raw as any)['Placed Order'] ||
+            (raw as any)['Ordered Product'] ||
+            0
+        );
+        const revenue = this.parseNumber(
+            (raw as any)['Revenue'] ||
+            (raw as any)['Ordered Product Value'] ||
+            0
+        );
 
         const bounceRate = this.parseDecimalRate((raw as any)['Bounce Rate']);
         const bouncesCount = this.parseNumber((raw as any)['Bounced']) || Math.round(emailsSent * bounceRate);
