@@ -224,6 +224,14 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
 
     // All-weeks-sent: show success message instead of cards
     if (result.allWeeksSent) {
+        console.log('[DEBUG UI] Showing good job message. Result:', {
+            allWeeksSent: result.allWeeksSent,
+            zeroCampaignSendWeeks: result.zeroCampaignSendWeeks,
+            longestZeroSendGap: result.longestZeroSendGap,
+            pctWeeksWithCampaignsSent: result.pctWeeksWithCampaignsSent,
+            weeksWithCampaignsSent: result.weeksWithCampaignsSent,
+            weeksInRangeFull: result.weeksInRangeFull
+        });
         return (
             <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-2"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Gap Week Elimination</h3></div>
