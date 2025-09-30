@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { SplitSquareVertical } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
+import { ProcessedCampaign } from '../../lib/data/dataTypes';
 
 type Gran = 'daily' | 'weekly' | 'monthly';
 type CompareMode = 'prev-period' | 'prev-year';
@@ -12,6 +13,7 @@ interface Props {
     customFrom?: string;
     customTo?: string;
     compareMode?: CompareMode;
+    filteredCampaigns?: ProcessedCampaign[];
 }
 
 type Metric = 'revenue' | 'emailsSent';
@@ -19,11 +21,11 @@ type Metric = 'revenue' | 'emailsSent';
 const formatCurrency = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
 const formatNumber = (v: number) => Math.round(v).toLocaleString('en-US');
 
-export default function SplitShareOverTime({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period' }: Props) {
+export default function SplitShareOverTime({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period', filteredCampaigns }: Props) {
     const dm = DataManager.getInstance();
     const [metric, setMetric] = useState<Metric>('revenue');
 
-    const campaigns = dm.getCampaigns();
+    const campaigns = filteredCampaigns || dm.getCampaigns();
     const flows = dm.getFlowEmails();
 
     const series = useMemo(() => {

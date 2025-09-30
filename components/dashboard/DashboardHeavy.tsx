@@ -2059,6 +2059,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 customFrom={customFrom}
                                 customTo={customTo}
                                 compareMode={compareMode}
+                                filteredCampaigns={filteredCampaigns}
                             />
                             {/* Revenue Reliability module removed - placeholder panel removed */}
                             <SendVolumeImpact dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
