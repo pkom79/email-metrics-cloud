@@ -118,6 +118,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   // We'll compute an alternate sent-weeks count directly from raw campaigns (defined below) and prefer it for coverage
   let sentWeeksAll = sentWeeksAllAgg;
   let pctWeeksWithCampaignsSent = coverageDenom > 0 ? (sentWeeksAll / coverageDenom) * 100 : 0;
+  let allWeeksSent = coverageDenom > 0 && sentWeeksAll >= coverageDenom;
   const totalCampaignsInFullWeeks = fullInRangeWeeks.reduce((s,w)=> s + (w.campaignsSent || 0), 0);
   const avgCampaignsPerWeek = coverageDenom > 0 ? (totalCampaignsInFullWeeks / coverageDenom) : 0;
   // Debug: surface coverage math to help diagnose gating issues in the field
@@ -229,7 +230,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   // Sort details by date desc for display
   zeroRevenueCampaignDetails.sort((a,b)=> (b.date.localeCompare(a.date)));
 
-  const allWeeksSent = coverageDenom > 0 && sentWeeksAll >= coverageDenom;
+  allWeeksSent = coverageDenom > 0 && sentWeeksAll >= coverageDenom;
   // Weekly sufficiency gate: require ceil(66%) of full-in-range weeks to have at least one campaign sent
   const threshold = Math.ceil(0.66 * coverageDenom);
   const insufficientWeeklyData = sentWeeksAll < threshold;
