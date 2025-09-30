@@ -172,7 +172,8 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
     const zeroWeeksFromAlt = altWeeks.filter(w => !w.sent);
     if (zeroWeeksFromAlt.length > zeroSendWeeks) {
       zeroSendWeeks = zeroWeeksFromAlt.length;
-      allWeeksSent = coverageDenom > 0 && sentWeeksAll >= coverageDenom;
+      // Fix: if there are zero weeks from alt calculation, allWeeksSent must be false
+      allWeeksSent = false;
       zeroWeekOverride = zeroWeeksFromAlt.map(w => w.key.slice(0, 10));
 
       let bestLen = 0;
@@ -235,7 +236,8 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   // Sort details by date desc for display
   zeroRevenueCampaignDetails.sort((a,b)=> (b.date.localeCompare(a.date)));
 
-  allWeeksSent = coverageDenom > 0 && sentWeeksAll >= coverageDenom;
+  // Fix: allWeeksSent should be false if there are any zero-send weeks
+  allWeeksSent = (coverageDenom > 0 && sentWeeksAll >= coverageDenom) && zeroSendWeeks === 0;
   // Weekly sufficiency gate: require ceil(66%) of full-in-range weeks to have at least one campaign sent
   const threshold = Math.ceil(0.66 * coverageDenom);
   const insufficientWeeklyData = sentWeeksAll < threshold;
