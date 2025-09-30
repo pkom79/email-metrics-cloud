@@ -66,7 +66,20 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   const fullInRangeWeeks = weeks.filter(w => {
     const weekStartMs = w.weekStart.getTime();
     const weekEndMs = weekStartMs + 7 * ONE_DAY - 1;
-    return weekStartMs >= rangeStart.getTime() && weekEndMs <= rangeEnd.getTime();
+    const isInRange = weekStartMs >= rangeStart.getTime() && weekEndMs <= rangeEnd.getTime();
+    
+    // Debug: log filtered out weeks to see what we're missing
+    if (!isInRange) {
+      try {
+        console.debug('[CampaignGaps&Losses] EXCLUDED week', {
+          start: w.weekStart.toISOString().slice(0,10),
+          campaignsSent: w.campaignsSent || 0,
+          reason: weekStartMs < rangeStart.getTime() ? 'before range' : 'after range'
+        });
+      } catch {}
+    }
+    
+    return isInRange;
   });
 
   // Guard: if no weeks, return zeros
