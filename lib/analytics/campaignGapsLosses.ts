@@ -209,7 +209,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
         };
         let currentWeeks = 0;
         if (suspectedCsvCoverageGap) {
-          currentWeeks = suspectedCsvCoverageGap.weeks;
+          currentWeeks = (suspectedCsvCoverageGap as { weeks: number; start: string; end: string }).weeks;
         }
         if (!suspectedCsvCoverageGap || fallbackGap.weeks > currentWeeks) {
           suspectedCsvCoverageGap = fallbackGap;
