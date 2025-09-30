@@ -199,7 +199,13 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
       allWeeksSent = false;
     }
     
-    if (zeroWeeksFromAlt.length > zeroSendWeeks) {
+    // IMPORTANT: Don't override zeroSendWeeks if the weekly aggregation already found gaps
+    // The weekly aggregation is the source of truth for dashboard consistency
+    
+    // Only use alternative calculation if weekly aggregation found ZERO gaps
+    // This ensures consistency with other dashboard components
+    if (zeroSendWeeks === 0 && zeroWeeksFromAlt.length > 0) {
+      console.debug('[CampaignGaps&Losses] Using alternative calculation - weekly agg found no gaps but alt found', zeroWeeksFromAlt.length);
       zeroSendWeeks = zeroWeeksFromAlt.length;
       zeroWeekOverride = zeroWeeksFromAlt.map(w => w.key.slice(0, 10));
 
