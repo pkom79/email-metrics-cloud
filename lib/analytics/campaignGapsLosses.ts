@@ -57,6 +57,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   const ONE_DAY = 24 * 60 * 60 * 1000;
   let zeroWeekOverride: string[] | null = null;
   let longestGapOverride: string[] | null = null;
+  let suspectedCsvCoverageGap: { weeks: number; start: string; end: string } | null = null;
   try {
     // eslint-disable-next-line no-console
   console.debug('[CampaignGaps&Losses] inputs', { rangeStart: rangeStart.toISOString(), rangeEnd: rangeEnd.toISOString(), weeks: weeks.length, campaigns: campaigns.length });
@@ -290,7 +291,6 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   }
 
   let estimatedLostRevenue: number | undefined = 0;
-  let suspectedCsvCoverageGap: { weeks: number; start: string; end: string } | null = null;
   // Global fallback median when local refs are insufficient
   const globalMedian = median(nonZeroWeeklyInRange);
   const ONE_WEEK = 7 * ONE_DAY;
