@@ -32,12 +32,12 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
             if (dateRange === 'custom' && customFrom && customTo) {
                 const start = new Date(`${customFrom}T00:00:00`);
                 const end = new Date(`${customTo}T23:59:59`);
-                
+
                 try {
                     // eslint-disable-next-line no-console
                     console.debug('[CampaignGaps&Losses] custom range', { dateRange, start: start.toISOString(), end: end.toISOString(), campaignsCount: campaigns.length });
                 } catch { }
-                
+
                 return { start, end };
             }
 
