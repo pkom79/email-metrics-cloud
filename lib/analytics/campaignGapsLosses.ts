@@ -183,7 +183,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   // Sort details by date desc for display
   zeroRevenueCampaignDetails.sort((a,b)=> (b.date.localeCompare(a.date)));
 
-  const allWeeksSent = coverageDenom > 0 && fullInRangeWeeks.every(w => (w.campaignsSent || 0) > 0);
+  const allWeeksSent = coverageDenom > 0 && sentWeeksAll >= coverageDenom;
   // Weekly sufficiency gate: require ceil(66%) of full-in-range weeks to have at least one campaign sent
   const threshold = Math.ceil(0.66 * coverageDenom);
   const insufficientWeeklyData = sentWeeksAll < threshold;
