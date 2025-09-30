@@ -62,11 +62,11 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
     // eslint-disable-next-line no-console
   console.debug('[CampaignGaps&Losses] inputs', { rangeStart: rangeStart.toISOString(), rangeEnd: rangeEnd.toISOString(), weeks: weeks.length, campaigns: campaigns.length });
   } catch {}
-  // Weeks fully contained within the selected range (exclude partial first/last week segments)
+  // Use same week filtering as Reliability module for consistency
+  // Include weeks where the week start is within the range (matches other dashboard components)
   const fullInRangeWeeks = weeks.filter(w => {
     const weekStartMs = w.weekStart.getTime();
-    const weekEndMs = weekStartMs + 7 * ONE_DAY - 1;
-    const isInRange = weekStartMs >= rangeStart.getTime() && weekEndMs <= rangeEnd.getTime();
+    const isInRange = weekStartMs >= rangeStart.getTime() && weekStartMs <= rangeEnd.getTime();
     
     // Debug: log filtered out weeks to see what we're missing
     if (!isInRange) {
