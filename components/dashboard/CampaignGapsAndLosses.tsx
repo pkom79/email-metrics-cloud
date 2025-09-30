@@ -28,10 +28,20 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
 
     const range = useMemo(() => {
         try {
+            // When using custom date range, use the exact same logic as DashboardHeavy
             if (dateRange === 'custom' && customFrom && customTo) {
-                return { start: new Date(`${customFrom}T00:00:00`), end: new Date(`${customTo}T23:59:59`) };
+                const start = new Date(`${customFrom}T00:00:00`);
+                const end = new Date(`${customTo}T23:59:59`);
+                
+                try {
+                    // eslint-disable-next-line no-console
+                    console.debug('[CampaignGaps&Losses] custom range', { dateRange, start: start.toISOString(), end: end.toISOString(), campaignsCount: campaigns.length });
+                } catch { }
+                
+                return { start, end };
             }
 
+            // For preset ranges, use the DataManager's resolved range
             const resolved = dm.getResolvedDateRange(dateRange, customFrom, customTo);
             let start = resolved?.startDate ?? null;
             let end = resolved?.endDate ?? null;
@@ -49,7 +59,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
 
             try {
                 // eslint-disable-next-line no-console
-                console.debug('[CampaignGaps&Losses] range', { dateRange, start: startAligned.toISOString(), end: endAligned.toISOString(), campaignsCount: campaigns.length });
+                console.debug('[CampaignGaps&Losses] preset range', { dateRange, start: startAligned.toISOString(), end: endAligned.toISOString(), campaignsCount: campaigns.length });
             } catch { }
 
             return { start: startAligned, end: endAligned };
@@ -224,14 +234,6 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
 
     // All-weeks-sent: show success message instead of cards
     if (result.allWeeksSent) {
-        console.log('[DEBUG UI] Showing good job message. Result:', {
-            allWeeksSent: result.allWeeksSent,
-            zeroCampaignSendWeeks: result.zeroCampaignSendWeeks,
-            longestZeroSendGap: result.longestZeroSendGap,
-            pctWeeksWithCampaignsSent: result.pctWeeksWithCampaignsSent,
-            weeksWithCampaignsSent: result.weeksWithCampaignsSent,
-            weeksInRangeFull: result.weeksInRangeFull
-        });
         return (
             <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-2"><CalendarRange className="w-5 h-5 text-purple-600" /><h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Gap Week Elimination</h3></div>
