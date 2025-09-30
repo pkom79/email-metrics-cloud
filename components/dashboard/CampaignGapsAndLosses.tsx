@@ -23,7 +23,8 @@ interface Props {
 
 export default function CampaignGapsAndLosses({ dateRange, granularity, customFrom, customTo, filteredCampaigns }: Props) {
     const dm = DataManager.getInstance();
-    const campaigns = (filteredCampaigns && filteredCampaigns.length) ? filteredCampaigns : dm.getCampaigns();
+    // Use same raw campaign data as Campaign vs Flow Split chart for consistency
+    const campaigns = dm.getCampaigns();
     // Intentionally exclude flows from this module; other modules still use them
 
     const range = useMemo(() => {
