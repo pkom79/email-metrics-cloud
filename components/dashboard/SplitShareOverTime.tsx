@@ -27,6 +27,14 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
     const flows = dm.getFlowEmails();
 
     const series = useMemo(() => {
+        // Debug: Show what Campaign vs Flow Split sees
+        const july2025Campaigns = campaigns.filter(c => c.sentDate.getFullYear() === 2025 && c.sentDate.getMonth() === 6);
+        console.log('📊 CAMPAIGN vs FLOW SPLIT DATA:', {
+          totalCampaigns: campaigns.length,
+          july2025Count: july2025Campaigns.length,
+          july2025Dates: july2025Campaigns.map(c => c.sentDate.toISOString().slice(0,10))
+        });
+        
         // Build campaign-only and flow-only series with compare; always aggregate all flows
         const camp = dm.getMetricTimeSeriesWithCompare(campaigns as any, [], metric, dateRange, granularity, compareMode, customFrom, customTo);
         const flo = dm.getMetricTimeSeriesWithCompare([], flows as any, metric, dateRange, granularity, compareMode, customFrom, customTo);
