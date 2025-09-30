@@ -55,6 +55,8 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   const totalCompleteWeeks = completeWeeks.length;
   const totalWeeksInRange = weeks.length;
   const ONE_DAY = 24 * 60 * 60 * 1000;
+  let zeroWeekOverride: string[] | null = null;
+  let longestGapOverride: string[] | null = null;
   try {
     // eslint-disable-next-line no-console
   console.debug('[CampaignGaps&Losses] inputs', { rangeStart: rangeStart.toISOString(), rangeEnd: rangeEnd.toISOString(), weeks: weeks.length, campaigns: campaigns.length });
@@ -156,7 +158,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   // Prefer raw-campaign-derived count for gating and display to avoid aggregation inconsistencies
   sentWeeksAll = altSentWeeks;
   pctWeeksWithCampaignsSent = coverageDenom > 0 ? (sentWeeksAll / coverageDenom) * 100 : 0;
-    console.debug('[CampaignGaps&Losses] coverage', { coverageDenom, sentWeeksAll, pctWeeksWithCampaignsSent: Number(pctWeeksWithCampaignsSent.toFixed?.(2) ?? pctWeeksWithCampaignsSent), totalWeeksInRange, totalCompleteWeeks });
+  console.debug('[CampaignGaps&Losses] coverage', { coverageDenom, sentWeeksAll, pctWeeksWithCampaignsSent: Number(pctWeeksWithCampaignsSent.toFixed?.(2) ?? pctWeeksWithCampaignsSent), totalWeeksInRange, totalCompleteWeeks });
     console.debug('[CampaignGaps&Losses] coverageWeeks', sample);
     // Build a tiny histogram: how many weeks had N campaigns (within full in-range weeks)
     const hist: Record<string, number> = { '0': 0 };
@@ -165,7 +167,51 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
       const key = String(n);
       hist[key] = (hist[key] || 0) + 1;
     }
-  console.debug('[CampaignGaps&Losses] altSentWeeks', { altSentWeeks, campaignsInRange, coverageDenom, hist, mismatches, weeksWithCounts: altWeeks.map(w => ({ start: w.key.slice(0,10), count: w.count })) });
+    const zeroWeeksFromAlt = altWeeks.filter(w => !w.sent);
+    if (zeroWeeksFromAlt.length > zeroSendWeeks) {
+      zeroSendWeeks = zeroWeeksFromAlt.length;
+      allWeeksSent = coverageDenom > 0 && sentWeeksAll >= coverageDenom;
+      zeroWeekOverride = zeroWeeksFromAlt.map(w => w.key.slice(0, 10));
+
+      let bestLen = 0;
+      let bestStart = -1;
+      let runLen = 0;
+      let runStart = -1;
+      altWeeks.forEach((w, idx) => {
+        if (!w.sent) {
+          if (runLen === 0) runStart = idx;
+          runLen += 1;
+          if (runLen > bestLen) {
+            bestLen = runLen;
+            bestStart = runStart;
+          }
+        } else {
+          runLen = 0;
+          runStart = -1;
+        }
+      });
+
+      if (bestLen > 0 && bestStart >= 0) {
+        longestGap = Math.max(longestGap, bestLen);
+        if (bestLen >= 5) hasLongGaps = true;
+        longestGapOverride = altWeeks.slice(bestStart, bestStart + bestLen).map(w => w.key.slice(0, 10));
+
+        if (bestLen >= 10) {
+          const startIso = altWeeks[bestStart].key.slice(0, 10);
+          const endDate = new Date(altWeeks[bestStart + bestLen - 1].key);
+          const endInclusive = new Date(endDate); endInclusive.setUTCDate(endInclusive.getUTCDate() + 6);
+          const fallbackGap = {
+            weeks: bestLen,
+            start: startIso,
+            end: endInclusive.toISOString().slice(0, 10),
+          };
+          if (!suspectedCsvCoverageGap || fallbackGap.weeks > suspectedCsvCoverageGap.weeks) {
+            suspectedCsvCoverageGap = fallbackGap;
+          }
+        }
+      }
+    }
+  console.debug('[CampaignGaps&Losses] altSentWeeks', { altSentWeeks, campaignsInRange, coverageDenom, hist, zeroWeeksFromAlt: zeroWeeksFromAlt.map(w => w.key.slice(0,10)), mismatches, weeksWithCounts: altWeeks.map(w => ({ start: w.key.slice(0,10), count: w.count })) });
   } catch {}
 
   // Low-Effectiveness Campaigns: count individual campaigns with revenue==0 in the selected range
@@ -243,6 +289,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   }
 
   let estimatedLostRevenue: number | undefined = 0;
+  let suspectedCsvCoverageGap: { weeks: number; start: string; end: string } | null = null;
   // Global fallback median when local refs are insufficient
   const globalMedian = median(nonZeroWeeklyInRange);
   const ONE_WEEK = 7 * ONE_DAY;
@@ -308,27 +355,32 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
 
   // Suspected CSV coverage gap hint: if we observe an exceptionally long consecutive zero-campaign stretch
   // (e.g., >= 10 weeks) inside the selected range, surface a guidance hint for users to re-export CSV.
-  let suspectedCsvCoverageGap: { weeks: number; start: string; end: string } | null = null;
   if (longestGap >= 10 && longestGapStartIdx != null) {
     const startW = completeWeeks[longestGapStartIdx]?.weekStart;
     const endW = completeWeeks[longestGapStartIdx + longestGap - 1]?.weekStart;
     if (startW && endW) {
       const endLabel = new Date(endW); endLabel.setDate(endLabel.getDate() + 6);
-      suspectedCsvCoverageGap = {
+      const candidate = {
         weeks: longestGap,
         start: startW.toISOString().slice(0, 10),
         end: endLabel.toISOString().slice(0, 10),
       };
-      try {
-        // eslint-disable-next-line no-console
-        console.warn('[CampaignGaps&Losses] Detected long zero-campaign stretch', suspectedCsvCoverageGap);
-      } catch {}
+      if (!suspectedCsvCoverageGap || candidate.weeks > suspectedCsvCoverageGap.weeks) {
+        suspectedCsvCoverageGap = candidate;
+        try {
+          // eslint-disable-next-line no-console
+          console.warn('[CampaignGaps&Losses] Detected long zero-campaign stretch', suspectedCsvCoverageGap);
+        } catch {}
+      }
     }
   }
 
   // Build lists for tooltips
-  const zeroSendWeekStarts = completeWeeks.filter(w => isZeroSend(w)).map(w => w.weekStart.toISOString().slice(0,10));
-  const longestGapWeekStarts = ((): string[] => {
+  let zeroSendWeekStarts = completeWeeks.filter(w => isZeroSend(w)).map(w => w.weekStart.toISOString().slice(0,10));
+  if (zeroWeekOverride) {
+    zeroSendWeekStarts = zeroWeekOverride;
+  }
+  let longestGapWeekStarts = ((): string[] => {
     if (longestGapStartIdx == null || longestGap <= 0) return [];
     const out: string[] = [];
     for (let k = longestGapStartIdx; k < longestGapStartIdx + longestGap && k < completeWeeks.length; k++) {
@@ -336,6 +388,9 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
     }
     return out;
   })();
+  if (longestGapOverride) {
+    longestGapWeekStarts = longestGapOverride;
+  }
 
   return {
     zeroCampaignSendWeeks: zeroSendWeeks,
