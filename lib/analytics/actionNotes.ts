@@ -1,7 +1,7 @@
 import type { FrequencyBucketAggregate } from "./campaignSendFrequency";
 import type { SendVolumeGuidanceResult } from "./sendVolumeGuidance";
 import type { ProcessedCampaign, ProcessedFlowEmail } from "../data/dataTypes";
-import { computeCampaignSendFrequency } from "./campaignSendFrequency";
+import { computeCampaignSendFrequency, computeSendFrequencyGuidance } from "./campaignSendFrequency";
 import { computeAudienceSizeBuckets } from "./audienceSizeBuckets";
 import type { AudienceSizeBucket } from "./audienceSizeBuckets";
 import { computeCampaignGapsAndLosses } from "./campaignGapsLosses";
@@ -216,138 +216,6 @@ function deriveSendFrequencyContext(
   return { campaigns, weeksInRange: weeks };
 }
 
-function pickFrequencyLift(
-  buckets: FrequencyBucketAggregate[]
-): {
-  note: ModuleActionNote;
-  baseline?: FrequencyBucketAggregate;
-  target?: FrequencyBucketAggregate;
-} {
-  if (!buckets.length) {
-    return {
-      note: {
-        module: "campaignSendFrequency",
-        title: "Not enough data for a recommendation",
-        message: "No campaigns were found in the selected date range.",
-        sample: null,
-      },
-    };
-  }
-
-  const MIN_WEEKS = 4;
-  const MIN_EMAILS = 2500;
-  const eligible = buckets.filter(
-    (b) => b.weeksCount >= MIN_WEEKS && b.sumEmails >= MIN_EMAILS
-  );
-  const totalWeeks = buckets.reduce((sum, b) => sum + b.weeksCount, 0);
-  const sample = totalWeeks
-    ? `Based on ${totalWeeks} ${totalWeeks === 1 ? "week" : "weeks"} of campaign data.`
-    : null;
-
-  if (!eligible.length) {
-    return {
-      note: {
-        module: "campaignSendFrequency",
-        status: "insufficient",
-        title: "Not enough data for a recommendation",
-        message:
-          "Each cadence ran too few weeks or emails to compare. Extend testing before changing frequency.",
-        sample,
-      },
-    };
-  }
-
-  const orderMap: Record<string, number> = { "1": 1, "2": 2, "3": 3, "4+": 4 };
-  const byWeeksDesc = [...eligible].sort((a, b) => {
-    if (b.weeksCount !== a.weeksCount) return b.weeksCount - a.weeksCount;
-    return orderMap[a.key] - orderMap[b.key];
-  });
-  const baseline = byWeeksDesc[0];
-  const higher = eligible
-    .filter((b) => orderMap[b.key] > orderMap[baseline.key])
-    .sort((a, b) => orderMap[a.key] - orderMap[b.key]);
-  const lower = eligible
-    .filter((b) => orderMap[b.key] < orderMap[baseline.key])
-    .sort((a, b) => orderMap[b.key] - orderMap[a.key]);
-
-  const labelFor = (key: string) =>
-    key === "4+" ? "4+ campaigns per week" : `${key} campaign${key === "1" ? "" : "s"} per week`;
-
-  const buildLiftNote = (
-    candidate: FrequencyBucketAggregate,
-    direction: "more" | "less",
-    lift: number
-  ): ModuleActionNote => {
-    const liftPct = lift === Infinity ? "from a low base" : `${(lift * 100).toFixed(1)}%`;
-    const title =
-      direction === "more"
-        ? `Send ${labelFor(candidate.key)}`
-        : `Shift to ${labelFor(candidate.key)}`;
-    const message =
-      direction === "more"
-        ? `${labelFor(candidate.key)} weeks outperformed ${labelFor(
-            baseline.key
-          )} by ${liftPct} on weekly revenue. Engagement stayed within guardrails, so scale toward this cadence.`
-        : `${labelFor(baseline.key)} underperformed ${labelFor(
-            candidate.key
-          )} by ${liftPct}. Drop cadence to recover revenue and reduce fatigue.`;
-    return {
-      module: "campaignSendFrequency",
-      status: direction === "more" ? "send-more" : "send-less",
-      title,
-      message,
-      sample,
-      metadata: {
-        baselineKey: baseline.key,
-        targetKey: candidate.key,
-        baselineWeekly: baseline.avgWeeklyRevenue,
-        targetWeekly: candidate.avgWeeklyRevenue,
-      },
-    } satisfies ModuleActionNote;
-  };
-
-  for (const candidate of higher) {
-    const lift = baseline.avgWeeklyRevenue
-      ? (candidate.avgWeeklyRevenue - baseline.avgWeeklyRevenue) /
-        baseline.avgWeeklyRevenue
-      : candidate.avgWeeklyRevenue > 0
-      ? Infinity
-      : 0;
-    if (lift > 0.05) {
-      const note = buildLiftNote(candidate, "more", lift);
-      return { note, baseline, target: candidate };
-    }
-  }
-
-  for (const candidate of lower) {
-    const lift = baseline.avgWeeklyRevenue
-      ? (baseline.avgWeeklyRevenue - candidate.avgWeeklyRevenue) /
-        baseline.avgWeeklyRevenue
-      : 0;
-    if (lift > 0.05) {
-      const note = buildLiftNote(candidate, "less", lift);
-      return { note, baseline, target: candidate };
-    }
-  }
-
-  return {
-    note: {
-      module: "campaignSendFrequency",
-      status: "keep-as-is",
-      title: `Stay with ${labelFor(baseline.key)}`,
-      message: `${labelFor(
-        baseline.key
-      )} is performing consistently. Keep gathering data before changing cadence.`,
-      sample,
-      metadata: {
-        baselineKey: baseline.key,
-      },
-    },
-    baseline,
-    target: baseline,
-  };
-}
-
 export function buildSendFrequencyNote(params: {
   campaigns: ProcessedCampaign[];
   dateRange: string;
@@ -361,22 +229,35 @@ export function buildSendFrequencyNote(params: {
     params.customTo
   );
   const buckets = computeCampaignSendFrequency(campaigns);
-  const { note, baseline, target } = pickFrequencyLift(buckets);
+  const guidance = computeSendFrequencyGuidance(buckets, 'week');
 
-  const weeklyDelta = (() => {
-    if (note.status !== "send-more" || !baseline || !target) return null;
+  if (!guidance) {
+    return {
+      module: "campaignSendFrequency",
+      title: "Not enough data for a recommendation",
+      message: "No campaigns were found in the selected date range.",
+      sample: null,
+    };
+  }
 
-    const delta = (target.avgWeeklyRevenue - baseline.avgWeeklyRevenue) * CONSERVATIVE_FACTOR;
-    return delta > 0 ? delta : null;
-  })();
-
-  note.metadata = {
-    ...(note.metadata || {}),
-    weeksAnalysed: weeksInRange,
-    weeklyDelta,
+  const note: ModuleActionNote = {
+    module: "campaignSendFrequency",
+    status: guidance.status,
+    title: guidance.title,
+    message: guidance.message,
+    sample: guidance.sample,
+    metadata: {
+      baselineKey: guidance.baselineKey,
+      targetKey: guidance.targetKey,
+      baselineWeeklyRevenue: guidance.baselineWeeklyRevenue,
+      targetWeeklyRevenue: guidance.targetWeeklyRevenue,
+      cadenceLabel: guidance.cadenceLabel,
+      weeksAnalysed: weeksInRange,
+      weeklyDelta: guidance.estimatedWeeklyGain ?? null,
+      recommendationKind: guidance.recommendationKind,
+    },
+    estimatedImpact: null,
   };
-
-  note.estimatedImpact = null;
 
   return note;
 }
@@ -1238,9 +1119,10 @@ export function computeOpportunitySummary(params: {
     const meta: Record<string, unknown> = {
       ...(frequencyNote.metadata || {}),
     };
+    const recommendationKind = typeof meta["recommendationKind"] === "string" ? String(meta["recommendationKind"]) : null;
     const weeklyDeltaValue = meta["weeklyDelta"];
     const weeklyDelta = typeof weeklyDeltaValue === "number" ? weeklyDeltaValue : null;
-    if (weeklyDelta == null || weeklyDelta <= 0) {
+    if (recommendationKind !== 'scale' || weeklyDelta == null || weeklyDelta <= 0) {
       frequencyNote.estimatedImpact = null;
       return;
     }

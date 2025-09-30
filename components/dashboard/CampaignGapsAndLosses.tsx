@@ -28,21 +28,33 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
 
     const range = useMemo(() => {
         try {
-            if (dateRange === 'custom' && customFrom && customTo) return { start: new Date(customFrom + 'T00:00:00'), end: new Date(customTo + 'T23:59:59') };
-            // Anchor strictly to campaigns timeline for weekly campaign coverage.
-            if (!campaigns.length) return null;
-            let maxTime = 0; for (const e of campaigns) { const t = e.sentDate?.getTime?.(); if (Number.isFinite(t) && t! > maxTime) maxTime = t!; }
-            const latestCampaign = new Date(maxTime);
-            const end = new Date(maxTime); end.setHours(23, 59, 59, 999);
-            const days = parseInt(String(dateRange).replace('d', '')) || 30;
-            const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0);
+            if (dateRange === 'custom' && customFrom && customTo) {
+                return { start: new Date(`${customFrom}T00:00:00`), end: new Date(`${customTo}T23:59:59`) };
+            }
+
+            const resolved = dm.getResolvedDateRange(dateRange, customFrom, customTo);
+            let start = resolved?.startDate ?? null;
+            let end = resolved?.endDate ?? null;
+
+            const lastEmail = dm.getLastEmailDate?.();
+            if (!end && lastEmail) end = new Date(lastEmail);
+            if (!start && end) {
+                start = new Date(end);
+                start.setMonth(start.getMonth() - 6);
+            }
+            if (!start || !end) return null;
+
+            const startAligned = new Date(start); startAligned.setHours(0, 0, 0, 0);
+            const endAligned = new Date(end); endAligned.setHours(23, 59, 59, 999);
+
             try {
                 // eslint-disable-next-line no-console
-                console.debug('[CampaignGaps&Losses] range', { dateRange, start: start.toISOString(), end: end.toISOString(), latestCampaign: latestCampaign.toISOString(), campaignsCount: campaigns.length });
+                console.debug('[CampaignGaps&Losses] range', { dateRange, start: startAligned.toISOString(), end: endAligned.toISOString(), campaignsCount: campaigns.length });
             } catch { }
-            return { start, end };
+
+            return { start: startAligned, end: endAligned };
         } catch { return null; }
-    }, [dateRange, customFrom, customTo, campaigns]);
+    }, [dateRange, customFrom, customTo, campaigns, dm]);
 
     const result = useMemo(() => {
         if (!range) return null;

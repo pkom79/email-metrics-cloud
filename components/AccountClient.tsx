@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '../lib/supabase/client';
 
 type Props = {
@@ -22,6 +23,8 @@ function normalizeStoreUrl(input: string) {
 }
 
 export default function AccountClient({ initial }: Props) {
+    const searchParams = useSearchParams();
+    const selectedAccountId = searchParams?.get('account') || '';
     const [email, setEmail] = useState(initial.email);
     const [businessName, setBusinessName] = useState(initial.businessName || '');
     const [storeUrl, setStoreUrl] = useState(normalizeStoreUrl(initial.storeUrl || ''));
@@ -120,11 +123,26 @@ export default function AccountClient({ initial }: Props) {
         setBusy(true); setMsg(null); setErr(null);
         try {
             const normalized = normalizeStoreUrl(storeUrl);
+            const trimmedName = businessName.trim();
             const { error } = await supabase.auth.updateUser({
-                data: { businessName: businessName.trim(), storeUrl: normalized },
+                data: { businessName: trimmedName, storeUrl: normalized },
             });
             if (error) throw error;
             setStoreUrl(normalized);
+            const payload = {
+                accountId: selectedAccountId || billingInfo.accountId || null,
+                businessName: trimmedName,
+                storeUrl: normalized,
+            };
+            const resp = await fetch('/api/account/update-company', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!resp.ok) {
+                const json = await resp.json().catch(() => ({}));
+                throw new Error(json?.error || 'Failed to update account details');
+            }
             setMsg('Company details updated');
         } catch (e) {
             handleError(e, 'Failed to update company details');
