@@ -156,6 +156,11 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
       // Debug July 2025 specifically
       if (dt.getFullYear() === 2025 && dt.getMonth() === 6) { // July is month 6
         julyWeeks++;
+        console.debug('[CampaignGaps&Losses] July campaign found', {
+          date: dt.toISOString(),
+          title: c.subject || 'Untitled',
+          weekStart: ws.toISOString()
+        });
       }
       
       const key = ws.toISOString();
