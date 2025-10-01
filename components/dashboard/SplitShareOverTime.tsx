@@ -116,11 +116,14 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
                 if (!isNaN(d.getTime())) {
                     const boundaries = dm.getWeekBoundaries(d);
                     rangeLabel = boundaries.rangeLabel;
+                    console.log('🏷️ Generated rangeLabel:', { iso, rangeLabel, label, monday: boundaries.monday.toISOString().slice(0,10), sunday: boundaries.sunday.toISOString().slice(0,10) });
                     // Check if this week is incomplete (first or last in range)
                     if (rangeStart && rangeEnd) {
                         isIncomplete = !boundaries.isCompleteWeek(rangeStart, rangeEnd);
                     }
                 }
+            } else {
+                console.log('⚠️ NOT generating rangeLabel:', { granularity, iso, hasIso: !!iso });
             }
 
             const row: any = { label, iso, rangeLabel, isIncomplete, campVal: c, flowVal: f, total, campPct, flowPct };
@@ -270,7 +273,9 @@ function BarShareChart({
                     transform: 'translate(-50%, 0)'
                 }}>
                     <div className="font-medium mb-1 text-gray-900 dark:text-gray-100">
-                        {active.rangeLabel || (() => {
+                        {(() => {
+                            console.log('📍 Tooltip rendering:', { rangeLabel: active.rangeLabel, iso: active.iso, label: active.label, hasRangeLabel: !!active.rangeLabel });
+                            if (active.rangeLabel) return active.rangeLabel;
                             // Use ISO anchor from DataManager when available to avoid parsing short labels (e.g., "Oct 01" -> year 2001)
                             const baseIso = active.iso;
                             if (baseIso) {
