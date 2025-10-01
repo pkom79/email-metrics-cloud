@@ -148,7 +148,7 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
             items.push(row);
         }
         return items;
-    }, [dm, campaigns, flows, metric, dateRange, granularity, compareMode, customFrom, customTo]);
+    }, [dm, campaigns, flows, metric, effectiveDateRange, effectiveCustomFrom, effectiveCustomTo, granularity, compareMode]);
 
     if (!campaigns.length && !flows.length) return null;
 
