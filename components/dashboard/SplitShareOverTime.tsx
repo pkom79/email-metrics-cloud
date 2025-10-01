@@ -14,6 +14,7 @@ interface Props {
     customTo?: string;
     compareMode?: CompareMode;
     filteredCampaigns?: ProcessedCampaign[];
+    dateRangeBoundaries?: { start: Date; end: Date } | null;
 }
 
 type Metric = 'revenue' | 'emailsSent';
@@ -21,47 +22,30 @@ type Metric = 'revenue' | 'emailsSent';
 const formatCurrency = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
 const formatNumber = (v: number) => Math.round(v).toLocaleString('en-US');
 
-export default function SplitShareOverTime({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period', filteredCampaigns }: Props) {
+export default function SplitShareOverTime({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period', filteredCampaigns, dateRangeBoundaries }: Props) {
     const dm = DataManager.getInstance();
     const [metric, setMetric] = useState<Metric>('revenue');
 
     const campaigns = filteredCampaigns || dm.getCampaigns();
     const flows = dm.getFlowEmails();
 
-    // When using filteredCampaigns, compute the exact date boundaries to use 'custom' dateRange
+    // When using filteredCampaigns with provided boundaries, use those boundaries directly
     // This prevents DataManager from applying additional date filtering on pre-filtered data
     const { effectiveDateRange, effectiveCustomFrom, effectiveCustomTo } = useMemo(() => {
-        if (!filteredCampaigns) {
+        if (!filteredCampaigns || !dateRangeBoundaries) {
             return { effectiveDateRange: dateRange, effectiveCustomFrom: customFrom, effectiveCustomTo: customTo };
         }
 
-        // Compute the same date boundaries that DashboardHeavy used for filtering
-        const REFERENCE_DATE = new Date(); // Current date
-        let start: Date, end: Date;
-
-        if (dateRange === 'custom' && customFrom && customTo) {
-            start = new Date(customFrom + 'T00:00:00');
-            end = new Date(customTo + 'T23:59:59');
-        } else if (dateRange !== 'all') {
-            const days = parseInt(dateRange.replace('d', ''));
-            end = new Date(REFERENCE_DATE);
-            end.setHours(23, 59, 59, 999);
-            start = new Date(end);
-            start.setDate(start.getDate() - days + 1);
-            start.setHours(0, 0, 0, 0);
-        } else {
-            return { effectiveDateRange: 'all', effectiveCustomFrom: undefined, effectiveCustomTo: undefined };
-        }
-
-        const customFromISO = start.toISOString().slice(0, 10);
-        const customToISO = end.toISOString().slice(0, 10);
+        // Use the exact boundaries that DashboardHeavy used for filtering
+        const customFromISO = dateRangeBoundaries.start.toISOString().slice(0, 10);
+        const customToISO = dateRangeBoundaries.end.toISOString().slice(0, 10);
 
         return {
             effectiveDateRange: 'custom',
             effectiveCustomFrom: customFromISO,
             effectiveCustomTo: customToISO
         };
-    }, [filteredCampaigns, dateRange, customFrom, customTo]);
+    }, [filteredCampaigns, dateRangeBoundaries, dateRange, customFrom, customTo]);
 
     const series = useMemo(() => {
         // Debug: Show what Campaign vs Flow Split sees
