@@ -28,6 +28,41 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
     const campaigns = filteredCampaigns || dm.getCampaigns();
     const flows = dm.getFlowEmails();
 
+    // When using filteredCampaigns, compute the exact date boundaries to use 'custom' dateRange
+    // This prevents DataManager from applying additional date filtering on pre-filtered data
+    const { effectiveDateRange, effectiveCustomFrom, effectiveCustomTo } = useMemo(() => {
+        if (!filteredCampaigns) {
+            return { effectiveDateRange: dateRange, effectiveCustomFrom: customFrom, effectiveCustomTo: customTo };
+        }
+
+        // Compute the same date boundaries that DashboardHeavy used for filtering
+        const REFERENCE_DATE = new Date(); // Current date
+        let start: Date, end: Date;
+
+        if (dateRange === 'custom' && customFrom && customTo) {
+            start = new Date(customFrom + 'T00:00:00');
+            end = new Date(customTo + 'T23:59:59');
+        } else if (dateRange !== 'all') {
+            const days = parseInt(dateRange.replace('d', ''));
+            end = new Date(REFERENCE_DATE);
+            end.setHours(23, 59, 59, 999);
+            start = new Date(end);
+            start.setDate(start.getDate() - days + 1);
+            start.setHours(0, 0, 0, 0);
+        } else {
+            return { effectiveDateRange: 'all', effectiveCustomFrom: undefined, effectiveCustomTo: undefined };
+        }
+
+        const customFromISO = start.toISOString().slice(0, 10);
+        const customToISO = end.toISOString().slice(0, 10);
+
+        return {
+            effectiveDateRange: 'custom',
+            effectiveCustomFrom: customFromISO,
+            effectiveCustomTo: customToISO
+        };
+    }, [filteredCampaigns, dateRange, customFrom, customTo]);
+
     const series = useMemo(() => {
         // Debug: Show what Campaign vs Flow Split sees
         const july2025Campaigns = campaigns.filter(c => c.sentDate.getFullYear() === 2025 && c.sentDate.getMonth() === 6);
@@ -45,12 +80,15 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
         console.log('📊 Calling getMetricTimeSeriesWithCompare with:', {
             campaignCount: campaigns.length,
             dateRange,
+            effectiveDateRange,
+            effectiveCustomFrom,
+            effectiveCustomTo,
             granularity,
             metric,
             campaignsReference: campaigns === dm.getCampaigns() ? 'SAME_REF' : 'DIFFERENT_REF'
         });
-        const camp = dm.getMetricTimeSeriesWithCompare(campaigns as any, [], metric, dateRange, granularity, compareMode, customFrom, customTo);
-        const flo = dm.getMetricTimeSeriesWithCompare([], flows as any, metric, dateRange, granularity, compareMode, customFrom, customTo);
+        const camp = dm.getMetricTimeSeriesWithCompare(campaigns as any, [], metric, effectiveDateRange, granularity, compareMode, effectiveCustomFrom, effectiveCustomTo);
+        const flo = dm.getMetricTimeSeriesWithCompare([], flows as any, metric, effectiveDateRange, granularity, compareMode, effectiveCustomFrom, effectiveCustomTo);
         const primaryLen = Math.min(camp.primary.length, flo.primary.length);
         const items = [] as {
             label: string;
