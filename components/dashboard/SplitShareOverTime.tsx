@@ -74,7 +74,7 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
         const camp = dm.getMetricTimeSeriesWithCompare(campaigns as any, [], metric, effectiveDateRange, granularity, compareMode, effectiveCustomFrom, effectiveCustomTo);
         const flo = dm.getMetricTimeSeriesWithCompare([], flows as any, metric, effectiveDateRange, granularity, compareMode, effectiveCustomFrom, effectiveCustomTo);
         const primaryLen = Math.min(camp.primary.length, flo.primary.length);
-        
+
         // Compute date boundaries for detecting incomplete weeks
         let rangeStart: Date | null = null;
         let rangeEnd: Date | null = null;
@@ -82,7 +82,7 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
             rangeStart = new Date(effectiveCustomFrom + 'T00:00:00');
             rangeEnd = new Date(effectiveCustomTo + 'T23:59:59');
         }
-        
+
         const items = [] as {
             label: string;
             // Anchor ISO date for accurate tooltip formatting (provided by DataManager)
@@ -97,7 +97,7 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
             cmpRangeLabel?: string;
             cmpIsIncomplete?: boolean;
         }[];
-        
+
         for (let i = 0; i < primaryLen; i++) {
             const c = camp.primary[i]?.value ?? 0;
             const f = flo.primary[i]?.value ?? 0;
@@ -107,7 +107,7 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
             const label = camp.primary[i]?.date || flo.primary[i]?.date || '';
             // Prefer ISO from either series (exists in DataManager output even if not typed)
             const iso = (camp.primary[i] as any)?.iso || (flo.primary[i] as any)?.iso || null;
-            
+
             // Generate explicit range label for weekly granularity
             let rangeLabel: string | undefined = undefined;
             let isIncomplete = false;
@@ -122,9 +122,9 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
                     }
                 }
             }
-            
+
             const row: any = { label, iso, rangeLabel, isIncomplete, campVal: c, flowVal: f, total, campPct, flowPct };
-            
+
             if (camp.compare && flo.compare) {
                 const cc = camp.compare[i]?.value ?? 0;
                 const ff = flo.compare[i]?.value ?? 0;
@@ -134,7 +134,7 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
                 row.cmpFlowPct = t > 0 ? (ff / t) * 100 : 0;
                 row.cmpLabel = camp.compare[i]?.date || flo.compare[i]?.date || undefined;
                 row.cmpIso = (camp.compare[i] as any)?.iso || (flo.compare[i] as any)?.iso || null;
-                
+
                 // Generate compare range label
                 if (granularity === 'weekly' && row.cmpIso) {
                     const cmpDate = new Date(row.cmpIso);

@@ -988,8 +988,31 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // Ensure selected flow remains valid; if not, reset to 'all'
     useEffect(() => { if (selectedFlow !== 'all' && !uniqueFlowNames.includes(selectedFlow)) setSelectedFlow('all'); }, [uniqueFlowNames, selectedFlow]);
 
-    // Filters
-    const filteredCampaigns = useMemo(() => { if (!hasData) return [] as typeof ALL_CAMPAIGNS; let list = ALL_CAMPAIGNS; if (dateRange === 'custom' && customActive) { const from = new Date(customFrom! + 'T00:00:00'); const to = new Date(customTo! + 'T23:59:59'); list = list.filter(c => c.sentDate >= from && c.sentDate <= to); } else if (dateRange !== 'all') { const days = parseInt(dateRange.replace('d', '')); const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999); const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0); list = list.filter(c => c.sentDate >= start && c.sentDate <= end); } return list; }, [ALL_CAMPAIGNS, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
+    // Filters - compute date boundaries and filtered campaigns
+    const { filteredCampaigns, dateRangeBoundaries } = useMemo(() => {
+        if (!hasData) return { filteredCampaigns: [] as typeof ALL_CAMPAIGNS, dateRangeBoundaries: null };
+
+        let list = ALL_CAMPAIGNS;
+        let boundaries: { start: Date; end: Date } | null = null;
+
+        if (dateRange === 'custom' && customActive) {
+            const from = new Date(customFrom! + 'T00:00:00');
+            const to = new Date(customTo! + 'T23:59:59');
+            list = list.filter(c => c.sentDate >= from && c.sentDate <= to);
+            boundaries = { start: from, end: to };
+        } else if (dateRange !== 'all') {
+            const days = parseInt(dateRange.replace('d', ''));
+            const end = new Date(REFERENCE_DATE);
+            end.setHours(23, 59, 59, 999);
+            const start = new Date(end);
+            start.setDate(start.getDate() - days + 1);
+            start.setHours(0, 0, 0, 0);
+            list = list.filter(c => c.sentDate >= start && c.sentDate <= end);
+            boundaries = { start, end };
+        }
+
+        return { filteredCampaigns: list, dateRangeBoundaries: boundaries };
+    }, [ALL_CAMPAIGNS, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
     const campaignRangeLabel = useMemo(() => {
         const formatDate = (date: Date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         if (dateRange === 'custom') {
@@ -2060,6 +2083,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 customTo={customTo}
                                 compareMode={compareMode}
                                 filteredCampaigns={filteredCampaigns}
+                                dateRangeBoundaries={dateRangeBoundaries}
                             />
                             {/* Revenue Reliability module removed - placeholder panel removed */}
                             <SendVolumeImpact dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />

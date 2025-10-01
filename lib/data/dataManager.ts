@@ -167,6 +167,42 @@ export class DataManager {
     private _dayKey(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
     private _mondayOf(d: Date) { const n = new Date(d); n.setHours(0, 0, 0, 0); const day = n.getDay(); const diff = n.getDate() - day + (day === 0 ? -6 : 1); n.setDate(diff); return n; }
 
+    /**
+     * Public method to get standardized week boundaries and labels.
+     * Returns Monday as week start and Sunday as week end with explicit range label.
+     * @param date Any date within the week
+     * @returns Object with monday, sunday, label, and helper methods
+     */
+    public getWeekBoundaries(date: Date): { 
+        monday: Date; 
+        sunday: Date; 
+        label: string;
+        rangeLabel: string;
+        isCompleteWeek: (rangeStart: Date, rangeEnd: Date) => boolean;
+    } {
+        const monday = this._mondayOf(date);
+        const sunday = new Date(monday);
+        sunday.setDate(sunday.getDate() + 6);
+        sunday.setHours(23, 59, 59, 999);
+        
+        // Format: "Nov 3–9, 2024"
+        const monStr = this.safeToLocaleDateString(monday, { month: 'short', day: 'numeric' });
+        const sunStr = this.safeToLocaleDateString(sunday, { month: 'short', day: 'numeric' });
+        const year = sunday.getFullYear();
+        const rangeLabel = `${monStr}–${sunStr.replace(/^\w+\s/, '')}, ${year}`;
+        
+        return {
+            monday,
+            sunday,
+            label: sunStr, // Backwards compatible with existing code
+            rangeLabel, // New explicit range label
+            isCompleteWeek: (rangeStart: Date, rangeEnd: Date) => {
+                // A week is complete if all 7 days fall within the range
+                return monday >= rangeStart && sunday <= rangeEnd;
+            }
+        };
+    }
+
     private _rebuildDailyAggregates() {
         this._dailyAgg.clear();
         const allEmails = [...this.campaigns, ...this.flowEmails];
