@@ -59,24 +59,25 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   let longestGapOverride: string[] | null = null;
   let suspectedCsvCoverageGap: { weeks: number; start: string; end: string } | null = null;
 
-  // Use same week filtering as Reliability module for consistency
-  // Include weeks where the week start is within the range (matches other dashboard components)
+  // Use complete weeks for coverage calculations to exclude partial weeks at range boundaries
+  // A week is complete if it ends on or before the range end date
   const fullInRangeWeeks = weeks.filter(w => {
     const weekStartMs = w.weekStart.getTime();
     const isInRange = weekStartMs >= rangeStart.getTime() && weekStartMs <= rangeEnd.getTime();
+    const isComplete = w.isCompleteWeek;
     
     // Debug: log filtered out weeks to see what we're missing
-    if (!isInRange) {
+    if (!isInRange || !isComplete) {
       try {
         console.debug('[CampaignGaps&Losses] EXCLUDED week', {
           start: w.weekStart.toISOString().slice(0,10),
           campaignsSent: w.campaignsSent || 0,
-          reason: weekStartMs < rangeStart.getTime() ? 'before range' : 'after range'
+          reason: !isInRange ? (weekStartMs < rangeStart.getTime() ? 'before range' : 'after range') : 'incomplete week'
         });
       } catch {}
     }
     
-    return isInRange;
+    return isInRange && isComplete;
   });
 
   // Guard: if no weeks, return zeros
