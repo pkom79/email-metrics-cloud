@@ -116,7 +116,7 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
                 if (!isNaN(d.getTime())) {
                     const boundaries = dm.getWeekBoundaries(d);
                     rangeLabel = boundaries.rangeLabel;
-                    console.log('🏷️ Generated rangeLabel:', { iso, rangeLabel, label, monday: boundaries.monday.toISOString().slice(0,10), sunday: boundaries.sunday.toISOString().slice(0,10) });
+                    console.log('🏷️ Generated rangeLabel:', { iso, rangeLabel, label, monday: boundaries.monday.toISOString().slice(0, 10), sunday: boundaries.sunday.toISOString().slice(0, 10) });
                     // Check if this week is incomplete (first or last in range)
                     if (rangeStart && rangeEnd) {
                         isIncomplete = !boundaries.isCompleteWeek(rangeStart, rangeEnd);
