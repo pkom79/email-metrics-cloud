@@ -255,12 +255,24 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
     });
   } catch {}
 
-  // Low-Effectiveness Campaigns: count individual campaigns with revenue==0 in the selected range
+  // Low-Effectiveness Campaigns: count individual campaigns with revenue==0 in COMPLETE weeks only
   let lowEffectivenessCampaigns = 0;
   const zeroRevenueCampaignDetails: { date: string; title: string }[] = [];
+  
+  // Helper to check if a date falls in a complete week
+  const isInCompleteWeek = (date: Date): boolean => {
+    const ws = new Date(date);
+    const dayUTC = ws.getUTCDay();
+    const diffUTC = (dayUTC + 6) % 7;
+    ws.setUTCDate(ws.getUTCDate() - diffUTC);
+    ws.setUTCHours(0,0,0,0);
+    const weekIso = ws.toISOString().slice(0,10);
+    return fullInRangeWeeks.some(w => w.weekStart.toISOString().slice(0,10) === weekIso);
+  };
+  
   for (const c of campaigns) {
     if (!(c.sentDate instanceof Date) || isNaN(c.sentDate.getTime())) continue;
-    if (c.sentDate >= rangeStart && c.sentDate <= rangeEnd && (c.revenue || 0) === 0) {
+    if (c.sentDate >= rangeStart && c.sentDate <= rangeEnd && (c.revenue || 0) === 0 && isInCompleteWeek(c.sentDate)) {
       lowEffectivenessCampaigns++;
       const dateIso = new Date(c.sentDate).toISOString();
       const title = (c.campaignName || c.subject || '').toString();
@@ -416,21 +428,30 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
     }
   }
 
-  // Build lists for tooltips
-  let zeroSendWeekStarts = completeWeeks.filter(w => isZeroSend(w)).map(w => w.weekStart.toISOString().slice(0,10));
+  // Build lists for tooltips - use formatted week range labels instead of ISO dates
+  let zeroSendWeekStarts = completeWeeks.filter(w => isZeroSend(w)).map(w => w.label);
   if (zeroWeekOverride) {
-    zeroSendWeekStarts = zeroWeekOverride;
+    // Convert ISO dates to formatted labels
+    zeroSendWeekStarts = zeroWeekOverride.map(iso => {
+      const weekMonday = new Date(iso);
+      const matchingWeek = weeks.find(w => w.weekStart.toISOString().slice(0,10) === iso);
+      return matchingWeek ? matchingWeek.label : iso;
+    });
   }
   let longestGapWeekStarts = ((): string[] => {
     if (longestGapStartIdx == null || longestGap <= 0) return [];
     const out: string[] = [];
     for (let k = longestGapStartIdx; k < longestGapStartIdx + longestGap && k < completeWeeks.length; k++) {
-      out.push(completeWeeks[k].weekStart.toISOString().slice(0,10));
+      out.push(completeWeeks[k].label);
     }
     return out;
   })();
   if (longestGapOverride) {
-    longestGapWeekStarts = longestGapOverride;
+    // Convert ISO dates to formatted labels
+    longestGapWeekStarts = longestGapOverride.map(iso => {
+      const matchingWeek = weeks.find(w => w.weekStart.toISOString().slice(0,10) === iso);
+      return matchingWeek ? matchingWeek.label : iso;
+    });
   }
 
   return {

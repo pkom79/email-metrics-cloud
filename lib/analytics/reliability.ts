@@ -1,4 +1,5 @@
 import type { ProcessedCampaign, ProcessedFlowEmail } from '../data/dataTypes';
+import { DataManager } from '../data/dataManager';
 
 export interface WeeklyAggregate {
   weekStart: Date;
@@ -143,14 +144,17 @@ export function buildWeeklyAggregatesInRange(
   for (const c of campaigns) add(c.sentDate, c.revenue, 'campaign');
   for (const f of flows) add(f.sentDate, f.revenue, 'flow');
   const weeks: WeeklyAggregate[] = [];
+  const dm = DataManager.getInstance();
   for (let t = startMonday.getTime(); t <= endMonday.getTime(); t += ONE_WEEK) {
     const ws = new Date(t);
     const key = ws.toISOString();
+    // Use centralized week boundary calculation for consistent Monday-Sunday range labels
+    const boundaries = dm.getWeekBoundaries(ws);
   if (map[key]) {
       const b = map[key];
       weeks.push({
         weekStart: b.weekStart,
-        label: b.weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        label: boundaries.rangeLabel,
         totalRevenue: b.totalRevenue,
         campaignRevenue: b.campaignRevenue,
         flowRevenue: b.flowRevenue,
@@ -162,7 +166,7 @@ export function buildWeeklyAggregatesInRange(
       // Only include a zero week if it lies wholly within range; genuine zero (no sends of either type)
       weeks.push({
         weekStart: ws,
-        label: ws.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        label: boundaries.rangeLabel,
         totalRevenue: 0,
         campaignRevenue: 0,
         flowRevenue: 0,
