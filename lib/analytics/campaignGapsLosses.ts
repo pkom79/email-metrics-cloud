@@ -59,25 +59,50 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   let longestGapOverride: string[] | null = null;
   let suspectedCsvCoverageGap: { weeks: number; start: string; end: string } | null = null;
 
-  // Use complete weeks for coverage calculations to exclude partial weeks at range boundaries
-  // A week is complete if it ends on or before the range end date
+  // Debug: log ALL weeks from buildWeeklyAggregatesInRange
+  try {
+    console.log('🔍 ALL WEEKS from buildWeeklyAggregatesInRange:', weeks.map(w => ({
+      start: w.weekStart.toISOString().slice(0,10),
+      end: new Date(w.weekStart.getTime() + 7*ONE_DAY - 1).toISOString().slice(0,10),
+      label: w.label,
+      campaignsSent: w.campaignsSent || 0,
+      isComplete: w.isCompleteWeek
+    })));
+    console.log('🔍 Date Range:', {
+      start: rangeStart.toISOString().slice(0,10),
+      end: rangeEnd.toISOString().slice(0,10)
+    });
+  } catch {}
+
+  // REVISED LOGIC: Include weeks in gap analysis if their Monday start falls within the selected range,
+  // regardless of whether the full week is within range. The isCompleteWeek flag is only used for
+  // revenue estimation quality, not for gap detection.
+  // 
+  // This fixes the issue where a campaign sent on 7/21 (Monday) was being excluded because the week
+  // 7/21-27 extended beyond the selected range end date.
   const fullInRangeWeeks = weeks.filter(w => {
     const weekStartMs = w.weekStart.getTime();
-    const isInRange = weekStartMs >= rangeStart.getTime() && weekStartMs <= rangeEnd.getTime();
-    const isComplete = w.isCompleteWeek;
+    const weekStart = w.weekStart;
     
-    // Debug: log filtered out weeks to see what we're missing
-    if (!isInRange || !isComplete) {
-      try {
-        console.debug('[CampaignGaps&Losses] EXCLUDED week', {
-          start: w.weekStart.toISOString().slice(0,10),
-          campaignsSent: w.campaignsSent || 0,
-          reason: !isInRange ? (weekStartMs < rangeStart.getTime() ? 'before range' : 'after range') : 'incomplete week'
-        });
-      } catch {}
-    }
+    // A week is included if its Monday start date falls within the selected range
+    const isInRange = weekStart >= rangeStart && weekStart <= rangeEnd;
     
-    return isInRange && isComplete;
+    // Debug: log all weeks to help diagnose issues
+    try {
+      const weekEndMs = weekStartMs + (7 * ONE_DAY - 1);
+      console.debug('[CampaignGaps&Losses] Week evaluation', {
+        start: w.weekStart.toISOString().slice(0,10),
+        end: new Date(weekEndMs).toISOString().slice(0,10),
+        campaignsSent: w.campaignsSent || 0,
+        isComplete: w.isCompleteWeek,
+        isInRange: isInRange,
+        rangeStart: rangeStart.toISOString().slice(0,10),
+        rangeEnd: rangeEnd.toISOString().slice(0,10),
+        included: isInRange
+      });
+    } catch {}
+    
+    return isInRange;
   });
 
   // Guard: if no weeks, return zeros
@@ -106,12 +131,13 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   let longestGap = 0;
   let longestGapStartIdx: number | null = null;
   let hasLongGaps = false;
-  // Detect runs among complete weeks only
+  // REVISED: Detect runs among ALL weeks whose Monday falls in range (not just complete weeks)
+  // This ensures we count gaps correctly even for weeks that extend beyond the range end
   let i = 0;
-  while (i < completeWeeks.length) {
-    if (isZeroSend(completeWeeks[i])) {
+  while (i < fullInRangeWeeks.length) {
+    if (isZeroSend(fullInRangeWeeks[i])) {
       let j = i;
-      while (j < completeWeeks.length && isZeroSend(completeWeeks[j])) j++;
+      while (j < fullInRangeWeeks.length && isZeroSend(fullInRangeWeeks[j])) j++;
       const runLen = j - i;
       zeroSendWeeks += runLen;
       if (runLen > longestGap) { longestGap = runLen; longestGapStartIdx = i; }
@@ -187,19 +213,24 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
     }
     const zeroWeeksFromAlt = altWeeks.filter(w => !w.sent);
     
-    // Always use the alternative method if it finds any zero weeks, regardless of comparison
+    // Always set allWeeksSent=false if the alt calculation finds any zero weeks
     if (zeroWeeksFromAlt.length > 0) {
-      // Fix: if there are ANY zero weeks from alt calculation, allWeeksSent must be false
       allWeeksSent = false;
     }
     
-    // IMPORTANT: Don't override zeroSendWeeks if the weekly aggregation already found gaps
-    // The weekly aggregation is the source of truth for dashboard consistency
+    // Log comparison for debugging but trust the primary calculation now that it's fixed
+    // The primary method using fullInRangeWeeks should now correctly include all weeks
+    // whose Monday falls in range, which matches the alt calculation's bucketing
+    if (zeroWeeksFromAlt.length !== zeroSendWeeks) {
+      console.log('[CampaignGaps&Losses] MISMATCH - primary found', zeroSendWeeks, 'zero weeks, alt found', zeroWeeksFromAlt.length);
+      console.log('[CampaignGaps&Losses] Zero weeks from alt:', zeroWeeksFromAlt.map(w => ({ week: w.key.slice(0,10), count: w.count })));
+      console.log('[CampaignGaps&Losses] Zero weeks from primary:', fullInRangeWeeks.filter(w => (w.campaignsSent||0)===0).map(w => ({ week: w.weekStart.toISOString().slice(0,10), count: w.campaignsSent||0 })));
+    }
     
-    // Only use alternative calculation if weekly aggregation found ZERO gaps
-    // This ensures consistency with other dashboard components
+    // TEMPORARY: Keep the fallback logic for now to handle any remaining edge cases
+    // This can be removed once we've verified the primary calculation works correctly
     if (zeroSendWeeks === 0 && zeroWeeksFromAlt.length > 0) {
-      console.debug('[CampaignGaps&Losses] Using alternative calculation - weekly agg found no gaps but alt found', zeroWeeksFromAlt.length);
+      console.debug('[CampaignGaps&Losses] Using alternative calculation - primary found no gaps but alt found', zeroWeeksFromAlt.length);
       zeroSendWeeks = zeroWeeksFromAlt.length;
       zeroWeekOverride = zeroWeeksFromAlt.map(w => w.key.slice(0, 10));
 
@@ -408,9 +439,10 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
 
   // Suspected CSV coverage gap hint: if we observe an exceptionally long consecutive zero-campaign stretch
   // (e.g., >= 10 weeks) inside the selected range, surface a guidance hint for users to re-export CSV.
+  // REVISED: Use fullInRangeWeeks
   if (longestGap >= 10 && longestGapStartIdx != null) {
-    const startW = completeWeeks[longestGapStartIdx]?.weekStart;
-    const endW = completeWeeks[longestGapStartIdx + longestGap - 1]?.weekStart;
+    const startW = fullInRangeWeeks[longestGapStartIdx]?.weekStart;
+    const endW = fullInRangeWeeks[longestGapStartIdx + longestGap - 1]?.weekStart;
     if (startW && endW) {
       const endLabel = new Date(endW); endLabel.setDate(endLabel.getDate() + 6);
       const candidate = {
@@ -429,7 +461,8 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   }
 
   // Build lists for tooltips - use formatted week range labels instead of ISO dates
-  let zeroSendWeekStarts = completeWeeks.filter(w => isZeroSend(w)).map(w => w.label);
+  // REVISED: Use fullInRangeWeeks (all weeks whose Monday is in range) not just completeWeeks
+  let zeroSendWeekStarts = fullInRangeWeeks.filter(w => isZeroSend(w)).map(w => w.label);
   if (zeroWeekOverride) {
     // Convert ISO dates to formatted labels
     zeroSendWeekStarts = zeroWeekOverride.map(iso => {
@@ -441,8 +474,9 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   let longestGapWeekStarts = ((): string[] => {
     if (longestGapStartIdx == null || longestGap <= 0) return [];
     const out: string[] = [];
-    for (let k = longestGapStartIdx; k < longestGapStartIdx + longestGap && k < completeWeeks.length; k++) {
-      out.push(completeWeeks[k].label);
+    // REVISED: Use fullInRangeWeeks for gap display
+    for (let k = longestGapStartIdx; k < longestGapStartIdx + longestGap && k < fullInRangeWeeks.length; k++) {
+      out.push(fullInRangeWeeks[k].label);
     }
     return out;
   })();
