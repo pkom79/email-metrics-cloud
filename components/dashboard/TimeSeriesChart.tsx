@@ -104,8 +104,13 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                 try {
                     const dm = DataManager.getInstance();
                     const boundaries = dm.getWeekBoundaries(d);
+                    console.log('🎯 TimeSeriesChart using getWeekBoundaries:', { 
+                        iso: d.toISOString().slice(0, 10), 
+                        rangeLabel: boundaries.rangeLabel 
+                    });
                     return boundaries.rangeLabel;
                 } catch (err) {
+                    console.warn('⚠️ TimeSeriesChart fallback (DataManager unavailable):', err);
                     // Fallback: Calculate Monday-Sunday week range
                     const end = d;
                     const start = new Date(end);
