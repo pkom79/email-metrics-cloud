@@ -108,7 +108,14 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                 const dayStart = start.getDate();
                 const dayEnd = end.getDate();
                 const year = end.getFullYear();
-                return sameMonth ? `${monthEnd} ${dayStart}${dayEnd}, ${year}`.replace('\u0013', '–') : `${monthStart} ${dayStart} – ${monthEnd} ${dayEnd}, ${year}`;
+                // Use centralized week boundary calculation for consistency
+                const dm = (window as any).__dataManager__;
+                if (dm && typeof dm.getWeekBoundaries === 'function') {
+                    const boundaries = dm.getWeekBoundaries(d);
+                    return boundaries.rangeLabel;
+                }
+                // Fallback: Calculate Monday-Sunday week range (fixes concatenation bug)
+                return sameMonth ? `${monthEnd} ${dayStart}–${dayEnd}, ${year}` : `${monthStart} ${dayStart} – ${monthEnd} ${dayEnd}, ${year}`;
             }
             return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         } catch {
