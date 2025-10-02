@@ -4,7 +4,6 @@ import SelectBase from "../ui/SelectBase";
 import TooltipPortal from "../TooltipPortal";
 import { ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
 import { computeAxisMax, thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
-import { DataManager } from '../../lib/data/dataManager';
 
 type Granularity = 'daily' | 'weekly' | 'monthly';
 type CompareMode = 'prev-period' | 'prev-year';
@@ -100,24 +99,16 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                 return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
             }
             if (granularity === 'weekly') {
-                // Use centralized week boundary calculation for consistency
-                try {
-                    const dm = DataManager.getInstance();
-                    const boundaries = dm.getWeekBoundaries(d);
-                    return boundaries.rangeLabel;
-                } catch (err) {
-                    // Fallback: Calculate Monday-Sunday week range
-                    const end = d;
-                    const start = new Date(end);
-                    start.setDate(end.getDate() - 6);
-                    const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
-                    const monthStart = start.toLocaleDateString('en-US', { month: 'short' });
-                    const monthEnd = end.toLocaleDateString('en-US', { month: 'short' });
-                    const dayStart = start.getDate();
-                    const dayEnd = end.getDate();
-                    const year = end.getFullYear();
-                    return sameMonth ? `${monthEnd} ${dayStart}–${dayEnd}, ${year}` : `${monthStart} ${dayStart} – ${monthEnd} ${dayEnd}, ${year}`;
-                }
+                const end = d;
+                const start = new Date(end);
+                start.setDate(end.getDate() - 6);
+                const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+                const monthStart = start.toLocaleDateString('en-US', { month: 'short' });
+                const monthEnd = end.toLocaleDateString('en-US', { month: 'short' });
+                const dayStart = start.getDate();
+                const dayEnd = end.getDate();
+                const year = end.getFullYear();
+                return sameMonth ? `${monthEnd} ${dayStart}${dayEnd}, ${year}`.replace('\u0013', '–') : `${monthStart} ${dayStart} – ${monthEnd} ${dayEnd}, ${year}`;
             }
             return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         } catch {
