@@ -218,44 +218,48 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
       allWeeksSent = false;
     }
     
-    // Log comparison for debugging but trust the primary calculation now that it's fixed
-    // The primary method using fullInRangeWeeks should now correctly include all weeks
-    // whose Monday falls in range, which matches the alt calculation's bucketing
+    // CRITICAL FIX: ALWAYS use the alternative calculation because it directly buckets
+    // campaigns by UTC Monday, which is more accurate than the weekly aggregation.
+    // The weekly aggregation can miss campaigns due to timezone/date issues.
     if (zeroWeeksFromAlt.length !== zeroSendWeeks) {
       console.log('[CampaignGaps&Losses] MISMATCH - primary found', zeroSendWeeks, 'zero weeks, alt found', zeroWeeksFromAlt.length);
       console.log('[CampaignGaps&Losses] Zero weeks from alt:', zeroWeeksFromAlt.map(w => ({ week: w.key.slice(0,10), count: w.count })));
       console.log('[CampaignGaps&Losses] Zero weeks from primary:', fullInRangeWeeks.filter(w => (w.campaignsSent||0)===0).map(w => ({ week: w.weekStart.toISOString().slice(0,10), count: w.campaignsSent||0 })));
+      console.log('[CampaignGaps&Losses] USING ALT CALCULATION as source of truth');
     }
     
-    // TEMPORARY: Keep the fallback logic for now to handle any remaining edge cases
-    // This can be removed once we've verified the primary calculation works correctly
-    if (zeroSendWeeks === 0 && zeroWeeksFromAlt.length > 0) {
-      console.debug('[CampaignGaps&Losses] Using alternative calculation - primary found no gaps but alt found', zeroWeeksFromAlt.length);
-      zeroSendWeeks = zeroWeeksFromAlt.length;
+    // ALWAYS use the alternative calculation - it's the source of truth
+    // It directly buckets campaigns by UTC Monday which is more accurate than aggregation
+    zeroSendWeeks = zeroWeeksFromAlt.length;
+    if (zeroWeeksFromAlt.length > 0) {
       zeroWeekOverride = zeroWeeksFromAlt.map(w => w.key.slice(0, 10));
+    } else {
+      zeroWeekOverride = null;
+    }
 
-      let bestLen = 0;
-      let bestStart = -1;
-      let runLen = 0;
-      let runStart = -1;
-      altWeeks.forEach((w, idx) => {
-        if (!w.sent) {
-          if (runLen === 0) runStart = idx;
-          runLen += 1;
-          if (runLen > bestLen) {
-            bestLen = runLen;
-            bestStart = runStart;
-          }
-        } else {
-          runLen = 0;
-          runStart = -1;
+    // Calculate longest gap from alt calculation
+    let bestLen = 0;
+    let bestStart = -1;
+    let runLen = 0;
+    let runStart = -1;
+    altWeeks.forEach((w, idx) => {
+      if (!w.sent) {
+        if (runLen === 0) runStart = idx;
+        runLen += 1;
+        if (runLen > bestLen) {
+          bestLen = runLen;
+          bestStart = runStart;
         }
-      });
+      } else {
+        runLen = 0;
+        runStart = -1;
+      }
+    });
 
-      if (bestLen > 0 && bestStart >= 0) {
-        longestGap = Math.max(longestGap, bestLen);
-        if (bestLen >= 5) hasLongGaps = true;
-        longestGapOverride = altWeeks.slice(bestStart, bestStart + bestLen).map(w => w.key.slice(0, 10));
+    if (bestLen > 0 && bestStart >= 0) {
+      longestGap = bestLen;  // Use alt calculation result directly
+      if (bestLen >= 5) hasLongGaps = true;
+      longestGapOverride = altWeeks.slice(bestStart, bestStart + bestLen).map(w => w.key.slice(0, 10));
 
       if (bestLen >= 10) {
         const startIso = altWeeks[bestStart].key.slice(0, 10);
@@ -274,7 +278,9 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
           suspectedCsvCoverageGap = fallbackGap;
         }
       }
-      }
+    } else {
+      longestGap = 0;
+      longestGapOverride = null;
     }
     // Show final comparison
     const zeroWeeksList = zeroWeeksFromAlt.map(w => w.key.slice(0,10));
