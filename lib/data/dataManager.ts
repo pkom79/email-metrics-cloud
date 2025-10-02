@@ -113,8 +113,9 @@ export class DataManager {
                 if (wKey !== currentWeekKey) {
                     if (current) weeks.push(current);
                     currentWeekKey = wKey;
-                    const weekEnd = new Date(monday); weekEnd.setDate(weekEnd.getDate() + 6);
-                    current = { key: wKey, label: this.safeToLocaleDateString(weekEnd, { month: 'short', day: 'numeric' }), sums: { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } };
+                    // Use centralized week boundary calculation for consistent Monday-Sunday range labels
+                    const boundaries = this.getWeekBoundaries(monday);
+                    current = { key: wKey, label: boundaries.rangeLabel, sums: { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } };
                 }
                 const rec = dailyMap.get(k);
                 if (rec) {
@@ -185,11 +186,16 @@ export class DataManager {
         sunday.setDate(sunday.getDate() + 6);
         sunday.setHours(23, 59, 59, 999);
         
-        // Format: "Nov 3–9, 2024"
+        // Format: "Nov 3–9, 2024" (same month) or "Sep 29–Oct 5, 2024" (cross-month)
         const monStr = this.safeToLocaleDateString(monday, { month: 'short', day: 'numeric' });
         const sunStr = this.safeToLocaleDateString(sunday, { month: 'short', day: 'numeric' });
         const year = sunday.getFullYear();
-        const rangeLabel = `${monStr}–${sunStr.replace(/^\w+\s/, '')}, ${year}`;
+        
+        // Check if Monday and Sunday are in the same month
+        const sameMonth = monday.getMonth() === sunday.getMonth() && monday.getFullYear() === sunday.getFullYear();
+        const rangeLabel = sameMonth 
+            ? `${monStr}–${sunStr.replace(/^\w+\s/, '')}, ${year}` // "Nov 3–9, 2024"
+            : `${monStr}–${sunStr}, ${year}`; // "Sep 29–Oct 5, 2024"
         
         return {
             monday,
@@ -687,8 +693,9 @@ export class DataManager {
                         if (wKey !== currentWeekKey) {
                             if (current) buckets.push(current);
                             currentWeekKey = wKey;
-                            const weekEnd = new Date(monday); weekEnd.setDate(weekEnd.getDate() + 6);
-                            current = { key: wKey, label: this.safeToLocaleDateString(weekEnd, { month: 'short', day: 'numeric' }), sums: { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } };
+                            // Use centralized week boundary calculation for consistent Monday-Sunday range labels
+                            const boundaries = this.getWeekBoundaries(monday);
+                            current = { key: wKey, label: boundaries.rangeLabel, sums: { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } };
                         }
                         const rec = this._dailyAgg.get(k);
                         if (rec) {

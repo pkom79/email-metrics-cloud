@@ -63,15 +63,15 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
             while (cursor <= end) { push(cursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), cursor); cursor.setDate(cursor.getDate() + 1); }
         } else if (granularity === 'weekly') {
             // Use Monday-based weeks with proper range labels for consistency
-            while (cursor <= end) { 
+            while (cursor <= end) {
                 const boundaries = dm.getWeekBoundaries(cursor);
-                console.log('📊 AudienceGrowth weekly bucket:', { 
-                    cursor: cursor.toISOString().slice(0, 10), 
+                console.log('📊 AudienceGrowth weekly bucket:', {
+                    cursor: cursor.toISOString().slice(0, 10),
                     monday: boundaries.monday.toISOString().slice(0, 10),
-                    rangeLabel: boundaries.rangeLabel 
+                    rangeLabel: boundaries.rangeLabel
                 });
-                push(boundaries.rangeLabel, new Date(boundaries.monday)); 
-                cursor.setDate(cursor.getDate() + 7); 
+                push(boundaries.rangeLabel, new Date(boundaries.monday));
+                cursor.setDate(cursor.getDate() + 7);
             }
         } else {
             while (cursor <= end) { push(cursor.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }), cursor); cursor.setMonth(cursor.getMonth() + 1); }
