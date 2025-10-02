@@ -62,13 +62,32 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
         if (granularity === 'daily') {
             while (cursor <= end) { push(cursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), cursor); cursor.setDate(cursor.getDate() + 1); }
         } else if (granularity === 'weekly') {
-            while (cursor <= end) { push(cursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), cursor); cursor.setDate(cursor.getDate() + 7); }
+            // Use Monday-based weeks with proper range labels for consistency
+            while (cursor <= end) { 
+                const boundaries = dm.getWeekBoundaries(cursor);
+                console.log('📊 AudienceGrowth weekly bucket:', { 
+                    cursor: cursor.toISOString().slice(0, 10), 
+                    monday: boundaries.monday.toISOString().slice(0, 10),
+                    rangeLabel: boundaries.rangeLabel 
+                });
+                push(boundaries.rangeLabel, new Date(boundaries.monday)); 
+                cursor.setDate(cursor.getDate() + 7); 
+            }
         } else {
             while (cursor <= end) { push(cursor.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }), cursor); cursor.setMonth(cursor.getMonth() + 1); }
         }
         const idxFor = (d: Date) => {
             if (granularity === 'daily') return Math.floor((d.getTime() - start.getTime()) / 86400000);
-            if (granularity === 'weekly') return Math.floor((d.getTime() - start.getTime()) / (86400000 * 7));
+            if (granularity === 'weekly') {
+                // Find which Monday-based week bucket this date belongs to
+                const boundaries = dm.getWeekBoundaries(d);
+                const weekMonday = boundaries.monday;
+                // Find the bucket with this Monday
+                for (let i = 0; i < res.length; i++) {
+                    if (res[i].start.getTime() === weekMonday.getTime()) return i;
+                }
+                return -1; // Not in any bucket (shouldn't happen if date is in range)
+            }
             return (d.getFullYear() - start.getFullYear()) * 12 + (d.getMonth() - start.getMonth());
         };
         activeSubs.forEach(s => {
@@ -83,7 +102,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
             }
         });
         return res;
-    }, [granularity, activeSubs]);
+    }, [granularity, activeSubs, dm]);
 
     const buckets = useMemo(() => { if (!range) return [] as Bucket[]; return buildBuckets(range.start, range.end); }, [range, buildBuckets]);
 
