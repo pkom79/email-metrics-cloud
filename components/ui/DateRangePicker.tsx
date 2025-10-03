@@ -295,7 +295,7 @@ export default function DateRangePicker({
                 >
                     {/* Header with Month/Year Controls */}
                     <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-1">
                             {/* Previous Month Button */}
                             <button
                                 onClick={() => changeMonth(-1)}
@@ -314,7 +314,7 @@ export default function DateRangePicker({
                                         month: parseInt(e.target.value, 10),
                                     }))
                                 }
-                                className="px-2 py-1 pr-6 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs"
+                                className="px-3 py-1 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs"
                             >
                                 {Array.from({ length: 12 }, (_, i) => {
                                     const date = new Date(2024, i, 1);
@@ -336,7 +336,7 @@ export default function DateRangePicker({
                                         year: parseInt(e.target.value, 10),
                                     }))
                                 }
-                                className="px-2 py-1 pr-6 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs"
+                                className="px-3 py-1 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs"
                             >
                                 {availableYears.map((y) => (
                                     <option key={y} value={y}>
@@ -344,16 +344,16 @@ export default function DateRangePicker({
                                     </option>
                                 ))}
                             </SelectBase>
-
-                            {/* Next Month Button */}
-                            <button
-                                onClick={() => changeMonth(1)}
-                                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-purple-600 dark:text-purple-400"
-                                aria-label="Next month"
-                            >
-                                <ChevronRight className="w-5 h-5" />
-                            </button>
                         </div>
+
+                        {/* Next Month Button - pushed to the right */}
+                        <button
+                            onClick={() => changeMonth(1)}
+                            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-purple-600 dark:text-purple-400 ml-auto"
+                            aria-label="Next month"
+                        >
+                            <ChevronRight className="w-5 h-5" />
+                        </button>
                     </div>
 
                     {/* Two-Month Calendar Grid */}
