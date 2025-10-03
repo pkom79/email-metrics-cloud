@@ -84,7 +84,14 @@ export class DataManager {
                 granularity,
                 startDate: startDate.toISOString(),
                 endDate: endDate.toISOString(),
-                sampleCampaignDates: campaigns.slice(0,3).map(c => c.sentDate?.toISOString()),
+                sampleCampaignDates: campaigns.slice(0,3).map(c => ({
+                    date: c.sentDate?.toISOString(),
+                    timestamp: c.sentDate?.getTime(),
+                    isAfterStart: c.sentDate >= startDate,
+                    isBeforeEnd: c.sentDate <= endDate,
+                    startTimestamp: startDate.getTime(),
+                    endTimestamp: endDate.getTime()
+                })),
                 filteredCampaignDates: all.filter(e => campaigns.includes(e as any)).map(c => (c as any).sentDate?.toISOString())
             });
         }
