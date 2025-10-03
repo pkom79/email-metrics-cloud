@@ -33,6 +33,8 @@ import { buildLlmExportJson } from '../../lib/export/exportBuilder';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import TooltipPortal from '../TooltipPortal';
 import SelectBase from "../ui/SelectBase";
+import DateRangePicker, { DateRange } from '../ui/DateRangePicker';
+import { useDateAvailability } from '../../lib/hooks/useDateAvailability';
 import UploadWizard from '../../components/UploadWizard';
 import EmptyStateCard from '../EmptyStateCard';
 import { usePendingUploadsLinker } from '../../lib/utils/usePendingUploadsLinker';
@@ -876,108 +878,39 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const allowedMinISO = useMemo(() => toISO(ALLOWED_MIN_DATE), [ALLOWED_MIN_DATE, toISO]);
     const allowedMaxISO = useMemo(() => toISO(ALLOWED_MAX_DATE), [ALLOWED_MAX_DATE, toISO]);
 
-    // Custom popover calendar state (desktop)
-    const [showDatePopover, setShowDatePopover] = useState(false);
-    const [popoverYear, setPopoverYear] = useState<number>(() => ALLOWED_MAX_DATE.getFullYear());
-    const [popoverMonth, setPopoverMonth] = useState<number>(() => ALLOWED_MAX_DATE.getMonth());
-    const [tempFrom, setTempFrom] = useState<Date | null>(null);
-    const [tempTo, setTempTo] = useState<Date | null>(null);
-    const calendarRef = useRef<HTMLDivElement | null>(null);
-    const calendarButtonRef = useRef<HTMLButtonElement | null>(null);
-    useEffect(() => {
-        if (!showDatePopover) return;
-        const onDoc = (e: MouseEvent) => {
-            const t = e.target as Node | null;
-            if (calendarRef.current && !calendarRef.current.contains(t) && calendarButtonRef.current && !calendarButtonRef.current.contains(t)) {
-                setShowDatePopover(false);
-            }
-        };
-        document.addEventListener('mousedown', onDoc);
-        return () => document.removeEventListener('mousedown', onDoc);
-    }, [showDatePopover]);
-    useEffect(() => {
-        // Keep popover month in allowed range
-        const clampDate = (y: number, m: number) => {
-            const minY = ALLOWED_MIN_DATE.getFullYear();
-            const maxY = ALLOWED_MAX_DATE.getFullYear();
-            let Y = Math.min(Math.max(y, minY), maxY);
-            let M = m;
-            if (Y === minY) M = Math.max(M, ALLOWED_MIN_DATE.getMonth());
-            if (Y === maxY) M = Math.min(M, ALLOWED_MAX_DATE.getMonth());
-            return { Y, M };
-        };
-        const { Y, M } = clampDate(popoverYear, popoverMonth);
-        if (Y !== popoverYear) setPopoverYear(Y);
-        if (M !== popoverMonth) setPopoverMonth(M);
-    }, [ALLOWED_MIN_DATE, ALLOWED_MAX_DATE, popoverYear, popoverMonth]);
-    const allowedYears = useMemo(() => {
-        const yrs: number[] = [];
-        for (let y = ALLOWED_MAX_DATE.getFullYear(); y >= ALLOWED_MIN_DATE.getFullYear(); y--) yrs.push(y);
-        return yrs;
-    }, [ALLOWED_MAX_DATE, ALLOWED_MIN_DATE]);
-    const firstDayOfMonth = (y: number, m: number) => new Date(y, m, 1);
-    const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
-    const allowedMinStart = useMemo(() => { const d = new Date(ALLOWED_MIN_DATE); d.setHours(0, 0, 0, 0); return d; }, [ALLOWED_MIN_DATE]);
-    const allowedMaxEnd = useMemo(() => { const d = new Date(ALLOWED_MAX_DATE); d.setHours(23, 59, 59, 999); return d; }, [ALLOWED_MAX_DATE]);
-    const isDisabled = (d: Date) => d < allowedMinStart || d > allowedMaxEnd;
-    const isInRange = (d: Date) => {
-        if (!tempFrom || !tempTo) return false;
-        // Clone to avoid mutating state objects via setHours
-        const from = new Date(tempFrom.getFullYear(), tempFrom.getMonth(), tempFrom.getDate());
-        const to = new Date(tempTo.getFullYear(), tempTo.getMonth(), tempTo.getDate());
-        return d >= from && d <= to;
-    };
-    const onDayClick = (day: number, year?: number, month?: number) => {
-        const d = new Date(year ?? popoverYear, month ?? popoverMonth, day);
-        if (isDisabled(d)) return;
-        if (!tempFrom || (tempFrom && tempTo)) {
-            setTempFrom(d);
-            setTempTo(null);
-            setDateError(null);
-        } else if (tempFrom && !tempTo) {
-            if (d < tempFrom) {
-                setTempFrom(d);
-                setTempTo(null);
-                setDateError(null);
-            } else {
-                setTempTo(d);
-                // Auto-apply when second date selected
-                const start = new Date(tempFrom.getFullYear(), tempFrom.getMonth(), tempFrom.getDate());
-                const end = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-                const startISO = toISO(start);
-                const endISO = toISO(end);
+    // Date availability for new DateRangePicker component
+    const dateAvailability = useDateAvailability(ALL_CAMPAIGNS, ALL_FLOWS, {
+        maxYearsBack: 2,
+    });
+
+    // DateRange state for new picker
+    const [dateRangeValue, setDateRangeValue] = useState<DateRange>(() => {
+        if (customFrom && customTo) {
+            const [y1, m1, d1] = customFrom.split('-').map(Number);
+            const [y2, m2, d2] = customTo.split('-').map(Number);
+            return {
+                start: new Date(y1, m1 - 1, d1),
+                end: new Date(y2, m2 - 1, d2),
+            };
+        }
+        return { start: null, end: null };
+    });
+
+    // Handle date range change from new picker
+    const handleDateRangePickerChange = useCallback((range: DateRange) => {
+        setDateRangeValue(range);
+        if (range.start && range.end) {
+            const startISO = toISO(range.start);
+            const endISO = toISO(range.end);
+            startTransition(() => {
                 setCustomFrom(startISO);
                 setCustomTo(endISO);
                 setDateRange('custom');
-                setShowDatePopover(false);
-                setDateError(null);
-            }
+            });
         }
-    };
-    const [dateError, setDateError] = useState<string | null>(null);
-    const applyTempRange = () => {
-        const start = tempFrom ? tempFrom : new Date(popoverYear, popoverMonth, 1);
-        const end = tempTo ? tempTo : start;
-        if (start > end) { setDateError('Start date must be on or before End date'); return; }
-        const startISO = toISO(start);
-        const endISO = toISO(end);
-        setCustomFrom(startISO);
-        setCustomTo(endISO);
-        setDateRange('custom');
-        setShowDatePopover(false);
-        setDateError(null);
-    };
-    useEffect(() => {
-        // Initialize temp from current custom values for better continuity
-        if (customFrom) {
-            const [y, m, d] = customFrom.split('-').map(Number);
-            setTempFrom(new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0)));
-        } else setTempFrom(null);
-        if (customTo) {
-            const [y, m, d] = customTo.split('-').map(Number);
-            setTempTo(new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0)));
-        } else setTempTo(null);
-    }, [showDatePopover]);
+    }, [toISO]);
+
+    // Old calendar state removed - now using DateRangePicker component
     // Active flows: flows that have at least one send in the currently selected (or custom) date range
     // Mirror FlowStepAnalysis logic: restrict dropdown to *live* flows only, further filtered to current date window
     const liveFlows = useMemo(() => ALL_FLOWS.filter(f => (f as any).status && String((f as any).status).toLowerCase() === 'live'), [ALL_FLOWS]);
@@ -1839,11 +1772,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             {HAS_ACTIVE_ACCOUNT && (
                 <div className={`hidden sm:block sm:pt-2 ${stickyBar ? 'sm:sticky sm:top-0 sm:z-50' : ''}`}> <div className="max-w-7xl mx-auto px-4"><div className={`rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 ${stickyBar ? 'shadow-lg' : 'shadow-sm'} px-3 py-2 sm:mx-[-30px]`}>
                     <div className="hidden sm:flex items-center justify-center gap-3 flex-nowrap whitespace-nowrap">
-                        {/* Custom date inputs */}
-                        <div className="flex items-center gap-1.5 relative">
-                            <button ref={calendarButtonRef} onClick={() => setShowDatePopover(v => !v)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
-                                <Calendar className="w-4 h-4 text-gray-500" />
-                            </button>
+                        {/* New DateRangePicker component */}
+                        <div className="flex items-center gap-1.5">
                             <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Date Range:</span>
                             {isPending && (
                                 <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-medium">
@@ -1851,84 +1781,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     Updating...
                                 </span>
                             )}
-                            <input type="date" min={allowedMinISO} max={allowedMaxISO} value={customFrom || ''} onChange={e => { const v = e.target.value || undefined; let finalV = v; if (v) { if (v < allowedMinISO) finalV = allowedMinISO; if (v > allowedMaxISO) finalV = allowedMaxISO; } startTransition(() => { setCustomFrom(finalV); if (finalV && customTo && new Date(finalV) > new Date(customTo)) setCustomTo(finalV); setDateRange('custom'); }); }} className="px-2 py-1 rounded text-xs border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
-                            <span className="text-xs text-gray-500">to</span>
-                            <input type="date" min={allowedMinISO} max={allowedMaxISO} value={customTo || ''} onChange={e => { const v = e.target.value || undefined; let finalV = v; if (v) { if (v < allowedMinISO) finalV = allowedMinISO; if (v > allowedMaxISO) finalV = allowedMaxISO; } startTransition(() => { setCustomTo(finalV); if (finalV && customFrom && new Date(finalV) < new Date(customFrom)) setCustomFrom(finalV); setDateRange('custom'); }); }} className="px-2 py-1 rounded text-xs border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
-                            {customActive && <button onClick={() => { setCustomFrom(undefined); setCustomTo(undefined); setDateRange('30d'); }} className="ml-1 px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700">Clear</button>}
-                            {/* Popover calendar */}
-                            {showDatePopover && (
-                                <div ref={calendarRef} className="absolute left-0 top-full mt-2 z-50 w-[660px] rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-3">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-2">
-                                            <label className="text-xs text-gray-600 dark:text-gray-300">Year</label>
-                                            <SelectBase value={popoverYear} onChange={e => setPopoverYear(parseInt((e.target as HTMLSelectElement).value, 10))} className="px-2 py-1 pr-6 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs">
-                                                {allowedYears.map(y => <option key={y} value={y}>{y}</option>)}
-                                            </SelectBase>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <button onClick={() => { let m = popoverMonth - 1, y = popoverYear; if (m < 0) { m = 11; y--; } setPopoverYear(y); setPopoverMonth(m); }} className="px-2 py-1 text-xs rounded border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Prev</button>
-                                            <button onClick={() => { let m = popoverMonth + 1, y = popoverYear; if (m > 11) { m = 0; y++; } setPopoverYear(y); setPopoverMonth(m); }} className="px-2 py-1 text-xs rounded border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Next</button>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-6">
-                                        {/* Month A */}
-                                        <div>
-                                            <div className="grid grid-cols-7 gap-1 text-[10px] text-gray-500 mb-1">
-                                                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => <div key={d} className="text-center">{d}</div>)}
-                                            </div>
-                                            {(() => {
-                                                const first = firstDayOfMonth(popoverYear, popoverMonth);
-                                                const startDay = first.getDay();
-                                                const total = daysInMonth(popoverYear, popoverMonth);
-                                                const cells: React.ReactNode[] = [];
-                                                for (let i = 0; i < startDay; i++) cells.push(<div key={`a-e${i}`} className="h-8" />);
-                                                for (let d = 1; d <= total; d++) {
-                                                    const cur = new Date(popoverYear, popoverMonth, d);
-                                                    const disabled = isDisabled(cur);
-                                                    const selected = (tempFrom && cur.toDateString() === tempFrom.toDateString()) || (tempTo && cur.toDateString() === tempTo.toDateString());
-                                                    const inRange = !selected && isInRange(cur);
-                                                    cells.push(
-                                                        <button key={`a-${d}`} onClick={() => onDayClick(d, popoverYear, popoverMonth)} disabled={disabled} className={`h-8 w-8 text-xs rounded mx-auto flex items-center justify-center border ${disabled ? 'text-gray-300 dark:text-gray-600 border-transparent' : inRange ? 'bg-purple-100 text-purple-900 border-purple-200' : selected ? 'bg-purple-600 text-white border-purple-600' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}>{d}</button>
-                                                    );
-                                                }
-                                                return <div className="grid grid-cols-7 gap-1">{cells}</div>;
-                                            })()}
-                                        </div>
-                                        {/* Month B (next month) */}
-                                        <div>
-                                            <div className="grid grid-cols-7 gap-1 text-[10px] text-gray-500 mb-1">
-                                                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => <div key={d} className="text-center">{d}</div>)}
-                                            </div>
-                                            {(() => {
-                                                let y = popoverYear; let m = popoverMonth + 1; if (m > 11) { m = 0; y += 1; }
-                                                const first = firstDayOfMonth(y, m);
-                                                const startDay = first.getDay();
-                                                const total = daysInMonth(y, m);
-                                                const cells: React.ReactNode[] = [];
-                                                for (let i = 0; i < startDay; i++) cells.push(<div key={`b-e${i}`} className="h-8" />);
-                                                for (let d = 1; d <= total; d++) {
-                                                    const cur = new Date(y, m, d);
-                                                    const disabled = isDisabled(cur);
-                                                    const selected = (tempFrom && cur.toDateString() === tempFrom.toDateString()) || (tempTo && cur.toDateString() === tempTo.toDateString());
-                                                    const inRange = !selected && isInRange(cur);
-                                                    cells.push(
-                                                        <button key={`b-${d}`} onClick={() => onDayClick(d, y, m)} disabled={disabled} className={`h-8 w-8 text-xs rounded mx-auto flex items-center justify-center border ${disabled ? 'text-gray-300 dark:text-gray-600 border-transparent' : inRange ? 'bg-purple-100 text-purple-900 border-purple-200' : selected ? 'bg-purple-600 text-white border-purple-600' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'}`}>{d}</button>
-                                                    );
-                                                }
-                                                return <div className="grid grid-cols-7 gap-1">{cells}</div>;
-                                            })()}
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center justify-end gap-2 mt-3">
-                                        <button onClick={() => { setTempFrom(null); setTempTo(null); }} className="px-3 py-1.5 text-xs rounded border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800">Clear</button>
-                                        <button onClick={applyTempRange} className="px-3 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-700">Apply</button>
-                                    </div>
-                                    {dateError && <div className="mt-2 text-[11px] text-rose-600">{dateError}</div>}
-                                    <div className="mt-2 text-[10px] text-gray-500">
-                                        Allowed: {ALLOWED_MIN_DATE.toLocaleDateString()} – {ALLOWED_MAX_DATE.toLocaleDateString()}
-                                    </div>
-                                </div>
-                            )}
+                            <DateRangePicker
+                                value={dateRangeValue}
+                                onChange={handleDateRangePickerChange}
+                                availability={dateAvailability}
+                                maxRangeDays={730}
+                                placeholder="Select custom range"
+                            />
                         </div>
                         <div className="flex flex-col items-start gap-1"><div className="relative"><SelectBase value={dateRange === 'custom' ? '' : dateRange} onChange={e => handleDateRangeChange((e.target as HTMLSelectElement).value || '30d')} className="px-2 py-1 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-xs">
                             <option value="" disabled>Presets</option>
