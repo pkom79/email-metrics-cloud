@@ -185,14 +185,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     // Additional readiness flag to avoid rendering charts before hydration attempts complete
     const [initialLoadComplete, setInitialLoadComplete] = useState(false);
-    
+
     // Performance: Use transitions for non-blocking date changes
     const [isPending, startTransition] = useTransition();
     const [dateRange, setDateRange] = useState<'30d' | '60d' | '90d' | '120d' | '180d' | '365d' | 'all' | 'custom'>('30d');
     const [customFrom, setCustomFrom] = useState<string | undefined>();
     const [customTo, setCustomTo] = useState<string | undefined>();
     const customActive = dateRange === 'custom' && customFrom && customTo;
-    
+
     // Performance: Defer heavy computations during date changes
     const deferredDateRange = useDeferredValue(dateRange);
     const deferredCustomFrom = useDeferredValue(customFrom);
