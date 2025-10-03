@@ -989,7 +989,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         const effectiveCustomFrom = deferredCustomFrom;
         const effectiveCustomTo = deferredCustomTo;
         const effectiveCustomActive = effectiveDateRange === 'custom' && effectiveCustomFrom && effectiveCustomTo;
-        
+
         if (effectiveDateRange === 'custom' && effectiveCustomActive) {
             // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
             const [y1, m1, d1] = effectiveCustomFrom!.split('-').map(Number);
@@ -1067,7 +1067,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     }, [ALL_CAMPAIGNS, deferredDateRange, REFERENCE_DATE, hasData, deferredCustomFrom, deferredCustomTo]);
     const campaignRangeLabel = useMemo(() => {
         const formatDate = (date: Date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        
+
         // Use immediate values for label (not deferred) so label updates instantly
         if (dateRange === 'custom') {
             if (customActive && customFrom && customTo) {
@@ -1098,13 +1098,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     }, [dateRange, customActive, customFrom, customTo, filteredCampaigns]);
     const filteredFlowEmails = useMemo(() => {
         if (!hasData) return [] as typeof ALL_FLOWS;
-        
+
         // PERFORMANCE: Use deferred values to avoid blocking UI during date changes
         const effectiveDateRange = deferredDateRange;
         const effectiveCustomFrom = deferredCustomFrom;
         const effectiveCustomTo = deferredCustomTo;
         const effectiveCustomActive = effectiveDateRange === 'custom' && effectiveCustomFrom && effectiveCustomTo;
-        
+
         let flows = ALL_FLOWS;
         // Apply Flow Performance selection only for non-overview sections
         if (selectedFlow !== 'all') flows = flows.filter(f => f.flowName === selectedFlow);
@@ -1128,13 +1128,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // Overview should always use ALL flows (date-filtered), regardless of Flow Performance selection
     const filteredFlowEmailsAll = useMemo(() => {
         if (!hasData) return [] as typeof ALL_FLOWS;
-        
+
         // PERFORMANCE: Use deferred values to avoid blocking UI during date changes
         const effectiveDateRange = deferredDateRange;
         const effectiveCustomFrom = deferredCustomFrom;
         const effectiveCustomTo = deferredCustomTo;
         const effectiveCustomActive = effectiveDateRange === 'custom' && effectiveCustomFrom && effectiveCustomTo;
-        
+
         let flows = ALL_FLOWS; // intentionally no selectedFlow filter
         if (effectiveDateRange === 'custom' && effectiveCustomActive) {
             // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
