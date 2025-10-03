@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState, useEffect, useDeferredValue, useRef, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useDeferredValue, useRef, useCallback, useTransition } from 'react';
 import { DataManager } from '../../lib/data/dataManager';
 import MetricCard from './MetricCard';
 import DayOfWeekPerformance from './DayOfWeekPerformance';
@@ -185,10 +185,18 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     // Additional readiness flag to avoid rendering charts before hydration attempts complete
     const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+    
+    // Performance: Use transitions for non-blocking date changes
+    const [isPending, startTransition] = useTransition();
     const [dateRange, setDateRange] = useState<'30d' | '60d' | '90d' | '120d' | '180d' | '365d' | 'all' | 'custom'>('30d');
     const [customFrom, setCustomFrom] = useState<string | undefined>();
     const [customTo, setCustomTo] = useState<string | undefined>();
     const customActive = dateRange === 'custom' && customFrom && customTo;
+    
+    // Performance: Defer heavy computations during date changes
+    const deferredDateRange = useDeferredValue(dateRange);
+    const deferredCustomFrom = useDeferredValue(customFrom);
+    const deferredCustomTo = useDeferredValue(customTo);
     const customDays = useMemo(() => { if (!customActive) return 0; const from = new Date(customFrom!); from.setHours(0, 0, 0, 0); const to = new Date(customTo!); to.setHours(23, 59, 59, 999); const diff = Math.floor((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1; return Math.max(diff, 1); }, [customActive, customFrom, customTo]);
     const [granularity, setGranularity] = useState<'daily' | 'weekly' | 'monthly'>('daily');
     const [compareMode, setCompareMode] = useState<'prev-period' | 'prev-year'>('prev-period');
@@ -1199,9 +1207,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         }
     }, [dateRange, REFERENCE_DATE, ALL_CAMPAIGNS, ALL_FLOWS, hasData]);
 
-    // Optimized date range change handler - let useEffect handle calculations
+    // Optimized date range change handler - use transitions for non-blocking updates
     const handleDateRangeChange = useCallback((value: string) => {
-        setDateRange(value as any);
+        startTransition(() => {
+            setDateRange(value as any);
+        });
     }, []);
 
     // Metrics calculations
