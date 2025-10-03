@@ -671,19 +671,21 @@ export class DataManager {
             }
 
             // Use manual formatting first to avoid DateTimeFormat issues
+            // CRITICAL: Use UTC methods to match UTC-based week boundary calculations
             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            const month = date.getMonth();
-            const day = date.getDate();
+            const month = date.getUTCMonth();
+            const day = date.getUTCDate();
+            const utcYear = date.getUTCFullYear();
 
             // Validate individual components
-            if (month < 0 || month > 11 || day < 1 || day > 31 || year < 1900 || year > 2100) {
-                console.warn('safeToLocaleDateString: Invalid date components:', { year, month, day });
+            if (month < 0 || month > 11 || day < 1 || day > 31 || utcYear < 1900 || utcYear > 2100) {
+                console.warn('safeToLocaleDateString: Invalid date components:', { year: utcYear, month, day });
                 return 'Invalid Date';
             }
 
             // Return manual formatting directly instead of trying native DateTimeFormat
             if (options.year) {
-                return `${monthNames[month]} ${String(year).slice(-2)}`;
+                return `${monthNames[month]} ${String(utcYear).slice(-2)}`;
             } else {
                 return `${monthNames[month]} ${day}`;
             }
