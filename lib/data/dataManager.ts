@@ -200,7 +200,15 @@ export class DataManager {
     }
 
     private _dayKey(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
-    private _mondayOf(d: Date) { const n = new Date(d); n.setHours(0, 0, 0, 0); const day = n.getDay(); const diff = n.getDate() - day + (day === 0 ? -6 : 1); n.setDate(diff); return n; }
+    private _mondayOf(d: Date) { 
+        // Use UTC methods to match startOfMondayUTC in reliability.ts and avoid timezone-based week boundary shifts
+        const n = new Date(d); 
+        const day = n.getUTCDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+        const diff = (day + 6) % 7; // days to subtract to get to Monday (0 for Mon, 6 for Sun, etc.)
+        n.setUTCDate(n.getUTCDate() - diff);
+        n.setUTCHours(0, 0, 0, 0);
+        return n;
+    }
 
     /**
      * Public method to get standardized week boundaries and labels.
@@ -217,16 +225,16 @@ export class DataManager {
     } {
         const monday = this._mondayOf(date);
         const sunday = new Date(monday);
-        sunday.setDate(sunday.getDate() + 6);
-        sunday.setHours(23, 59, 59, 999);
+        sunday.setUTCDate(sunday.getUTCDate() + 6);
+        sunday.setUTCHours(23, 59, 59, 999);
         
         // Format: "Nov 3–9, 2024" (same month) or "Sep 29–Oct 5, 2024" (cross-month)
         const monStr = this.safeToLocaleDateString(monday, { month: 'short', day: 'numeric' });
         const sunStr = this.safeToLocaleDateString(sunday, { month: 'short', day: 'numeric' });
-        const year = sunday.getFullYear();
+        const year = sunday.getUTCFullYear();
         
-        // Check if Monday and Sunday are in the same month
-        const sameMonth = monday.getMonth() === sunday.getMonth() && monday.getFullYear() === sunday.getFullYear();
+        // Check if Monday and Sunday are in the same month (using UTC to match week boundary calculation)
+        const sameMonth = monday.getUTCMonth() === sunday.getUTCMonth() && monday.getUTCFullYear() === sunday.getUTCFullYear();
         const rangeLabel = sameMonth 
             ? `${monStr}–${sunStr.replace(/^\w+\s/, '')}, ${year}` // "Nov 3–9, 2024"
             : `${monStr}–${sunStr}, ${year}`; // "Sep 29–Oct 5, 2024"
