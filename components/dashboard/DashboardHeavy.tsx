@@ -910,6 +910,29 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         }
     }, [toISO]);
 
+    // Sync dateRangeValue when customFrom/customTo changes (from preset selection)
+    useEffect(() => {
+        if (customFrom && customTo) {
+            const [y1, m1, d1] = customFrom.split('-').map(Number);
+            const [y2, m2, d2] = customTo.split('-').map(Number);
+            const newRange = {
+                start: new Date(y1, m1 - 1, d1),
+                end: new Date(y2, m2 - 1, d2),
+            };
+            // Only update if different to avoid infinite loops
+            if (
+                !dateRangeValue.start ||
+                !dateRangeValue.end ||
+                dateRangeValue.start.getTime() !== newRange.start.getTime() ||
+                dateRangeValue.end.getTime() !== newRange.end.getTime()
+            ) {
+                setDateRangeValue(newRange);
+            }
+        } else if (dateRangeValue.start || dateRangeValue.end) {
+            setDateRangeValue({ start: null, end: null });
+        }
+    }, [customFrom, customTo]);
+
     // Old calendar state removed - now using DateRangePicker component
     // Active flows: flows that have at least one send in the currently selected (or custom) date range
     // Mirror FlowStepAnalysis logic: restrict dropdown to *live* flows only, further filtered to current date window
