@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Calendar } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import SelectBase from './SelectBase';
 
 export interface DateRange {
@@ -281,7 +281,7 @@ export default function DateRangePicker({
                 ref={buttonRef}
                 onClick={() => !disabled && setIsOpen(!isOpen)}
                 disabled={disabled}
-                className="flex items-center gap-2 px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-750 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-750 disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 <Calendar className="w-4 h-4 text-gray-500" />
                 <span>{displayValue}</span>
@@ -296,6 +296,15 @@ export default function DateRangePicker({
                     {/* Header with Month/Year Controls */}
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
+                            {/* Previous Month Button */}
+                            <button
+                                onClick={() => changeMonth(-1)}
+                                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-purple-600 dark:text-purple-400"
+                                aria-label="Previous month"
+                            >
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+
                             <label className="text-xs font-medium text-gray-600 dark:text-gray-300">Month</label>
                             <SelectBase
                                 value={calendarState.month}
@@ -335,10 +344,15 @@ export default function DateRangePicker({
                                     </option>
                                 ))}
                             </SelectBase>
-                        </div>
 
-                        <div className="flex items-center gap-1 text-xs text-gray-500">
-                            <span>Use PgUp/PgDn to navigate</span>
+                            {/* Next Month Button */}
+                            <button
+                                onClick={() => changeMonth(1)}
+                                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-purple-600 dark:text-purple-400"
+                                aria-label="Next month"
+                            >
+                                <ChevronRight className="w-5 h-5" />
+                            </button>
                         </div>
                     </div>
 
@@ -412,22 +426,6 @@ export default function DateRangePicker({
                                 className="px-3 py-1.5 text-xs rounded border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
                             >
                                 Clear
-                            </button>
-                            <button
-                                onClick={() => {
-                                    const today = new Date();
-                                    today.setHours(0, 0, 0, 0);
-                                    if (!isDateDisabled(today, 'start')) {
-                                        setCalendarState((prev) => ({
-                                            ...prev,
-                                            pendingStart: today,
-                                            pendingEnd: null,
-                                        }));
-                                    }
-                                }}
-                                className="px-3 py-1.5 text-xs rounded border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
-                            >
-                                Today
                             </button>
                         </div>
                     </div>
