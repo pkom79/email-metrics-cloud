@@ -255,8 +255,22 @@ export class DataManager {
     private _computeDateRangeForTimeSeries(dateRange: string, customFrom?: string, customTo?: string): { startDate: Date; endDate: Date } | null {
         try {
             if (dateRange === 'custom' && customFrom && customTo) {
-                const startDate = new Date(customFrom + 'T00:00:00');
-                const endDate = new Date(customTo + 'T23:59:59');
+                // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
+                // The format YYYY-MM-DDTHH:MM:SS is interpreted as local time by JavaScript
+                // which causes a 4-hour offset in EDT (UTC-4), making 7/21 become 7/20 8pm UTC
+                // Use Date.UTC() to ensure consistent UTC interpretation
+                const [y1, m1, d1] = customFrom.split('-').map(Number);
+                const [y2, m2, d2] = customTo.split('-').map(Number);
+                const startDate = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
+                const endDate = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
+                
+                console.log('🔍 [DataManager] Date range parsing:', {
+                    customFrom,
+                    customTo,
+                    startDateUTC: startDate.toISOString(),
+                    endDateUTC: endDate.toISOString()
+                });
+                
                 return { startDate, endDate };
             }
             const allEmails = [...this.campaigns, ...this.flowEmails].filter(e => e.sentDate instanceof Date && !isNaN(e.sentDate.getTime()));
