@@ -961,10 +961,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     };
     useEffect(() => {
         // Initialize temp from current custom values for better continuity
-        if (customFrom) setTempFrom(new Date(customFrom + 'T00:00:00'));
-        else setTempFrom(null);
-        if (customTo) setTempTo(new Date(customTo + 'T00:00:00'));
-        else setTempTo(null);
+        if (customFrom) {
+            const [y, m, d] = customFrom.split('-').map(Number);
+            setTempFrom(new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0)));
+        } else setTempFrom(null);
+        if (customTo) {
+            const [y, m, d] = customTo.split('-').map(Number);
+            setTempTo(new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0)));
+        } else setTempTo(null);
     }, [showDatePopover]);
     // Active flows: flows that have at least one send in the currently selected (or custom) date range
     // Mirror FlowStepAnalysis logic: restrict dropdown to *live* flows only, further filtered to current date window
@@ -973,8 +977,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         if (!liveFlows.length) return [] as typeof liveFlows;
         let flows = liveFlows;
         if (dateRange === 'custom' && customActive) {
-            const from = new Date(customFrom! + 'T00:00:00');
-            const to = new Date(customTo! + 'T23:59:59');
+            // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
+            const [y1, m1, d1] = customFrom!.split('-').map(Number);
+            const [y2, m2, d2] = customTo!.split('-').map(Number);
+            const from = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
+            const to = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
             flows = flows.filter(f => f.sentDate >= from && f.sentDate <= to);
         } else if (dateRange !== 'all') {
             const days = parseInt(dateRange.replace('d', ''));
@@ -996,8 +1003,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         let boundaries: { start: Date; end: Date } | null = null;
 
         if (dateRange === 'custom' && customActive) {
-            const from = new Date(customFrom! + 'T00:00:00');
-            const to = new Date(customTo! + 'T23:59:59');
+            // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
+            const [y1, m1, d1] = customFrom!.split('-').map(Number);
+            const [y2, m2, d2] = customTo!.split('-').map(Number);
+            const from = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
+            const to = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
             list = list.filter(c => c.sentDate >= from && c.sentDate <= to);
             boundaries = { start: from, end: to };
         } else if (dateRange !== 'all') {
@@ -1017,8 +1027,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         const formatDate = (date: Date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         if (dateRange === 'custom') {
             if (customActive && customFrom && customTo) {
-                const start = new Date(`${customFrom}T00:00:00`);
-                const end = new Date(`${customTo}T23:59:59`);
+                // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
+                const [y1, m1, d1] = customFrom.split('-').map(Number);
+                const [y2, m2, d2] = customTo.split('-').map(Number);
+                const start = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
+                const end = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
                 return `${formatDate(start)} – ${formatDate(end)}`;
             }
             return 'custom range';
@@ -1046,8 +1059,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         if (selectedFlow !== 'all') flows = flows.filter(f => f.flowName === selectedFlow);
         // Apply date filtering
         if (dateRange === 'custom' && customActive) {
-            const from = new Date(customFrom! + 'T00:00:00');
-            const to = new Date(customTo! + 'T23:59:59');
+            // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
+            const [y1, m1, d1] = customFrom!.split('-').map(Number);
+            const [y2, m2, d2] = customTo!.split('-').map(Number);
+            const from = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
+            const to = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
             flows = flows.filter(f => f.sentDate >= from && f.sentDate <= to);
         } else if (dateRange !== 'all') {
             const days = parseInt(dateRange.replace('d', ''));
@@ -1063,8 +1079,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         if (!hasData) return [] as typeof ALL_FLOWS;
         let flows = ALL_FLOWS; // intentionally no selectedFlow filter
         if (dateRange === 'custom' && customActive) {
-            const from = new Date(customFrom! + 'T00:00:00');
-            const to = new Date(customTo! + 'T23:59:59');
+            // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
+            const [y1, m1, d1] = customFrom!.split('-').map(Number);
+            const [y2, m2, d2] = customTo!.split('-').map(Number);
+            const from = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
+            const to = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
             flows = flows.filter(f => f.sentDate >= from && f.sentDate <= to);
         } else if (dateRange !== 'all') {
             const days = parseInt(dateRange.replace('d', ''));
