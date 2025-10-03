@@ -178,8 +178,12 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   const altMap: Record<string, number> = {};
     let campaignsInRange = 0;
     let julyWeeks = 0;
+    
+    // Log campaigns for debugging
+    const campaignDates: string[] = [];
     for (const c of campaigns) {
       if (!(c.sentDate instanceof Date)) continue;
+      campaignDates.push(c.sentDate.toISOString().slice(0,10));
       const dt = c.sentDate;
       if (dt < rangeStart || dt > rangeEnd) continue;
       campaignsInRange++;
@@ -195,6 +199,9 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
       const key = ws.toISOString();
       altMap[key] = (altMap[key] || 0) + 1;
     }
+    
+    console.log('🔍 [CampaignGaps] Campaign dates in dataset:', campaignDates.slice(0,20), '... (showing first 20)');
+    console.log('🔍 [CampaignGaps] Campaigns in selected range:', campaignsInRange, 'out of', campaigns.length, 'total');
     
 
   const altWeeks = fullInRangeWeeks.map(w => ({ key: w.weekStart.toISOString(), sent: (altMap[w.weekStart.toISOString()]||0) > 0, count: (altMap[w.weekStart.toISOString()]||0) }));
