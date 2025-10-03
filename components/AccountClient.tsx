@@ -259,41 +259,6 @@ export default function AccountClient({ initial }: Props) {
 
             <section className="space-y-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
                 <header className="space-y-1">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Company details</h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Update the business name and store URL shown across the dashboard.</p>
-                </header>
-                <div className="space-y-3">
-                    <label className="block text-sm text-gray-700 dark:text-gray-300">
-                        <span className="mb-1 block">Business name</span>
-                        <input
-                            value={businessName}
-                            onChange={e => setBusinessName(e.target.value)}
-                            className="w-full h-10 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 text-sm text-gray-900 dark:text-gray-100"
-                            placeholder="Acme Co"
-                        />
-                    </label>
-                    <label className="block text-sm text-gray-700 dark:text-gray-300">
-                        <span className="mb-1 block">Store URL</span>
-                        <input
-                            value={storeUrl}
-                            onChange={e => setStoreUrl(e.target.value)}
-                            className="w-full h-10 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 text-sm text-gray-900 dark:text-gray-100"
-                            placeholder="yourstore.com"
-                        />
-                    </label>
-                    <button
-                        type="button"
-                        onClick={onSaveCompany}
-                        disabled={busy}
-                        className={`inline-flex items-center justify-center rounded bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-60`}
-                    >
-                        Save
-                    </button>
-                </div>
-            </section>
-
-            <section className="space-y-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-                <header className="space-y-1">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Login email</h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400">Change the email used for sign-in and notifications.</p>
                 </header>
@@ -335,45 +300,6 @@ export default function AccountClient({ initial }: Props) {
 
             <section className="space-y-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
                 <header className="space-y-1">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Billing</h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Manage your Email Metrics subscription, payment methods, and invoices.</p>
-                </header>
-                {billingInfo.error && <div className="rounded border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-600 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200">{billingInfo.error}</div>}
-                <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
-                    <div>
-                        <span className="font-medium text-gray-900 dark:text-gray-100">Status:</span>{' '}
-                        <span className="uppercase tracking-wide text-xs inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 font-semibold text-gray-700 dark:text-gray-200">
-                            {billingInfo.loading ? 'Checking…' : billingInfo.status.replace(/_/g, ' ')}
-                        </span>
-                    </div>
-                    {billingInfo.trialEndsAt && (
-                        <div>Trial ends on {new Date(billingInfo.trialEndsAt).toLocaleDateString()}</div>
-                    )}
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                    <button
-                        type="button"
-                        onClick={openBillingPortal}
-                        disabled={billingInfo.portalBusy || billingInfo.loading}
-                        className="inline-flex items-center justify-center rounded bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-60"
-                    >
-                        {billingInfo.portalBusy ? 'Opening portal…' : 'Open billing portal'}
-                    </button>
-                    {billingInfo.portalLoginUrl && (
-                        <a
-                            href={billingInfo.portalLoginUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center rounded border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
-                        >
-                            Stripe portal login
-                        </a>
-                    )}
-                </div>
-            </section>
-
-            <section className="space-y-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-                <header className="space-y-1">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Password</h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400">Choose a new password for this account.</p>
                 </header>
@@ -410,25 +336,21 @@ export default function AccountClient({ initial }: Props) {
             {isAdmin && (
                 <section className="space-y-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
                     <header className="space-y-1">
-                        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Global Admin</h2>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Open any customer account in read/write mode.</p>
+                        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Accounts</h2>
                     </header>
                     {adminError && <div className="text-sm text-rose-600">{adminError}</div>}
-                    <ul className="space-y-2">
+                    <ul className="space-y-3">
                         {adminAccounts.map(account => (
-                            <li key={account.id} className="flex items-center justify-between rounded border border-gray-200 dark:border-gray-800 px-4 py-3 text-sm text-gray-800 dark:text-gray-200">
-                                <div>
-                                    <div className="font-medium">{account.businessName}</div>
-                                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                                        {account.ownerEmail ? `Owner: ${account.ownerEmail}` : 'Owner email unavailable'}
+                            <li key={account.id} className="rounded border border-gray-200 dark:border-gray-800 px-4 py-3 text-sm text-gray-800 dark:text-gray-200">
+                                <div className="font-medium text-base">{account.businessName}</div>
+                                {account.storeUrl && (
+                                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                        {account.storeUrl}
                                     </div>
+                                )}
+                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {account.ownerEmail ? `Owner: ${account.ownerEmail}` : 'Owner email unavailable'}
                                 </div>
-                                <a
-                                    href={`/dashboard?account=${account.id}`}
-                                    className="inline-flex items-center justify-center rounded bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700"
-                                >
-                                    Open
-                                </a>
                             </li>
                         ))}
                         {!adminError && adminAccounts.length === 0 && (
