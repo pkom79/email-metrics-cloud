@@ -30,8 +30,11 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
         try {
             // When using custom date range, use the exact same logic as DashboardHeavy
             if (dateRange === 'custom' && customFrom && customTo) {
-                const start = new Date(`${customFrom}T00:00:00`);
-                const end = new Date(`${customTo}T23:59:59`);
+                // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
+                const [y1, m1, d1] = customFrom.split('-').map(Number);
+                const [y2, m2, d2] = customTo.split('-').map(Number);
+                const start = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
+                const end = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
 
                 try {
                     // eslint-disable-next-line no-console

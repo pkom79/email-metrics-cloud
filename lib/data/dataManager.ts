@@ -1313,8 +1313,11 @@ export class DataManager {
             let startDate: Date; let endDate: Date; let periodDays = 0;
             if (dateRange === 'custom') {
                 if (!customFrom || !customTo) return false;
-                startDate = new Date(customFrom + 'T00:00:00');
-                endDate = new Date(customTo + 'T23:59:59');
+                // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
+                const [y1, m1, d1] = customFrom.split('-').map(Number);
+                const [y2, m2, d2] = customTo.split('-').map(Number);
+                startDate = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
+                endDate = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
                 periodDays = Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1;
             } else if (dateRange.includes('custom:')) {
                 const parts = dateRange.split(':');

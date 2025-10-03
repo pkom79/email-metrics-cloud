@@ -299,8 +299,11 @@ export async function buildSnapshotJSON(opts: { snapshotId: string; accountId: s
   if (opts.rangeStart && opts.rangeEnd) {
     overrideRange = { start: opts.rangeStart, end: opts.rangeEnd };
     try {
-      const start = new Date(opts.rangeStart + 'T00:00:00');
-      const end = new Date(opts.rangeEnd + 'T23:59:59');
+      // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
+      const [y1, m1, d1] = opts.rangeStart.split('-').map(Number);
+      const [y2, m2, d2] = opts.rangeEnd.split('-').map(Number);
+      const start = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
+      const end = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
       // Filter to stored window so metrics match original dashboard view
       campaigns = campaigns.filter(c => c.sentAt && c.sentAt >= start && c.sentAt <= end);
       flows = flows.filter(f => f.sentAt && f.sentAt >= start && f.sentAt <= end);

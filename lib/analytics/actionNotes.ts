@@ -856,8 +856,11 @@ export function buildCampaignGapsNote(params: {
   let rangeStart: Date | null = null;
   let rangeEnd: Date | null = null;
   if (params.dateRange === "custom" && params.customFrom && params.customTo) {
-    rangeStart = new Date(`${params.customFrom}T00:00:00`);
-    rangeEnd = new Date(`${params.customTo}T23:59:59`);
+    // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
+    const [y1, m1, d1] = params.customFrom.split('-').map(Number);
+    const [y2, m2, d2] = params.customTo.split('-').map(Number);
+    rangeStart = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
+    rangeEnd = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
   } else {
     const resolved = dm.getResolvedDateRange(
       params.dateRange,
