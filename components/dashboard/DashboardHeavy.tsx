@@ -984,21 +984,27 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const flowsInRange = useMemo(() => {
         if (!liveFlows.length) return [] as typeof liveFlows;
         let flows = liveFlows;
-        if (dateRange === 'custom' && customActive) {
+        // PERFORMANCE: Use deferred values to avoid blocking UI during date changes
+        const effectiveDateRange = deferredDateRange;
+        const effectiveCustomFrom = deferredCustomFrom;
+        const effectiveCustomTo = deferredCustomTo;
+        const effectiveCustomActive = effectiveDateRange === 'custom' && effectiveCustomFrom && effectiveCustomTo;
+        
+        if (effectiveDateRange === 'custom' && effectiveCustomActive) {
             // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
-            const [y1, m1, d1] = customFrom!.split('-').map(Number);
-            const [y2, m2, d2] = customTo!.split('-').map(Number);
+            const [y1, m1, d1] = effectiveCustomFrom!.split('-').map(Number);
+            const [y2, m2, d2] = effectiveCustomTo!.split('-').map(Number);
             const from = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
             const to = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
             flows = flows.filter(f => f.sentDate >= from && f.sentDate <= to);
-        } else if (dateRange !== 'all') {
-            const days = parseInt(dateRange.replace('d', ''));
+        } else if (effectiveDateRange !== 'all') {
+            const days = parseInt(effectiveDateRange.replace('d', ''));
             const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999);
             const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0);
             flows = flows.filter(f => f.sentDate >= start && f.sentDate <= end);
         }
         return flows;
-    }, [liveFlows, dateRange, customActive, customFrom, customTo, REFERENCE_DATE]);
+    }, [liveFlows, deferredDateRange, deferredCustomFrom, deferredCustomTo, REFERENCE_DATE]);
     const uniqueFlowNames = useMemo(() => Array.from(new Set(flowsInRange.map(f => f.flowName))).sort(), [flowsInRange]);
     // Ensure selected flow remains valid; if not, reset to 'all'
     useEffect(() => { if (selectedFlow !== 'all' && !uniqueFlowNames.includes(selectedFlow)) setSelectedFlow('all'); }, [uniqueFlowNames, selectedFlow]);
@@ -1007,19 +1013,25 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const { filteredCampaigns, dateRangeBoundaries } = useMemo(() => {
         if (!hasData) return { filteredCampaigns: [] as typeof ALL_CAMPAIGNS, dateRangeBoundaries: null };
 
+        // PERFORMANCE: Use deferred values to avoid blocking UI during date changes
+        const effectiveDateRange = deferredDateRange;
+        const effectiveCustomFrom = deferredCustomFrom;
+        const effectiveCustomTo = deferredCustomTo;
+        const effectiveCustomActive = effectiveDateRange === 'custom' && effectiveCustomFrom && effectiveCustomTo;
+
         let list = ALL_CAMPAIGNS;
         let boundaries: { start: Date; end: Date } | null = null;
 
-        if (dateRange === 'custom' && customActive) {
+        if (effectiveDateRange === 'custom' && effectiveCustomActive) {
             // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
-            const [y1, m1, d1] = customFrom!.split('-').map(Number);
-            const [y2, m2, d2] = customTo!.split('-').map(Number);
+            const [y1, m1, d1] = effectiveCustomFrom!.split('-').map(Number);
+            const [y2, m2, d2] = effectiveCustomTo!.split('-').map(Number);
             const from = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
             const to = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
 
             console.log('🔍 [DashboardHeavy] FILTERING CAMPAIGNS:', {
-                customFrom,
-                customTo,
+                effectiveCustomFrom,
+                effectiveCustomTo,
                 totalCampaigns: ALL_CAMPAIGNS.length,
                 from: from.toISOString(),
                 to: to.toISOString(),
@@ -1040,8 +1052,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             });
 
             boundaries = { start: from, end: to };
-        } else if (dateRange !== 'all') {
-            const days = parseInt(dateRange.replace('d', ''));
+        } else if (effectiveDateRange !== 'all') {
+            const days = parseInt(effectiveDateRange.replace('d', ''));
             const end = new Date(REFERENCE_DATE);
             end.setHours(23, 59, 59, 999);
             const start = new Date(end);
@@ -1052,9 +1064,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         }
 
         return { filteredCampaigns: list, dateRangeBoundaries: boundaries };
-    }, [ALL_CAMPAIGNS, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
+    }, [ALL_CAMPAIGNS, deferredDateRange, REFERENCE_DATE, hasData, deferredCustomFrom, deferredCustomTo]);
     const campaignRangeLabel = useMemo(() => {
         const formatDate = (date: Date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        
+        // Use immediate values for label (not deferred) so label updates instantly
         if (dateRange === 'custom') {
             if (customActive && customFrom && customTo) {
                 // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
@@ -1084,45 +1098,59 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     }, [dateRange, customActive, customFrom, customTo, filteredCampaigns]);
     const filteredFlowEmails = useMemo(() => {
         if (!hasData) return [] as typeof ALL_FLOWS;
+        
+        // PERFORMANCE: Use deferred values to avoid blocking UI during date changes
+        const effectiveDateRange = deferredDateRange;
+        const effectiveCustomFrom = deferredCustomFrom;
+        const effectiveCustomTo = deferredCustomTo;
+        const effectiveCustomActive = effectiveDateRange === 'custom' && effectiveCustomFrom && effectiveCustomTo;
+        
         let flows = ALL_FLOWS;
         // Apply Flow Performance selection only for non-overview sections
         if (selectedFlow !== 'all') flows = flows.filter(f => f.flowName === selectedFlow);
         // Apply date filtering
-        if (dateRange === 'custom' && customActive) {
+        if (effectiveDateRange === 'custom' && effectiveCustomActive) {
             // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
-            const [y1, m1, d1] = customFrom!.split('-').map(Number);
-            const [y2, m2, d2] = customTo!.split('-').map(Number);
+            const [y1, m1, d1] = effectiveCustomFrom!.split('-').map(Number);
+            const [y2, m2, d2] = effectiveCustomTo!.split('-').map(Number);
             const from = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
             const to = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
             flows = flows.filter(f => f.sentDate >= from && f.sentDate <= to);
-        } else if (dateRange !== 'all') {
-            const days = parseInt(dateRange.replace('d', ''));
+        } else if (effectiveDateRange !== 'all') {
+            const days = parseInt(effectiveDateRange.replace('d', ''));
             const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999);
             const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0);
             flows = flows.filter(f => f.sentDate >= start && f.sentDate <= end);
         }
         return flows;
-    }, [ALL_FLOWS, selectedFlow, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
+    }, [ALL_FLOWS, selectedFlow, deferredDateRange, REFERENCE_DATE, hasData, deferredCustomFrom, deferredCustomTo]);
 
     // Overview should always use ALL flows (date-filtered), regardless of Flow Performance selection
     const filteredFlowEmailsAll = useMemo(() => {
         if (!hasData) return [] as typeof ALL_FLOWS;
+        
+        // PERFORMANCE: Use deferred values to avoid blocking UI during date changes
+        const effectiveDateRange = deferredDateRange;
+        const effectiveCustomFrom = deferredCustomFrom;
+        const effectiveCustomTo = deferredCustomTo;
+        const effectiveCustomActive = effectiveDateRange === 'custom' && effectiveCustomFrom && effectiveCustomTo;
+        
         let flows = ALL_FLOWS; // intentionally no selectedFlow filter
-        if (dateRange === 'custom' && customActive) {
+        if (effectiveDateRange === 'custom' && effectiveCustomActive) {
             // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
-            const [y1, m1, d1] = customFrom!.split('-').map(Number);
-            const [y2, m2, d2] = customTo!.split('-').map(Number);
+            const [y1, m1, d1] = effectiveCustomFrom!.split('-').map(Number);
+            const [y2, m2, d2] = effectiveCustomTo!.split('-').map(Number);
             const from = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
             const to = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
             flows = flows.filter(f => f.sentDate >= from && f.sentDate <= to);
-        } else if (dateRange !== 'all') {
-            const days = parseInt(dateRange.replace('d', ''));
+        } else if (effectiveDateRange !== 'all') {
+            const days = parseInt(effectiveDateRange.replace('d', ''));
             const end = new Date(REFERENCE_DATE); end.setHours(23, 59, 59, 999);
             const start = new Date(end); start.setDate(start.getDate() - days + 1); start.setHours(0, 0, 0, 0);
             flows = flows.filter(f => f.sentDate >= start && f.sentDate <= end);
         }
         return flows;
-    }, [ALL_FLOWS, dateRange, REFERENCE_DATE, hasData, customActive, customFrom, customTo]);
+    }, [ALL_FLOWS, deferredDateRange, REFERENCE_DATE, hasData, deferredCustomFrom, deferredCustomTo]);
 
     useEffect(() => {
         if (dataHydrated && !initialLoadComplete) {
@@ -1817,9 +1845,15 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 <Calendar className="w-4 h-4 text-gray-500" />
                             </button>
                             <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Date Range:</span>
-                            <input type="date" min={allowedMinISO} max={allowedMaxISO} value={customFrom || ''} onChange={e => { let v = e.target.value || undefined; if (v) { if (v < allowedMinISO) v = allowedMinISO; if (v > allowedMaxISO) v = allowedMaxISO; } setCustomFrom(v); if (v && customTo && new Date(v) > new Date(customTo)) setCustomTo(v); setDateRange('custom'); }} className="px-2 py-1 rounded text-xs border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
+                            {isPending && (
+                                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-xs font-medium">
+                                    <RefreshCcw className="w-3 h-3 animate-spin" />
+                                    Updating...
+                                </span>
+                            )}
+                            <input type="date" min={allowedMinISO} max={allowedMaxISO} value={customFrom || ''} onChange={e => { const v = e.target.value || undefined; let finalV = v; if (v) { if (v < allowedMinISO) finalV = allowedMinISO; if (v > allowedMaxISO) finalV = allowedMaxISO; } startTransition(() => { setCustomFrom(finalV); if (finalV && customTo && new Date(finalV) > new Date(customTo)) setCustomTo(finalV); setDateRange('custom'); }); }} className="px-2 py-1 rounded text-xs border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
                             <span className="text-xs text-gray-500">to</span>
-                            <input type="date" min={allowedMinISO} max={allowedMaxISO} value={customTo || ''} onChange={e => { let v = e.target.value || undefined; if (v) { if (v < allowedMinISO) v = allowedMinISO; if (v > allowedMaxISO) v = allowedMaxISO; } setCustomTo(v); if (v && customFrom && new Date(v) < new Date(customFrom)) setCustomFrom(v); setDateRange('custom'); }} className="px-2 py-1 rounded text-xs border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
+                            <input type="date" min={allowedMinISO} max={allowedMaxISO} value={customTo || ''} onChange={e => { const v = e.target.value || undefined; let finalV = v; if (v) { if (v < allowedMinISO) finalV = allowedMinISO; if (v > allowedMaxISO) finalV = allowedMaxISO; } startTransition(() => { setCustomTo(finalV); if (finalV && customFrom && new Date(finalV) < new Date(customFrom)) setCustomFrom(finalV); setDateRange('custom'); }); }} className="px-2 py-1 rounded text-xs border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100" />
                             {customActive && <button onClick={() => { setCustomFrom(undefined); setCustomTo(undefined); setDateRange('30d'); }} className="ml-1 px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700">Clear</button>}
                             {/* Popover calendar */}
                             {showDatePopover && (
