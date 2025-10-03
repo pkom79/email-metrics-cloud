@@ -72,6 +72,25 @@ export class DataManager {
     }
 
     private _buildBaseBucketsForSubset(campaigns: ProcessedCampaign[], flows: ProcessedFlowEmail[], granularity: 'daily' | 'weekly' | 'monthly', startDate: Date, endDate: Date) {
+        // Debug logging BEFORE filtering to see raw data
+        if (campaigns.length > 0) {
+            const firstCampaign = campaigns[0];
+            console.log('🔍 [DataManager] PRE-FILTER Campaign Check:', {
+                campaignDate: firstCampaign.sentDate?.toISOString(),
+                campaignTimestamp: firstCampaign.sentDate?.getTime(),
+                startDate: startDate.toISOString(),
+                startTimestamp: startDate.getTime(),
+                endDate: endDate.toISOString(),
+                endTimestamp: endDate.getTime(),
+                isInstanceOfDate: firstCampaign.sentDate instanceof Date,
+                isNotNaN: !isNaN(firstCampaign.sentDate.getTime()),
+                isAfterStart: firstCampaign.sentDate >= startDate,
+                isAfterStartDebug: `${firstCampaign.sentDate?.getTime()} >= ${startDate.getTime()} = ${firstCampaign.sentDate >= startDate}`,
+                isBeforeEnd: firstCampaign.sentDate <= endDate,
+                isBeforeEndDebug: `${firstCampaign.sentDate?.getTime()} <= ${endDate.getTime()} = ${firstCampaign.sentDate <= endDate}`
+            });
+        }
+        
         // Build a per-day map of subset sums, then iterate across the full day range to zero-fill gaps
         const all = [...campaigns, ...flows].filter(e => e.sentDate instanceof Date && !isNaN(e.sentDate.getTime()) && e.sentDate >= startDate && e.sentDate <= endDate);
         
@@ -83,16 +102,7 @@ export class DataManager {
                 filteredTotal: all.length,
                 granularity,
                 startDate: startDate.toISOString(),
-                endDate: endDate.toISOString(),
-                sampleCampaignDates: campaigns.slice(0,3).map(c => ({
-                    date: c.sentDate?.toISOString(),
-                    timestamp: c.sentDate?.getTime(),
-                    isAfterStart: c.sentDate >= startDate,
-                    isBeforeEnd: c.sentDate <= endDate,
-                    startTimestamp: startDate.getTime(),
-                    endTimestamp: endDate.getTime()
-                })),
-                filteredCampaignDates: all.filter(e => campaigns.includes(e as any)).map(c => (c as any).sentDate?.toISOString())
+                endDate: endDate.toISOString()
             });
         }
         
