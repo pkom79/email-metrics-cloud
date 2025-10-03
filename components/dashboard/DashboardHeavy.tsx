@@ -1008,7 +1008,29 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             const [y2, m2, d2] = customTo!.split('-').map(Number);
             const from = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
             const to = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
+            
+            console.log('🔍 [DashboardHeavy] FILTERING CAMPAIGNS:', {
+                customFrom,
+                customTo,
+                totalCampaigns: ALL_CAMPAIGNS.length,
+                from: from.toISOString(),
+                to: to.toISOString(),
+                sampleCampaigns: ALL_CAMPAIGNS.slice(0, 3).map(c => ({
+                    date: c.sentDate.toISOString(),
+                    timestamp: c.sentDate.getTime(),
+                    isAfterFrom: c.sentDate >= from,
+                    isBeforeTo: c.sentDate <= to,
+                    willBeIncluded: c.sentDate >= from && c.sentDate <= to
+                }))
+            });
+            
             list = list.filter(c => c.sentDate >= from && c.sentDate <= to);
+            
+            console.log('🔍 [DashboardHeavy] FILTER RESULT:', {
+                filteredCount: list.length,
+                filteredDates: list.map(c => c.sentDate.toISOString().slice(0, 10))
+            });
+            
             boundaries = { start: from, end: to };
         } else if (dateRange !== 'all') {
             const days = parseInt(dateRange.replace('d', ''));
