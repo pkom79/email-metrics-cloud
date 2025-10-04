@@ -1022,7 +1022,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         return { filteredCampaigns: list, dateRangeBoundaries: boundaries };
     }, [ALL_CAMPAIGNS, deferredDateRange, REFERENCE_DATE, hasData, deferredCustomFrom, deferredCustomTo]);
     const campaignRangeLabel = useMemo(() => {
-        const formatDate = (date: Date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const formatDate = (date: Date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 
         // Use immediate values for label (not deferred) so label updates instantly
         if (dateRange === 'custom') {
@@ -2164,7 +2164,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                         <div className="md:col-start-1 md:col-end-2 min-w-0">
                                             <div className="flex items-center gap-3 mb-1.5"><h4 className="font-medium text-gray-900 dark:text-gray-100 truncate">{c.subject}</h4></div>
                                             <p className="text-sm text-gray-500 dark:text-gray-400 mb-1 truncate">{c.campaignName}</p>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">Sent on {c.sentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {c.sentDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}</p>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">Sent on {c.sentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })} at {c.sentDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'UTC' })}</p>
                                             <p className="text-sm text-gray-500 dark:text-gray-400">{formatNumber(c.emailsSent)} recipients</p>
                                             {/* Segments removed per requirements */}
                                         </div>

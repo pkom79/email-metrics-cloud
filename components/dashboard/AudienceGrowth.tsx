@@ -60,7 +60,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
         const cursor = new Date(start);
         const push = (label: string, d: Date) => { res.push({ label, start: new Date(d), countCreated: 0, countFirst: 0, countSubscribed: 0 }); };
         if (granularity === 'daily') {
-            while (cursor <= end) { push(cursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), cursor); cursor.setDate(cursor.getDate() + 1); }
+            while (cursor <= end) { push(cursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }), cursor); cursor.setDate(cursor.getDate() + 1); }
         } else if (granularity === 'weekly') {
             // Use Monday-based weeks with proper range labels for consistency
             while (cursor <= end) {
@@ -74,7 +74,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                 cursor.setDate(cursor.getDate() + 7);
             }
         } else {
-            while (cursor <= end) { push(cursor.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }), cursor); cursor.setMonth(cursor.getMonth() + 1); }
+            while (cursor <= end) { push(cursor.toLocaleDateString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' }), cursor); cursor.setMonth(cursor.getMonth() + 1); }
         }
         const idxFor = (d: Date) => {
             if (granularity === 'daily') return Math.floor((d.getTime() - start.getTime()) / 86400000);

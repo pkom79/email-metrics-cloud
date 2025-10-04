@@ -97,7 +97,7 @@ export default function DetailedMetricChart({
 
     // Transform data with safe defaults
     const chartData = activeData.map(item => ({
-        dateLabel: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        dateLabel: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
         current: Number(item.current ?? 0) || 0,
         previous: Number(item.previous ?? 0) || 0,
     }));

@@ -113,6 +113,7 @@ function parseDateFlexible(raw: string): Date | null {
       mins = Number(tParts[1] || 0);
       secs = Number(tParts[2] || 0);
     }
+    // Store using UTC to preserve wall-clock time consistently across all timezones
     const d = new Date(Date.UTC(year, month, day, hours, mins, secs));
     if (!isNaN(d.getTime())) return d;
   }
@@ -299,7 +300,7 @@ export async function buildSnapshotJSON(opts: { snapshotId: string; accountId: s
   if (opts.rangeStart && opts.rangeEnd) {
     overrideRange = { start: opts.rangeStart, end: opts.rangeEnd };
     try {
-      // CRITICAL FIX: Parse dates as UTC to avoid timezone issues
+      // Parse dates using UTC to match how CSV timestamps are stored
       const [y1, m1, d1] = opts.rangeStart.split('-').map(Number);
       const [y2, m2, d2] = opts.rangeEnd.split('-').map(Number);
       const start = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));

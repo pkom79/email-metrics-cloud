@@ -303,7 +303,7 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
     const statsB = useMemo(() => (filteredB.length ? computeStats(filteredB) : null), [filteredB]);
 
     // Compute created_at coverage for uploaded segments and detect if selected filter window is entirely outside
-    const dateFmt = (d: Date | null) => d ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' }) : 'N/A';
+    const dateFmt = (d: Date | null) => d ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit', timeZone: 'UTC' }) : 'N/A';
     const createdSpan = (subs: ProcessedSubscriber[]) => {
         // Compute min/max iteratively to avoid spreading a large array into Math.min/Math.max (which can overflow the call stack)
         let minTime = Infinity;

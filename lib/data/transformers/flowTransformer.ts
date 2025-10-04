@@ -133,10 +133,11 @@ export class FlowTransformer {
             if (dt) {
                 const Y = parseInt(dt[1],10), M = parseInt(dt[2],10)-1, D = parseInt(dt[3],10);
                 const h = parseInt(dt[4],10), m = parseInt(dt[5],10), sec = parseInt(dt[6]||'0',10);
+                // Store using UTC to preserve wall-clock time consistently across all timezones
                 const d = new Date(Date.UTC(Y,M,D,h,m,sec));
                 if (!isNaN(d.getTime())) return d;
             }
-            // Bare YYYY-MM-DD -> midnight naive
+            // Bare YYYY-MM-DD -> midnight
             if (/^\d{4}-\d{2}-\d{2}$/.test(s)) { const [Y,M,D] = s.split('-').map(n=>parseInt(n,10)); const d=new Date(Date.UTC(Y,M-1,D)); if(!isNaN(d.getTime())) return d; }
             // MM/DD/YYYY
             const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);

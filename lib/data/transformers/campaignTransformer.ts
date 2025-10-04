@@ -165,11 +165,11 @@ export class CampaignTransformer {
                 const [_, Y, M, D, h, m, sec] = naiveWithOffset;
                 const year = parseInt(Y, 10); const month = parseInt(M, 10) - 1; const day = parseInt(D, 10);
                 const hour = parseInt(h, 10); const minute = parseInt(m, 10); const second = parseInt(sec || '0', 10);
-                // Build Date using UTC components == CSV wall time (ignore actual offset deliberately)
+                // Store using UTC to preserve wall-clock time consistently across all timezones
                 const d = new Date(Date.UTC(year, month, day, hour, minute, second));
                 if (!isNaN(d.getTime())) return d;
             }
-            // Handle common MM/DD/YYYY[ HH:mm[:ss]] [AM|PM] formats explicitly in UTC to avoid locale ambiguity
+            // Handle common MM/DD/YYYY[ HH:mm[:ss]] [AM|PM] formats
             const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i);
             if (mdy) {
                 const mm = parseInt(mdy[1], 10);
@@ -184,22 +184,24 @@ export class CampaignTransformer {
                     if (ampm === 'PM' && hours < 12) hours += 12;
                     if (ampm === 'AM' && hours === 12) hours = 0;
                 }
+                // Store using UTC to preserve wall-clock time consistently across all timezones
                 const d = new Date(Date.UTC(year, mm - 1, dd, hours, mins, secs));
                 if (!isNaN(d.getTime())) return d;
             }
-            // ISO-like with space separator (YYYY-MM-DD HH:mm[:ss]) -> treat as naive wall time anchored to UTC
+            // ISO-like with space separator (YYYY-MM-DD HH:mm[:ss])
             if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2})?$/.test(s)) {
                 const parts = s.split(/[ T]/);
                 const [datePart, timePart] = parts.length === 2 ? parts : [parts[0], parts[1]];
                 const [Y, M, D] = datePart.split('-').map(n => parseInt(n, 10));
                 const [h, m, sec] = timePart.split(':').map(n => parseInt(n, 10));
+                // Store using UTC to preserve wall-clock time consistently across all timezones
                 const d = new Date(Date.UTC(Y, M - 1, D, h, m, sec || 0));
                 if (!isNaN(d.getTime())) return d;
             }
-            // Try native parse
-            // Avoid native parsing that may apply local timezone; treat any bare YYYY-MM-DD as midnight naive UTC
+            // Bare date YYYY-MM-DD as midnight
             if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
                 const [Y, M, D] = s.split('-').map(n => parseInt(n, 10));
+                // Store using UTC to preserve wall-clock time consistently across all timezones
                 const d = new Date(Date.UTC(Y, M - 1, D, 0, 0, 0));
                 if (!isNaN(d.getTime())) return d;
             }
