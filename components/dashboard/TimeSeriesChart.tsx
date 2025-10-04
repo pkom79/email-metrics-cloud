@@ -100,11 +100,11 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                 return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
             }
             if (granularity === 'weekly') {
-                // Use simplified short label for weekly (just end date)
+                // Use full week range label for tooltips (e.g., "Jun 30–Jul 6, 2025")
                 try {
                     const dm = DataManager.getInstance();
                     const boundaries = dm.getWeekBoundaries(d);
-                    return boundaries.shortLabel; // Simple date format like "Jul 6"
+                    return boundaries.rangeLabel; // Full range format for tooltips
                 } catch (err) {
                     console.warn('⚠️ TimeSeriesChart fallback (DataManager unavailable):', err);
                     // Fallback: Just show the week end date

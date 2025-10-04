@@ -9,7 +9,7 @@ import { computeAxisMax, thirdTicks, formatTickLabels } from '../../lib/utils/ch
 interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; compareMode?: 'prev-period' | 'prev-year'; }
 
 type Metric = 'created' | 'firstActive' | 'subscribed';
-interface Bucket { label: string; start: Date; countCreated: number; countFirst: number; countSubscribed: number; }
+interface Bucket { label: string; fullLabel?: string; start: Date; countCreated: number; countFirst: number; countSubscribed: number; }
 
 // (Legacy) parsing helper no longer needed now that transformer exposes emailConsentTimestamp
 // Kept as a no-op fallback for backward compatibility if older data still present
@@ -58,16 +58,19 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
     const buildBuckets = useCallback((start: Date, end: Date): Bucket[] => {
         const res: Bucket[] = [];
         const cursor = new Date(start);
-        const push = (label: string, d: Date) => { res.push({ label, start: new Date(d), countCreated: 0, countFirst: 0, countSubscribed: 0 }); };
+        const push = (label: string, d: Date, fullLabel?: string) => { res.push({ label, fullLabel, start: new Date(d), countCreated: 0, countFirst: 0, countSubscribed: 0 }); };
         if (granularity === 'daily') {
             while (cursor <= end) { push(cursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }), cursor); cursor.setDate(cursor.getDate() + 1); }
         } else if (granularity === 'weekly') {
-            // Use Monday-based weeks with short date labels (e.g., "Jul 6" instead of "Jun 30–Jul 6, 2025")
+            // Use Monday-based weeks with short date labels for X-axis (e.g., "Jul 6")
+            // But keep full range labels for tooltips (e.g., "Jun 30–Jul 6, 2025")
             while (cursor <= end) {
                 const boundaries = dm.getWeekBoundaries(cursor);
-                // Use short format for week labels (Monday's date)
+                // Short format for X-axis labels
                 const shortLabel = boundaries.monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-                push(shortLabel, new Date(boundaries.monday));
+                // Full range format for tooltips
+                const fullLabel = boundaries.rangeLabel;
+                push(shortLabel, new Date(boundaries.monday), fullLabel);
                 cursor.setDate(cursor.getDate() + 7);
             }
         } else {
@@ -260,7 +263,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                 </svg>
                 {active && hoverIdx != null && (
                     <div className="pointer-events-none absolute z-20 px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs rounded-lg shadow-lg border border-gray-200 dark:border-gray-700" style={{ left: `${(xScale(hoverIdx) / width) * 100}%`, top: '10%', transform: 'translate(-50%, 0)' }}>
-                        <div className="font-medium mb-0.5 text-gray-900 dark:text-gray-100">{active.label}</div>
+                        <div className="font-medium mb-0.5 text-gray-900 dark:text-gray-100">{active.fullLabel || active.label}</div>
                         <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">Created</span><span className="tabular-nums">{active.countCreated.toLocaleString()}</span></div>
                         <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">First Active</span><span className="tabular-nums">{active.countFirst.toLocaleString()}</span></div>
                         <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">Subscribed</span><span className="tabular-nums">{active.countSubscribed.toLocaleString()}</span></div>

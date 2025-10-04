@@ -1308,7 +1308,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                                     key={i}
                                                     cx={point.x}
                                                     cy={point.y}
-                                                    r="10"
+                                                    r="25"
                                                     fill="transparent"
                                                     style={{ cursor: 'pointer' }}
                                                     onMouseEnter={(e) => {
