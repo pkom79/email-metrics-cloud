@@ -1302,32 +1302,36 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                             <path d={pathD} fill="none" stroke={chartColor} strokeWidth="2.5" />
                                             {/* Overlay baseline to mask the line exactly at baseline for crisp resting effect */}
                                             <line x1={0} y1={120} x2={850} y2={120} className="stroke-gray-200 dark:stroke-gray-700" />
-                                            {/* Hover points */}
-                                            {points.map((point, i) => (
-                                                <circle
-                                                    key={i}
-                                                    cx={point.x}
-                                                    cy={point.y}
-                                                    r="25"
-                                                    fill="transparent"
-                                                    style={{ cursor: 'pointer' }}
-                                                    onMouseEnter={(e) => {
-                                                        e.stopPropagation();
-                                                        setHoveredPoint({
-                                                            chartIndex: index,
-                                                            x: point.x,
-                                                            y: point.y,
-                                                            value: point.value,
-                                                            date: point.date,
-                                                            pointIndex: i
-                                                        });
-                                                    }}
-                                                    onMouseLeave={(e) => {
-                                                        e.stopPropagation();
-                                                        setHoveredPoint(null);
-                                                    }}
-                                                />
-                                            ))}
+                                            {/* Hover rectangles (full-height zones for easier tooltip triggering) */}
+                                            {(() => {
+                                                const cellW = 850 / Math.max(1, (points.length - 1));
+                                                return points.map((point, i) => (
+                                                    <rect
+                                                        key={i}
+                                                        x={point.x - cellW / 2}
+                                                        y={0}
+                                                        width={cellW}
+                                                        height={120}
+                                                        fill="transparent"
+                                                        style={{ cursor: 'pointer' }}
+                                                        onMouseEnter={(e) => {
+                                                            e.stopPropagation();
+                                                            setHoveredPoint({
+                                                                chartIndex: index,
+                                                                x: point.x,
+                                                                y: point.y,
+                                                                value: point.value,
+                                                                date: point.date,
+                                                                pointIndex: i
+                                                            });
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.stopPropagation();
+                                                            setHoveredPoint(null);
+                                                        }}
+                                                    />
+                                                ));
+                                            })()}
                                             {/* Visible hover point */}
                                             {hoveredPoint && hoveredPoint.chartIndex === index && (
                                                 <circle
