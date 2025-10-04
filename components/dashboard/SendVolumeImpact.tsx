@@ -102,9 +102,9 @@ function catmullRom2bezier(points: { x: number, y: number }[], yMin?: number, yM
 
 const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsMax, metricMax, formatValue, compareSeries, axisMode, scope }) => {
     // Match FlowStepAnalysis dimensions (graph height 160, drawing area 120 baseline)
-    const VIEW_W = 850; const VIEW_H = 160; const GRAPH_H = 120; // baseline at y=120
+    const VIEW_W = 900; const VIEW_H = 160; const GRAPH_H = 120; // baseline at y=120
     const PADDING_LEFT = 50; // space for y ticks
-    const PADDING_RIGHT = 20;
+    const PADDING_RIGHT = 40; // increased for weekly labels
     const innerW = VIEW_W - PADDING_LEFT - PADDING_RIGHT;
     const xScale = useCallback((i: number) => points.length <= 1 ? PADDING_LEFT + innerW / 2 : PADDING_LEFT + (i / (points.length - 1)) * innerW, [points.length, PADDING_LEFT, innerW]);
     const yMetric = useCallback((v: number) => {
@@ -170,11 +170,17 @@ const ChartContainer: React.FC<ChartContainerProps> = ({ points, metric, emailsM
                     );
                 })}
                 {/* X axis ticks (tick lines removed, labels kept) */}
-                {xTicks.map((t, i) => (
-                    <g key={i}>
-                        <text x={t.x} y={GRAPH_H + 25} textAnchor="middle" fontSize={11} className="fill-gray-600 dark:fill-gray-400">{t.label}</text>
-                    </g>
-                ))}
+                {xTicks.map((t, i) => {
+                    // For the last tick, anchor to end; for first, anchor to start; middle ticks centered
+                    const isLast = i === xTicks.length - 1;
+                    const isFirst = i === 0;
+                    const anchor = isLast ? 'end' : isFirst ? 'start' : 'middle';
+                    return (
+                        <g key={i}>
+                            <text x={t.x} y={GRAPH_H + 25} textAnchor={anchor} fontSize={11} className="fill-gray-600 dark:fill-gray-400">{t.label}</text>
+                        </g>
+                    );
+                })}
                 {axisMode === 'volume' && (
                     <text x={PADDING_LEFT} y={GRAPH_H + 38} textAnchor="start" fontSize={10} className="font-medium fill-gray-600 dark:fill-gray-400">
                         Send Volume (Highest → Lowest)

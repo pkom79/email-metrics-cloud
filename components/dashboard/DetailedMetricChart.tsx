@@ -38,7 +38,7 @@ interface DetailedMetricChartProps {
 
 const formatValue = (value: number, format: MetricFormat): string => {
     if (value === null || value === undefined || isNaN(value)) return '—';
-    
+
     switch (format) {
         case 'currency':
             return new Intl.NumberFormat('en-US', {
@@ -80,18 +80,18 @@ export default function DetailedMetricChart({
     color = '#8b5cf6',
 }: DetailedMetricChartProps) {
     const [selectedMetric, setSelectedMetric] = useState<string>('totalRevenue');
-    
+
     // Handle both interfaces
     const isLegacyInterface = !!data && !!title;
     const isNewInterface = !!allSeriesData;
-    
+
     if (!isLegacyInterface && !isNewInterface) {
         return <div>No data provided</div>;
     }
-    
+
     const selectedMetricInfo = METRIC_OPTIONS.find(m => m.value === selectedMetric);
     const format = selectedMetricInfo?.format || 'number';
-    
+
     // Use appropriate data source
     const activeData = (isLegacyInterface ? data! : (allSeriesData![selectedMetric] || [])) as TimeSeriesData[];
 

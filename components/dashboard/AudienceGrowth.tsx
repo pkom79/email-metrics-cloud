@@ -128,7 +128,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
     // Scale now based only on selected metric for better visual variation
     const rawMax = Math.max(0, ...buckets.map(b => metric === 'created' ? b.countCreated : metric === 'firstActive' ? b.countFirst : b.countSubscribed));
     const maxVal = computeAxisMax([rawMax], null, 'number');
-    const width = 850; const height = 170; const innerH = 120; const padLeft = 40; const padRight = 20; const innerW = width - padLeft - padRight;
+    const width = 900; const height = 170; const innerH = 120; const padLeft = 40; const padRight = 40; const innerW = width - padLeft - padRight;
     const xScale = (i: number) => buckets.length <= 1 ? padLeft + innerW / 2 : padLeft + (i / (buckets.length - 1)) * innerW;
     // Clamp to 0: never render below baseline even with smoothing/negative glitches
     const yScale = (v: number) => {
@@ -251,8 +251,12 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                     {/* X axis ticks */}
                     {tickIndices.map(i => {
                         const b = buckets[i];
-                        const x = xScale(i) - 30;
-                        return <text key={i} x={x} y={height - 15} fontSize={11} textAnchor="start" className="fill-gray-500 dark:fill-gray-400">{b.label}</text>;
+                        const x = xScale(i);
+                        // For the last tick, anchor to end; for first, anchor to start; middle ticks centered
+                        const isLast = i === buckets.length - 1;
+                        const isFirst = i === 0;
+                        const anchor = isLast ? 'end' : isFirst ? 'start' : 'middle';
+                        return <text key={i} x={x} y={height - 15} fontSize={11} textAnchor={anchor} className="fill-gray-500 dark:fill-gray-400">{b.label}</text>;
                     })}
                     {/* Hover hit zones */}
                     {buckets.map((b, i) => { const x = xScale(i); const cellW = innerW / Math.max(1, (buckets.length - 1)); return <rect key={i} x={x - cellW / 2} y={0} width={cellW} height={height} fill="transparent" onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)} />; })}

@@ -2159,7 +2159,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 </div>
                                 {/* Campaign Subject Line Action Note removed (2025-09-27) */}
                                 <div>{getSortedCampaigns().slice(0, displayedCampaigns).map((c, i) => (
-                                    <div key={c.id} className={`group relative p-3 sm:p-4 avoid-break ${i !== 0 ? 'border-t border-gray-200 dark:border-gray-800' : ''} md:grid md:items-center md:gap-4 md:[grid-template-columns:minmax(0,1fr)_400px_max-content]`}>
+                                    <div key={c.id} className={`group relative p-3 sm:p-4 avoid-break ${i !== 0 ? 'border-t border-gray-200 dark:border-gray-800' : ''} md:grid md:items-center md:gap-6 md:[grid-template-columns:minmax(0,1fr)_480px_max-content]`}>
                                         {/* Subject (col 1) */}
                                         <div className="md:col-start-1 md:col-end-2 min-w-0">
                                             <div className="flex items-center gap-3 mb-1.5"><h4 className="font-medium text-gray-900 dark:text-gray-100 truncate">{c.subject}</h4></div>
@@ -2169,23 +2169,23 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                             {/* Segments removed per requirements */}
                                         </div>
 
-                                        {/* Details (col 2 on md+, below on mobile) - now always visible and centered */}
-                                        <div className="hidden md:flex md:col-start-2 md:col-end-3 justify-center">
-                                            <div className="text-xs grid grid-cols-2 gap-x-6 gap-y-1">
+                                        {/* Details (col 2 on md+, below on mobile) - left-aligned with more space for values */}
+                                        <div className="hidden md:flex md:col-start-2 md:col-end-3">
+                                            <div className="text-xs grid grid-cols-2 gap-x-8 gap-y-1 w-full">
                                                 {['revenue', 'revenuePerEmail', 'openRate', 'clickRate', 'clickToOpenRate', 'emailsSent', 'totalOrders', 'avgOrderValue', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].map(mk => (
-                                                    <div key={mk} className="flex justify-between gap-4">
-                                                        <span className="text-gray-500 dark:text-gray-400">{campaignMetricOptions.find(opt => opt.value === mk)?.label || mk}</span>
-                                                        <span className="tabular-nums font-medium text-gray-900 dark:text-gray-100">{formatMetricValue((c as any)[mk] as number, mk)}</span>
+                                                    <div key={mk} className="flex justify-between gap-6">
+                                                        <span className="text-gray-500 dark:text-gray-400 text-left">{campaignMetricOptions.find(opt => opt.value === mk)?.label || mk}</span>
+                                                        <span className="tabular-nums font-medium text-gray-900 dark:text-gray-100 text-right">{formatMetricValue((c as any)[mk] as number, mk)}</span>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
-                                        <div className="md:hidden mt-3 flex justify-center">
-                                            <div className="text-xs grid grid-cols-2 gap-x-4 gap-y-1">
+                                        <div className="md:hidden mt-3">
+                                            <div className="text-xs grid grid-cols-2 gap-x-6 gap-y-1">
                                                 {['revenue', 'revenuePerEmail', 'openRate', 'clickRate', 'clickToOpenRate', 'emailsSent', 'totalOrders', 'avgOrderValue', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].map(mk => (
-                                                    <div key={mk} className="flex justify-between gap-3">
-                                                        <span className="text-gray-500 dark:text-gray-400">{campaignMetricOptions.find(opt => opt.value === mk)?.label || mk}</span>
-                                                        <span className="tabular-nums font-medium text-gray-900 dark:text-gray-100">{formatMetricValue((c as any)[mk] as number, mk)}</span>
+                                                    <div key={mk} className="flex justify-between gap-4">
+                                                        <span className="text-gray-500 dark:text-gray-400 text-left">{campaignMetricOptions.find(opt => opt.value === mk)?.label || mk}</span>
+                                                        <span className="tabular-nums font-medium text-gray-900 dark:text-gray-100 text-right">{formatMetricValue((c as any)[mk] as number, mk)}</span>
                                                     </div>
                                                 ))}
                                             </div>
