@@ -174,6 +174,45 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 #### (Removed) Campaign & Subject Line Action Note
 2025-09-27: This experimental note was removed from the Campaign Details card after evaluation showed low incremental value (redundant with existing per-campaign metrics and day/hour performance modules). Narrative headline guidelines above are retained for potential future reuse in other summarization contexts.
 
+### Campaign Details (Campaign Performance section)
+2025-10-03: Campaign details display updated to show all metrics permanently without hover/container, improving accessibility and visibility.
+
+Layout:
+- Three-column grid on desktop (`md:[grid-template-columns:minmax(0,1fr)_400px_max-content]`): 
+  1. Left column: Subject line, campaign name, send date/time, recipient count
+  2. Center column (400px): 12-metric grid always visible
+  3. Right column: Selected sort metric displayed large
+- Mobile: Stacked layout with metrics below campaign info
+
+Column 1 (Campaign Info):
+- Subject line: `font-medium text-gray-900 dark:text-gray-100`, truncated
+- Campaign name: `text-sm text-gray-500 dark:text-gray-400 mb-1`, truncated
+- Send date/time: `text-sm text-gray-500 dark:text-gray-400`, formatted as "Sent on Sep 3, 2025 at 9:30 AM"
+- Recipients: `text-sm text-gray-500 dark:text-gray-400`, formatted as "19,570 recipients" using `formatNumber()`
+
+Column 2 (Metrics Grid):
+- Always visible (no hover/opacity behavior)
+- No container border, shadow, or background
+- Centered using `justify-center` flexbox
+- Grid: 2 columns with `gap-x-6 gap-y-1` (desktop), `gap-x-4` (mobile)
+- Text size: `text-xs`
+- Label: `text-gray-500 dark:text-gray-400`
+- Value: `tabular-nums font-medium text-gray-900 dark:text-gray-100`
+- Metrics (in order): revenue, revenuePerEmail, openRate, clickRate, clickToOpenRate, emailsSent, totalOrders, avgOrderValue, conversionRate, unsubscribeRate, spamRate, bounceRate
+
+Column 3 (Sort Metric):
+- Value: `text-xl font-semibold text-gray-900 dark:text-gray-100`
+- Label: `text-sm text-gray-500 dark:text-gray-400`
+
+Visual Changes from Previous Version:
+- Removed hover-triggered opacity transition (`opacity-0 group-hover:opacity-100`)
+- Removed metrics container styling (`rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-3`)
+- Changed from `block` to `flex justify-center` for center column alignment
+- Added send time to date display
+- Added recipient count as separate line below date
+
+This pattern provides immediate visibility of all campaign metrics without requiring user interaction, improving data scanability and accessibility while maintaining the app's clean aesthetic.
+
 
 ### Export controls
 

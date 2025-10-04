@@ -2164,26 +2164,27 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                         <div className="md:col-start-1 md:col-end-2 min-w-0">
                                             <div className="flex items-center gap-3 mb-1.5"><h4 className="font-medium text-gray-900 dark:text-gray-100 truncate">{c.subject}</h4></div>
                                             <p className="text-sm text-gray-500 dark:text-gray-400 mb-1 truncate">{c.campaignName}</p>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">Sent on {c.sentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">Sent on {c.sentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {c.sentDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}</p>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">{formatNumber(c.emailsSent)} recipients</p>
                                             {/* Segments removed per requirements */}
                                         </div>
 
-                                        {/* Details (col 2 on md+, below on mobile) */}
-                                        <div className="hidden md:block md:col-start-2 md:col-end-3 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                                            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-3 text-xs grid grid-cols-2 gap-x-6 gap-y-1">
+                                        {/* Details (col 2 on md+, below on mobile) - now always visible and centered */}
+                                        <div className="hidden md:flex md:col-start-2 md:col-end-3 justify-center">
+                                            <div className="text-xs grid grid-cols-2 gap-x-6 gap-y-1">
                                                 {['revenue', 'revenuePerEmail', 'openRate', 'clickRate', 'clickToOpenRate', 'emailsSent', 'totalOrders', 'avgOrderValue', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].map(mk => (
                                                     <div key={mk} className="flex justify-between gap-4">
-                                                        <span className="text-gray-500 capitalize">{campaignMetricOptions.find(opt => opt.value === mk)?.label || mk}</span>
+                                                        <span className="text-gray-500 dark:text-gray-400">{campaignMetricOptions.find(opt => opt.value === mk)?.label || mk}</span>
                                                         <span className="tabular-nums font-medium text-gray-900 dark:text-gray-100">{formatMetricValue((c as any)[mk] as number, mk)}</span>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
-                                        <div className="md:hidden mt-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                                            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm p-3 text-xs grid grid-cols-2 gap-x-4 gap-y-1">
+                                        <div className="md:hidden mt-3 flex justify-center">
+                                            <div className="text-xs grid grid-cols-2 gap-x-4 gap-y-1">
                                                 {['revenue', 'revenuePerEmail', 'openRate', 'clickRate', 'clickToOpenRate', 'emailsSent', 'totalOrders', 'avgOrderValue', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].map(mk => (
                                                     <div key={mk} className="flex justify-between gap-3">
-                                                        <span className="text-gray-500 capitalize">{campaignMetricOptions.find(opt => opt.value === mk)?.label || mk}</span>
+                                                        <span className="text-gray-500 dark:text-gray-400">{campaignMetricOptions.find(opt => opt.value === mk)?.label || mk}</span>
                                                         <span className="tabular-nums font-medium text-gray-900 dark:text-gray-100">{formatMetricValue((c as any)[mk] as number, mk)}</span>
                                                     </div>
                                                 ))}
