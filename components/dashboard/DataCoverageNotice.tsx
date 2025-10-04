@@ -28,7 +28,7 @@ export default function DataCoverageNotice({ dataManager, referenceDate }: DataC
     try {
         const last = referenceDate ? new Date(referenceDate) : dataManager.getLastEmailDate();
         if (!last) return null;
-        const lastStr = last.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        const lastStr = last.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
         const capDays = 730; // 2 years
         const capStart = new Date(last);
         capStart.setDate(capStart.getDate() - (capDays - 1));

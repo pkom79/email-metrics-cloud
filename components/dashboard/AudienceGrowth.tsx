@@ -62,15 +62,12 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
         if (granularity === 'daily') {
             while (cursor <= end) { push(cursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }), cursor); cursor.setDate(cursor.getDate() + 1); }
         } else if (granularity === 'weekly') {
-            // Use Monday-based weeks with proper range labels for consistency
+            // Use Monday-based weeks with short date labels (e.g., "Jul 6" instead of "Jun 30–Jul 6, 2025")
             while (cursor <= end) {
                 const boundaries = dm.getWeekBoundaries(cursor);
-                console.log('📊 AudienceGrowth weekly bucket:', {
-                    cursor: cursor.toISOString().slice(0, 10),
-                    monday: boundaries.monday.toISOString().slice(0, 10),
-                    rangeLabel: boundaries.rangeLabel
-                });
-                push(boundaries.rangeLabel, new Date(boundaries.monday));
+                // Use short format for week labels (Monday's date)
+                const shortLabel = boundaries.monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+                push(shortLabel, new Date(boundaries.monday));
                 cursor.setDate(cursor.getDate() + 7);
             }
         } else {

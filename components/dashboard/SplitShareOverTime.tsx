@@ -281,33 +281,20 @@ function BarShareChart({
                             if (baseIso) {
                                 const d = new Date(baseIso);
                                 if (!isNaN(d.getTime())) {
-                                    if (granularity === 'daily') return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                                    if (granularity === 'monthly') return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-                                    // weekly: iso represents week end; compute Monday start
-                                    const day = d.getDay();
-                                    const diffToMon = day === 0 ? -6 : (1 - day);
-                                    const mon = new Date(d); mon.setDate(mon.getDate() + diffToMon);
-                                    const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
-                                    const start = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                                    const sameMonth = mon.getMonth() === sun.getMonth();
-                                    return sameMonth
-                                        ? `${start}–${sun.getDate()}, ${sun.getFullYear()}`
-                                        : `${start}–${sun.toLocaleDateString('en-US', { month: 'short' })} ${sun.getDate()}, ${sun.getFullYear()}`;
+                                    if (granularity === 'daily') return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+                                    if (granularity === 'monthly') return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+                                    // weekly: simplified to just show the week end date
+                                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
                                 }
                             }
                             // Fallback to parsing label (legacy) if iso not available
                             const s = active.label;
                             const d = new Date(s);
-                            if (granularity === 'daily') return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                            if (granularity === 'monthly') return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                            if (granularity === 'daily') return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+                            if (granularity === 'monthly') return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
                             if (isNaN(d.getTime())) return s;
-                            const day = d.getDay();
-                            const diffToMon = day === 0 ? -6 : (1 - day);
-                            const mon = new Date(d); mon.setDate(mon.getDate() + diffToMon);
-                            const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
-                            const start = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                            const sameMonth = mon.getMonth() === sun.getMonth();
-                            return sameMonth ? `${start}–${sun.getDate()}, ${sun.getFullYear()}` : `${start}–${sun.toLocaleDateString('en-US', { month: 'short' })} ${sun.getDate()}, ${sun.getFullYear()}`;
+                            // weekly: simplified to just show the week end date
+                            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
                         })()}
                         {active.isIncomplete && <span className="ml-1.5 text-xs text-amber-600 dark:text-amber-400">• Incomplete week</span>}
                     </div>
@@ -327,32 +314,20 @@ function BarShareChart({
                                     if (cmpIso) {
                                         const d = new Date(cmpIso);
                                         if (!isNaN(d.getTime())) {
-                                            if (granularity === 'daily') return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                                            if (granularity === 'monthly') return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-                                            const day = d.getDay();
-                                            const diffToMon = day === 0 ? -6 : (1 - day);
-                                            const mon = new Date(d); mon.setDate(mon.getDate() + diffToMon);
-                                            const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
-                                            const start = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                                            const sameMonth = mon.getMonth() === sun.getMonth();
-                                            return sameMonth
-                                                ? `${start}–${sun.getDate()}, ${sun.getFullYear()}`
-                                                : `${start}–${sun.toLocaleDateString('en-US', { month: 'short' })} ${sun.getDate()}, ${sun.getFullYear()}`;
+                                            if (granularity === 'daily') return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+                                            if (granularity === 'monthly') return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+                                            // weekly: simplified to just show the week end date
+                                            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
                                         }
                                     }
                                     // Fallback to label if no iso
                                     const s = active.cmpLabel || active.label;
                                     const d = new Date(s);
-                                    if (granularity === 'daily') return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                                    if (granularity === 'monthly') return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                                    if (granularity === 'daily') return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+                                    if (granularity === 'monthly') return isNaN(d.getTime()) ? s : d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
                                     if (isNaN(d.getTime())) return s;
-                                    const day = d.getDay();
-                                    const diffToMon = day === 0 ? -6 : (1 - day);
-                                    const mon = new Date(d); mon.setDate(mon.getDate() + diffToMon);
-                                    const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
-                                    const start = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                                    const sameMonth = mon.getMonth() === sun.getMonth();
-                                    return sameMonth ? `${start}–${sun.getDate()}, ${sun.getFullYear()}` : `${start}–${sun.toLocaleDateString('en-US', { month: 'short' })} ${sun.getDate()}, ${sun.getFullYear()}`;
+                                    // weekly: simplified to just show the week end date
+                                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
                                 })()}
                             </div>
                             <div className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5 items-center">

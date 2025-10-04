@@ -97,34 +97,21 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
             const d = new Date(iso);
             if (isNaN(d.getTime())) return fallback || '';
             if (granularity === 'monthly') {
-                return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
             }
             if (granularity === 'weekly') {
-                // Use centralized week boundary calculation for consistency
+                // Use simplified short label for weekly (just end date)
                 try {
                     const dm = DataManager.getInstance();
                     const boundaries = dm.getWeekBoundaries(d);
-                    console.log('🎯 TimeSeriesChart using getWeekBoundaries:', {
-                        iso: d.toISOString().slice(0, 10),
-                        rangeLabel: boundaries.rangeLabel
-                    });
-                    return boundaries.rangeLabel;
+                    return boundaries.shortLabel; // Simple date format like "Jul 6"
                 } catch (err) {
                     console.warn('⚠️ TimeSeriesChart fallback (DataManager unavailable):', err);
-                    // Fallback: Calculate Monday-Sunday week range
-                    const end = d;
-                    const start = new Date(end);
-                    start.setDate(end.getDate() - 6);
-                    const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
-                    const monthStart = start.toLocaleDateString('en-US', { month: 'short' });
-                    const monthEnd = end.toLocaleDateString('en-US', { month: 'short' });
-                    const dayStart = start.getDate();
-                    const dayEnd = end.getDate();
-                    const year = end.getFullYear();
-                    return sameMonth ? `${monthEnd} ${dayStart}–${dayEnd}, ${year}` : `${monthStart} ${dayStart} – ${monthEnd} ${dayEnd}, ${year}`;
+                    // Fallback: Just show the week end date
+                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
                 }
             }
-            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
         } catch {
             return fallback || '';
         }
@@ -165,7 +152,7 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                                 default: return Math.round(v).toLocaleString('en-US');
                             }
                         };
-                        const formatDate = (d: Date) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                        const formatDate = (d: Date) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
                         const tooltipNode = prevPeriod && prevVal != null ? (
                             <div className="text-gray-900 dark:text-gray-100">
                                 <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">{formatDate(prevPeriod.startDate)} – {formatDate(prevPeriod.endDate)}</div>

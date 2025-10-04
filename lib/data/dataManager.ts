@@ -147,9 +147,9 @@ export class DataManager {
                 if (wKey !== currentWeekKey) {
                     if (current) weeks.push(current);
                     currentWeekKey = wKey;
-                    // Use centralized week boundary calculation for consistent Monday-Sunday range labels
+                    // Use centralized week boundary calculation with short labels for charts
                     const boundaries = this.getWeekBoundaries(monday);
-                    current = { key: wKey, label: boundaries.rangeLabel, sums: { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } };
+                    current = { key: wKey, label: boundaries.shortLabel, sums: { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } };
                 }
                 const rec = dailyMap.get(k);
                 if (rec) {
@@ -221,6 +221,7 @@ export class DataManager {
         sunday: Date; 
         label: string;
         rangeLabel: string;
+        shortLabel: string;
         isCompleteWeek: (rangeStart: Date, rangeEnd: Date) => boolean;
     } {
         const monday = this._mondayOf(date);
@@ -228,7 +229,7 @@ export class DataManager {
         sunday.setUTCDate(sunday.getUTCDate() + 6);
         sunday.setUTCHours(23, 59, 59, 999);
         
-        // Format: "Nov 3–9, 2024" (same month) or "Sep 29–Oct 5, 2024" (cross-month)
+        // Short format for chart labels (just the Monday date)
         const monStr = this.safeToLocaleDateString(monday, { month: 'short', day: 'numeric' });
         const sunStr = this.safeToLocaleDateString(sunday, { month: 'short', day: 'numeric' });
         const year = sunday.getUTCFullYear();
@@ -243,7 +244,8 @@ export class DataManager {
             monday,
             sunday,
             label: sunStr, // Backwards compatible with existing code
-            rangeLabel, // New explicit range label
+            rangeLabel, // Full range label for tooltips/detailed views
+            shortLabel: monStr, // Short label for chart axes (e.g., "Jul 6")
             isCompleteWeek: (rangeStart: Date, rangeEnd: Date) => {
                 // A week is complete if all 7 days fall within the range
                 return monday >= rangeStart && sunday <= rangeEnd;
@@ -751,9 +753,9 @@ export class DataManager {
                         if (wKey !== currentWeekKey) {
                             if (current) buckets.push(current);
                             currentWeekKey = wKey;
-                            // Use centralized week boundary calculation for consistent Monday-Sunday range labels
+                            // Use centralized week boundary calculation with short labels for charts
                             const boundaries = this.getWeekBoundaries(monday);
-                            current = { key: wKey, label: boundaries.rangeLabel, sums: { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } };
+                            current = { key: wKey, label: boundaries.shortLabel, sums: { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0 } };
                         }
                         const rec = this._dailyAgg.get(k);
                         if (rec) {

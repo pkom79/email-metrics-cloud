@@ -980,7 +980,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
     };
 
-    const formatDate = (d: Date) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const formatDate = (d: Date) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 
     const renderStepChart = (step: FlowStepMetrics, index: number) => {
         const sparklineData = getStepSparklineData(step.sequencePosition, selectedMetric);
@@ -1048,7 +1048,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         let xTicks: { x: number; label: string }[] = [];
         if (sparklineData.length > 1) {
             const tickCount = Math.min(6, sparklineData.length);
-            for (let i = 0; i < tickCount; i++) { const idx = Math.round((i / (tickCount - 1)) * (sparklineData.length - 1)); const point = sparklineData[idx]; const x = (idx / (sparklineData.length - 1)) * 850; const label = new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); xTicks.push({ x, label }); }
+            for (let i = 0; i < tickCount; i++) { const idx = Math.round((i / (tickCount - 1)) * (sparklineData.length - 1)); const point = sparklineData[idx]; const x = (idx / (sparklineData.length - 1)) * 850; const label = new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }); xTicks.push({ x, label }); }
         }
         let yTicks: { y: number; label: string }[] = [];
         if (yAxisRange.max > yAxisRange.min) {
