@@ -756,7 +756,7 @@ function computeAddStepSuggestionForNotes(
 
   const reason = flowStepMetrics.length === 1
     ? 'Strong RPE and healthy deliverability'
-    : `Step ${last.sequencePosition} is performing well; a follow-up could add value`;
+    : `Step ${last.sequencePosition} is performing well. A follow-up could add value`;
 
   return {
     suggested: true,
@@ -1259,7 +1259,7 @@ export function computeOpportunitySummary(params: {
     },
     flowStepAnalysis: {
       category: "flows",
-      label: (note) => note.metadata?.flowName ? `Add Step — ${String(note.metadata.flowName)}` : `Flow Step Optimization`,
+      label: (note) => note.metadata?.flowName ? `Add Step: ${String(note.metadata.flowName)}` : `Flow Step Optimization`,
       type: "lift",
     },
     deadWeightAudience: {

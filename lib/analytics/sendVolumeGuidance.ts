@@ -56,7 +56,7 @@ const STATUS_MESSAGES: Record<SendVolumeChannel, Record<Exclude<SendVolumeStatus
     flows: {
         "send-more": "When overall flow sends increased, revenue went up without damaging reputation. Review the Flow Step Analysis to see which flows and steps drive these gains, and consider extending high-performing flows.",
         "send-less": "Increasing flow volume hasn’t brought meaningful revenue and has strained deliverability. Use the Flow Step Analysis to identify flows or steps that should be scaled back or removed.",
-        "keep-as-is": "Your current flow volume supports good deliverability. Sending more added little revenue and hurt reputation. Use the Flow Step Analysis to refine—some flows may still be expandable, while weaker steps might need trimming.",
+        "keep-as-is": "Your current flow volume supports good deliverability. Sending more added little revenue and hurt reputation. Use the Flow Step Analysis to refine. Some flows may still be expandable, while weaker steps might need trimming.",
     },
 };
 

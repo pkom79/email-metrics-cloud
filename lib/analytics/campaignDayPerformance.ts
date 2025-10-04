@@ -89,7 +89,7 @@ export function computeCampaignDayPerformance({ campaigns, rangeStart, rangeEnd,
       recommendation: {
         state: 'not_enough_data',
         headline: 'Not enough data for day-of-week guidance.',
-        body: [`At least ${minWeeks} full weeks are required; only ${weeksObserved} observed.`],
+        body: [`At least ${minWeeks} full weeks are required. Only ${weeksObserved} observed.`],
         sampleLine: weeksObserved ? `Based on ${weeksObserved} week${weeksObserved===1?'':'s'} of data.` : undefined,
       }
     };
@@ -239,7 +239,7 @@ export function computeCampaignDayPerformance({ campaigns, rangeStart, rangeEnd,
       recommendation: {
         state: 'even',
         headline: 'Performance is even across days.',
-        body: ['Revenue and engagement vary <6% among sampled days. Maintain consistency; focus testing on creative rather than shifting send days.'],
+        body: ['Revenue and engagement vary <6% among sampled days. Maintain consistency. Focus testing on creative rather than shifting send days.'],
         sampleLine: `Based on ${weeksObserved} weeks / ${totalCampaigns} campaigns (${totalEmails} emails).`
       }
     };

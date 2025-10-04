@@ -429,7 +429,7 @@ export function computeSendFrequencyGuidance(
     }
     if (!healthy) {
       const title = `Stabilize ${actionLabelForFrequencyBucket(baseline.key)} before scaling`;
-      const msg = `${baselineLabel} is struggling—${issueSummary}. Tighten audience segments and creative at this cadence, then revisit higher-frequency tests.`;
+      const msg = `${baselineLabel} is struggling. ${issueSummary}. Tighten audience segments and creative at this cadence, then revisit higher-frequency tests.`;
       return {
         status: 'keep-as-is',
         recommendationKind: 'stay',
