@@ -3,6 +3,7 @@ import type { ProcessedCampaign, ProcessedFlowEmail } from "../data/dataTypes";
 
 export type SendVolumeChannel = "campaigns" | "flows";
 export type SendVolumeStatus = "send-more" | "send-less" | "keep-as-is" | "insufficient";
+export type SendVolumeTrigger = "deliverability" | "revenue" | null;
 export type SendVolumePeriod = "weekly" | "monthly";
 
 export interface SendVolumeGuidanceResult {
@@ -13,6 +14,10 @@ export interface SendVolumeGuidanceResult {
     periodType: SendVolumePeriod | null;
     revenueScore: number;
     riskScore: number;
+    trigger: SendVolumeTrigger;
+    deliverabilityBreached: boolean;
+    maxRates: RateSnapshot;
+    thresholds: RateSnapshot;
     correlations: {
         volumeVsRevenue: CorrelationDetail;
         volumeVsUnsubs: CorrelationDetail;
@@ -24,6 +29,12 @@ export interface SendVolumeGuidanceResult {
 export interface CorrelationDetail {
     r: number | null;
     n: number;
+}
+
+export interface RateSnapshot {
+    unsubRate: number | null;
+    spamRate: number | null;
+    bounceRate: number | null;
 }
 
 interface ComputeOptions {
@@ -65,6 +76,17 @@ const INSUFFICIENT_MESSAGES: Record<SendVolumeChannel, string> = {
     flows: "There isn’t enough consistent flow data to measure how send volume impacts performance. Adjust the date range or granularity to uncover stronger patterns.",
 };
 
+const SEND_LESS_REVENUE_MESSAGES: Record<SendVolumeChannel, string> = {
+    campaigns: "When you increased campaign volume, revenue efficiency slipped even with healthy deliverability. Scale back frequency until returns improve.",
+    flows: "Higher flow volume dragged down revenue while deliverability held steady. Trim lower-value sends and focus efforts on the steps that convert best.",
+};
+
+const DELIVERABILITY_THRESHOLDS: Record<SendVolumeChannel, RateSnapshot> & { account: RateSnapshot } = {
+    account: { spamRate: 0.1, unsubRate: 0.8, bounceRate: 1 },
+    campaigns: { spamRate: 0.08, unsubRate: 1, bounceRate: 1 },
+    flows: { spamRate: 0.15, unsubRate: 2, bounceRate: 2.5 },
+};
+
 export function computeSendVolumeGuidance(
     channel: SendVolumeChannel,
     options: ComputeOptions,
@@ -103,6 +125,10 @@ export function computeSendVolumeGuidance(
             periodType: null,
             revenueScore: 0,
             riskScore: 0,
+            trigger: null,
+            deliverabilityBreached: false,
+            maxRates: { unsubRate: null, spamRate: null, bounceRate: null },
+            thresholds: DELIVERABILITY_THRESHOLDS[channel],
             correlations: {
                 volumeVsRevenue: { r: null, n: 0 },
                 volumeVsUnsubs: { r: null, n: 0 },
@@ -118,6 +144,23 @@ export function computeSendVolumeGuidance(
     const spamRates = seriesForScoring.map(p => p.spamRate);
     const bounceRates = seriesForScoring.map(p => p.bounceRate);
 
+    const thresholds = DELIVERABILITY_THRESHOLDS[channel];
+    const maxRate = (values: number[]): number | null => {
+        const finite = values.filter(v => Number.isFinite(v));
+        if (!finite.length) return null;
+        return finite.reduce((max, v) => (v > max ? v : max), finite[0]);
+    };
+
+    const maxUnsubRate = maxRate(unsubRates);
+    const maxSpamRate = maxRate(spamRates);
+    const maxBounceRate = maxRate(bounceRates);
+
+    const deliverabilityBreached = Boolean(
+        (maxUnsubRate != null && maxUnsubRate > (thresholds.unsubRate ?? Infinity)) ||
+        (maxSpamRate != null && maxSpamRate > (thresholds.spamRate ?? Infinity)) ||
+        (maxBounceRate != null && maxBounceRate > (thresholds.bounceRate ?? Infinity))
+    );
+
     const volumeVsRevenue = pearson(emails, revenue);
     const volumeVsUnsubs = pearson(emails, unsubRates);
     const volumeVsComplaints = pearson(emails, spamRates);
@@ -129,12 +172,18 @@ export function computeSendVolumeGuidance(
         .map(score => (score > 0 ? score : 0));
     const riskScore = riskComponents.length ? Math.max(...riskComponents) : 0;
 
+    const revenueDecline = revenueScore <= -1;
+    const trigger: SendVolumeTrigger = deliverabilityBreached ? "deliverability" : (revenueDecline ? "revenue" : null);
+
     let status: SendVolumeStatus;
     if (revenueScore >= 1 && riskScore <= 0) status = "send-more";
-    else if (riskScore >= 2 || (riskScore >= 1 && revenueScore <= 0)) status = "send-less";
+    else if (trigger) status = "send-less";
     else status = "keep-as-is";
 
-    const message = STATUS_MESSAGES[channel][status];
+    let message = STATUS_MESSAGES[channel][status];
+    if (status === "send-less" && trigger === "revenue") {
+        message = SEND_LESS_REVENUE_MESSAGES[channel];
+    }
 
     return {
         channel,
@@ -144,6 +193,10 @@ export function computeSendVolumeGuidance(
         periodType,
         revenueScore,
         riskScore,
+        trigger,
+        deliverabilityBreached,
+        maxRates: { unsubRate: maxUnsubRate, spamRate: maxSpamRate, bounceRate: maxBounceRate },
+        thresholds,
         correlations: {
             volumeVsRevenue,
             volumeVsUnsubs,

@@ -172,6 +172,10 @@ export function buildSendVolumeNotes(params: {
         periodType: result.periodType,
         revenueScore: result.revenueScore,
         riskScore: result.riskScore,
+        trigger: result.trigger,
+        deliverabilityBreached: result.deliverabilityBreached,
+        maxRates: result.maxRates,
+        thresholds: result.thresholds,
         correlations: result.correlations,
       },
     } satisfies ModuleActionNote;
