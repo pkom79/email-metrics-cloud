@@ -1,7 +1,7 @@
 import { DataManager } from "../data/dataManager";
 import type { ProcessedCampaign, ProcessedFlowEmail } from "../data/dataTypes";
 
-export type SendVolumeChannel = "campaigns" | "flows";
+export type SendVolumeChannel = "all" | "campaigns" | "flows";
 export type SendVolumeStatus = "send-more" | "send-less" | "keep-as-is" | "insufficient";
 export type SendVolumeTrigger = "deliverability" | "revenue" | null;
 export type SendVolumePeriod = "weekly" | "monthly";
@@ -59,6 +59,11 @@ const DEFAULT_MIN_WEEKS = 6;
 const DEFAULT_MIN_MONTHS = 3;
 
 const STATUS_MESSAGES: Record<SendVolumeChannel, Record<Exclude<SendVolumeStatus, "insufficient">, string>> = {
+    all: {
+        "send-more": "When total email volume increased, revenue rose without hurting deliverability. Scale thoughtfully and keep an eye on reputation metrics.",
+        "send-less": "Pushing overall email volume higher failed to deliver meaningful revenue and applied pressure to reputation signals. Trim sends and focus on your highest-impact messages.",
+        "keep-as-is": "Your current overall email volume balances revenue and reputation. Additional sends provided little upside while adding risk, so maintain the current cadence.",
+    },
     campaigns: {
         "send-more": "When you sent more campaigns during the review period, revenue increased without hurting deliverability. Try sending more frequently and monitor reputation and engagement.",
         "send-less": "At the current campaign volume, deliverability and engagement have been declining, and sending more did not drive meaningful revenue. Reduce frequency to protect sender reputation.",
@@ -72,17 +77,20 @@ const STATUS_MESSAGES: Record<SendVolumeChannel, Record<Exclude<SendVolumeStatus
 };
 
 const INSUFFICIENT_MESSAGES: Record<SendVolumeChannel, string> = {
+    all: "There isn’t enough consistent account-level email data to measure how changes in total send volume affect revenue or reputation. Expand the date range or adjust granularity for a clearer signal before dialing volume up or down.",
     campaigns: "There isn’t enough consistent campaign data to measure how changes in send volume affect revenue or reputation. Try adjusting the date range or using a broader time granularity to build a clearer picture before changing your sending frequency.",
     flows: "There isn’t enough consistent flow data to measure how send volume impacts performance. Adjust the date range or granularity to uncover stronger patterns.",
 };
 
 const SEND_LESS_REVENUE_MESSAGES: Record<SendVolumeChannel, string> = {
+    all: "Higher total email volume dragged down revenue efficiency even with healthy deliverability. Refocus on the messages that convert best before scaling sends again.",
     campaigns: "When you increased campaign volume, revenue efficiency slipped even with healthy deliverability. Scale back frequency until returns improve.",
     flows: "Higher flow volume dragged down revenue while deliverability held steady. Trim lower-value sends and focus efforts on the steps that convert best.",
 };
 
 const DELIVERABILITY_THRESHOLDS: Record<SendVolumeChannel, RateSnapshot> & { account: RateSnapshot } = {
     account: { spamRate: 0.1, unsubRate: 0.8, bounceRate: 1 },
+    all: { spamRate: 0.1, unsubRate: 0.8, bounceRate: 1 },
     campaigns: { spamRate: 0.08, unsubRate: 1, bounceRate: 1 },
     flows: { spamRate: 0.15, unsubRate: 2, bounceRate: 2.5 },
 };
@@ -94,12 +102,12 @@ export function computeSendVolumeGuidance(
 ): SendVolumeGuidanceResult {
     const { dateRange, customFrom, customTo, minWeeklySamples = DEFAULT_MIN_WEEKS, minMonthlySamples = DEFAULT_MIN_MONTHS } = options;
 
-    const subsetCampaigns = channel === "campaigns"
-        ? (options.campaigns ?? dm.getCampaigns())
-        : (options.campaigns ?? []);
-    const subsetFlows = channel === "flows"
-        ? (options.flows ?? dm.getFlowEmails())
-        : (options.flows ?? []);
+    const subsetCampaigns = channel === "flows"
+        ? []
+        : (options.campaigns ?? dm.getCampaigns());
+    const subsetFlows = channel === "campaigns"
+        ? []
+        : (options.flows ?? dm.getFlowEmails());
 
     const weeklySeries = buildSeriesPoints(dm, subsetCampaigns, subsetFlows, dateRange, customFrom, customTo, "weekly");
     let periodType: SendVolumePeriod | null = null;

@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useMemo, useEffect } from 'react';
-import { Workflow, AlertTriangle, ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
+import { Workflow, AlertTriangle, ArrowUp, ArrowDown, ArrowRight, ChevronDown } from 'lucide-react';
 import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
 import { thirdTicks, formatTickLabels, computeAxisMax } from '../../lib/utils/chartTicks';
@@ -127,6 +127,11 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
     const [selectedFlow, setSelectedFlow] = useState<string>('');
     const [selectedMetric, setSelectedMetric] = useState<string>('revenue');
+    const [actionNoteExpanded, setActionNoteExpanded] = useState<boolean>(false);
+    const actionNoteContentId = useMemo(() => {
+        if (!selectedFlow) return 'flow-action-note-content';
+        return `flow-action-note-content-${selectedFlow.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}`;
+    }, [selectedFlow]);
 
     const dataManager = DataManager.getInstance();
     const resolvedRange = useMemo(() => dataManager.getResolvedDateRange(dateRange, customFrom, customTo), [dataManager, dateRange, customFrom, customTo]);
@@ -1449,6 +1454,9 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             if (top) setSelectedFlow(top.flowName);
         }
     }, [selectedFlow, flowSummaries]);
+    useEffect(() => {
+        setActionNoteExpanded(false);
+    }, [selectedFlow]);
 
     return (
         <section className="section-card">
@@ -1491,29 +1499,6 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                     </div>
                 </div>
             </div>
-
-            {selectedFlow && flowActionNote && (
-                <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4 mb-6">
-                    {Array.isArray(flowActionNote.bodyParts) && flowActionNote.bodyParts.length > 0 && (
-                        <div className="space-y-1">
-                            {flowActionNote.bodyParts.map((line: string, idx: number) => (
-                                <p key={idx} className="text-sm font-semibold text-gray-900 dark:text-gray-100">{line}</p>
-                            ))}
-                        </div>
-                    )}
-                    {flowActionNote.items?.length ? (
-                        <ul className="mt-3 space-y-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed list-disc pl-5">
-                            {flowActionNote.items.map((item, idx) => (
-                                <li key={idx}>{item}</li>
-                            ))}
-                        </ul>
-                    ) : null}
-                    {flowActionNote.sample && (
-                        <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{flowActionNote.sample}</p>
-                    )}
-                </div>
-            )}
-
             {/* Not enough data empty state card (still render charts below) */}
             {selectedFlow && notEnoughDataCard && (
                 <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900 mb-3">
@@ -1524,6 +1509,41 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             {selectedFlow && (
                 <div className="grid grid-cols-1 gap-6">
                     {flowStepMetrics.map((step, index) => renderStepChart(step, index))}
+                </div>
+            )}
+            {selectedFlow && flowActionNote && (
+                <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 mt-6">
+                    <button
+                        type="button"
+                        className="w-full px-4 py-3 flex items-center justify-between text-left"
+                        onClick={() => setActionNoteExpanded(prev => !prev)}
+                        aria-expanded={actionNoteExpanded}
+                        aria-controls={actionNoteContentId}
+                    >
+                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{flowActionNote.title}</span>
+                        <ChevronDown className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform ${actionNoteExpanded ? 'rotate-180' : ''}`} />
+                    </button>
+                    {actionNoteExpanded && (
+                        <div id={actionNoteContentId} className="px-4 pb-4 pt-1">
+                            {Array.isArray(flowActionNote.bodyParts) && flowActionNote.bodyParts.length > 0 && (
+                                <div className="space-y-1">
+                                    {flowActionNote.bodyParts.map((line: string, idx: number) => (
+                                        <p key={idx} className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-relaxed">{line}</p>
+                                    ))}
+                                </div>
+                            )}
+                            {flowActionNote.items?.length ? (
+                                <ul className="mt-3 space-y-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed list-disc pl-5">
+                                    {flowActionNote.items.map((item, idx) => (
+                                        <li key={idx}>{item}</li>
+                                    ))}
+                                </ul>
+                            ) : null}
+                            {flowActionNote.sample && (
+                                <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{flowActionNote.sample}</p>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
         </section>

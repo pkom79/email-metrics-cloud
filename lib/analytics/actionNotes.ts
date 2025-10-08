@@ -139,7 +139,11 @@ function buildSendVolumeSample(result: SendVolumeGuidanceResult): string | null 
   const unit = result.periodType === "weekly" ? "week" : "month";
   const count = result.sampleSize;
   const plural = count === 1 ? unit : `${unit}s`;
-  return `Based on ${count} ${plural} of ${result.channel} activity in this range.`;
+  const channelLabel =
+    result.channel === "all"
+      ? "overall email activity"
+      : `${result.channel} activity`;
+  return `Based on ${count} ${plural} of ${channelLabel} in this range.`;
 }
 
 export function buildSendVolumeNotes(params: {
@@ -148,22 +152,50 @@ export function buildSendVolumeNotes(params: {
   customTo?: string;
 }): ModuleActionNote[] {
   const dm = DataManager.getInstance();
-  const base: Array<{ key: "campaigns" | "flows"; label: string }> = [
+  const base: Array<{ key: "all" | "campaigns" | "flows"; label: string }> = [
+    { key: "all", label: "All Emails" },
     { key: "campaigns", label: "Campaigns" },
     { key: "flows", label: "Flows" },
   ];
   return base.map(({ key, label }) => {
     const result = computeSendVolumeGuidance(key, { ...params }, dm);
+    const title = (() => {
+      if (result.status === "insufficient") {
+        return `Not enough data to evaluate ${label.toLowerCase()} volume`;
+      }
+      switch (result.channel) {
+        case "all":
+          return `${label}: ${
+            result.status === "send-more"
+              ? "Scale total volume"
+              : result.status === "send-less"
+              ? "Trim total volume"
+              : "Hold steady"
+          }`;
+        case "campaigns":
+          return `${label}: ${
+            result.status === "send-more"
+              ? "Increase"
+              : result.status === "send-less"
+              ? "Reduce"
+              : "Keep"
+          } volume`;
+        case "flows":
+        default:
+          return `${label}: ${
+            result.status === "send-more"
+              ? "Scale"
+              : result.status === "send-less"
+              ? "Trim"
+              : "Maintain"
+          } send volume`;
+      }
+    })();
     return {
       module: "sendVolumeImpact",
-      scope: label.toLowerCase(),
+      scope: result.channel,
       status: result.status,
-      title:
-        result.status === "insufficient"
-          ? `Not enough data to evaluate ${label.toLowerCase()} volume`
-          : label === "Campaigns"
-          ? `${label}: ${result.status === "send-more" ? "Increase" : result.status === "send-less" ? "Reduce" : "Keep"} volume`
-          : `${label}: ${result.status === "send-more" ? "Scale" : result.status === "send-less" ? "Trim" : "Maintain"} send volume`,
+      title,
       message: result.message,
       sample: buildSendVolumeSample(result),
       estimatedImpact: null,

@@ -440,18 +440,6 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                     </SelectBase>
                 </div>
             </div>
-            {guidance && (
-                <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4 mb-6">
-                    <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{guidance.title}</p>
-                    <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{guidance.message}</p>
-                    {guidance.estimatedMonthlyGain != null && guidance.estimatedMonthlyGain >= 500 && (
-                        <p className="mt-3 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                            Monthly revenue could increase by an estimated {formatCurrency(guidance.estimatedMonthlyGain)} by leaning into this audience size.
-                        </p>
-                    )}
-                    {guidance.sample && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{guidance.sample}</p>}
-                </div>
-            )}
             <div className={`grid gap-6 ${buckets.length === 1 ? 'grid-cols-1 max-w-xs mx-auto' : buckets.length === 2 ? 'grid-cols-2 max-w-md mx-auto' : buckets.length === 3 ? 'grid-cols-3 max-w-3xl mx-auto' : 'grid-cols-2 md:grid-cols-4'}`}>
                 {buckets.map((b) => {
                     const val = getValue(b);
@@ -491,6 +479,18 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                     );
                 })}
             </div>
+            {guidance && (
+                <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4 mt-6">
+                    <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{guidance.title}</p>
+                    <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{guidance.message}</p>
+                    {guidance.estimatedMonthlyGain != null && guidance.estimatedMonthlyGain >= 500 && (
+                        <p className="mt-3 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                            Monthly revenue could increase by an estimated {formatCurrency(guidance.estimatedMonthlyGain)} by leaning into this audience size.
+                        </p>
+                    )}
+                    {guidance.sample && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{guidance.sample}</p>}
+                </div>
+            )}
         </div>
     );
 }

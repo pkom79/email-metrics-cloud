@@ -71,6 +71,11 @@ const DEAD_ZONE = {
 // Utility formatters
 const fmtCurrency = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
 const fmtNum = (v: number, d = 2) => Number.isFinite(v) ? v.toFixed(d) : '—';
+const SCOPE_LABELS: Record<SourceScope, string> = {
+    all: 'All Emails',
+    campaigns: 'Campaigns',
+    flows: 'Flows'
+};
 
 // ChartContainer renders dual-axis SVG + tooltip + baseline band
 interface ChartSeriesPoint { x: number; value: number | null; emails?: number; label: string; dateLabel?: string; faded?: boolean; }
@@ -219,6 +224,10 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     const dm = DataManager.getInstance();
     const campaigns = dm.getCampaigns();
     const flows = dm.getFlowEmails();
+    const guidanceAll = useMemo(
+        () => computeSendVolumeGuidance('all', { dateRange, customFrom, customTo, campaigns, flows }, dm),
+        [dm, campaigns, flows, dateRange, customFrom, customTo]
+    );
     const guidanceCampaigns = useMemo(
         () => computeSendVolumeGuidance('campaigns', { dateRange, customFrom, customTo, campaigns }, dm),
         [dm, campaigns, dateRange, customFrom, customTo]
@@ -264,10 +273,12 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         return { campaigns, flows };
     }, [scope, campaigns, flows]);
 
-    const guidanceCards: { key: 'campaigns' | 'flows'; label: string; result: SendVolumeGuidanceResult }[] = [
+    const guidanceCards: { key: SourceScope; label: string; result: SendVolumeGuidanceResult }[] = [
+        { key: 'all', label: 'All Emails', result: guidanceAll },
         { key: 'campaigns', label: 'Campaigns', result: guidanceCampaigns },
         { key: 'flows', label: 'Flows', result: guidanceFlows }
     ];
+    const activeGuidance = guidanceCards.find(card => card.key === scope)?.result ?? guidanceAll;
 
     const formatSampleText = (result: SendVolumeGuidanceResult) => {
         if (!result.periodType || result.sampleSize <= 0) return null;
@@ -479,7 +490,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     </div>
                 </div>
             </div>
-            <div className="grid gap-4 md:grid-cols-2 mb-6">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
                 {guidanceCards.map(card => {
                     const badgeClass = STATUS_BADGE_CLASSES[card.result.status];
                     const statusText = STATUS_LABELS[card.result.status];
@@ -567,6 +578,25 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     );
                 })()}
             </div>
+            {activeGuidance && (() => {
+                const activeSample = formatSampleText(activeGuidance);
+                return (
+                    <div className="mt-8 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                            <div>
+                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                    {SCOPE_LABELS[scope]} Action Note
+                                </p>
+                                <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{activeGuidance.message}</p>
+                                {activeSample && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{activeSample}</p>}
+                            </div>
+                            <span className={`px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap ${STATUS_BADGE_CLASSES[activeGuidance.status]}`}>
+                                {STATUS_LABELS[activeGuidance.status]}
+                            </span>
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 }
