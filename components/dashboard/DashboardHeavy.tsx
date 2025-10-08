@@ -840,7 +840,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         return memberAccounts.some(a => a.id === memberSelectedId);
     }, [isAdmin, selectedAccountId, memberBrandsLoaded, memberSelectedId, memberAccounts]);
     useEffect(() => { try { DataManager.setAccountId(EFFECTIVE_ACCOUNT_ID || null); } catch { } }, [EFFECTIVE_ACCOUNT_ID]);
-    // Reference/end date for presets and bounds —
+    // Reference/end date for presets and bounds –
     // align with DataCoverageNotice by using DataManager's helper.
     const REFERENCE_DATE = useMemo(() => {
         try {
@@ -1577,7 +1577,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                             const baselineShareDisplay = baselineShare != null
                                                 ? `+${formatPercent(baselineShare)}`
                                                 : null;
-                                            const suppressedCount = metadata?.deadWeightCount != null ? formatNumber(Number(metadata.deadWeightCount)) : '—';
+                                            const suppressedCount = metadata?.deadWeightCount != null ? formatNumber(Number(metadata.deadWeightCount)) : '–';
                                             const currentPlan = metadata?.currentMonthlyPrice != null ? formatCurrency(Number(metadata.currentMonthlyPrice)) : null;
                                             const projectedPlan = metadata?.projectedMonthlyPrice != null ? formatCurrency(Number(metadata.projectedMonthlyPrice)) : null;
                                             const savingsPct = isSavings && category.percentOfBaseline != null ? category.percentOfBaseline : null;
@@ -1602,7 +1602,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                                             <div className="font-semibold text-purple-700 dark:text-purple-200">Dead Weight Audience</div>
                                                             <div>Suppressed profiles: {suppressedCount}</div>
                                                             <div>{currentPlan && projectedPlan ? <>Plan: {currentPlan}/mo → {projectedPlan}/mo</> : 'Plan savings available after purge'}</div>
-                                                            <div>Savings: {savingsPct != null ? formatPercent(savingsPct) : '—'}</div>
+                                                            <div>Savings: {savingsPct != null ? formatPercent(savingsPct) : '–'}</div>
                                                         </div>
                                                     ) : (
                                                         <div className="space-y-1">
@@ -1644,9 +1644,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                                             </div>
                                                             {isSavings ? (
                                                                 <div className="mt-3 space-y-1 text-sm text-gray-700 dark:text-gray-200">
-                                                                    <div>Current plan: {currentPlan ?? '—'}</div>
-                                                                    <div>After purge: {projectedPlan ?? '—'}</div>
-                                                                    <div>Savings: {savingsPct != null ? formatPercent(savingsPct) : '—'}</div>
+                                                                    <div>Current plan: {currentPlan ?? '–'}</div>
+                                                                    <div>After purge: {projectedPlan ?? '–'}</div>
+                                                                    <div>Savings: {savingsPct != null ? formatPercent(savingsPct) : '–'}</div>
                                                                 </div>
                                                             ) : baselineValue != null ? (
                                                                 <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">Baseline (365d): {formatCurrency(baselineValue)} {IMPACT_TIMEFRAME_SUFFIX[impactTimeframe]}</div>
@@ -1670,7 +1670,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         )}
 
                     </div>
-                    {/* Data Coverage & Age — only when an account is active */}
+                    {/* Data Coverage & Age – only when an account is active */}
                     {HAS_ACTIVE_ACCOUNT && (
                         <>
                             <DataCoverageNotice dataManager={dm} referenceDate={REFERENCE_DATE} />
@@ -1773,8 +1773,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 </div>
             )}
             {/* Klaviyo connect modal removed (CSV-only ingestion) */}
-            {/* Filters bar (sticky) — hide when no active account */}
-            {/* Mobile filters trigger (visible only on small screens) — hide when no active account */}
+            {/* Filters bar (sticky) – hide when no active account */}
+            {/* Mobile filters trigger (visible only on small screens) – hide when no active account */}
             {HAS_ACTIVE_ACCOUNT && (
                 <div className="sm:hidden pt-2">
                     <div className="max-w-7xl mx-auto px-4">
@@ -1873,7 +1873,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     </div></div></div></div>
             )}
 
-            {/* Mobile Filters Bottom Sheet — hide when no active account */}
+            {/* Mobile Filters Bottom Sheet – hide when no active account */}
             {HAS_ACTIVE_ACCOUNT && mobileFiltersOpen && (
                 <div className="sm:hidden fixed inset-0 z-50" role="dialog" aria-modal="true">
                     {/* Backdrop */}
@@ -1970,7 +1970,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     </div>
                 </div>
             )}
-            {/* Empty state (no data) — Admin, only when an account is selected and has no data */}
+            {/* Empty state (no data) – Admin, only when an account is selected and has no data */}
             {!showOverlay && !hasData && isAdmin && !!selectedAccountId && (
                 <div className="px-6 pb-4">
                     <div className="max-w-3xl mx-auto mt-8">
@@ -2112,7 +2112,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             {/* Send Frequency Module */}
                             <CampaignSendFrequency campaigns={filteredCampaigns} onGuidance={(g) => setFrequencyGuidance(g)} />
                             <AudienceSizePerformance campaigns={filteredCampaigns} />
-                            {/* Gap Week Elimination — placed below Send Frequency Optimization */}
+                            {/* Gap Week Elimination – placed below Send Frequency Optimization */}
                             <CampaignGapsAndLosses
                                 dateRange={dateRange}
                                 granularity={granularity}
@@ -2262,7 +2262,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         </section>
                     )}
                 </>)}
-                {/* Flow Step Analysis — only when an account is active */}
+                {/* Flow Step Analysis – only when an account is active */}
                 {HAS_ACTIVE_ACCOUNT && (
                     <section>
                         {showFlowAnalysis ? (

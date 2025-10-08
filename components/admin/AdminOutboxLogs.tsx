@@ -53,7 +53,7 @@ export default function AdminOutboxLogs() {
                 <tr key={r.id || i} className="border-t border-gray-200 dark:border-gray-800">
                   <td className="py-1 pr-2 whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
                   <td className="py-1 pr-2 whitespace-nowrap">{r.topic}</td>
-                  <td className="py-1 pr-2 whitespace-nowrap">{r.recipient_email || r.recipient_user_id || '—'}</td>
+                  <td className="py-1 pr-2 whitespace-nowrap">{r.recipient_email || r.recipient_user_id || '–'}</td>
                   <td className="py-1 pr-2 whitespace-nowrap">{String(r.status)}</td>
                   <td className="py-1 pr-2 whitespace-nowrap">{r.attempts ?? 0}</td>
                   <td className="py-1 truncate max-w-[480px]" title={r.last_error || ''}>{r.last_error || ''}</td>

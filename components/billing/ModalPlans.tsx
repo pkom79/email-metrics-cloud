@@ -125,7 +125,7 @@ export default function ModalPlans({ open, status, onClose, onSelect, onRefresh,
                     <h2 id="plans-title" className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Choose your plan</h2>
                     <p className="text-base font-medium text-gray-900 dark:text-gray-100">Same features. Pay how you prefer.</p>
                     <p className="text-sm text-gray-600 dark:text-gray-300 max-w-2xl">
-                        Unlock powerful, easy-to-use analytics that help you optimize flows, improve campaigns, and grow revenue. Every plan starts with a 30-day free trial—$0 due today. Cancel anytime.
+                        Unlock powerful, easy-to-use analytics that help you optimize flows, improve campaigns, and grow revenue. Every plan starts with a 30-day free trial–$0 due today. Cancel anytime.
                     </p>
                     <div className="text-xs font-semibold text-indigo-600">30 day free trial on every plan</div>
                     {status ? (

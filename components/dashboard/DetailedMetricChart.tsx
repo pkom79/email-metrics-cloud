@@ -37,7 +37,7 @@ interface DetailedMetricChartProps {
 }
 
 const formatValue = (value: number, format: MetricFormat): string => {
-    if (value === null || value === undefined || isNaN(value)) return '—';
+    if (value === null || value === undefined || isNaN(value)) return '–';
 
     switch (format) {
         case 'currency':

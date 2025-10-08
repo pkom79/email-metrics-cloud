@@ -173,7 +173,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
     }
 
     // Y axis ticks (4 divisions)
-    // Thirds-based ticks and labels (numbers) — compute directly (avoid hooks after early return)
+    // Thirds-based ticks and labels (numbers) – compute directly (avoid hooks after early return)
     const yTickValues = thirdTicks(maxVal, 'number');
     const yTickLabels = formatTickLabels(yTickValues, 'number', maxVal);
 

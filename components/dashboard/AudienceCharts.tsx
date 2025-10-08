@@ -251,7 +251,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                 ideas: [
                     'Highlight advanced use cases, product refreshers, or behind-the-scenes updates',
                     'Remind them about loyalty perks, referrals, or insider benefits they might earn',
-                    'Ask for feedback or surveys—they have enough context to share meaningful input'
+                    'Ask for feedback or surveys–they have enough context to share meaningful input'
                 ]
             },
             '1-2 years': {
@@ -544,7 +544,7 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
         else if (stability === 'midlife_drop') sentences.push('Balance onboarding wins with programs that re-energize the one-to-two-year audience.');
         else sentences.push('Distribute effort across welcome journeys, loyalty reinforcement, and recurring hygiene checks.');
 
-        sentences.push('If the pattern flips—strong early engagement but heavy inactivity later—it usually points to hygiene issues rather than acquisition, so keep watching these signals.');
+        sentences.push('If the pattern flips–strong early engagement but heavy inactivity later–it usually points to hygiene issues rather than acquisition, so keep watching these signals.');
 
         const paragraph = sentences.slice(0, 5).join(' ');
 
@@ -1267,11 +1267,11 @@ export default function AudienceCharts({ dateRange, granularity, customFrom, cus
                                 <div className="grid grid-cols-2 gap-6 text-sm">
                                     <div>
                                         <p className="text-gray-500 dark:text-gray-400">Current Monthly</p>
-                                        <p className="font-medium text-gray-900 dark:text-gray-100">{deadWeight.currentPrice !== null ? deadWeight.currentPrice.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }) : '—'}</p>
+                                        <p className="font-medium text-gray-900 dark:text-gray-100">{deadWeight.currentPrice !== null ? deadWeight.currentPrice.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }) : '–'}</p>
                                     </div>
                                     <div>
                                         <p className="text-gray-500 dark:text-gray-400">After Purge</p>
-                                        <p className="font-medium text-gray-900 dark:text-gray-100">{deadWeight.newPrice !== null ? deadWeight.newPrice.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }) : '—'}</p>
+                                        <p className="font-medium text-gray-900 dark:text-gray-100">{deadWeight.newPrice !== null ? deadWeight.newPrice.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }) : '–'}</p>
                                     </div>
                                 </div>
                             </div>

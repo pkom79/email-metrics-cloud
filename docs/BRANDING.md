@@ -1,4 +1,4 @@
-# Email Metrics Cloud — Branding and UI Guidelines
+# Email Metrics Cloud – Branding and UI Guidelines
 
 This guide defines the design tokens, components, and patterns used across the app. Treat it as the single source of truth and keep it updated as we standardize. When adding or modifying UI, reference this document and prefer the shared components listed here.
 
@@ -23,6 +23,10 @@ Last updated: 2025-10-03 (Send Volume Impact guidance cards removed in favour of
   - Section headings: `text-lg` with `font-semibold`
   - Large numeric stats: `text-lg` or `text-3xl` with `tabular-nums` for alignment
 - Numeric alignment: Use `tabular-nums` on metrics, ticks, and stats for better column alignment.
+
+### Copy tone and punctuation
+- Keep sentences short and direct; split long thoughts into multiple sentences instead of chaining clauses.
+- **Never** use semicolons (`;`) or em dashes (`–`) in customer-facing copy. Prefer periods or commas, or rewrite the sentence. When a placeholder is needed (e.g., no value), use an en dash (`–`) or the word “N/A”.
 
 ## color palette
 Use Tailwind’s palette with these role mappings:
@@ -64,8 +68,8 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Examples:
   - Weekly-only module for 90+ day ranges: Title “Weekly view and 90+ days required”, body “This module is available only in the Weekly view for ranges 90 days or longer.” Icon: `CalendarRange`.
   - Zero full weeks in range: Title “Not enough data in this period”, body “We didn’t find any complete weeks inside this range. Try a longer date range.” Icon: `MailX`.
-  - Dashboard: No Account Access (Manager) — Title “No account access yet”, body “You don’t have access to any account. Ask an Admin to invite you.” Icon: `Calendar` in gray-300. No CTAs.
-  - Dashboard: Admin (no account selected) — Title “Select an account”, body “Choose an account from the selector above to view its dashboard.” Icon: `Calendar` in gray-300. No CTAs.
+  - Dashboard: No Account Access (Manager) – Title “No account access yet”, body “You don’t have access to any account. Ask an Admin to invite you.” Icon: `Calendar` in gray-300. No CTAs.
+  - Dashboard: Admin (no account selected) – Title “Select an account”, body “Choose an account from the selector above to view its dashboard.” Icon: `Calendar` in gray-300. No CTAs.
 
 ### Settings and management pages (current)
 - Use the same section-card pattern with compact controls.
@@ -107,12 +111,13 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Sample line: optional `text-xs text-gray-500 dark:text-gray-400` reminder formatted as “Based on X weeks of … data.” Count all weeks used in the comparison (e.g., baseline + challenger) so the note reflects the total observation window.
 - Toggles (when present) use purple text buttons (`text-purple-600 hover:text-purple-700`) with a `ChevronDown` icon that rotates on open. Labels read “View Insights” / “Hide Insights”.
 - Placement: unless otherwise noted, action notes sit below the primary visualization with `mt-6` spacing. Send Volume Impact uses `mt-8` to clear the stat grid.
+- Flow Step Analysis headers follow the same rules and must always show a plain-English summary line (no punctuation shortcuts) paired with the toggle on the right.
 
 #### Narrative Headlines (Subject Line Insights)
 - Use a single descriptive sentence instead of a prefixed tag (e.g., avoid "Revenue Win:").
 - Must describe what happened in the observed period (e.g., volume share below baseline, lift achieved) and end with a period.
 - Use the phrase “Rev per Email” (capital R) instead of the acronym RPE.
-- Do not use colon `:`, semicolon `;`, or em dash `—` characters; keep punctuation simple (period only).
+- Do not use colon `:`, semicolon `;`, or em dash `–` characters; keep punctuation simple (period only).
 - Example patterns (actual selection logic handled in analytics layer):
   - "42% of sends were 18% below baseline Rev per Email ($0.34)."
   - "Scarcity & Low Stock subject lines lifted Rev per Email 26% on 145,000 sends (38% of revenue)."
@@ -156,7 +161,7 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Header line: interpret the overall engagement health by age (use the rule priority: hygiene, then acquisition quality, then stability). Subline is a one-sentence focus reminder derived from the signals map.
 - Interaction: “View Insights” / “Hide Insights” toggle with chevron; expanded state shows a short 4–6 sentence paragraph (no bullets) that covers acquisition quality, list maintenance, where habits form or fade, recommended allocation, and a contrast reminder.
 - Data inputs: derive segments using the same age buckets (0–6m, 6–12m, 1–2y, 2+y) and engagement buckets (0–30d, 31–60d, 61–90d, 91–120d, 120+, Never). Do not restate raw percentages already shown on the chart.
-- Sentence templates: follow the rule set—headline priority order, subline mapping, paragraph sentences covering quality, maintenance, stability, focus, and contrast.
+- Sentence templates: follow the rule set–headline priority order, subline mapping, paragraph sentences covering quality, maintenance, stability, focus, and contrast.
 
 #### Campaign Day Performance Action Note (new)
 - Purpose: Recommend which day(s) of the week to prioritize for campaign sends based on Revenue per Email, engagement (opens, clicks, conversions), and risk (unsub & spam) while respecting the existing Send Frequency recommendation.
@@ -167,7 +172,7 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
   - Even performance: “Performance is even across days.”
   - Not enough data: “Not enough data for day-of-week guidance.”
   - Exploratory (only one eligible day): “Use Tue as an anchor day.”
-  - Consider (no clear winner for frequency=1): “No clear leader—consider Tue or Wed.”
+  - Consider (no clear winner for frequency=1): “No clear leader–consider Tue or Wed.”
 - Sampling guardrails: Require ≥4 full weeks; a day eligible when it has ≥3 campaigns OR ≥1k emails (or ≥2% of total emails, whichever larger). Volatile single-campaign spikes dampen revenue weight (0.7×) to avoid overfitting.
 - Scoring blend (not displayed directly): 55% revenue index, 25% engagement index (opens 50%, clicks 30%, conversion 20%), 20% risk index (penalizes unsub & spam deltas; spam weighted heavier). Result only influences recommendation copy and ordering; we do not surface raw composite values in UI to minimize noise.
 - Risk gating: Days exceeding spam 0.5% or unsub +0.15 pp over weighted average are excluded/substituted when alternatives exist; elevated but not blocking risk adds a caution sentence (“Monitoring elevated complaints on Fri…”).
@@ -238,7 +243,7 @@ This pattern provides immediate visibility of all campaign metrics without requi
 - Example:
   - Time/Volume, Asc/Desc, Revenue/Emails Sent
 
-### Segment Comparison (A/B) — Custom Segment
+### Segment Comparison (A/B) – Custom Segment
 - Uploads: Two optional CSV inputs, labeled "Segment A" and "Segment B". A is the baseline.
 - Labels: After upload, show an editable text field to rename each segment (defaults to file name).
 - Layout when both segments are present (compact compare):
@@ -257,7 +262,7 @@ This pattern provides immediate visibility of all campaign metrics without requi
     - ≥1000%: thousands‑grouped integer (e.g., 1,463%).
   - Counts: integers using `toLocaleString()`.
 - Anchoring for N‑day windows: anchor to `referenceDate` when provided; otherwise Today. Use the same anchor for both A and B.
-- Baseline zero: show "N/A (no baseline)" when A = 0 and B > 0; show "—" when both are zero.
+- Baseline zero: show "N/A (no baseline)" when A = 0 and B > 0; show "–" when both are zero.
 - Single-file behavior: When only Segment A is present, render the original single-segment cards without delta text.
 - Row headers and order (both single and compare views):
   1) Revenue & Value
@@ -390,7 +395,7 @@ Dynamic Subject Length bins:
 ---
 If you find a UI that deviates from this guide, log it and standardize by replacing ad-hoc markup with the shared components/utilities above.
 
-## Flow Step Analysis — Score & Tooltip Nomenclature
+## Flow Step Analysis – Score & Tooltip Nomenclature
 
 Scope: Applies to both UI and export surfaces. Keep naming, formatting, and calculations in strict parity.
 
@@ -403,7 +408,7 @@ Scope: Applies to both UI and export surfaces. Keep naming, formatting, and calc
 - Score N/A: When store revenue in the selected window is zero, show “Score N/A” in the UI; export should also note the lack of store revenue.
 - Notes: When RI ≥ 1.4, include “High Revenue Index” in the notes. Retain the high‑revenue guardrail note when applicable.
 - Minimum volume: Don’t recommend scaling/pausing until a step has at least 250 sends in the selected range. Show the purple “Low volume” badge and Action Note reminder instead of a scale/keep verdict below that threshold.
-- Flow Action Note: sits below the step charts. Collapsed view shows the flow-specific title plus the first summary line; the right side surfaces a “View Insights” purple text button with the chevron toggle. Expanded state reveals the remaining narrative sentences, optional bullet list, and the sample line. Call out the reason (Revenue Index, ERS share, deliverability issues) and average revenue per the selected granularity (day/week/month). When the last step is strong enough to extend, phrase the suggestion as “Adding one more email…” and include the estimated lift per the active granularity.
+- Flow Action Note: sits below the step charts. Collapsed view shows a flow-specific summary headline plus the first summary line; the right side surfaces a “View Insights” purple text button with the chevron toggle. Expanded state reveals the remaining narrative sentences, optional bullet list, and the sample line. Call out the reason (Revenue Index, ERS share, deliverability issues) and average revenue per the selected granularity (day/week/month). When the last step is strong enough to extend, phrase the suggestion as “Adding one more email…” and include the estimated lift per the active granularity.
 
 Formatting:
 - RI display: use “x.x×” format in tooltips (e.g., “1.4×”).

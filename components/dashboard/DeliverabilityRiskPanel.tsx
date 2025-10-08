@@ -16,7 +16,7 @@ interface WindowStats { emailsSent: number; revenue: number; bounces: number; sp
 
 // Formatting helpers
 const formatCurrency = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
-const pct = (r: number, digits = 1) => (isFinite(r) ? (r * 100).toFixed(digits) + '%' : '—');
+const pct = (r: number, digits = 1) => (isFinite(r) ? (r * 100).toFixed(digits) + '%' : '–');
 const signedPct = (r: number, digits = 1) => (r >= 0 ? '+' : '') + pct(Math.abs(r), digits); // we pass abs then re-add sign
 const rate = (r: number) => (r * 100).toFixed(r * 100 >= 1 ? 2 : 3) + '%';
 
@@ -316,7 +316,7 @@ export default function DeliverabilityRiskPanel({ dateRange, customFrom, customT
                                 </div>
                             </div>
                             <div className="mt-2 text-[10px] text-gray-500 dark:text-gray-500 leading-snug">
-                                {analysis.regressionElasticity.unstable ? 'Low variation in recent send volume—marginal metrics are provisional.' : `Model fit (R² revenue vs volume): ${(analysis.regressionElasticity.r2Revenue * 100).toFixed(0)}%.`}
+                                {analysis.regressionElasticity.unstable ? 'Low variation in recent send volume–marginal metrics are provisional.' : `Model fit (R² revenue vs volume): ${(analysis.regressionElasticity.r2Revenue * 100).toFixed(0)}%.`}
                             </div>
                         </div>
                         {/* Time Series + Marginals */}
@@ -353,12 +353,12 @@ export default function DeliverabilityRiskPanel({ dateRange, customFrom, customT
                     </div>
                     {/* Guidance */}
                     <div className="mt-6 text-[11px] text-gray-600 dark:text-gray-400 leading-snug">
-                        {analysis.classification === 'Healthy Expansion' && 'Scaling is efficient—test upper bounds gradually and monitor unsub/spam slopes for inflection.'}
-                        {analysis.classification === 'Mixed Efficiency' && 'Revenue lift with rising friction—prune low-engagement cohorts or smooth cadence before further scaling.'}
-                        {analysis.classification === 'Harmful' && 'Marginal value negative—pause volume increases; focus on list quality & re-engagement.'}
-                        {analysis.classification === 'Marginal Gain' && 'Positive but thin margin—optimize content/targeting to thicken value before pushing harder.'}
-                        {analysis.classification === 'Neutral' && 'No clear marginal pattern—await more variation or run controlled tests.'}
-                        {analysis.classification === 'Low Signal' && 'Insufficient volume variation to estimate marginal impact—consider structured A/B volume tests.'}
+                        {analysis.classification === 'Healthy Expansion' && 'Scaling is efficient–test upper bounds gradually and monitor unsub/spam slopes for inflection.'}
+                        {analysis.classification === 'Mixed Efficiency' && 'Revenue lift with rising friction–prune low-engagement cohorts or smooth cadence before further scaling.'}
+                        {analysis.classification === 'Harmful' && 'Marginal value negative–pause volume increases; focus on list quality & re-engagement.'}
+                        {analysis.classification === 'Marginal Gain' && 'Positive but thin margin–optimize content/targeting to thicken value before pushing harder.'}
+                        {analysis.classification === 'Neutral' && 'No clear marginal pattern–await more variation or run controlled tests.'}
+                        {analysis.classification === 'Low Signal' && 'Insufficient volume variation to estimate marginal impact–consider structured A/B volume tests.'}
                     </div>
                 </>
             )}

@@ -263,7 +263,7 @@ export function computeSubjectAnalysis(
 
   const baseline = computeAggregate(campaigns, metric);
 
-  // Length bins — dynamic tertiles by number of campaigns (tie-aware), with 2/1-bin fallback
+  // Length bins – dynamic tertiles by number of campaigns (tie-aware), with 2/1-bin fallback
   const lengthBins: LengthBinStat[] = computeLengthBinsDynamic(campaigns, metric, baseline);
 
   // Build category predicates with explicit term lists (multi-category allowed)
@@ -424,7 +424,7 @@ export function computeSubjectAnalysis(
   const priceAnchoring: FeatureStat[] = [];
   const imperativeStart: FeatureStat[] = [];
 
-  // Reuse fatigue — exact match only
+  // Reuse fatigue – exact match only
   const bySubject = new Map<string, ProcessedCampaign[]>();
   for (const c of campaigns) {
     const key = normalize(c.subject || c.campaignName || '');

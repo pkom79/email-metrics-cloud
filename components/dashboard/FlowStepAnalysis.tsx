@@ -49,12 +49,25 @@ const PAUSE_GUIDANCE_VARIANTS = [
 ];
 
 const LOW_VOLUME_VARIANTS = [
-    (sends: number, min: number) => `Only ${sends.toLocaleString('en-US')} sends so far—let it reach at least ${min.toLocaleString('en-US')} before you judge it.`,
-    (sends: number, min: number) => `${sends.toLocaleString('en-US')} sends isn't enough signal yet; aim for ${min.toLocaleString('en-US')} before you decide.`,
-    (sends: number, min: number) => `Give it time: ${sends.toLocaleString('en-US')} sends logged, but we need about ${min.toLocaleString('en-US')} to call it.`
+    (sends: number, min: number) => `Only ${sends.toLocaleString('en-US')} sends so far. Let it reach at least ${min.toLocaleString('en-US')} before you judge it.`,
+    (sends: number, min: number) => `${sends.toLocaleString('en-US')} sends isn't enough signal yet. Aim for ${min.toLocaleString('en-US')} before you decide.`,
+    (sends: number, min: number) => `Give it time. ${sends.toLocaleString('en-US')} sends are logged, but we need about ${min.toLocaleString('en-US')} to call it.`
 ];
 
 const pickVariant = <T,>(arr: T[], index: number): T => arr[index % arr.length];
+
+function buildFlowHeadline(flowName: string, stats: { allLowVolume: boolean; allWeak: boolean; good: number; needsWork: number; pauseCount: number; totalSteps: number; actionableSteps: number }): string {
+    const base = flowName?.trim() || 'This flow';
+    const shortName = base.length > 48 ? `${base.slice(0, 45)}…` : base;
+    if (stats.allLowVolume) return `${shortName} needs more data`;
+    if (stats.allWeak) return `Rebuild ${shortName}`;
+    if (stats.pauseCount > 0 && stats.needsWork > 0) return `Pause and refresh steps in ${shortName}`;
+    if (stats.pauseCount > 0) return `Pause weak steps in ${shortName}`;
+    if (stats.needsWork > 0 && stats.good > 0) return `Tune the weak links in ${shortName}`;
+    if (stats.needsWork > 0) return `Refresh ${shortName}`;
+    if (stats.good === stats.totalSteps && stats.totalSteps > 0) return `${shortName} is performing well`;
+    return `${shortName} is on track`;
+}
 
 const METRIC_OPTIONS = [
     // Display label changed per request; metric key remains 'revenue'
@@ -643,7 +656,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const lastRes = (stepScores as any).results?.[lastIdx] as any | undefined;
         const lastScoreVal = Number(lastRes?.score) || Number(lastRes?.stepScore?.score) || 0;
         const volumeOk = last.emailsSent >= Math.max(MIN_STEP_EMAILS, Math.round(0.05 * s1Sends));
-        // Deliverability gate removed — rely on overall step score instead
+        // Deliverability gate removed. Rely on overall step score instead
         const deliverabilityOk = true;
         // Recompute median RPE across steps for gating (kept from earlier behavior)
         const rpesAll = flowStepMetrics.map(s => s.revenuePerEmail).filter(v => isFinite(v) && v >= 0).sort((a, b) => a - b);
@@ -848,20 +861,20 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const allLowVolume = lowVolume === totalSteps;
         const allWeak = actionableSteps > 0 && good === 0 && (needsWork + pauseCount === actionableSteps);
 
-        let title = 'Flow guidance';
+        const headlineTitle = buildFlowHeadline(selectedFlow, { allLowVolume, allWeak, good, needsWork, pauseCount, totalSteps, actionableSteps });
+        let title = headlineTitle;
         let bodyParts: string[] = [];
         if (allLowVolume) {
-            title = 'Collect more data for this flow';
             bodyParts = [`Each email has fewer than ${MIN_STEP_EMAILS.toLocaleString('en-US')} sends. Let this flow run longer before making changes.`];
         } else if (allWeak) {
-            title = 'Rework this flow';
             bodyParts = ['Every email trails benchmarks. Revisit the trigger and refresh each message before adding more touches.'];
         } else {
             const parts: string[] = [];
             if (good > 0) {
                 if (good === totalSteps) {
                     const word = totalSteps === 1 ? 'email' : (totalSteps === 2 ? 'two emails' : totalSteps === 3 ? 'all three emails' : `all ${totalSteps} emails`);
-                    parts.push(`${word.charAt(0).toUpperCase()}${word.slice(1)} are performing well—keep them running.`);
+                    const wordCap = `${word.charAt(0).toUpperCase()}${word.slice(1)} are performing well.`;
+                    parts.push(`${wordCap} Keep them running.`);
                 } else {
                     const countWord = (() => {
                         if (good === 1) return 'One email is';
@@ -869,7 +882,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                         if (good === 3) return 'Three emails are';
                         return `${good} emails are`;
                     })();
-                    parts.push(`${countWord} performing well—keep them running.`);
+                    parts.push(`${countWord} performing well. Keep them running.`);
                 }
             }
             if (needsWork > 0) parts.push(`${needsWork === 1 ? 'One email needs testing' : `${needsWork} emails need testing`} to improve timing or creative.`);

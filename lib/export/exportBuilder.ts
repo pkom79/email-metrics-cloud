@@ -143,7 +143,7 @@ export interface LlmExportJson {
     lengthBins: Array<{ key: string; label: string; value: number; liftVsBaseline: number; countCampaigns: number; totalEmails: number }>;
     note: string; // overlapping categories; reliable = volume + significance
   };
-  // Flow Step Analysis (lookback totals only — per flow and per step; no time series)
+  // Flow Step Analysis (lookback totals only – per flow and per step; no time series)
   flowStepAnalysis?: {
     disclaimer: string;
     flows: Array<{
@@ -289,7 +289,7 @@ type FlowMetricTotals = {
   bounceRate: number;
 };
 
-// (FlowMetricSeries removed — flowStepAnalysis is totals-only)
+// (FlowMetricSeries removed – flowStepAnalysis is totals-only)
 
 export async function buildLlmExportJson(params: {
   dateRange: string;
@@ -741,7 +741,7 @@ export async function buildLlmExportJson(params: {
         monthlySavingsOut = null;
         annualSavingsOut = null;
       } else if (!monthlySavings || monthlySavings <= 0) {
-        note = 'No savings detected — you are not overpaying for your Klaviyo plan. It can still be a good idea to suppress long‑inactive profiles for list hygiene.';
+        note = 'No savings detected – you are not overpaying for your Klaviyo plan. It can still be a good idea to suppress long‑inactive profiles for list hygiene.';
       }
       json.deadWeightAudience = {
         audienceSize: currentSubscribers,
@@ -810,7 +810,7 @@ export async function buildLlmExportJson(params: {
         }))
       };
 
-      // Subject Line Analysis (All Segments) — categories with reliability gating, plus baseline and length bins
+      // Subject Line Analysis (All Segments) – categories with reliability gating, plus baseline and length bins
       const buildCategories = () => {
         const metrics: Array<'openRate' | 'clickRate' | 'clickToOpenRate' | 'revenuePerEmail'> = ['openRate','clickRate','clickToOpenRate','revenuePerEmail'];
         const perMetric = metrics.map(m => ({ m, res: computeSubjectAnalysis(campaigns as any, m, 'ALL_SEGMENTS') }));
@@ -831,7 +831,7 @@ export async function buildLlmExportJson(params: {
           clickToOpenRate: perMetric.find(x => x.m==='clickToOpenRate')!.res.baseline.value,
           revenuePerEmail: perMetric.find(x => x.m==='revenuePerEmail')!.res.baseline.value,
         };
-        // Length bins — take from the currently selected metric in UI? Export a neutral set from openRate for consistency here
+        // Length bins – take from the currently selected metric in UI? Export a neutral set from openRate for consistency here
         const lbRes = perMetric.find(x => x.m==='openRate')!.res.lengthBins || [];
         const lengthBins = lbRes.map(b => ({ key: (b as any).key, label: (b as any).label, value: b.value, liftVsBaseline: b.liftVsBaseline, countCampaigns: b.countCampaigns, totalEmails: b.totalEmails }));
         const categories = Array.from(map.values()).filter(c => Object.keys(c.metrics).length > 0);
@@ -840,7 +840,7 @@ export async function buildLlmExportJson(params: {
       const cat = buildCategories();
       json.subjectLineAnalysis = { ...cat, note: 'Categories may overlap. Only entries meeting volume and significance are included.' } as any;
 
-      // Campaign Performance by Audience Size — compute buckets like the dashboard component
+      // Campaign Performance by Audience Size – compute buckets like the dashboard component
       const computeAudienceBuckets = () => {
         const campaignsValid = campaigns.filter(c => typeof (c as any).emailsSent === 'number' && (c as any).emailsSent >= 0);
         const total = campaignsValid.length;
@@ -943,7 +943,7 @@ export async function buildLlmExportJson(params: {
         json.audienceSizePerformance = asp as any;
       }
 
-      // Gap Week Elimination — weekly-only analysis over lookback
+      // Gap Week Elimination – weekly-only analysis over lookback
       try {
         const gaps = computeCampaignGapsAndLosses({ campaigns: campaigns as any, flows: [], rangeStart: s, rangeEnd: e });
         json.campaignGapsAndLosses = {
@@ -956,7 +956,7 @@ export async function buildLlmExportJson(params: {
         };
       } catch {}
 
-      // Campaign Performance by Day of Week — aggregate over lookback
+      // Campaign Performance by Day of Week – aggregate over lookback
       try {
         // We need all metrics, not one at a time. We'll aggregate raw sums per day and derive KPIs.
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -993,7 +993,7 @@ export async function buildLlmExportJson(params: {
         }));
       } catch {}
 
-  // Flow Step Analysis — totals for lookback (no time series) with indicators and add-step suggestion
+  // Flow Step Analysis – totals for lookback (no time series) with indicators and add-step suggestion
       try {
         const resolvedRange2 = dm.getResolvedDateRange(dateRange as any, customFrom as any, customTo as any);
         const s2 = resolvedRange2?.startDate ?? start;
@@ -1274,7 +1274,7 @@ export async function buildLlmExportJson(params: {
         }
       } catch {}
 
-      // Audience Growth — series by granularity for created, firstActive, subscribed
+      // Audience Growth – series by granularity for created, firstActive, subscribed
       try {
         const subs = dm.getSubscribers() as any[];
         // Filter to active audience, mirroring component logic

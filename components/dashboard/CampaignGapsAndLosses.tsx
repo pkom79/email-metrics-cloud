@@ -285,7 +285,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                 </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Row 1 — Consistency & Gaps */}
+                {/* Row 1 – Consistency & Gaps */}
                 <div className="relative">
                     <TooltipPortal
                         content={(
@@ -348,7 +348,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                         </div>
                     </TooltipPortal>
                 </div>
-                {/* Row 2 — Impact & Effectiveness */}
+                {/* Row 2 – Impact & Effectiveness */}
                 <div className="relative">
                     <TooltipPortal
                         content={(
@@ -372,7 +372,7 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
                                         <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300 mb-1">Campaigns</div>
                                         <ul className="max-h-48 overflow-auto space-y-1 pr-1">
                                             {result.zeroRevenueCampaignDetails.slice(0, 10).map((c, i) => (
-                                                <li key={`${c.date}-${i}`} className="text-xs"><span className="tabular-nums mr-1">{new Date(c.date).toISOString().slice(0, 10)}</span> — <span className="truncate inline-block max-w-[12rem] align-bottom" title={c.title}>{c.title || 'Untitled'}</span></li>
+                                                <li key={`${c.date}-${i}`} className="text-xs"><span className="tabular-nums mr-1">{new Date(c.date).toISOString().slice(0, 10)}</span> – <span className="truncate inline-block max-w-[12rem] align-bottom" title={c.title}>{c.title || 'Untitled'}</span></li>
                                             ))}
                                             {result.zeroRevenueCampaignDetails.length > 10 && (
                                                 <li className="text-xs text-gray-600 dark:text-gray-400">+{result.zeroRevenueCampaignDetails.length - 10} more</li>

@@ -163,11 +163,10 @@ export function computeSendVolumeGuidance(
     const maxSpamRate = maxRate(spamRates);
     const maxBounceRate = maxRate(bounceRates);
 
-    const deliverabilityBreached = Boolean(
-        (maxUnsubRate != null && maxUnsubRate > (thresholds.unsubRate ?? Infinity)) ||
-        (maxSpamRate != null && maxSpamRate > (thresholds.spamRate ?? Infinity)) ||
-        (maxBounceRate != null && maxBounceRate > (thresholds.bounceRate ?? Infinity))
-    );
+    const unsubSeverity = severityRatio(maxUnsubRate, thresholds.unsubRate);
+    const spamSeverity = severityRatio(maxSpamRate, thresholds.spamRate);
+    const bounceSeverity = severityRatio(maxBounceRate, thresholds.bounceRate);
+    const rawDeliverabilityPressure = Math.max(unsubSeverity, spamSeverity, bounceSeverity);
 
     const volumeVsRevenue = pearson(emails, revenue);
     const volumeVsUnsubs = pearson(emails, unsubRates);
@@ -175,18 +174,38 @@ export function computeSendVolumeGuidance(
     const volumeVsBounces = pearson(emails, bounceRates);
 
     const revenueScore = correlationToScore(volumeVsRevenue.r);
-    const riskComponents = [volumeVsUnsubs.r, volumeVsComplaints.r, volumeVsBounces.r]
-        .map(r => correlationToScore(r))
-        .map(score => (score > 0 ? score : 0));
-    const riskScore = riskComponents.length ? Math.max(...riskComponents) : 0;
+
+    const mildTolerance = revenueScore >= 1 ? 1.15 : 1.05;
+    const severeTolerance = revenueScore >= 2 ? 1.40 : revenueScore >= 1 ? 1.25 : 1.10;
+
+    const deriveRiskScore = (detail: CorrelationDetail, severity: number) => {
+        if (severity >= severeTolerance) return 2;
+        if (severity >= mildTolerance) return 1;
+        if (detail.r != null && detail.r >= 0.45) return 1;
+        return 0;
+    };
+
+    const riskScore = Math.max(
+        deriveRiskScore(volumeVsUnsubs, unsubSeverity),
+        deriveRiskScore(volumeVsComplaints, spamSeverity),
+        deriveRiskScore(volumeVsBounces, bounceSeverity)
+    );
+
+    const deliverabilityBreached = rawDeliverabilityPressure >= severeTolerance;
 
     const revenueDecline = revenueScore <= -1;
-    const trigger: SendVolumeTrigger = deliverabilityBreached ? "deliverability" : (revenueDecline ? "revenue" : null);
+    let trigger: SendVolumeTrigger = null;
+    if (deliverabilityBreached) trigger = "deliverability";
+    else if (revenueDecline) trigger = "revenue";
 
     let status: SendVolumeStatus;
-    if (revenueScore >= 1 && riskScore <= 0) status = "send-more";
-    else if (trigger) status = "send-less";
-    else status = "keep-as-is";
+    if (deliverabilityBreached || riskScore >= 2 || revenueDecline) {
+        status = "send-less";
+    } else if ((revenueScore >= 2 && riskScore <= 1) || (revenueScore >= 1 && riskScore === 0)) {
+        status = "send-more";
+    } else {
+        status = "keep-as-is";
+    }
 
     let message = STATUS_MESSAGES[channel][status];
     if (status === "send-less" && trigger === "revenue") {
@@ -273,9 +292,15 @@ function pearson(xs: number[], ys: number[]): CorrelationDetail {
 
 function correlationToScore(r: number | null): number {
     if (r == null || !Number.isFinite(r)) return 0;
-    if (r >= 0.45) return 2;
-    if (r >= 0.2) return 1;
-    if (r <= -0.45) return -2;
-    if (r <= -0.2) return -1;
+    if (r >= 0.35) return 2;
+    if (r >= 0.15) return 1;
+    if (r <= -0.35) return -2;
+    if (r <= -0.15) return -1;
     return 0;
+}
+
+function severityRatio(value: number | null, limit: number | null | undefined): number {
+    if (value == null || !Number.isFinite(value)) return 0;
+    if (limit == null || !Number.isFinite(limit) || limit <= 0) return 0;
+    return value / limit;
 }

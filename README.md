@@ -83,11 +83,11 @@ curl -X POST https://your-domain.com/api/cleanup
 ```
 
 ## Routes
-- `/(public)/upload/step-0` — Pre-auth upload wizard
-- `/(public)/signup` — Account creation
-- `/(auth)/dashboard` — Analytics dashboard
-- `/api/cleanup` — Data cleanup endpoint
-- `/api/auth/callback` — Enhanced email confirmation with upload linking
+- `/(public)/upload/step-0` – Pre-auth upload wizard
+- `/(public)/signup` – Account creation
+- `/(auth)/dashboard` – Analytics dashboard
+- `/api/cleanup` – Data cleanup endpoint
+- `/api/auth/callback` – Enhanced email confirmation with upload linking
 
 ### CSV-Only Ingestion
 The app ingests data exclusively from user-provided CSV exports and processes them into snapshots for analysis. Upload all three files (campaigns.csv, flows.csv, subscribers.csv) via the upload wizard.

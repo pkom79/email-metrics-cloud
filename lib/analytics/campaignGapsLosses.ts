@@ -9,7 +9,7 @@ export interface GapsLossesInputs {
 }
 
 export interface GapsLossesResult {
-  // Row 1 — Consistency & Gaps
+  // Row 1 – Consistency & Gaps
   zeroCampaignSendWeeks: number;
   longestZeroSendGap: number;
   pctWeeksWithCampaignsSent: number; // 0-100
@@ -19,7 +19,7 @@ export interface GapsLossesResult {
   // Lists for tooltips
   zeroSendWeekStarts?: string[];      // ISO YYYY-MM-DD of week starts (complete weeks only)
   longestGapWeekStarts?: string[];    // ISO YYYY-MM-DD for the longest zero-send run (complete weeks only)
-  // Row 2 — Impact & Effectiveness
+  // Row 2 – Impact & Effectiveness
   estimatedLostRevenue?: number; // undefined when insufficient data for computation
   lowEffectivenessCampaigns: number; // campaigns with revenue == 0
   zeroRevenueCampaigns?: number;     // alias for UI label

@@ -336,7 +336,7 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
 
     const relativeDeltaText = (a: number, b: number): { text: string; value?: number; isNA: boolean } => {
         if (a === 0) {
-            if (b === 0) return { text: '—', isNA: true };
+            if (b === 0) return { text: '–', isNA: true };
             return { text: 'N/A (no baseline)', isNA: true };
         }
         const v = ((b - a) / a) * 100;
@@ -741,15 +741,15 @@ const CustomSegmentBlock: React.FC<Props> = ({ dateRange = 'all', customFrom, cu
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="rounded-md border border-purple-200/60 dark:border-purple-800/60 bg-white/70 dark:bg-gray-900/40 p-2">
                                 <div className="text-purple-900 dark:text-purple-200 font-medium">Segment A</div>
-                                <div>File: {fileNameA || '—'}</div>
+                                <div>File: {fileNameA || '–'}</div>
                                 <div>Progress: {Math.round(progressA)}%</div>
-                                {diag?.a && (<div>Rows: {diag.a.count?.toLocaleString?.() || diag.a.count} · Elapsed: {diag.a.elapsedMs ? Math.round(diag.a.elapsedMs / 1000) + 's' : '—'}</div>)}
+                                {diag?.a && (<div>Rows: {diag.a.count?.toLocaleString?.() || diag.a.count} · Elapsed: {diag.a.elapsedMs ? Math.round(diag.a.elapsedMs / 1000) + 's' : '–'}</div>)}
                             </div>
                             <div className="rounded-md border border-purple-200/60 dark:border-purple-800/60 bg-white/70 dark:bg-gray-900/40 p-2">
                                 <div className="text-purple-900 dark:text-purple-200 font-medium">Segment B</div>
-                                <div>File: {fileNameB || '—'}</div>
+                                <div>File: {fileNameB || '–'}</div>
                                 <div>Progress: {Math.round(progressB)}%</div>
-                                {diag?.b && (<div>Rows: {diag.b.count?.toLocaleString?.() || diag.b.count} · Elapsed: {diag.b.elapsedMs ? Math.round(diag.b.elapsedMs / 1000) + 's' : '—'}</div>)}
+                                {diag?.b && (<div>Rows: {diag.b.count?.toLocaleString?.() || diag.b.count} · Elapsed: {diag.b.elapsedMs ? Math.round(diag.b.elapsedMs / 1000) + 's' : '–'}</div>)}
                             </div>
                         </div>
                     </div>

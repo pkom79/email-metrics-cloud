@@ -131,8 +131,8 @@ export default function SubjectAnalysis({ campaigns }: Props) {
                                                             <div className="text-xs font-medium mb-1">Used this period</div>
                                                             <ul className="list-disc pl-4 text-xs space-y-1 max-w-xs">
                                                                 {f.usedTerms.slice(0, 10).map((t, i) => (
-                                                                    <li key={i} className="truncate" title={`${t.term} — ${t.count} campaigns`}>
-                                                                        <span className="font-medium">{t.term}</span> <span className="text-gray-500">— {t.count}</span>
+                                                                    <li key={i} className="truncate" title={`${t.term} – ${t.count} campaigns`}>
+                                                                        <span className="font-medium">{t.term}</span> <span className="text-gray-500">– {t.count}</span>
                                                                     </li>
                                                                 ))}
                                                             </ul>

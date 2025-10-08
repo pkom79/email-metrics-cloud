@@ -753,7 +753,7 @@ export async function approveAgencyLink(serviceClient: ReturnType<typeof createC
   await serviceClient.rpc('audit_log_event', { p_action: 'agency_link_approved', p_target_table: 'link_requests', p_target_id: req.id, p_account_id: req.account_id, p_details: { agency_id: req.agency_id } });
 }
 
-// Notifications worker (Vercel cron) — Postmark
+// Notifications worker (Vercel cron) – Postmark
 export async function processNotifications(serviceClient: ReturnType<typeof createClient>) {
   const postmark = new ServerClient(process.env.POSTMARK_SERVER_TOKEN!);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://emailmetrics.io';
@@ -816,7 +816,7 @@ async function resolveUserEmail(serviceClient: ReturnType<typeof createClient>, 
 ```
 
 ## Signup & Onboarding
-- Brand signup (existing): auto‑creates a brand account owned by the user (keep your baseline trigger) — no changes.
+- Brand signup (existing): auto‑creates a brand account owned by the user (keep your baseline trigger) – no changes.
 - Agency signup (new): separate footer link to Agency signup; collect agency details. On first login, create an Agency and add the user as Agency Owner (all_accounts=true). No brand is auto‑created.
 - Agencies see no accounts until they create a brand or a brand owner approves a link (empty state UX required).
 - Baseline trigger note: update your `handle_new_user()` trigger to early‑return when `raw_user_meta_data.signup_type = 'agency'` so it does not auto‑create a brand for agency signups.

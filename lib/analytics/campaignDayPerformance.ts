@@ -325,7 +325,7 @@ export function computeCampaignDayPerformance({ campaigns, rangeStart, rangeEnd,
       aggregates,
       recommendation: {
         state: 'consider',
-        headline: `No clear leader—consider ${d1.day} or ${d2.day}.`,
+        headline: `No clear leader–consider ${d1.day} or ${d2.day}.`,
         body: ['Performance differences are within normal variance. Keep testing while avoiding overfitting to short-term spikes.'],
         sampleLine,
         recommendedDays: [d1.day, d2.day]
@@ -340,7 +340,7 @@ export function computeCampaignDayPerformance({ campaigns, rangeStart, rangeEnd,
   const clusterLiftTxt = clusterLift > 0 ? `${clusterLift.toFixed(clusterLift >= 10 ? 0 : 1)}% over baseline` : 'in line with baseline';
   const headline = `Focus sends on ${recommendedDays.join(', ').replace(/, ([^,]*)$/, ' and $1')}.`;
   const body = [`These days form the top performance cluster (avg revenue/email ${formatCurrency(avgClusterRev)}; ${clusterLiftTxt}) without meaningful engagement tradeoffs.`];
-  if (risky.length) body.push(`Monitoring elevated complaints on ${excludedRiskDays.join(', ')}—keep copy and segmentation tight.`);
+  if (risky.length) body.push(`Monitoring elevated complaints on ${excludedRiskDays.join(', ')}–keep copy and segmentation tight.`);
 
   return {
     aggregates,

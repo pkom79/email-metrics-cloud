@@ -70,7 +70,7 @@ const DEAD_ZONE = {
 
 // Utility formatters
 const fmtCurrency = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
-const fmtNum = (v: number, d = 2) => Number.isFinite(v) ? v.toFixed(d) : '—';
+const fmtNum = (v: number, d = 2) => Number.isFinite(v) ? v.toFixed(d) : '–';
 const SCOPE_LABELS: Record<SourceScope, string> = {
     all: 'All Emails',
     campaigns: 'Campaigns',
@@ -449,7 +449,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         return vals.reduce((s, v) => s + v, 0) / vals.length;
     })();
     const formatValue = (v: number | null) => {
-        if (v == null) return '—';
+        if (v == null) return '–';
         if (metric === 'totalRevenue') return fmtCurrency(v);
         return v >= 1 ? v.toFixed(2) : v.toFixed(3);
     };
@@ -503,15 +503,15 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 text-[11px]">
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Mean emails per bucket after trimming partial periods.">
                     <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Avg Sends</div>
-                    <div className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums leading-none">{micro?.avgEmails?.toLocaleString() || '—'}</div>
+                    <div className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums leading-none">{micro?.avgEmails?.toLocaleString() || '–'}</div>
                 </div>
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Total revenue divided by total emails, scaled per 1,000 sends.">
                     <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Revenue / 1k</div>
-                    <div className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums leading-none">{micro ? fmtCurrency(Number(micro.rpmE.toFixed(2))) : '—'}</div>
+                    <div className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums leading-none">{micro ? fmtCurrency(Number(micro.rpmE.toFixed(2))) : '–'}</div>
                 </div>
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between" title="Median bucket unsubscribe count normalized per 1,000 emails.">
                     <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Median Unsub/1k</div>
-                    <div className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums leading-none">{micro ? Number(micro.medianUnsub.toFixed(2)).toFixed(2) : '—'}</div>
+                    <div className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums leading-none">{micro ? Number(micro.medianUnsub.toFixed(2)).toFixed(2) : '–'}</div>
                 </div>
                 {(() => {
                     const r = correlationInfo?.r ?? null;

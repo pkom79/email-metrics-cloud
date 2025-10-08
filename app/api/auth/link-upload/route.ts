@@ -179,7 +179,7 @@ export async function POST(request: Request) {
             .select('id')
             .single();
         if (snapErr) throw snapErr;
-        // 5) Opportunistically bind any additional preauth uploads supplied (bulk claim) — ignore errors
+        // 5) Opportunistically bind any additional preauth uploads supplied (bulk claim) – ignore errors
         if (Array.isArray(pendingUploadIds)) {
             const others = pendingUploadIds.filter((id: string) => id && id !== uploadId);
             if (others.length) {
