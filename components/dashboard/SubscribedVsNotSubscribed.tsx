@@ -376,7 +376,7 @@ export default function SubscribedVsNotSubscribed({ dateRange, customFrom, custo
             </div>
 
             {actionNote && (
-                <div className="px-6 pb-6 border-t border-gray-100 dark:border-gray-800">
+                <div className="px-6 pb-6">
                     <div className="mt-4 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4" data-consent-action-note="svns">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="flex-1">

@@ -273,18 +273,19 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         return { campaigns, flows };
     }, [scope, campaigns, flows]);
 
-    const guidanceCards: { key: SourceScope; label: string; result: SendVolumeGuidanceResult }[] = [
-        { key: 'all', label: 'All Emails', result: guidanceAll },
-        { key: 'campaigns', label: 'Campaigns', result: guidanceCampaigns },
-        { key: 'flows', label: 'Flows', result: guidanceFlows }
-    ];
-    const activeGuidance = guidanceCards.find(card => card.key === scope)?.result ?? guidanceAll;
+    const guidanceByScope = useMemo(() => ({
+        all: guidanceAll,
+        campaigns: guidanceCampaigns,
+        flows: guidanceFlows
+    }), [guidanceAll, guidanceCampaigns, guidanceFlows]);
+    const activeGuidance = guidanceByScope[scope] ?? guidanceAll;
 
     const formatSampleText = (result: SendVolumeGuidanceResult) => {
         if (!result.periodType || result.sampleSize <= 0) return null;
         const unit = result.periodType === 'weekly' ? 'week' : 'month';
         const plural = result.sampleSize === 1 ? unit : `${unit}s`;
-        return `Based on ${result.sampleSize} ${plural} of volume data.`;
+        const channelLabel = result.channel === 'all' ? 'overall email activity' : `${result.channel} volume`;
+        return `Based on ${result.sampleSize} ${plural} of ${channelLabel}.`;
     };
 
     // Build base buckets using dm.getMetricTimeSeries for each needed metric then join on date labels
@@ -490,27 +491,6 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     </div>
                 </div>
             </div>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
-                {guidanceCards.map(card => {
-                    const badgeClass = STATUS_BADGE_CLASSES[card.result.status];
-                    const statusText = STATUS_LABELS[card.result.status];
-                    const sample = formatSampleText(card.result);
-                    return (
-                        <div key={card.key} className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
-                            <div className="flex items-start justify-between gap-3">
-                                <div className="no-channel-indicator">
-                                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight no-channel-indicator">
-                                        {card.label}
-                                    </span>
-                                </div>
-                                <span className={`px-2 py-1 rounded-md text-xs font-semibold ${badgeClass}`}>{statusText}</span>
-                            </div>
-                            <p className="mt-3 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{card.result.message}</p>
-                            {sample && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{sample}</p>}
-                        </div>
-                    );
-                })}
-            </div>
             <div className="flex items-start justify-between mb-4">
                 <div />
                 <div className="text-right">
@@ -582,15 +562,15 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                 const activeSample = formatSampleText(activeGuidance);
                 return (
                     <div className="mt-8 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                            <div>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="flex-1">
                                 <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                                     {SCOPE_LABELS[scope]} Action Note
                                 </p>
                                 <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{activeGuidance.message}</p>
                                 {activeSample && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{activeSample}</p>}
                             </div>
-                            <span className={`px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap ${STATUS_BADGE_CLASSES[activeGuidance.status]}`}>
+                            <span className={`px-2 py-1 rounded-md text-xs font-semibold self-start whitespace-nowrap ${STATUS_BADGE_CLASSES[activeGuidance.status]}`}>
                                 {STATUS_LABELS[activeGuidance.status]}
                             </span>
                         </div>

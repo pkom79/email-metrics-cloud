@@ -1457,6 +1457,19 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
     useEffect(() => {
         setActionNoteExpanded(false);
     }, [selectedFlow]);
+    useEffect(() => {
+        if (!flowActionNote) {
+            setActionNoteExpanded(false);
+            return;
+        }
+        const bodyParts = Array.isArray(flowActionNote.bodyParts) ? flowActionNote.bodyParts : [];
+        const headline = bodyParts.length ? bodyParts[0] : null;
+        const detailBodyParts = headline ? bodyParts.slice(1) : bodyParts;
+        const hasDetails = detailBodyParts.length > 0 || (flowActionNote.items?.length ?? 0) > 0 || Boolean(flowActionNote.sample);
+        if (!hasDetails && actionNoteExpanded) {
+            setActionNoteExpanded(false);
+        }
+    }, [flowActionNote, actionNoteExpanded]);
 
     return (
         <section className="section-card">
@@ -1511,41 +1524,59 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                     {flowStepMetrics.map((step, index) => renderStepChart(step, index))}
                 </div>
             )}
-            {selectedFlow && flowActionNote && (
-                <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 mt-6">
-                    <button
-                        type="button"
-                        className="w-full px-4 py-3 flex items-center justify-between text-left"
-                        onClick={() => setActionNoteExpanded(prev => !prev)}
-                        aria-expanded={actionNoteExpanded}
-                        aria-controls={actionNoteContentId}
-                    >
-                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{flowActionNote.title}</span>
-                        <ChevronDown className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform ${actionNoteExpanded ? 'rotate-180' : ''}`} />
-                    </button>
-                    {actionNoteExpanded && (
-                        <div id={actionNoteContentId} className="px-4 pb-4 pt-1">
-                            {Array.isArray(flowActionNote.bodyParts) && flowActionNote.bodyParts.length > 0 && (
-                                <div className="space-y-1">
-                                    {flowActionNote.bodyParts.map((line: string, idx: number) => (
-                                        <p key={idx} className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-relaxed">{line}</p>
-                                    ))}
-                                </div>
-                            )}
-                            {flowActionNote.items?.length ? (
-                                <ul className="mt-3 space-y-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed list-disc pl-5">
-                                    {flowActionNote.items.map((item, idx) => (
-                                        <li key={idx}>{item}</li>
-                                    ))}
-                                </ul>
-                            ) : null}
-                            {flowActionNote.sample && (
-                                <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{flowActionNote.sample}</p>
+            {selectedFlow && flowActionNote && (() => {
+                const bodyParts = Array.isArray(flowActionNote.bodyParts) ? flowActionNote.bodyParts : [];
+                const headline = bodyParts.length ? bodyParts[0] : null;
+                const detailBodyParts = headline ? bodyParts.slice(1) : bodyParts;
+                const hasDetails = detailBodyParts.length > 0 || (flowActionNote.items?.length ?? 0) > 0 || Boolean(flowActionNote.sample);
+                const toggleLabel = actionNoteExpanded ? 'Hide Insights' : 'View Insights';
+                const shouldShowDetails = hasDetails && actionNoteExpanded;
+                return (
+                    <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 mt-6">
+                        <div className="px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="flex-1">
+                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{flowActionNote.title}</p>
+                                {headline && (
+                                    <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{headline}</p>
+                                )}
+                            </div>
+                            {hasDetails && (
+                                <button
+                                    type="button"
+                                    onClick={() => setActionNoteExpanded(prev => !prev)}
+                                    className="inline-flex items-center justify-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-900"
+                                    aria-expanded={actionNoteExpanded}
+                                    aria-controls={actionNoteContentId}
+                                >
+                                    {toggleLabel}
+                                    <ChevronDown className={`w-4 h-4 transition-transform ${actionNoteExpanded ? 'rotate-180' : ''}`} />
+                                </button>
                             )}
                         </div>
-                    )}
-                </div>
-            )}
+                        {shouldShowDetails && (
+                            <div id={actionNoteContentId} className="px-4 pb-4 pt-1">
+                                {detailBodyParts.length > 0 && (
+                                    <div className="space-y-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                        {detailBodyParts.map((line: string, idx: number) => (
+                                            <p key={idx}>{line}</p>
+                                        ))}
+                                    </div>
+                                )}
+                                {flowActionNote.items?.length ? (
+                                    <ul className="mt-3 space-y-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed list-disc pl-5">
+                                        {flowActionNote.items.map((item, idx) => (
+                                            <li key={idx}>{item}</li>
+                                        ))}
+                                    </ul>
+                                ) : null}
+                                {flowActionNote.sample && (
+                                    <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{flowActionNote.sample}</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
         </section>
     );
 }

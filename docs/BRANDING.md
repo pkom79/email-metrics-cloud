@@ -2,11 +2,12 @@
 
 This guide defines the design tokens, components, and patterns used across the app. Treat it as the single source of truth and keep it updated as we standardize. When adding or modifying UI, reference this document and prefer the shared components listed here.
 
-Last updated: 2025-10-02 (Send Volume Impact guidance includes All Emails scope; scoped action notes repositioned; Flow Step Analysis note collapses below charts)
+Last updated: 2025-10-03 (Send Volume Impact guidance cards removed in favour of scoped footer note; Flow Step Analysis toggle shows summary line; Consent module divider removed)
 
 > 2025-09-26: Campaign Subject Line insight headlines switched to narrative sentences (no prefixed labels like "Revenue Win:" / "Revenue Warning:"). Headlines now state the observed outcome using "Rev per Email" phrasing (never the RPE acronym) and avoid colons/semicolons/em dashes per readability guidance.
 > 2025-09-26 (later): Headline simplified to period revenue delta sentence ("Campaigns generated $12k more revenue this period than the previous one."). Summary now standardizes deliverability status phrases (Critical / Elevated) with thresholds: Open <30% critical, <40% low; Spam ≥0.3% critical (≥0.1% elevated); Unsubs ≥2% critical (≥1% elevated); Bounces ≥5% critical (≥2% elevated).
 > 2025-10-02: Send Volume Impact shows All/Campaign/Flow guidance cards, scoped action note now sits beneath the metric grid, and Flow Step Analysis action note headline stays visible with a collapsible body. Send Frequency and Audience Size modules mirror the new placement.
+> 2025-10-03: Send Volume Impact now relies on a single scoped action note (no header cards). Flow Step Analysis exposes the first summary line with a “View Insights” toggle, and the Consent action note no longer has a divider line.
 
 ## theme and modes
 - Tailwind: v3.x, darkMode: class
@@ -93,21 +94,19 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Do not stack multiple actions; prefer one clear CTA or none.
 - Dark mode: bg-gray-900 with gray-800 border; maintain contrast for text and button.
 
-### Send Volume Guidance (All vs campaigns vs flows)
-- Lives at the top of the Send Volume Impact module, ahead of the chart.
-- Layout: responsive grid — single column on small screens, `md:grid-cols-2`, `lg:grid-cols-3` — so All Emails, Campaigns, and Flows each retain equal weight.
-- Card: `rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4` with no shadow.
-- Header row: left label uses the scope name (`All Emails`, `Campaigns`, `Flows`); right badge uses the standard status chips (emerald “Send More”, rose “Send Less”, amber “Keep as Is”, gray “Not Enough Data”).
-- Body copy: `text-sm text-gray-700 dark:text-gray-300 leading-relaxed`; flows copy always references Flow Step Analysis per product guidance.
-- Sample line: optional `text-xs text-gray-500 dark:text-gray-400` text (“Based on N weeks/months of overall email activity.”) when enough observations exist.
-- Scoped action note: a single card below the metric grid labeled “{Scope} Action Note”, status chip on the right, body copy reusing the shared tone, optional sample line, and `mt-8` spacing from the metric grid.
+### Send Volume Impact action note (All vs campaigns vs flows)
+- A single action note appears below the metric cards (`mt-8`) and reflects the active scope selected in the dropdown (`All Emails`, `Campaigns`, `Flows`).
+- Card: `rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4`.
+- Layout: stacked copy on the left with the scope-specific headline (`text-sm font-semibold`), followed by the narrative paragraph (`text-sm text-gray-700 dark:text-gray-300`). The status chip (emerald “Send More”, rose “Send Less”, amber “Keep as Is”, gray “Not Enough Data”) sits on the right and stays aligned to the top.
+- Sample line: optional `text-xs text-gray-500 dark:text-gray-400` (“Based on N weeks/months of {scope} volume.”).
+- No header cards precede the chart; the action note is the primary guidance surface for this module.
 
 ### Action Notes (shared pattern)
-- Shell: same card styling as Send Volume Guidance (`rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4`).
-- Header options: modules may either lead with a compact header row (e.g., “All Emails Action Note” with a status chip) or begin directly with the narrative sentence. Keep the header `text-sm font-semibold text-gray-900 dark:text-gray-100`.
-- Narrative line: bold sentence summarizing the recommendation (`text-sm font-semibold`). Follow with body copy in `text-sm text-gray-700 dark:text-gray-300 leading-relaxed` describing the why and next step.
+- Shell: `rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4`.
+- Lead sentence: `text-sm font-semibold text-gray-900 dark:text-gray-100`. Follow with descriptive copy in `text-sm text-gray-700 dark:text-gray-300 leading-relaxed`.
 - Sample line: optional `text-xs text-gray-500 dark:text-gray-400` reminder formatted as “Based on X weeks of … data.” Count all weeks used in the comparison (e.g., baseline + challenger) so the note reflects the total observation window.
-- Placement: unless otherwise noted, action notes sit below the primary visualization with `mt-6` spacing (Send Frequency, Audience Size Performance) or `mt-8` when paired with stacked metric cards (Send Volume Impact).
+- Toggles (when present) use purple text buttons (`text-purple-600 hover:text-purple-700`) with a `ChevronDown` icon that rotates on open. Labels read “View Insights” / “Hide Insights”.
+- Placement: unless otherwise noted, action notes sit below the primary visualization with `mt-6` spacing. Send Volume Impact uses `mt-8` to clear the stat grid.
 
 #### Narrative Headlines (Subject Line Insights)
 - Use a single descriptive sentence instead of a prefixed tag (e.g., avoid "Revenue Win:").
@@ -404,7 +403,7 @@ Scope: Applies to both UI and export surfaces. Keep naming, formatting, and calc
 - Score N/A: When store revenue in the selected window is zero, show “Score N/A” in the UI; export should also note the lack of store revenue.
 - Notes: When RI ≥ 1.4, include “High Revenue Index” in the notes. Retain the high‑revenue guardrail note when applicable.
 - Minimum volume: Don’t recommend scaling/pausing until a step has at least 250 sends in the selected range. Show the purple “Low volume” badge and Action Note reminder instead of a scale/keep verdict below that threshold.
-- Flow Action Note: sits below the step charts. Header row shows the flow-specific title with a chevron toggle; the card loads collapsed so the headline stays visible. Expanded state reveals the narrative sentences, optional bullet list, and the sample line. Call out the reason (Revenue Index, ERS share, deliverability issues) and average revenue per the selected granularity (day/week/month). When the last step is strong enough to extend, phrase the suggestion as “Adding one more email…” and include the estimated lift per the active granularity.
+- Flow Action Note: sits below the step charts. Collapsed view shows the flow-specific title plus the first summary line; the right side surfaces a “View Insights” purple text button with the chevron toggle. Expanded state reveals the remaining narrative sentences, optional bullet list, and the sample line. Call out the reason (Revenue Index, ERS share, deliverability issues) and average revenue per the selected granularity (day/week/month). When the last step is strong enough to extend, phrase the suggestion as “Adding one more email…” and include the estimated lift per the active granularity.
 
 Formatting:
 - RI display: use “x.x×” format in tooltips (e.g., “1.4×”).
