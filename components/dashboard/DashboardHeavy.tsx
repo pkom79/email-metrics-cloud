@@ -33,6 +33,7 @@ import { buildLlmExportJson } from '../../lib/export/exportBuilder';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import TooltipPortal from '../TooltipPortal';
 import SelectBase from "../ui/SelectBase";
+import AdminAccountPicker, { AdminAccountOption } from "./AdminAccountPicker";
 import DateRangePicker, { DateRange } from '../ui/DateRangePicker';
 import { useDateAvailability } from '../../lib/hooks/useDateAvailability';
 import UploadWizard from '../../components/UploadWizard';
@@ -279,7 +280,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // Admin accounts selector state
     const [isAdmin, setIsAdmin] = useState(false);
     const [adminCheckComplete, setAdminCheckComplete] = useState(false);
-    const [allAccounts, setAllAccounts] = useState<any[] | null>(null);
+    const [allAccounts, setAllAccounts] = useState<AdminAccountOption[] | null>(null);
     const [accountsError, setAccountsError] = useState<string | null>(null);
     const [selectedAccountId, setSelectedAccountId] = useState<string>('');
     // Member brand switcher
@@ -342,23 +343,30 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     }, [breakdownOpen]);
 
     const activeAccountId = useMemo(() => (isAdmin ? (selectedAccountId || '') : (memberSelectedId || '')), [isAdmin, selectedAccountId, memberSelectedId]);
+    const activeAdminAccount = useMemo(() => {
+        if (!isAdmin || !allAccounts) return null;
+        return allAccounts.find(x => x.id === selectedAccountId) || null;
+    }, [isAdmin, allAccounts, selectedAccountId]);
     const activeAccountLabel = useMemo(() => {
         if (isAdmin) {
-            const a = (allAccounts || []).find(x => x.id === selectedAccountId);
-            return a?.label || a?.businessName || businessName || '';
+            return activeAdminAccount?.label || activeAdminAccount?.businessName || businessName || '';
         }
         if (memberSelectedId) {
             const sel = memberAccounts.find(a => a.id === memberSelectedId);
             if (sel?.label) return sel.label;
         }
         return businessName || '';
-    }, [isAdmin, allAccounts, selectedAccountId, businessName, memberAccounts, memberSelectedId]);
+    }, [isAdmin, activeAdminAccount, businessName, memberAccounts, memberSelectedId]);
+    const activeAccountTag = useMemo(() => {
+        if (!isAdmin || !activeAdminAccount) return null;
+        return activeAdminAccount.isAdminFree ? (activeAdminAccount.adminContactLabel || 'Comped') : null;
+    }, [isAdmin, activeAdminAccount]);
     const billingStatusValue = (billingState.status || 'inactive').toLowerCase();
     const billingLoading = billingState.loading;
     // Classify status for gating nuance (issue vs none vs ok)
     const classifyBilling = (s: string): 'ok' | 'issue' | 'none' | 'unknown' => {
         if (s === 'unknown') return 'unknown';
-        if (['active', 'trialing'].includes(s)) return 'ok';
+        if (['active', 'trialing', 'comped'].includes(s)) return 'ok';
         if (['past_due', 'incomplete', 'incomplete_expired', 'unpaid'].includes(s)) return 'issue';
         return 'none'; // paused, canceled, inactive, etc.
     };
@@ -443,9 +451,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             let accountName: string | undefined = businessName;
             let accountUrl: string | undefined;
             if (isAdmin) {
-                const a = (allAccounts || []).find(x => x.id === selectedAccountId);
-                accountName = a?.businessName || a?.label || accountName;
-                accountUrl = a?.storeUrl || undefined;
+                accountName = activeAdminAccount?.businessName || activeAdminAccount?.label || accountName;
+                accountUrl = activeAdminAccount?.storeUrl || undefined;
             } else {
                 try {
                     const session = (await supabase.auth.getSession()).data.session;
@@ -474,7 +481,15 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         } finally {
             setExportBusy(false);
         }
-    }, [dateRange, granularity, compareMode, customFrom, customTo, businessName, isAdmin, allAccounts, selectedAccountId]);
+    }, [dateRange, granularity, compareMode, customFrom, customTo, businessName, isAdmin, activeAdminAccount]);
+    const handleAdminAccountChange = useCallback((val: string) => {
+        setSelectedAccountId(val);
+        if (!val) {
+            try { (dm as any).clearAllData?.(); } catch { /* ignore */ }
+            setDataVersion(v => v + 1);
+            setIsInitialLoading(false);
+        }
+    }, [dm]);
     // Debug state for link errors
     const [linkDebugInfo, setLinkDebugInfo] = useState<string | null>(null);
 
@@ -518,7 +533,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     id: a.id,
                                     businessName: a.businessName || null,
                                     storeUrl: a.storeUrl || null,
-                                    label: a.label || a.businessName || a.id?.slice(0, 8) || 'Account'
+                                    label: a.label || a.businessName || a.id?.slice(0, 8) || 'Account',
+                                    adminContactLabel: a.adminContactLabel || null,
+                                    isAdminFree: Boolean(a.isAdminFree),
                                 }));
                                 setAllAccounts(list);
                             }
@@ -1482,7 +1499,16 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                             <div>
                                 <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>
-                                {activeAccountLabel ? (<p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{activeAccountLabel}</p>) : null}
+                                {activeAccountLabel && (
+                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                        <span>{activeAccountLabel}</span>
+                                        {activeAccountTag && (
+                                            <span className="inline-flex items-center rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 px-2 py-0.5 text-[11px] font-semibold tracking-wide">
+                                                {activeAccountTag}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 relative ml-auto">
                                 {isAdmin ? null : (
@@ -1495,9 +1521,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     </>
                                 )}
                                 {isAdmin && (<>
-                                    <div className="relative">
-                                        <SelectBase value={selectedAccountId} onChange={e => { const val = (e.target as HTMLSelectElement).value; setSelectedAccountId(val); if (!val) { try { (dm as any).clearAllData?.(); } catch { } setDataVersion(v => v + 1); setIsInitialLoading(false); } }} className="w-full sm:w-auto text-sm" minWidthClass="sm:min-w-[240px]">{!selectedAccountId && <option value="">Select Account</option>}{(allAccounts || []).map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</SelectBase>
-                                    </div>
+                                    <AdminAccountPicker
+                                        accounts={allAccounts || []}
+                                        value={selectedAccountId}
+                                        onChange={handleAdminAccountChange}
+                                        placeholder="Select account"
+                                        disabled={!!accountsError}
+                                    />
                                     <button
                                         onClick={handleExportJson}
                                         disabled={exportBusy || !selectedAccountId}

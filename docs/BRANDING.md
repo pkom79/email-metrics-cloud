@@ -278,6 +278,12 @@ This pattern provides immediate visibility of all campaign metrics without requi
   - Height: typically `h-9` (~36px)
   - Focus: `focus:ring-2 focus:ring-purple-500`
 
+### Admin account picker
+- Component: `components/dashboard/AdminAccountPicker.tsx`.
+- Trigger button: rounded, `border border-gray-200 dark:border-gray-700`, `bg-white dark:bg-gray-800`, `h-10`, `px-3`. Focus ring `purple-500`. Width `100%` on mobile, `260px` on desktop.
+- Flyout: rounded-2xl surface with shadow, `bg-white dark:bg-gray-900`, border `gray-200/700`, list items get `hover:bg-purple-50 dark:hover:bg-gray-800`.
+- Contact tags: lavender bubble `inline-flex items-center rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 px-2 py-0.5 text-[11px] font-semibold`. Keep copy ≤80 chars (truncate on input if longer).
+
 ### Info tooltips (standardized)
 - Use `components/InfoTooltipIcon.tsx`:
   - Icon: Lucide `Info`, 16×16 (`w-4 h-4`), `strokeWidth={2}`, inherits `currentColor`

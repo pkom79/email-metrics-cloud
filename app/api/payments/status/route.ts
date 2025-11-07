@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
 
         const { data: account, error } = await svc
             .from('accounts')
-            .select('id, owner_user_id, stripe_customer_id, stripe_subscription_status, stripe_current_period_end, stripe_price_id, stripe_trial_ends_at, stripe_subscription_id')
+            .select('id, owner_user_id, stripe_customer_id, stripe_subscription_status, stripe_current_period_end, stripe_price_id, stripe_trial_ends_at, stripe_subscription_id, billing_mode')
             .eq('id', accountId)
             .maybeSingle();
         if (error) {
@@ -52,10 +52,11 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
-        return NextResponse.json({
+        const isComped = (account as any).billing_mode === 'admin_free';
+        const baseResponse = {
             accountId: account.id,
             subscription: {
-                status: account.stripe_subscription_status || 'inactive',
+                status: isComped ? 'comped' : (account.stripe_subscription_status || 'inactive'),
                 currentPeriodEnd: account.stripe_current_period_end,
                 trialEndsAt: account.stripe_trial_ends_at,
                 priceId: account.stripe_price_id,
@@ -63,7 +64,17 @@ export async function GET(req: NextRequest) {
                 hasCustomer: !!account.stripe_customer_id
             },
             portalLoginUrl: process.env.NEXT_PUBLIC_STRIPE_PORTAL_LOGIN_URL || null
-        });
+        };
+
+        if (isComped) {
+            baseResponse.subscription.currentPeriodEnd = null;
+            baseResponse.subscription.trialEndsAt = null;
+            baseResponse.subscription.priceId = null;
+            baseResponse.subscription.subscriptionId = null;
+            baseResponse.subscription.hasCustomer = false;
+        }
+
+        return NextResponse.json(baseResponse);
     } catch (err: any) {
         console.error('Stripe status error', err);
         return NextResponse.json({ error: err?.message || 'Server error' }, { status: 500 });

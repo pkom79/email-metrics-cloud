@@ -13,6 +13,9 @@ type AdminAccount = {
     ownerEmail: string | null;
     storeUrl: string | null;
     country: string | null;
+    adminContactLabel: string | null;
+    billingMode: 'standard' | 'admin_free';
+    isAdminFree: boolean;
 };
 
 function normalizeStoreUrl(input: string) {
@@ -42,6 +45,11 @@ export default function AccountClient({ initial }: Props) {
     const [isAdmin, setIsAdmin] = useState(false);
     const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
     const [adminError, setAdminError] = useState<string | null>(null);
+    const [adminFormName, setAdminFormName] = useState('');
+    const [adminFormContact, setAdminFormContact] = useState('');
+    const [adminFormStore, setAdminFormStore] = useState('');
+    const [adminCreateBusy, setAdminCreateBusy] = useState(false);
+    const [adminCreateError, setAdminCreateError] = useState<string | null>(null);
 
     const [billingInfo, setBillingInfo] = useState({
         loading: true,
@@ -71,6 +79,9 @@ export default function AccountClient({ initial }: Props) {
                     ownerEmail: a.ownerEmail ?? null,
                     storeUrl: a.storeUrl ?? null,
                     country: a.country ?? null,
+                    adminContactLabel: a.adminContactLabel ?? null,
+                    billingMode: a.billingMode === 'admin_free' ? 'admin_free' : 'standard',
+                    isAdminFree: Boolean(a.isAdminFree),
                 })));
             } catch (e: any) {
                 if (!cancelled) setAdminError(e?.message || 'Failed to load accounts');
@@ -250,6 +261,44 @@ export default function AccountClient({ initial }: Props) {
         }
     };
 
+    const onCreateAdminAccount = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (adminCreateBusy) return;
+        setAdminCreateError(null);
+        const trimmedName = adminFormName.trim();
+        if (!trimmedName) {
+            setAdminCreateError('Enter a business name');
+            return;
+        }
+        setAdminCreateBusy(true);
+        try {
+            const payload = {
+                businessName: trimmedName,
+                contactLabel: adminFormContact.trim(),
+                storeUrl: normalizeStoreUrl(adminFormStore),
+            };
+            const resp = await fetch('/api/accounts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const json = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(json?.error || 'Failed to create account');
+            const createdAccount = json.account as AdminAccount | undefined;
+            if (createdAccount) {
+                setAdminAccounts(prev => [createdAccount, ...prev]);
+            }
+            setMsg('Created a new comped account');
+            setAdminFormName('');
+            setAdminFormContact('');
+            setAdminFormStore('');
+        } catch (error: any) {
+            setAdminCreateError(error?.message || 'Failed to create account');
+        } finally {
+            setAdminCreateBusy(false);
+        }
+    };
+
     return (
         <div className="max-w-2xl mx-auto space-y-8">
             <h1 className="text-2xl font-bold">Account</h1>
@@ -334,15 +383,66 @@ export default function AccountClient({ initial }: Props) {
             </section>
 
             {isAdmin && (
-                <section className="space-y-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
+                <section className="space-y-5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
                     <header className="space-y-1">
                         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Accounts</h2>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Create comped accounts and tag the contact so the dashboard picker shows a purple bubble for them.</p>
                     </header>
+                    <form onSubmit={onCreateAdminAccount} className="space-y-4 rounded-xl border border-dashed border-purple-200 dark:border-purple-900/40 bg-purple-50/40 dark:bg-purple-950/20 p-4">
+                        <div className="grid gap-4 md:grid-cols-3">
+                            <label className="text-sm text-gray-700 dark:text-gray-200">
+                                <span className="mb-1 block font-medium">Business name</span>
+                                <input
+                                    className="w-full h-10 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 text-sm text-gray-900 dark:text-gray-100"
+                                    value={adminFormName}
+                                    onChange={e => setAdminFormName(e.target.value)}
+                                    placeholder="Acme Skincare"
+                                />
+                            </label>
+                            <label className="text-sm text-gray-700 dark:text-gray-200">
+                                <span className="mb-1 block font-medium">Contact tag (optional)</span>
+                                <input
+                                    className="w-full h-10 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 text-sm text-gray-900 dark:text-gray-100"
+                                    value={adminFormContact}
+                                    onChange={e => setAdminFormContact(e.target.value)}
+                                    placeholder="Taylor – Head of Email"
+                                    maxLength={80}
+                                />
+                                <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">Shown as a purple bubble in the dashboard switcher.</span>
+                            </label>
+                            <label className="text-sm text-gray-700 dark:text-gray-200">
+                                <span className="mb-1 block font-medium">Store URL (optional)</span>
+                                <input
+                                    className="w-full h-10 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 text-sm text-gray-900 dark:text-gray-100"
+                                    value={adminFormStore}
+                                    onChange={e => setAdminFormStore(e.target.value)}
+                                    placeholder="brand.com"
+                                />
+                            </label>
+                        </div>
+                        {adminCreateError && <div className="text-sm text-rose-600 dark:text-rose-400">{adminCreateError}</div>}
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="submit"
+                                disabled={adminCreateBusy}
+                                className="inline-flex items-center justify-center rounded bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-60"
+                            >
+                                {adminCreateBusy ? 'Creating…' : 'Create account'}
+                            </button>
+                        </div>
+                    </form>
                     {adminError && <div className="text-sm text-rose-600">{adminError}</div>}
                     <ul className="space-y-3">
                         {adminAccounts.map(account => (
                             <li key={account.id} className="rounded border border-gray-200 dark:border-gray-800 px-4 py-3 text-sm text-gray-800 dark:text-gray-200">
-                                <div className="font-medium text-base">{account.businessName}</div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <div className="font-medium text-base text-gray-900 dark:text-gray-100">{account.businessName}</div>
+                                    {account.isAdminFree && (
+                                        <span className="inline-flex items-center rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 px-2 py-0.5 text-[11px] font-semibold tracking-wide">
+                                            {account.adminContactLabel || 'Comped'}
+                                        </span>
+                                    )}
+                                </div>
                                 {account.storeUrl && (
                                     <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                                         {account.storeUrl}

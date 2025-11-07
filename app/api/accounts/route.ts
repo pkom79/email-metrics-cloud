@@ -9,6 +9,9 @@ type AdminAccount = {
     ownerEmail: string | null;
     storeUrl: string | null;
     country: string | null;
+    adminContactLabel: string | null;
+    billingMode: 'standard' | 'admin_free';
+    isAdminFree: boolean;
 };
 
 // Returns list of all accounts with owner email & metadata (admin only)
@@ -16,14 +19,14 @@ export async function GET() {
     const userClient = createRouteHandlerClient({ cookies });
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const isAdmin = user.app_metadata?.role === 'admin';
+    const isAdmin = user.app_metadata?.role === 'admin' || user.app_metadata?.app_role === 'admin';
     if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     // Use service client to also fetch owner emails via Auth Admin API
     const service = createServiceClient();
     const { data, error } = await service
         .from('accounts')
-        .select('id,name,company,country,store_url,deleted_at,created_at,owner_user_id')
+        .select('id,name,company,country,store_url,deleted_at,created_at,owner_user_id,admin_contact_label,billing_mode')
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -56,6 +59,9 @@ export async function GET() {
             storeUrl: a.store_url || null,
             ownerEmail: ownerUserId ? emailMap[ownerUserId] || null : null,
             country: trimmed(a.country),
+            adminContactLabel: trimmed(a.admin_contact_label),
+            billingMode: (a.billing_mode === 'admin_free' ? 'admin_free' : 'standard') as 'standard' | 'admin_free',
+            isAdminFree: a.billing_mode === 'admin_free',
         };
     });
 
@@ -65,6 +71,67 @@ export async function GET() {
     }));
 
     return NextResponse.json({ accounts });
+}
+
+// Create a new admin-comped account (admin only)
+export async function POST(request: Request) {
+    try {
+        const supabase = createRouteHandlerClient({ cookies });
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const isAdmin = user.app_metadata?.role === 'admin' || user.app_metadata?.app_role === 'admin';
+        if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+        const { businessName, contactLabel, storeUrl, country } = await request.json().catch(() => ({}));
+        const trimmedName = (businessName || '').trim();
+        if (!trimmedName) {
+            return NextResponse.json({ error: 'Business name is required' }, { status: 400 });
+        }
+        const trimmedLabel = (contactLabel || '').trim();
+        if (trimmedLabel.length > 80) {
+            return NextResponse.json({ error: 'Contact label must be 80 characters or fewer' }, { status: 400 });
+        }
+        const normalizedStore = typeof storeUrl === 'string' ? storeUrl.trim() || null : null;
+        const normalizedCountry = typeof country === 'string' ? country.trim() || null : null;
+
+        const service = createServiceClient();
+        const payload: any = {
+            owner_user_id: user.id,
+            company: trimmedName,
+            name: trimmedName,
+            store_url: normalizedStore,
+            country: normalizedCountry,
+            billing_mode: 'admin_free',
+            admin_created_by: user.id,
+            admin_contact_label: trimmedLabel || null,
+        };
+
+        const { data: created, error } = await service
+            .from('accounts')
+            .insert(payload)
+            .select('id, company, store_url, country, admin_contact_label, billing_mode')
+            .single();
+        if (error || !created) {
+            console.error('Create admin account failed', error);
+            return NextResponse.json({ error: 'Failed to create account' }, { status: 500 });
+        }
+
+        const response: AdminAccount = {
+            id: created.id,
+            businessName: payload.company,
+            storeUrl: created.store_url || null,
+            ownerEmail: user.email || null,
+            country: created.country || null,
+            adminContactLabel: created.admin_contact_label || null,
+            billingMode: 'admin_free',
+            isAdminFree: true,
+        };
+
+        return NextResponse.json({ account: response }, { status: 201 });
+    } catch (e: any) {
+        console.error('Create admin account error', e);
+        return NextResponse.json({ error: e?.message || 'Failed to create account' }, { status: 500 });
+    }
 }
 
 // Soft delete an account (admin only). Body: { accountId: string, hard?: boolean }
