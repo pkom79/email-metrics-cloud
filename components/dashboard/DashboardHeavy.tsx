@@ -287,6 +287,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [memberAccounts, setMemberAccounts] = useState<Array<{ id: string; label: string }>>([]);
     const [memberSelectedId, setMemberSelectedId] = useState<string>('');
     const [memberBrandsLoaded, setMemberBrandsLoaded] = useState<boolean>(false);
+    const adminSelectionInitRef = useRef(false);
     // Billing state: start in loading state to avoid first-paint plan modal flash
     const [billingState, setBillingState] = useState<{ status: string; trialEndsAt: string | null; currentPeriodEnd: string | null; loading: boolean; hasCustomer: boolean }>({ status: 'unknown', trialEndsAt: null, currentPeriodEnd: null, loading: true, hasCustomer: false });
     const [billingStatusKnown, setBillingStatusKnown] = useState(false); // becomes true after first fetch resolves (success or error)
@@ -357,10 +358,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         }
         return businessName || '';
     }, [isAdmin, activeAdminAccount, businessName, memberAccounts, memberSelectedId]);
-    const activeAccountTag = useMemo(() => {
-        if (!isAdmin || !activeAdminAccount) return null;
-        return activeAdminAccount.isAdminFree ? (activeAdminAccount.adminContactLabel || 'Comped') : null;
-    }, [isAdmin, activeAdminAccount]);
     const billingStatusValue = (billingState.status || 'inactive').toLowerCase();
     const billingLoading = billingState.loading;
     // Classify status for gating nuance (issue vs none vs ok)
@@ -483,7 +480,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         }
     }, [dateRange, granularity, compareMode, customFrom, customTo, businessName, isAdmin, activeAdminAccount]);
     const handleAdminAccountChange = useCallback((val: string) => {
+        adminSelectionInitRef.current = true;
         setSelectedAccountId(val);
+        if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            if (val) url.searchParams.set('account', val); else url.searchParams.delete('account');
+            window.history.replaceState(null, '', url.toString());
+        }
         if (!val) {
             try { (dm as any).clearAllData?.(); } catch { /* ignore */ }
             setDataVersion(v => v + 1);
@@ -538,6 +541,24 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     isAdminFree: Boolean(a.isAdminFree),
                                 }));
                                 setAllAccounts(list);
+                                if (!adminSelectionInitRef.current) {
+                                    let initialSelection = '';
+                                    if (typeof window !== 'undefined') {
+                                        const qp = new URLSearchParams(window.location.search);
+                                        const requested = qp.get('account');
+                                        if (requested && list.some((acc: AdminAccountOption) => acc.id === requested)) {
+                                            initialSelection = requested;
+                                        } else {
+                                            initialSelection = list[0]?.id || '';
+                                        }
+                                    } else if (list.length) {
+                                        initialSelection = list[0].id;
+                                    }
+                                    if (initialSelection) {
+                                        setSelectedAccountId(initialSelection);
+                                    }
+                                    adminSelectionInitRef.current = true;
+                                }
                             }
                         } else if (!cancelled) {
                             setAccountsError(`Accounts ${r.status}`);
@@ -1500,14 +1521,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             <div>
                                 <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-gray-100">Performance Dashboard</h1>
                                 {activeAccountLabel && (
-                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                                        <span>{activeAccountLabel}</span>
-                                        {activeAccountTag && (
-                                            <span className="inline-flex items-center rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 px-2 py-0.5 text-[11px] font-semibold tracking-wide">
-                                                {activeAccountTag}
-                                            </span>
-                                        )}
-                                    </div>
+                                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{activeAccountLabel}</p>
                                 )}
                             </div>
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 relative ml-auto">

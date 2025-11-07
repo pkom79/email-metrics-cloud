@@ -143,13 +143,90 @@ export async function POST(request: Request) {
     }
 }
 
+export async function PATCH(request: Request) {
+    try {
+        const supabase = createRouteHandlerClient({ cookies });
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const isAdmin = user.app_metadata?.role === 'admin' || user.app_metadata?.app_role === 'admin';
+        if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+        const { accountId, businessName, contactLabel, storeUrl, country } = await request.json().catch(() => ({}));
+        if (!accountId || !/^[0-9a-fA-F-]{36}$/.test(accountId)) {
+            return NextResponse.json({ error: 'Invalid accountId' }, { status: 400 });
+        }
+
+        const updatePayload: Record<string, any> = {};
+        if (typeof businessName === 'string') {
+            const trimmedName = businessName.trim();
+            if (!trimmedName) return NextResponse.json({ error: 'Business name is required' }, { status: 400 });
+            updatePayload.company = trimmedName;
+            updatePayload.name = trimmedName;
+        }
+        if (typeof contactLabel === 'string') {
+            const trimmedContact = contactLabel.trim();
+            if (trimmedContact.length > 80) {
+                return NextResponse.json({ error: 'Contact label must be 80 characters or fewer' }, { status: 400 });
+            }
+            updatePayload.admin_contact_label = trimmedContact || null;
+        }
+        if (typeof storeUrl === 'string') {
+            const normalized = storeUrl.trim();
+            updatePayload.store_url = normalized ? normalized : null;
+        }
+        if (typeof country === 'string') {
+            const trimmedCountry = country.trim();
+            updatePayload.country = trimmedCountry || null;
+        }
+        if (!Object.keys(updatePayload).length) {
+            return NextResponse.json({ error: 'No changes provided' }, { status: 400 });
+        }
+
+        const service = createServiceClient();
+        const { data, error } = await service
+            .from('accounts')
+            .update(updatePayload)
+            .eq('id', accountId)
+            .select('id, company, store_url, country, admin_contact_label, billing_mode, owner_user_id')
+            .single();
+        if (error || !data) {
+            console.error('Update admin account failed', error);
+            return NextResponse.json({ error: 'Failed to update account' }, { status: 500 });
+        }
+
+        let ownerEmail: string | null = null;
+        if (data.owner_user_id) {
+            try {
+                const { data: owner } = await (service as any).auth.admin.getUserById(data.owner_user_id);
+                ownerEmail = owner?.user?.email || null;
+            } catch { /* noop */ }
+        }
+
+        const response: AdminAccount = {
+            id: data.id,
+            businessName: data.company || '',
+            storeUrl: data.store_url || null,
+            ownerEmail,
+            country: data.country || null,
+            adminContactLabel: data.admin_contact_label || null,
+            billingMode: data.billing_mode === 'admin_free' ? 'admin_free' : 'standard',
+            isAdminFree: data.billing_mode === 'admin_free',
+        };
+
+        return NextResponse.json({ account: response });
+    } catch (e: any) {
+        console.error('Update admin account error', e);
+        return NextResponse.json({ error: e?.message || 'Failed to update account' }, { status: 500 });
+    }
+}
+
 // Soft delete an account (admin only). Body: { accountId: string, hard?: boolean }
 export async function DELETE(request: Request) {
     try {
         const supabase = createRouteHandlerClient({ cookies });
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        const isAdmin = user.app_metadata?.role === 'admin';
+        const isAdmin = user.app_metadata?.role === 'admin' || user.app_metadata?.app_role === 'admin';
         if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
         const { accountId, hard } = await request.json().catch(() => ({}));
@@ -163,12 +240,14 @@ export async function DELETE(request: Request) {
         // Ensure account exists
         const { data: acct, error: acctErr } = await supabase
             .from('accounts')
-            .select('id, deleted_at, owner_user_id')
+            .select('id, deleted_at, owner_user_id, billing_mode')
             .eq('id', accountId)
             .maybeSingle();
         if (acctErr) return NextResponse.json({ error: acctErr.message }, { status: 500 });
         if (!acct) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-        if ((acct as any).owner_user_id === user.id) {
+        const ownerMatches = (acct as any).owner_user_id === user.id;
+        const isAdminFree = (acct as any).billing_mode === 'admin_free';
+        if (ownerMatches && !isAdminFree) {
             return NextResponse.json({ error: 'Cannot delete account you own via admin API' }, { status: 400 });
         }
 

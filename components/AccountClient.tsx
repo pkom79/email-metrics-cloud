@@ -50,6 +50,13 @@ export default function AccountClient({ initial }: Props) {
     const [adminFormStore, setAdminFormStore] = useState('');
     const [adminCreateBusy, setAdminCreateBusy] = useState(false);
     const [adminCreateError, setAdminCreateError] = useState<string | null>(null);
+    const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+    const [editName, setEditName] = useState('');
+    const [editContact, setEditContact] = useState('');
+    const [editStore, setEditStore] = useState('');
+    const [editBusy, setEditBusy] = useState(false);
+    const [adminManageError, setAdminManageError] = useState<string | null>(null);
+    const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
 
     const [billingInfo, setBillingInfo] = useState({
         loading: true,
@@ -299,6 +306,97 @@ export default function AccountClient({ initial }: Props) {
         }
     };
 
+    const startEditingAccount = (account: AdminAccount) => {
+        setAdminManageError(null);
+        setEditingAccountId(account.id);
+        setEditName(account.businessName);
+        setEditContact(account.adminContactLabel || '');
+        setEditStore(account.storeUrl || '');
+    };
+
+    const cancelEditingAccount = () => {
+        setEditingAccountId(null);
+        setEditName('');
+        setEditContact('');
+        setEditStore('');
+        setEditBusy(false);
+    };
+
+    const onSaveAdminAccount = async () => {
+        if (!editingAccountId || editBusy) return;
+        setAdminManageError(null);
+        const trimmedName = editName.trim();
+        if (!trimmedName) {
+            setAdminManageError('Business name is required');
+            return;
+        }
+        const trimmedContact = editContact.trim();
+        if (trimmedContact.length > 80) {
+            setAdminManageError('Contact tag must be 80 characters or fewer');
+            return;
+        }
+        setEditBusy(true);
+        try {
+            const payload = {
+                accountId: editingAccountId,
+                businessName: trimmedName,
+                contactLabel: trimmedContact,
+                storeUrl: normalizeStoreUrl(editStore),
+            };
+            const resp = await fetch('/api/accounts', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const json = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(json?.error || 'Failed to update account');
+            const updated = json.account as AdminAccount | undefined;
+            setAdminAccounts(prev => prev.map(acc => {
+                if (acc.id !== editingAccountId) return acc;
+                if (updated) {
+                    return { ...acc, ...updated, ownerEmail: updated.ownerEmail ?? acc.ownerEmail };
+                }
+                return {
+                    ...acc,
+                    businessName: trimmedName,
+                    storeUrl: payload.storeUrl || null,
+                    adminContactLabel: trimmedContact || null,
+                };
+            }));
+            setMsg('Account updated');
+            cancelEditingAccount();
+        } catch (error: any) {
+            setAdminManageError(error?.message || 'Failed to update account');
+        } finally {
+            setEditBusy(false);
+        }
+    };
+
+    const onDeleteAdminAccount = async (accountId: string) => {
+        if (deleteBusyId) return;
+        if (!window.confirm('Delete this account? This cannot be undone.')) return;
+        setAdminManageError(null);
+        setDeleteBusyId(accountId);
+        try {
+            const resp = await fetch('/api/accounts', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accountId }),
+            });
+            const json = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(json?.error || 'Failed to delete account');
+            setAdminAccounts(prev => prev.filter(acc => acc.id !== accountId));
+            if (editingAccountId === accountId) {
+                cancelEditingAccount();
+            }
+            setMsg('Account deleted');
+        } catch (error: any) {
+            setAdminManageError(error?.message || 'Failed to delete account');
+        } finally {
+            setDeleteBusyId(null);
+        }
+    };
+
     return (
         <div className="max-w-2xl mx-auto space-y-8">
             <h1 className="text-2xl font-bold">Account</h1>
@@ -408,7 +506,7 @@ export default function AccountClient({ initial }: Props) {
                                     placeholder="Taylor – Head of Email"
                                     maxLength={80}
                                 />
-                                <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">Shown as a purple bubble in the dashboard switcher.</span>
+                                    <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">Shown as a purple bubble in the dashboard switcher.</span>
                             </label>
                             <label className="text-sm text-gray-700 dark:text-gray-200">
                                 <span className="mb-1 block font-medium">Store URL (optional)</span>
@@ -432,16 +530,36 @@ export default function AccountClient({ initial }: Props) {
                         </div>
                     </form>
                     {adminError && <div className="text-sm text-rose-600">{adminError}</div>}
+                    {adminManageError && <div className="text-sm text-rose-600">{adminManageError}</div>}
                     <ul className="space-y-3">
                         {adminAccounts.map(account => (
                             <li key={account.id} className="rounded border border-gray-200 dark:border-gray-800 px-4 py-3 text-sm text-gray-800 dark:text-gray-200">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <div className="font-medium text-base text-gray-900 dark:text-gray-100">{account.businessName}</div>
-                                    {account.isAdminFree && (
-                                        <span className="inline-flex items-center rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 px-2 py-0.5 text-[11px] font-semibold tracking-wide">
-                                            {account.adminContactLabel || 'Comped'}
-                                        </span>
-                                    )}
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <div className="font-medium text-base text-gray-900 dark:text-gray-100">{account.businessName}</div>
+                                        {account.isAdminFree && (
+                                            <span className="inline-flex items-center rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200 px-2 py-0.5 text-[11px] font-semibold tracking-wide">
+                                                {account.adminContactLabel || 'Internal'}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => startEditingAccount(account)}
+                                            className="inline-flex items-center rounded border border-gray-200 dark:border-gray-700 px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => onDeleteAdminAccount(account.id)}
+                                            disabled={deleteBusyId === account.id}
+                                            className="inline-flex items-center rounded border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-600 hover:bg-rose-100 disabled:opacity-60 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-300"
+                                        >
+                                            {deleteBusyId === account.id ? 'Deleting…' : 'Delete'}
+                                        </button>
+                                    </div>
                                 </div>
                                 {account.storeUrl && (
                                     <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -451,6 +569,55 @@ export default function AccountClient({ initial }: Props) {
                                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                     {account.ownerEmail ? `Owner: ${account.ownerEmail}` : 'Owner email unavailable'}
                                 </div>
+                                {editingAccountId === account.id && (
+                                    <div className="mt-3 space-y-3 border-t border-dashed border-gray-200 pt-3 dark:border-gray-800">
+                                        <div className="grid gap-3 md:grid-cols-3">
+                                            <label className="text-sm text-gray-700 dark:text-gray-200">
+                                                <span className="mb-1 block font-medium">Business name</span>
+                                                <input
+                                                    className="w-full h-10 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 text-sm text-gray-900 dark:text-gray-100"
+                                                    value={editName}
+                                                    onChange={e => setEditName(e.target.value)}
+                                                />
+                                            </label>
+                                            <label className="text-sm text-gray-700 dark:text-gray-200">
+                                                <span className="mb-1 block font-medium">Contact tag</span>
+                                                <input
+                                                    className="w-full h-10 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 text-sm text-gray-900 dark:text-gray-100"
+                                                    value={editContact}
+                                                    onChange={e => setEditContact(e.target.value)}
+                                                    maxLength={80}
+                                                />
+                                            </label>
+                                            <label className="text-sm text-gray-700 dark:text-gray-200">
+                                                <span className="mb-1 block font-medium">Store URL</span>
+                                                <input
+                                                    className="w-full h-10 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 text-sm text-gray-900 dark:text-gray-100"
+                                                    value={editStore}
+                                                    onChange={e => setEditStore(e.target.value)}
+                                                />
+                                            </label>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={onSaveAdminAccount}
+                                                disabled={editBusy}
+                                                className="inline-flex items-center rounded bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-60"
+                                            >
+                                                {editBusy ? 'Saving…' : 'Save changes'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={cancelEditingAccount}
+                                                disabled={editBusy}
+                                                className="inline-flex items-center rounded border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </li>
                         ))}
                         {!adminError && adminAccounts.length === 0 && (

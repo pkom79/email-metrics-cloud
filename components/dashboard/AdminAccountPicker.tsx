@@ -53,7 +53,7 @@ export default function AdminAccountPicker({ accounts, value, onChange, placehol
     }, [open]);
 
     const active = useMemo(() => accounts.find(acc => acc.id === value), [accounts, value]);
-    const tagLabel = active?.isAdminFree ? (active.adminContactLabel || 'Comped') : null;
+    const tagLabel = active?.isAdminFree ? (active.adminContactLabel || 'Internal') : null;
 
     const handleSelect = (id: string) => {
         onChange(id);
@@ -90,7 +90,7 @@ export default function AdminAccountPicker({ accounts, value, onChange, placehol
                         <>
                             {accounts.map(account => {
                                 const isSelected = account.id === value;
-                                const optionTag = account.isAdminFree ? (account.adminContactLabel || 'Comped') : null;
+                                const optionTag = account.isAdminFree ? (account.adminContactLabel || 'Internal') : null;
                                 return (
                                     <button
                                         key={account.id}
