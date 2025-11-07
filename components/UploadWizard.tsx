@@ -40,7 +40,11 @@ function FileRow({
     );
 }
 
-export default function UploadWizard() {
+type UploadWizardProps = {
+    accountId?: string;
+};
+
+export default function UploadWizard({ accountId }: UploadWizardProps = {}) {
     const diagEnabled = useMemo(() => isDiagEnabled(), []);
     const [campaigns, setCampaigns] = useState<File | null>(null);
     const [flows, setFlows] = useState<File | null>(null);
@@ -120,7 +124,7 @@ export default function UploadWizard() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({ uploadId }),
+                    body: JSON.stringify({ uploadId, accountId }),
                 });
                 const linkJson = await linkRes.json().catch(() => ({}));
                 if (diagEnabled) {

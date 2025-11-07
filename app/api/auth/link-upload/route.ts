@@ -15,23 +15,40 @@ export async function POST(request: Request) {
         }
         console.log('link-upload: User authenticated:', user.id);
 
-        const { uploadId, label, pendingUploadIds } = await request.json();
-        console.log('link-upload: Request payload:', { uploadId, label, pendingUploadIds });
+        const { uploadId, label, pendingUploadIds, accountId: requestedAccountId } = await request.json();
+        console.log('link-upload: Request payload:', { uploadId, label, pendingUploadIds, accountId: requestedAccountId });
         if (!uploadId) return NextResponse.json({ error: 'uploadId required' }, { status: 400 });
 
         const supabase = createServiceClient();
         const bucket = ingestBucketName();
 
         // 1) Ensure account exists (single-user workspace for now)
-        const { data: acctRow, error: acctSelErr } = await supabase
-            .from('accounts')
-            .select('id')
-            .eq('owner_user_id', user.id)
-            .limit(1)
-            .maybeSingle();
-        if (acctSelErr) throw acctSelErr;
+        const isAdmin = (user.app_metadata as any)?.role === 'admin' || (user.app_metadata as any)?.app_role === 'admin';
+        let accountId: string | undefined = requestedAccountId;
+        if (accountId) {
+            const { data: candidate, error: acctErr } = await supabase
+                .from('accounts')
+                .select('id, owner_user_id')
+                .eq('id', accountId)
+                .maybeSingle();
+            if (acctErr) throw acctErr;
+            if (!candidate) return NextResponse.json({ error: 'Account not found' }, { status: 404 });
+            if (!isAdmin && candidate.owner_user_id !== user.id) {
+                return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+            }
+            accountId = candidate.id;
+        } else {
+            const { data: acctRow, error: acctSelErr } = await supabase
+                .from('accounts')
+                .select('id')
+                .eq('owner_user_id', user.id)
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .maybeSingle();
+            if (acctSelErr) throw acctSelErr;
+            accountId = acctRow?.id as string | undefined;
+        }
 
-        let accountId = acctRow?.id as string | undefined;
         if (!accountId) {
             const md = (user.user_metadata as any) || {};
             const rawBusiness = (md.businessName as string | undefined) || '';
