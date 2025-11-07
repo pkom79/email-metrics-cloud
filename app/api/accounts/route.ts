@@ -41,8 +41,17 @@ export async function GET() {
         } catch { /* ignore individual failures */ }
     }
     const looksLikeEmail = (s: string | null) => !!s && /@/.test(s);
-    const trimmed = (s: string | null) => (s && s.trim()) || null;
-    const derived = (data || []).map((a: { id: string; owner_user_id: string | null; company: string | null; name: string | null; store_url: string | null; country: string | null }) => {
+    const trimmed = (s: string | null | undefined) => (s && s.trim()) || null;
+    const derived = (data || []).map((a: {
+        id: string;
+        owner_user_id: string | null;
+        company: string | null;
+        name: string | null;
+        store_url: string | null;
+        country: string | null;
+        admin_contact_label?: string | null;
+        billing_mode?: string | null;
+    }) => {
         const ownerUserId = a.owner_user_id;
         let businessName: string | null = null;
         const company = trimmed(a.company);
