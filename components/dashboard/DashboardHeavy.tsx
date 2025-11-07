@@ -747,6 +747,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         };
     }, [isAdmin]);
 
+    useEffect(() => {
+        const onDatasetHydrated = () => {
+            setShowUploadModal(false);
+        };
+        window.addEventListener('em:dataset-hydrated', onDatasetHydrated as EventListener);
+        return () => window.removeEventListener('em:dataset-hydrated', onDatasetHydrated as EventListener);
+    }, []);
+
     // Load accessible brands (owner + members + any agency-entitled) and default-select
     useEffect(() => {
         if (!adminCheckComplete || isAdmin) return;
