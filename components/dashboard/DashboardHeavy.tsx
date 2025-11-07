@@ -280,6 +280,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // Admin accounts selector state
     const [isAdmin, setIsAdmin] = useState(false);
     const [adminCheckComplete, setAdminCheckComplete] = useState(false);
+    const [adminHydrateTick, setAdminHydrateTick] = useState(0);
     const [allAccounts, setAllAccounts] = useState<AdminAccountOption[] | null>(null);
     const [accountsError, setAccountsError] = useState<string | null>(null);
     const [selectedAccountId, setSelectedAccountId] = useState<string>('');
@@ -689,7 +690,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             }
         })();
         return () => { cancelled = true; };
-    }, [isAdmin, selectedAccountId, dm]);
+    }, [isAdmin, selectedAccountId, dm, adminHydrateTick]);
 
     // Events / hydration
     const [showUploadModal, setShowUploadModal] = useState(false);
@@ -728,6 +729,23 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             window.removeEventListener('em:dataset-hydrated', onHydrated as EventListener);
         };
     }, [userId, isAdmin, selectedAccountId, adminCheckComplete]);
+
+    useEffect(() => {
+        if (!isAdmin) return;
+        const onSnapshotCreated = () => {
+            setAdminHydrateTick(t => t + 1);
+        };
+        const onDatasetHydrated = () => {
+            setDataVersion(v => v + 1);
+            setIsInitialLoading(false);
+        };
+        window.addEventListener('em:snapshot-created', onSnapshotCreated as EventListener);
+        window.addEventListener('em:dataset-hydrated', onDatasetHydrated as EventListener);
+        return () => {
+            window.removeEventListener('em:snapshot-created', onSnapshotCreated as EventListener);
+            window.removeEventListener('em:dataset-hydrated', onDatasetHydrated as EventListener);
+        };
+    }, [isAdmin]);
 
     // Load accessible brands (owner + members + any agency-entitled) and default-select
     useEffect(() => {
