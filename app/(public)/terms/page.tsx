@@ -14,9 +14,9 @@ export default function TermsPage() {
             <p className="leading-relaxed">By accessing or using Email Metrics (the &quot;Service&quot;), you agree to be bound by these Terms &amp; Conditions. If you do not agree, you must not use the Service.</p>
             <h2 className="mt-10">2. The Service</h2>
             <p className="leading-relaxed">The Service allows you to upload email performance CSV files and receive aggregated snapshot reports. We may add, change, or remove features at any time.</p>
-            <h2 className="mt-10">3. Subscriptions, Trials &amp; Payment</h2>
+            <h2 className="mt-10">3. Subscriptions &amp; Payment</h2>
             <ul className="list-disc pl-6">
-                <li>Each plan starts with a 30-day free trial; unless you cancel before the trial ends, the subscription converts to a paid plan automatically.</li>
+                <li>You can unlock lifetime access by completing the required onboarding call, or enroll in a paid plan that bills immediately upon checkout.</li>
                 <li>By starting a subscription you authorize recurring charges to the payment method on file. Charges are processed by our payment provider (currently Stripe).</li>
                 <li>You must keep your billing details accurate and up to date and are responsible for applicable taxes, duties, or exchange fees.</li>
                 <li>We may suspend or cancel access for payment failures, chargebacks, or suspected fraudulent activity.</li>
@@ -46,9 +46,9 @@ export default function TermsPage() {
             <h2 className="mt-10">11. Limitation of Liability</h2>
             <p className="leading-relaxed">To the maximum extent permitted by law, our aggregate liability arising out of or relating to the Service shall not exceed the greater of (a) amounts actually paid by you to us in the 3 months preceding the claim or (b) USD $50.</p>
             <h2 className="mt-10">12. Refunds &amp; Chargebacks</h2>
-            <p className="leading-relaxed">All subscription fees are non-refundable once the free trial ends. If you initiate a chargeback with your payment provider, we may suspend or terminate access to the Service while the dispute is investigated, and future access may require resolving any outstanding balances.</p>
+            <p className="leading-relaxed">All subscription fees are non-refundable once charged. If you initiate a chargeback with your payment provider, we may suspend or terminate access to the Service while the dispute is investigated, and future access may require resolving any outstanding balances.</p>
             <h2 className="mt-10">13. Cancellation</h2>
-            <p className="leading-relaxed">You can cancel at any time through the billing portal link on your account page. Cancellation before the trial ends prevents further charges. If you cancel after charges have posted, access continues through the end of the paid period and no further renewals will occur.</p>
+            <p className="leading-relaxed">You can cancel at any time through the billing portal link on your account page. Cancellation stops future renewals. If you cancel after charges have posted, access continues through the end of the paid period and no further renewals will occur.</p>
             <h2 className="mt-10">14. Indemnification</h2>
             <p className="leading-relaxed">You agree to indemnify and hold us harmless from claims arising from your misuse of the Service or violation of these Terms.</p>
             <h2 className="mt-10">15. Termination</h2>

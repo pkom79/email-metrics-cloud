@@ -54,7 +54,7 @@ export default function ModalPlans({
     const hasRequestedFreeUnlock = useRef(false);
     const [showScheduler, setShowScheduler] = useState(false);
     const [calendarLoaded, setCalendarLoaded] = useState(false);
-    const [freePathTriggered, setFreePathTriggered] = useState(false);
+    const [unlockInFlight, setUnlockInFlight] = useState(false);
 
     useEffect(() => {
         if (!open) return;
@@ -112,7 +112,7 @@ export default function ModalPlans({
         if (open) return;
         setShowScheduler(false);
         setCalendarLoaded(false);
-        setFreePathTriggered(false);
+        setUnlockInFlight(false);
         hasRequestedFreeUnlock.current = false;
     }, [open]);
 
@@ -138,7 +138,7 @@ export default function ModalPlans({
         return () => {
             script.removeEventListener('load', handleReady);
         };
-    }, [showScheduler]);
+    }, [showScheduler, CONCIERGE_CALENDAR_URL]);
 
     const planCards = useMemo(() => ([
         {
@@ -169,12 +169,12 @@ export default function ModalPlans({
     const triggerFreeUnlock = useCallback(async () => {
         if (hasRequestedFreeUnlock.current) return;
         hasRequestedFreeUnlock.current = true;
-        setFreePathTriggered(true);
+        setUnlockInFlight(true);
         try {
             await onClaimFreeAccess?.();
         } catch (err) {
             hasRequestedFreeUnlock.current = false;
-            setFreePathTriggered(false);
+            setUnlockInFlight(false);
             throw err;
         }
     }, [onClaimFreeAccess]);
@@ -200,13 +200,16 @@ export default function ModalPlans({
     return (
         <div
             ref={overlayRef}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4 sm:px-6"
+            className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 backdrop-blur-sm px-4 sm:px-6 py-8 overflow-y-auto"
             role="dialog"
             aria-modal="true"
             aria-labelledby="plans-title"
             onMouseDown={handleOverlayClick}
         >
-            <div className="relative w-full max-w-4xl rounded-2xl bg-white dark:bg-gray-950 shadow-2xl ring-1 ring-black/5 p-5 sm:p-8" onMouseDown={e => e.stopPropagation()}>
+            <div
+                className="relative w-full max-w-4xl rounded-2xl bg-white dark:bg-gray-950 shadow-2xl ring-1 ring-black/5 p-5 sm:p-8 max-h-[92vh] overflow-y-auto"
+                onMouseDown={e => e.stopPropagation()}
+            >
                 <div className="flex flex-col items-center gap-3 text-center">
                     <div className="h-12 w-12 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 flex items-center justify-center">
                         <ShieldCheck className="h-6 w-6" />
@@ -227,7 +230,7 @@ export default function ModalPlans({
                 )}
 
                 <div className="mt-6 space-y-6">
-                    <section className="rounded-3xl border-2 border-emerald-200 bg-gradient-to-b from-emerald-50 via-white to-white dark:from-emerald-900/20 dark:via-gray-950 dark:to-gray-950 p-5 sm:p-6">
+                    <section className="rounded-3xl border border-emerald-200 bg-white dark:bg-gray-950 p-5 sm:p-6 shadow-sm">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div>
                                 <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Recommended</p>
@@ -264,41 +267,50 @@ export default function ModalPlans({
 
                         {showScheduler && (
                             <div className="mt-5 space-y-4">
-                                <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-2">
-                                    <div
-                                        className="calendly-inline-widget rounded-xl"
-                                        data-url={CONCIERGE_CALENDAR_URL}
-                                        style={{ minWidth: '320px', height: '700px' }}
-                                    />
+                                <div className="rounded-2xl overflow-hidden bg-white dark:bg-gray-900 shadow-sm">
+                                    <div className="calendly-inline-widget" data-url={CONCIERGE_CALENDAR_URL} style={{ minWidth: '320px', height: '700px' }} />
                                 </div>
-                                {!calendarLoaded && CONCIERGE_CALENDAR_URL && (
+                                {!calendarLoaded && (
                                     <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                                         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                                         Loading calendar...
                                     </div>
                                 )}
-                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                {unlockInFlight && (
+                                    <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-300">
+                                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                                        Unlocking your dashboard...
+                                    </div>
+                                )}
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    Calendly will redirect you after scheduling. We automatically unlock your dashboard when the booking completes.
+                                </p>
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                     <button
                                         type="button"
-                                        onClick={() => triggerFreeUnlock().catch(() => {})}
-                                        disabled={claimingFreeAccess}
-                                        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-emerald-600 text-emerald-700 dark:text-emerald-200 px-6 text-sm font-semibold hover:border-emerald-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 disabled:opacity-60"
+                                        onClick={() => {
+                                            setShowScheduler(false);
+                                            setCalendarLoaded(false);
+                                            setUnlockInFlight(false);
+                                            hasRequestedFreeUnlock.current = false;
+                                        }}
+                                        className="inline-flex h-11 items-center justify-center rounded-xl border border-gray-300 dark:border-gray-700 px-6 text-sm font-semibold text-gray-700 dark:text-gray-200 hover:border-gray-400"
                                     >
-                                        {(claimingFreeAccess || freePathTriggered) && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                                        I booked my call – unlock access
+                                        Go Back
                                     </button>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Booked already? Tap once and we’ll mark your account free forever.</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Prefer to pay? You can still pick a plan after backing out.</p>
                                 </div>
                             </div>
                         )}
                     </section>
 
-                    <section className="rounded-3xl border border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/30 p-5 sm:p-6">
-                        <div className="flex flex-col gap-2">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Prefer to pay?</p>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Own the same insights with a self-serve plan.</h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-300">Pick the cadence that fits. We charge instantly and hand you the keys right away.</p>
-                        </div>
+                    {!showScheduler && (
+                        <section className="rounded-3xl border border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/30 p-5 sm:p-6">
+                            <div className="flex flex-col gap-2">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Prefer to pay?</p>
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Own the same insights with a self-serve plan.</h3>
+                                <p className="text-sm text-gray-600 dark:text-gray-300">Pick the cadence that fits. We charge instantly and hand you the keys right away.</p>
+                            </div>
                         <div className="mt-4 grid gap-4 sm:grid-cols-2">
                             {planCards.map(plan => {
                                 const isBusy = busyPlan === plan.id;
@@ -350,7 +362,8 @@ export default function ModalPlans({
                                 ))}
                             </ul>
                         </div>
-                    </section>
+                        </section>
+                    )}
                 </div>
 
                 <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm">

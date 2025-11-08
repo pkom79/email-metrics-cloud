@@ -295,6 +295,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [billingWatchdogFired, setBillingWatchdogFired] = useState(false); // watchdog fallback if fetch stalls
     const [billingModalOpen, setBillingModalOpen] = useState(false);
     const [billingActionCadence, setBillingActionCadence] = useState<PlanId | null>(null);
+    const [claimingFreeAccess, setClaimingFreeAccess] = useState(false);
     const [billingError, setBillingError] = useState<string | null>(null);
     const [billingRefreshTick, setBillingRefreshTick] = useState(0);
     const [billingPortalBusy, setBillingPortalBusy] = useState(false);
@@ -436,6 +437,29 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             setBillingPortalBusy(false);
         }
     }, [activeAccountId]);
+
+    const handleClaimFreeAccess = useCallback(async () => {
+        if (!activeAccountId) return;
+        try {
+            setClaimingFreeAccess(true);
+            setBillingError(null);
+            const resp = await fetch('/api/payments/free-access', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accountId: activeAccountId })
+            });
+            const json = await resp.json().catch(() => ({}));
+            if (!resp.ok) {
+                throw new Error(json?.error || 'Unable to unlock access.');
+            }
+            handleRefreshBillingStatus();
+            setBillingModalOpen(false);
+        } catch (err: any) {
+            setBillingError(err?.message || 'Unable to unlock access.');
+        } finally {
+            setClaimingFreeAccess(false);
+        }
+    }, [activeAccountId, handleRefreshBillingStatus]);
 
     const checkKeyAndSync = useCallback(async () => {
         // API sync removed; guide user to upload CSVs instead
@@ -1522,6 +1546,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         onRefresh={handleRefreshBillingStatus}
                         busyPlan={billingActionCadence}
                         error={billingError}
+                        onClaimFreeAccess={handleClaimFreeAccess}
+                        claimingFreeAccess={claimingFreeAccess}
                     />
                 )}
             </div>

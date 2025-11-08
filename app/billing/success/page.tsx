@@ -13,9 +13,9 @@ export default function BillingSuccessPage() {
                     <CheckCircle2 className="h-10 w-10" />
                 </div>
             </div>
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-3">Trial started!</h1>
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-3">Welcome aboard!</h1>
             <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
-                Thanks for subscribing to Email Metrics. Your 30 day free trial is active–feel free to explore every dashboard insight. We’ll remind you before billing begins.
+                Thanks for activating Email Metrics. Your dashboard is unlocked immediately, so feel free to explore every insight.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Link href="/dashboard" className="inline-flex items-center justify-center rounded-full bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 text-sm font-medium">
