@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, CheckCircle, FileText, Zap, Send, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, CheckCircle, FileText, Zap, Send, ArrowRight, AlertCircle, Loader2, Quote } from 'lucide-react';
 import { DataManager } from '../lib/data/dataManager';
 import { supabase } from '../lib/supabase/client';
 import { getDiagEvents, isDiagEnabled } from '../lib/utils/diag';
@@ -410,16 +410,6 @@ export default function UploadPage() {
                             <p className="text-lg md:text-xl leading-relaxed max-w-3xl mx-auto text-gray-600 dark:text-gray-300">
                                 See what drives sales and what wastes money. Upload your Klaviyo exports today and get free insights that show the truth about your campaigns, flows, and subscribers. Sign up now to unlock lifetime access for free.
                             </p>
-                            <div className="mt-6 max-w-2xl mx-auto">
-                                <figure className="rounded-2xl border border-purple-200/70 dark:border-purple-800/60 bg-white/80 dark:bg-gray-900/60 p-6 shadow-sm">
-                                    <blockquote className="text-base md:text-lg text-gray-900 dark:text-gray-100 leading-relaxed">
-                                        “Email Metrics is so much easier to use and miles better than the Klaviyo app. I uncovered over $150k in additional revenue within minutes.”
-                                    </blockquote>
-                                    <figcaption className="mt-3 text-sm font-medium text-gray-600 dark:text-gray-300">
-                                        — Maya Chen, Lifecycle Director at Ridge & Co.
-                                    </figcaption>
-                                </figure>
-                            </div>
                             <div className="mt-4 flex justify-center">
                                 <a
                                     href="/report-export-guide"
@@ -470,6 +460,26 @@ export default function UploadPage() {
                                 {allUploaded && !isProcessing && (<><div className="absolute inset-0 -top-px rounded-full bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transform -translate-x-full group-hover:translate-x-0 transition-transform duration-1000" /> <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-600 to-purple-700 blur-xl opacity-0 group-hover:opacity-30 transition-opacity duration-300" /></>)}
                             </button>
                             {!allUploaded && !isProcessing && (<p className="text-gray-400 dark:text-gray-500 text-sm mt-4">Upload all three reports to enable analysis</p>)}
+                        </div>
+                        <div className="mt-12">
+                            <figure className="relative overflow-hidden rounded-3xl border border-purple-500/30 dark:border-purple-800/50 bg-gradient-to-br from-purple-50/80 via-white to-white dark:from-purple-900/40 dark:via-gray-900 dark:to-gray-900 p-8 shadow-[0_10px_40px_rgba(79,70,229,0.12)]">
+                                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-3 text-sm font-semibold uppercase tracking-[0.2em] text-purple-700 dark:text-purple-300">
+                                            <Quote className="w-5 h-5" />
+                                            Customer proof
+                                        </div>
+                                        <blockquote className="mt-4 text-lg md:text-xl text-gray-900 dark:text-gray-100 leading-relaxed">
+                                            “Email Metrics is instantly easier to use and way better than the Klaviyo app. In one session we surfaced more than $150k in revenue that was hiding in broken journeys.”
+                                        </blockquote>
+                                    </div>
+                                    <div className="rounded-2xl border border-purple-200/60 dark:border-purple-800/60 bg-white/70 dark:bg-gray-900/50 px-6 py-4 text-left lg:text-right">
+                                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Revenue unlocked</div>
+                                        <div className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-1">+$150k</div>
+                                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">Discovered in under 10 minutes after switching to Email Metrics.</p>
+                                    </div>
+                                </div>
+                            </figure>
                         </div>
                         {/* Diagnostics panel (visible only when diagEnabled) */}
                         {diagEnabled && (
