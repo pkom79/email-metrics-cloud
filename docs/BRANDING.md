@@ -9,7 +9,7 @@ Last updated: 2025-10-03 (Send Volume Impact guidance cards removed in favour of
 > 2025-10-02: Send Volume Impact shows All/Campaign/Flow guidance cards, scoped action note now sits beneath the metric grid, and Flow Step Analysis action note headline stays visible with a collapsible body. Send Frequency and Audience Size modules mirror the new placement.
 > 2025-10-03: Send Volume Impact now relies on a single scoped action note (no header cards). Flow Step Analysis exposes the first summary line with a “View Insights” toggle, and the Consent action note no longer has a divider line.
 > 2025-10-05: Landing hero adds the lifetime free access sentence, introduces the purple quote card, and the rotating headline words are now Simple, Useful, Valuable, Actionable (Truthful removed).
-> 2025-10-05 (later): Customer proof block relocated under the “Analyze Your Data” CTA with a gradient testimonial layout and revenue stat pill.
+> 2025-10-05 (later): Customer proof block relocated under the “Analyze Your Data” CTA with a gradient testimonial layout and revenue stat pill; badge headline removed so only the Quote icon and stat remain.
 
 ## theme and modes
 - Tailwind: v3.x, darkMode: class
@@ -66,7 +66,8 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Headline stays “Klaviyo Metrics Made {rotating word}” with the rotating list fixed to `['Simple','Useful','Valuable','Actionable']`. Additions/removals must be reflected in both the hero component and this document.
 - Subheadline pairs the “See what drives sales…” promise with time-bound offers such as “Sign up now to unlock lifetime access for free.” Keep it to two sentences with 16–18px text and no semicolons or em dashes.
 - The testimonial block now lives immediately beneath the `Analyze Your Data` CTA / upload reminder so it reinforces the action. Layout: `rounded-3xl border border-purple-500/30 dark:border-purple-800/50 bg-gradient-to-br from-purple-50/80 via-white to-white dark:from-purple-900/40 dark:via-gray-900 dark:to-gray-900 p-8` with a soft drop shadow (`shadow-[0_10px_40px_rgba(79,70,229,0.12)]`).
-- Inside the block, include a Quote icon badge (“Customer proof”) plus a revenue stat pill: `rounded-2xl border border-purple-200/60 dark:border-purple-800/60 bg-white/70 dark:bg-gray-900/50 px-6 py-4`. Headline copy mentions how Email Metrics is easier/better than the Klaviyo app and quantifies the win (e.g., “over $150k uncovered in under 10 minutes”). Avoid separate figcaptions; keep attribution inline if needed.
+- Inside the block, lead with the Quote icon (no “Customer proof” label) before the paragraph. Keep the revenue stat pill (`rounded-2xl border border-purple-200/60 dark:border-purple-800/60 bg-white/70 dark:bg-gray-900/50 px-6 py-4`) but only show the label and amount—no extra sentence about time or setup.
+- Quote copy must emphasize ease of use vs. Klaviyo, contrast the insight depth, and quantify the revenue impact (e.g., “over $150,000 added to the bottom line by fixing flows and pruning unengaged subscribers”). Avoid separate figcaptions; keep everything inside a single blockquote.
 
 ### Empty states (standardized)
 - Use a dashed border card when a module is gated by view/range or has no sufficient data for the section:

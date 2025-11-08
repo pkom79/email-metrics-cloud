@@ -465,18 +465,14 @@ export default function UploadPage() {
                             <figure className="relative overflow-hidden rounded-3xl border border-purple-500/30 dark:border-purple-800/50 bg-gradient-to-br from-purple-50/80 via-white to-white dark:from-purple-900/40 dark:via-gray-900 dark:to-gray-900 p-8 shadow-[0_10px_40px_rgba(79,70,229,0.12)]">
                                 <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                                     <div className="flex-1">
-                                        <div className="flex items-center gap-3 text-sm font-semibold uppercase tracking-[0.2em] text-purple-700 dark:text-purple-300">
-                                            <Quote className="w-5 h-5" />
-                                            Customer proof
-                                        </div>
+                                        <Quote className="w-10 h-10 text-purple-600 dark:text-purple-300" />
                                         <blockquote className="mt-4 text-lg md:text-xl text-gray-900 dark:text-gray-100 leading-relaxed">
-                                            “Email Metrics is instantly easier to use and way better than the Klaviyo app. In one session we surfaced more than $150k in revenue that was hiding in broken journeys.”
+                                            “Email Metrics was easier to use from the start and gave us insights Klaviyo never did. In one session we found over $150,000 that can be added to our bottom line by fixing underperforming flows and campaigns and removing unengaged subscribers.”
                                         </blockquote>
                                     </div>
                                     <div className="rounded-2xl border border-purple-200/60 dark:border-purple-800/60 bg-white/70 dark:bg-gray-900/50 px-6 py-4 text-left lg:text-right">
                                         <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Revenue unlocked</div>
                                         <div className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-1">+$150k</div>
-                                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">Discovered in under 10 minutes after switching to Email Metrics.</p>
                                     </div>
                                 </div>
                             </figure>
