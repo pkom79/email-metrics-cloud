@@ -512,26 +512,23 @@ export default function UploadPage() {
                                 </div>
                             </figure>
                         </div>
-                        <div className="mt-10 space-y-8">
+                        <div className="mt-10 space-y-10">
                             {featureScreens.map((feature, idx) => (
-                                <div
-                                    key={feature.key}
-                                    className="overflow-hidden rounded-3xl border border-gray-200/70 dark:border-gray-700/70 bg-white/90 dark:bg-gray-900/70 backdrop-blur-sm shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
-                                >
-                                    <div className="px-6 pt-6 text-center">
-                                        <p className="text-sm md:text-base font-semibold text-gray-900 dark:text-gray-100">
-                                            {feature.header}
-                                        </p>
-                                    </div>
-                                    <div className="relative mt-4 px-6 pb-6">
-                                        <Image
-                                            src={feature.src}
-                                            alt={feature.alt}
-                                            className="w-full h-auto object-cover rounded-2xl"
-                                            placeholder="blur"
-                                            priority={idx === 0}
-                                            sizes="(min-width: 1024px) 900px, 100vw"
-                                        />
+                                <div key={feature.key} className="space-y-4">
+                                    <p className="text-xl md:text-2xl font-semibold text-center text-gray-900 dark:text-gray-100">
+                                        {feature.header}
+                                    </p>
+                                    <div className="overflow-hidden rounded-3xl border border-gray-200/70 dark:border-gray-700/70 bg-white/90 dark:bg-gray-900/70 backdrop-blur-sm shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+                                        <div className="px-6 py-6">
+                                            <Image
+                                                src={feature.src}
+                                                alt={feature.alt}
+                                                className="w-full h-auto object-cover rounded-2xl"
+                                                placeholder="blur"
+                                                priority={idx === 0}
+                                                sizes="(min-width: 1024px) 900px, 100vw"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             ))}
