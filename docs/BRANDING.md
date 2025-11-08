@@ -11,6 +11,7 @@ Last updated: 2025-10-03 (Send Volume Impact guidance cards removed in favour of
 > 2025-10-05: Landing hero adds the lifetime free access sentence, introduces the purple quote card, and the rotating headline words are now Simple, Useful, Valuable, Actionable (Truthful removed).
 > 2025-10-05 (later): Customer proof block relocated under the “Analyze Your Data” CTA with a gradient testimonial layout and revenue stat pill; badge headline removed so only the Quote icon and stat remain.
 > 2025-10-06: Testimonial block now relies on multi-line copy plus a cite (no stat pill), and a vertical stack of screenshot cards sits beneath the hero with headers above each rounded image pulled from `app/homepage_images`.
+> 2025-10-06 (later): Testimonial copy trimmed to a single paragraph (no cite), and screenshot headers are centered text above each rounded image instead of a full-width header bar.
 
 ## theme and modes
 - Tailwind: v3.x, darkMode: class
@@ -67,9 +68,9 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - Headline stays “Klaviyo Metrics Made {rotating word}” with the rotating list fixed to `['Simple','Useful','Valuable','Actionable']`. Additions/removals must be reflected in both the hero component and this document.
 - Subheadline pairs the “See what drives sales…” promise with time-bound offers such as “Sign up now to unlock lifetime access for free.” Keep it to two sentences with 16–18px text and no semicolons or em dashes.
 - The testimonial block now lives immediately beneath the `Analyze Your Data` CTA / upload reminder so it reinforces the action. Layout: `rounded-3xl border border-purple-500/30 dark:border-purple-800/50 bg-gradient-to-br from-purple-50/80 via-white to-white dark:from-purple-900/40 dark:via-gray-900 dark:to-gray-900 p-8` with a soft drop shadow (`shadow-[0_10px_40px_rgba(79,70,229,0.12)]`).
-- Inside the block, lead with the Quote icon (no “Customer proof” label) before the paragraph stack. Follow with two short paragraphs (insight + outcome) and close with an uppercase cite line; no stat pill or secondary badge.
+- Inside the block, lead with the Quote icon (no “Customer proof” label) before a single insight paragraph that mentions the quantified revenue impact; no secondary paragraph or cite line, and still no stat pill or badge.
 - Quote copy must emphasize ease of use vs. Klaviyo, contrast the insight depth, and quantify the revenue impact (e.g., “over $150,000 added to the bottom line by fixing flows and pruning unengaged subscribers”). Avoid separate figcaptions; keep everything inside a single blockquote.
-- Beneath the testimonial, show the four-proof stack: each screenshot card is full width, stacked vertically with `rounded-3xl border border-gray-200/70 dark:border-gray-700/70 bg-white/90 dark:bg-gray-900/70 shadow-[0_10px_30px_rgba(15,23,42,0.08)]`. A header bar (`px-6 py-4` with a `border-b`) states the benefit, and the screenshot sits below with matching rounded corners. Images live at `app/homepage_images` and appear in this order: Email Performance, Flow Step Analysis, Inactivity Revenue, Send Volume Impact.
+- Beneath the testimonial, show the four-proof stack: each screenshot card is full width, stacked vertically with `rounded-3xl border border-gray-200/70 dark:border-gray-700/70 bg-white/90 dark:bg-gray-900/70 shadow-[0_10px_30px_rgba(15,23,42,0.08)]`. Center the benefit header above the image (`text-sm md:text-base font-semibold text-center`) with the same padding as the screenshot gutters, and keep the screenshots themselves rounded. Images live at `app/homepage_images` and appear in this order: Email Performance, Flow Step Analysis, Inactivity Revenue, Send Volume Impact.
 
 ### Empty states (standardized)
 - Use a dashed border card when a module is gated by view/range or has no sufficient data for the section:

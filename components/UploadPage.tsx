@@ -508,12 +508,6 @@ export default function UploadPage() {
                                         <p className="text-lg md:text-xl text-gray-900 dark:text-gray-100 leading-relaxed">
                                             “Email Metrics was easier to use from the start and surfaced insights Klaviyo never puts in one place. One working session showed the $150,000 hiding in weak flows and disengaged segments, so we knew exactly what to rebuild.”
                                         </p>
-                                        <p className="mt-4 text-base text-gray-700 dark:text-gray-300 leading-relaxed">
-                                            We made those changes the same day, so finance finally trusts the numbers and the lifecycle team can act faster.
-                                        </p>
-                                        <cite className="mt-4 block text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
-                                            Lifecycle Marketing Lead, DTC Retailer
-                                        </cite>
                                     </blockquote>
                                 </div>
                             </figure>
@@ -524,16 +518,16 @@ export default function UploadPage() {
                                     key={feature.key}
                                     className="overflow-hidden rounded-3xl border border-gray-200/70 dark:border-gray-700/70 bg-white/90 dark:bg-gray-900/70 backdrop-blur-sm shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
                                 >
-                                    <div className="px-6 py-4 border-b border-gray-100/70 dark:border-gray-800/70">
-                                        <p className="text-base md:text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                    <div className="px-6 pt-6 text-center">
+                                        <p className="text-sm md:text-base font-semibold text-gray-900 dark:text-gray-100">
                                             {feature.header}
                                         </p>
                                     </div>
-                                    <div className="relative">
+                                    <div className="relative mt-4 px-6 pb-6">
                                         <Image
                                             src={feature.src}
                                             alt={feature.alt}
-                                            className="w-full h-auto object-cover"
+                                            className="w-full h-auto object-cover rounded-2xl"
                                             placeholder="blur"
                                             priority={idx === 0}
                                             sizes="(min-width: 1024px) 900px, 100vw"
