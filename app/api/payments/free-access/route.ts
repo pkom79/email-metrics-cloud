@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
             .from('accounts')
             .update({
                 billing_mode: 'admin_free',
-                stripe_subscription_status: null,
+                stripe_subscription_status: 'comped',
                 stripe_subscription_id: null,
                 stripe_price_id: null,
                 stripe_current_period_end: null,
