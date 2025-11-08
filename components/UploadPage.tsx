@@ -1,10 +1,15 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
+import Image, { StaticImageData } from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Upload, CheckCircle, FileText, Zap, Send, ArrowRight, AlertCircle, Loader2, Quote } from 'lucide-react';
 import { DataManager } from '../lib/data/dataManager';
 import { supabase } from '../lib/supabase/client';
 import { getDiagEvents, isDiagEnabled } from '../lib/utils/diag';
+import EmailPerformanceImage from '../app/homepage_images/Email Performance.png';
+import FlowStepAnalysisImage from '../app/homepage_images/Flow Step Analysis.png';
+import InactivityRevenueImage from '../app/homepage_images/Inactivity Revenue.png';
+import SendVolumeImpactImage from '../app/homepage_images/Send Volume Impact.png';
 
 export default function UploadPage() {
     const router = useRouter();
@@ -89,6 +94,40 @@ export default function UploadPage() {
             hoverText: 'group-hover:text-indigo-600 dark:group-hover:text-indigo-400',
         },
     ] as const;
+
+    type FeatureScreen = {
+        key: string;
+        header: string;
+        alt: string;
+        src: StaticImageData;
+    };
+
+    const featureScreens: FeatureScreen[] = [
+        {
+            key: 'email-performance',
+            header: 'See all your email marketing metrics in one chart',
+            alt: 'Email performance chart comparing periods.',
+            src: EmailPerformanceImage,
+        },
+        {
+            key: 'flow-step-analysis',
+            header: 'Track how each step in your flow performs',
+            alt: 'Flow Step Analysis screenshot highlighting step-level trend.',
+            src: FlowStepAnalysisImage,
+        },
+        {
+            key: 'inactivity-revenue',
+            header: 'See what segment to email next',
+            alt: 'Inactivity revenue drain module showing dormant CLV buckets.',
+            src: InactivityRevenueImage,
+        },
+        {
+            key: 'send-volume-impact',
+            header: 'Learn how often to send using data, not guesses',
+            alt: 'Send Volume Impact chart correlating volume to revenue and deliverability.',
+            src: SendVolumeImpactImage,
+        },
+    ];
 
     const handleFileSelect = async (type: 'subscribers' | 'flows' | 'campaigns') => {
         if (isProcessing) return;
@@ -463,19 +502,45 @@ export default function UploadPage() {
                         </div>
                         <div className="mt-12">
                             <figure className="relative overflow-hidden rounded-3xl border border-purple-500/30 dark:border-purple-800/50 bg-gradient-to-br from-purple-50/80 via-white to-white dark:from-purple-900/40 dark:via-gray-900 dark:to-gray-900 p-8 shadow-[0_10px_40px_rgba(79,70,229,0.12)]">
-                                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                                    <div className="flex-1">
-                                        <Quote className="w-10 h-10 text-purple-600 dark:text-purple-300" />
-                                        <blockquote className="mt-4 text-lg md:text-xl text-gray-900 dark:text-gray-100 leading-relaxed">
-                                            “Email Metrics was easier to use from the start and gave us insights Klaviyo never did. In one session we found over $150,000 that can be added to our bottom line by fixing underperforming flows and campaigns and removing unengaged subscribers.”
-                                        </blockquote>
-                                    </div>
-                                    <div className="rounded-2xl border border-purple-200/60 dark:border-purple-800/60 bg-white/70 dark:bg-gray-900/50 px-6 py-4 text-left lg:text-right">
-                                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Revenue unlocked</div>
-                                        <div className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-1">+$150k</div>
-                                    </div>
+                                <div className="flex flex-col gap-4">
+                                    <Quote className="w-10 h-10 text-purple-600 dark:text-purple-300" />
+                                    <blockquote className="text-left">
+                                        <p className="text-lg md:text-xl text-gray-900 dark:text-gray-100 leading-relaxed">
+                                            “Email Metrics was easier to use from the start and surfaced insights Klaviyo never puts in one place. One working session showed the $150,000 hiding in weak flows and disengaged segments, so we knew exactly what to rebuild.”
+                                        </p>
+                                        <p className="mt-4 text-base text-gray-700 dark:text-gray-300 leading-relaxed">
+                                            We made those changes the same day, so finance finally trusts the numbers and the lifecycle team can act faster.
+                                        </p>
+                                        <cite className="mt-4 block text-sm font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
+                                            Lifecycle Marketing Lead, DTC Retailer
+                                        </cite>
+                                    </blockquote>
                                 </div>
                             </figure>
+                        </div>
+                        <div className="mt-10 space-y-8">
+                            {featureScreens.map((feature, idx) => (
+                                <div
+                                    key={feature.key}
+                                    className="overflow-hidden rounded-3xl border border-gray-200/70 dark:border-gray-700/70 bg-white/90 dark:bg-gray-900/70 backdrop-blur-sm shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
+                                >
+                                    <div className="px-6 py-4 border-b border-gray-100/70 dark:border-gray-800/70">
+                                        <p className="text-base md:text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                            {feature.header}
+                                        </p>
+                                    </div>
+                                    <div className="relative">
+                                        <Image
+                                            src={feature.src}
+                                            alt={feature.alt}
+                                            className="w-full h-auto object-cover"
+                                            placeholder="blur"
+                                            priority={idx === 0}
+                                            sizes="(min-width: 1024px) 900px, 100vw"
+                                        />
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                         {/* Diagnostics panel (visible only when diagEnabled) */}
                         {diagEnabled && (
