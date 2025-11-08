@@ -20,7 +20,7 @@ export default function UploadPage() {
     const [diagEvents, setDiagEvents] = useState<Array<{ ts: number; source: string; message: string; data?: any }>>([]);
 
     // Text animation state
-    const words = ['Simple', 'Useful', 'Valuable', 'Truthful', 'Actionable'];
+    const words = ['Simple', 'Useful', 'Valuable', 'Actionable'];
     const [currentWordIndex, setCurrentWordIndex] = useState(0);
 
     useEffect(() => {
@@ -408,8 +408,18 @@ export default function UploadPage() {
                                 </span>
                             </h1>
                             <p className="text-lg md:text-xl leading-relaxed max-w-3xl mx-auto text-gray-600 dark:text-gray-300">
-                                See what drives sales and what wastes money. Upload your Klaviyo exports today and get free insights that show the truth about your campaigns, flows, and subscribers.
+                                See what drives sales and what wastes money. Upload your Klaviyo exports today and get free insights that show the truth about your campaigns, flows, and subscribers. Sign up now to unlock lifetime access for free.
                             </p>
+                            <div className="mt-6 max-w-2xl mx-auto">
+                                <figure className="rounded-2xl border border-purple-200/70 dark:border-purple-800/60 bg-white/80 dark:bg-gray-900/60 p-6 shadow-sm">
+                                    <blockquote className="text-base md:text-lg text-gray-900 dark:text-gray-100 leading-relaxed">
+                                        “Email Metrics is so much easier to use and miles better than the Klaviyo app. I uncovered over $150k in additional revenue within minutes.”
+                                    </blockquote>
+                                    <figcaption className="mt-3 text-sm font-medium text-gray-600 dark:text-gray-300">
+                                        — Maya Chen, Lifecycle Director at Ridge & Co.
+                                    </figcaption>
+                                </figure>
+                            </div>
                             <div className="mt-4 flex justify-center">
                                 <a
                                     href="/report-export-guide"

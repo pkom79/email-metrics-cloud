@@ -1,4 +1,4 @@
-# Email Metrics Cloud – Branding and UI Guidelines
+# Email Metrics – Branding and UI Guidelines
 
 This guide defines the design tokens, components, and patterns used across the app. Treat it as the single source of truth and keep it updated as we standardize. When adding or modifying UI, reference this document and prefer the shared components listed here.
 
@@ -8,6 +8,7 @@ Last updated: 2025-10-03 (Send Volume Impact guidance cards removed in favour of
 > 2025-09-26 (later): Headline simplified to period revenue delta sentence ("Campaigns generated $12k more revenue this period than the previous one."). Summary now standardizes deliverability status phrases (Critical / Elevated) with thresholds: Open <30% critical, <40% low; Spam ≥0.3% critical (≥0.1% elevated); Unsubs ≥2% critical (≥1% elevated); Bounces ≥5% critical (≥2% elevated).
 > 2025-10-02: Send Volume Impact shows All/Campaign/Flow guidance cards, scoped action note now sits beneath the metric grid, and Flow Step Analysis action note headline stays visible with a collapsible body. Send Frequency and Audience Size modules mirror the new placement.
 > 2025-10-03: Send Volume Impact now relies on a single scoped action note (no header cards). Flow Step Analysis exposes the first summary line with a “View Insights” toggle, and the Consent action note no longer has a divider line.
+> 2025-10-05: Landing hero adds the lifetime free access sentence, introduces the purple quote card, and the rotating headline words are now Simple, Useful, Valuable, Actionable (Truthful removed).
 
 ## theme and modes
 - Tailwind: v3.x, darkMode: class
@@ -59,6 +60,13 @@ Tip: Prefer semantic roles over hardcoding colors. If we need stronger tokenizat
 - `.section-card`: Rounded card with border and padding.
 - `.section-header`: Title at left, controls at right.
 - Dashboard opportunity summary card (admin only): sits directly under the header row when gains are available. Use `rounded-xl` border with a subtle purple gradient (`from-purple-50 via-white to-white` light, `from-purple-950/40 via-gray-900 to-gray-900` dark). Padding `p-4 sm:p-5`. Totals row uses `text-xs font-semibold uppercase` label and `text-sm` values separated by 24px gaps. Breakdown list aligns right on desktop with `text-sm`, showing `{formatCurrency(value)} / {lift|savings}` in `font-medium`.
+
+### Marketing hero
+- Headline stays “Klaviyo Metrics Made {rotating word}” with the rotating list fixed to `['Simple','Useful','Valuable','Actionable']`. Additions/removals must be reflected in both the hero component and this document.
+- Subheadline pairs the “See what drives sales…” promise with time-bound offers such as “Sign up now to unlock lifetime access for free.” Keep it to two sentences with 16–18px text and no semicolons or em dashes.
+- The testimonial quote card sits under the subheadline, centered within `max-w-2xl`. Use `rounded-2xl border border-purple-200/70 dark:border-purple-800/60 bg-white/80 dark:bg-gray-900/60 p-6` plus a light shadow (`shadow-sm`). Quote text uses `text-base md:text-lg text-gray-900 dark:text-gray-100`, caption uses `text-sm font-medium text-gray-600 dark:text-gray-300`.
+- Quotes should mention how Email Metrics compares to Klaviyo, highlight ease of use, and quantify the outcome (e.g., “over $150k in additional revenue”). Keep names and roles short (two-part name + title + company).
+
 ### Empty states (standardized)
 - Use a dashed border card when a module is gated by view/range or has no sufficient data for the section:
   - Container: `rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-10 bg-white dark:bg-gray-900`
