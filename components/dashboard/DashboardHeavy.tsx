@@ -383,14 +383,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const showPlansModal = !isAdmin && billingStatusKnown && !billingLoading && (billingModalOpen || billingRequiresPlan || billingIssue);
     const emitTelemetry = (name: string, detail: any) => { try { window.dispatchEvent(new CustomEvent(name, { detail })); } catch { /* noop */ } };
 
-    useEffect(() => {
-        if (!forceDataOverlay) return;
-        if (blockDashboard) return;
-        if (dataHydrated) {
-            setForceDataOverlay(false);
-        }
-    }, [forceDataOverlay, blockDashboard, dataHydrated]);
-
     const handleRefreshBillingStatus = useCallback(() => {
         setBillingRefreshTick(t => t + 1);
     }, []);
@@ -925,6 +917,13 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const ALL_FLOWS = useMemo(() => dm.getFlowEmails(), [dm, dataVersion]);
     const dataHydrated = useMemo(() => dm.hasRealData(), [dm, dataVersion]);
+    useEffect(() => {
+        if (!forceDataOverlay) return;
+        if (blockDashboard) return;
+        if (dataHydrated) {
+            setForceDataOverlay(false);
+        }
+    }, [forceDataOverlay, blockDashboard, dataHydrated]);
     const hasData = dataHydrated;
     // Active account resolution
     const EFFECTIVE_ACCOUNT_ID = useMemo(

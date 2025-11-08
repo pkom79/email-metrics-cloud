@@ -106,6 +106,12 @@ export default function ModalPlans({
         hasRequestedFreeUnlock.current = false;
     }, [open]);
 
+    const handleGoBack = useCallback(() => {
+        setShowScheduler(false);
+        setCalendarLoaded(false);
+        hasRequestedFreeUnlock.current = false;
+    }, []);
+
     useEffect(() => {
         if (!showScheduler || !CONCIERGE_CALENDAR_URL) return;
         const handleReady = () => setCalendarLoaded(true);
