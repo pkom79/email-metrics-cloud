@@ -362,6 +362,11 @@ function SignupInner() {
                 >
                     {submitting ? 'Please wait…' : (mode === 'signup' ? 'Create account' : 'Sign in')}
                 </button>
+                {mode === 'signup' && (
+                    <p className="text-xs text-center text-gray-500 dark:text-gray-400">
+                        Creating an account keeps your uploads private—each CSV stays encrypted and accessible only to you.
+                    </p>
+                )}
             </form>
             {mode === 'signin' && (
                 <div className="flex justify-end -mt-2">

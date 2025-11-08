@@ -307,6 +307,13 @@ Note:
 - For tiny stat cards where an info icon is too heavy, prefer `title` attributes for one-line hints.
 - Embed long-form help in tooltips; link to docs instead.
 
+### Plan Selection Modal
+- Heading: only the “Choose Your Access Method” title belongs up top (no icon, no subtitle, no status badge).
+- Free option: bordered emerald card with the three benefit bullets, CTA, and the reassurance line (“We unlock your dashboard the moment your call is booked.”).
+- Scheduling state: swap the cards for just the Calendly embed, a single helper line (“We automatically unlock your dashboard when the booking completes.”), and a neutral Go Back button.
+- Paid option: keep the “PREFER TO PAY?” label plus the monthly and annual cards. Skip the descriptive paragraph and shared-features list.
+- Footer: remove auxiliary controls such as “Refresh status” or “Close”; the back button in the Calendly view is the only navigation affordance there.
+
 ### Charts
 Flow Step Analysis layout:
 - Use a simple grid with gaps (no inner card borders or shadows per step).

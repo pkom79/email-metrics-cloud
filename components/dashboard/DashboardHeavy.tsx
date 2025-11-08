@@ -299,6 +299,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [billingError, setBillingError] = useState<string | null>(null);
     const [billingRefreshTick, setBillingRefreshTick] = useState(0);
     const [billingPortalBusy, setBillingPortalBusy] = useState(false);
+    const [forceDataOverlay, setForceDataOverlay] = useState(false);
     // Removed API integration modal/state (CSV-only ingestion)
     const [showKeyModal, setShowKeyModal] = useState(false);
     const [keyInput, setKeyInput] = useState('');
@@ -382,6 +383,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const showPlansModal = !isAdmin && billingStatusKnown && !billingLoading && (billingModalOpen || billingRequiresPlan || billingIssue);
     const emitTelemetry = (name: string, detail: any) => { try { window.dispatchEvent(new CustomEvent(name, { detail })); } catch { /* noop */ } };
 
+    useEffect(() => {
+        if (!forceDataOverlay) return;
+        if (blockDashboard) return;
+        if (dataHydrated) {
+            setForceDataOverlay(false);
+        }
+    }, [forceDataOverlay, blockDashboard, dataHydrated]);
+
     const handleRefreshBillingStatus = useCallback(() => {
         setBillingRefreshTick(t => t + 1);
     }, []);
@@ -452,10 +461,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             if (!resp.ok) {
                 throw new Error(json?.error || 'Unable to unlock access.');
             }
+            setForceDataOverlay(true);
             handleRefreshBillingStatus();
             setBillingModalOpen(false);
         } catch (err: any) {
             setBillingError(err?.message || 'Unable to unlock access.');
+            setForceDataOverlay(false);
         } finally {
             setClaimingFreeAccess(false);
         }
@@ -1484,7 +1495,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     // If admin and there are zero accounts, don't block UI with overlay after initial load
     const noAccounts = isAdmin && (allAccounts?.length === 0);
-    const showOverlay = ((isInitialLoading || (!dataHydrated && !initialLoadComplete)) && !noAccounts && !blockDashboard);
+    const showOverlay = ((isInitialLoading || (!dataHydrated && !initialLoadComplete) || forceDataOverlay) && !noAccounts && !blockDashboard);
 
     if (dashboardError) { return <div className="min-h-screen flex items-center justify-center p-6"><div className="max-w-md mx-auto text-center"><h2 className="text-lg font-semibold text-red-600 mb-4">Dashboard Error</h2><p className="text-gray-600 dark:text-gray-300 mb-6">{dashboardError}</p><div className="space-x-4"><button onClick={() => { setDashboardError(null); setDataVersion(v => v + 1); }} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Retry</button><button onClick={() => window.location.reload()} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Reload Page</button></div></div></div>; }
 
