@@ -23,9 +23,10 @@ const CONCIERGE_POINTS = [
     'Never pay – yours free forever'
 ];
 
-const MONTHLY_PRICE = 29;
+const MONTHLY_PRICE = 19;
 const ANNUAL_PRICE = 99;
-const ANNUAL_BADGE_TEXT = 'SAVE 71%';
+const annualMonthlyEquivalent = MONTHLY_PRICE * 12;
+const annualSavingsPercent = Math.round(((annualMonthlyEquivalent - ANNUAL_PRICE) / annualMonthlyEquivalent) * 100);
 const DEFAULT_CALENDLY_URL = 'https://calendly.com/peterkom/email_metrics?primary_color=9333ea';
 const CONCIERGE_CALENDAR_URL = process.env.NEXT_PUBLIC_ONBOARDING_CALENDAR_URL || process.env.NEXT_PUBLIC_CONCIERGE_CALENDAR_URL || DEFAULT_CALENDLY_URL;
 const CALENDLY_SCRIPT_SRC = 'https://assets.calendly.com/assets/external/widget.js';
@@ -155,7 +156,7 @@ export default function ModalPlans({
             price: `$${ANNUAL_PRICE}`,
             suffix: '/year',
             highlight: true,
-            badge: ANNUAL_BADGE_TEXT,
+            badge: `SAVE ${annualSavingsPercent}%`,
             orderClass: 'order-1 sm:order-2',
             autoFocus: true,
             cta: 'Get Started – $99/year'
@@ -205,7 +206,9 @@ export default function ModalPlans({
                 onMouseDown={e => e.stopPropagation()}
             >
                 <div className="space-y-4">
-                    <h2 id="plans-title" className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Choose Your Access Method</h2>
+                    {!showScheduler && (
+                        <h2 id="plans-title" className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Choose Your Access Method</h2>
+                    )}
                     {error && (
                         <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-600 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200">
                             {error}
@@ -213,9 +216,13 @@ export default function ModalPlans({
                     )}
 
                     {showScheduler ? (
-                        <div className="space-y-4">
-                            <div className="rounded-3xl border border-emerald-200 dark:border-emerald-900/40 bg-white dark:bg-gray-900 p-3 shadow-sm">
-                                <div className="calendly-inline-widget" data-url={CONCIERGE_CALENDAR_URL} style={{ minWidth: '320px', height: '700px' }} />
+                        <div className="space-y-3">
+                            <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/40 bg-white dark:bg-gray-900 p-2 shadow-sm">
+                                <div
+                                    className="calendly-inline-widget"
+                                    data-url={CONCIERGE_CALENDAR_URL}
+                                    style={{ minWidth: '320px', height: '600px', transform: 'scale(0.94)', transformOrigin: 'top center' }}
+                                />
                             </div>
                             {!calendarLoaded && (
                                 <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -228,7 +235,7 @@ export default function ModalPlans({
                                 <button
                                     type="button"
                                     onClick={handleGoBack}
-                                    className="inline-flex h-11 items-center justify-center rounded-xl border border-gray-300 dark:border-gray-700 px-6 text-sm font-semibold text-gray-700 dark:text-gray-200 hover:border-gray-400 dark:hover:border-gray-500"
+                                    className="inline-flex h-10 items-center justify-center rounded-xl border border-gray-300 dark:border-gray-700 px-5 text-sm font-semibold text-gray-700 dark:text-gray-200 hover:border-gray-400 dark:hover:border-gray-500"
                                 >
                                     Go Back
                                 </button>

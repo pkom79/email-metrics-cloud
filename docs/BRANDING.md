@@ -311,6 +311,7 @@ Note:
 - Heading: only the “Choose Your Access Method” title belongs up top (no icon, no subtitle, no status badge).
 - Free option: bordered emerald card with the three benefit bullets, CTA, and the reassurance line (“We unlock your dashboard the moment your call is booked.”).
 - Scheduling state: swap the cards for just the Calendly embed, a single helper line (“We automatically unlock your dashboard when the booking completes.”), and a neutral Go Back button.
+- When the Calendly embed is active, hide the header entirely and tighten the container (smaller padding, scaled iframe ~600px tall) so the widget fits in a single viewport without extra chrome.
 - Paid option: keep the “PREFER TO PAY?” label plus the monthly and annual cards. Skip the descriptive paragraph and shared-features list.
 - Footer: remove auxiliary controls such as “Refresh status” or “Close”; the back button in the Calendly view is the only navigation affordance there.
 
