@@ -447,7 +447,7 @@ export default function UploadPage() {
                                 </span>
                             </h1>
                             <p className="text-lg md:text-xl leading-relaxed max-w-3xl mx-auto text-gray-600 dark:text-gray-300">
-                                See what drives sales and what wastes money. Upload your Klaviyo exports today and get free insights that show the truth about your campaigns, flows, and subscribers. Sign up now to unlock lifetime access for free.
+                                See what drives sales and what wastes money. Upload your Klaviyo exports today and get free insights that show the truth about your campaigns, flows, and subscribers. <strong className="font-semibold text-gray-900 dark:text-gray-100">Sign up now to unlock lifetime access for free.</strong>
                             </p>
                             <div className="mt-4 flex justify-center">
                                 <a
@@ -455,9 +455,9 @@ export default function UploadPage() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-50 dark:bg-purple-900/30 px-5 py-2 text-sm font-medium text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
-                                    aria-label="Open the Report Export Guide in a new tab"
+                                    aria-label="Open the How to Export Your Klaviyo Data guide in a new tab"
                                 >
-                                    Report Export Guide
+                                    How to Export Your Klaviyo Data
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                                         <path fillRule="evenodd" d="M5 4a1 1 0 011-1h9a1 1 0 011 1v9a1 1 0 11-2 0V6.414l-9.293 9.293a1 1 0 01-1.414-1.414L12.586 5H6a1 1 0 01-1-1z" clipRule="evenodd" />
                                     </svg>
