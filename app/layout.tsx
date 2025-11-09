@@ -61,20 +61,21 @@ fbq('track', 'PageView');`
                     />
                 </noscript>
                 {/* End Meta Pixel Code */}
-            </head>
-            <body className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
-                <AuthProvider>
-                    {/* Google Analytics */}
-                    <Script src="https://www.googletagmanager.com/gtag/js?id=G-GV00VP8JZV" />
-                    <Script id="google-analytics">
-                        {`
+                {/* Google tag (gtag.js) */}
+                <script async src="https://www.googletagmanager.com/gtag/js?id=G-W8E9CKKT9R"></script>
+                <script
+                    dangerouslySetInnerHTML={{
+                        __html: `
                             window.dataLayer = window.dataLayer || [];
                             function gtag(){dataLayer.push(arguments);}
                             gtag('js', new Date());
-                            gtag('config', 'G-GV00VP8JZV');
-                        `}
-                    </Script>
-
+                            gtag('config', 'G-W8E9CKKT9R');
+                        `
+                    }}
+                />
+            </head>
+            <body className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+                <AuthProvider>
                     <SupabaseAuthListener />
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
                         <Link href="/" className="flex items-center gap-2 text-lg font-semibold hover:opacity-90 transition-opacity">
