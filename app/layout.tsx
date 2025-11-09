@@ -31,6 +31,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     return (
         <html lang="en">
             <head>
+                <meta name="facebook-domain-verification" content="kpan8g7znd0wva09hwnqqnr4fd4rfx" />
                 <script
                     dangerouslySetInnerHTML={{
                         __html: `!function(){try{var t=localStorage.getItem("theme");if(!t){var e=window.matchMedia("(prefers-color-scheme: dark)");t=e.matches?"dark":"light"}("dark"===t)&&document.documentElement.classList.add("dark")}catch(n){}}();`
