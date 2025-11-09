@@ -27,7 +27,7 @@ export default function TermsPage() {
                 <li>You must be authorized to upload any data you submit.</li>
                 <li>We may suspend accounts for suspected abuse, security risk, or legal compliance.</li>
                 <li>We reserve the right to revoke access to complimentary accounts for any reason and at any time, with or without notice.</li>
-                <li>Each account is intended for use by a single user or organization only. Using multiple accounts or sharing access across multiple entities may result in immediate termination of all associated accounts without notice.</li>
+                <li>Each account is intended for use with a single Klaviyo account only. Using one Email Metrics account to manage or analyze data from multiple Klaviyo accounts is not permitted and may result in immediate termination of access without notice.</li>
             </ul>
             <h2 className="mt-10">5. Acceptable Use</h2>
             <ul className="list-disc pl-6">
