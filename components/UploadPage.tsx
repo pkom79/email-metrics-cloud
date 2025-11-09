@@ -449,7 +449,7 @@ export default function UploadPage() {
                             <p className="text-lg md:text-xl leading-relaxed max-w-3xl mx-auto text-gray-600 dark:text-gray-300">
                                 See what drives sales and what wastes money. Upload your Klaviyo exports today and get free insights that show the truth about your campaigns, flows, and subscribers.
                                 <br />
-                                <strong className="font-semibold text-gray-900 dark:text-gray-100">Sign up now to unlock lifetime access for free.</strong>
+                                <strong className="font-semibold text-gray-900 dark:text-gray-100">To get started, upload your Klaviyo reports below. Join now to unlock lifetime access for free.</strong>
                             </p>
                             <div className="mt-4 flex justify-center">
                                 <a

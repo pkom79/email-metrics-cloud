@@ -9,7 +9,7 @@ export default function TermsPage() {
     return (
         <div className="prose dark:prose-invert max-w-3xl">
             <h1 className="mb-2">Terms &amp; Conditions</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">Last updated: 2025-09-16</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">Last updated: 2025-11-09</p>
             <h2 className="mt-0">1. Acceptance of Terms</h2>
             <p className="leading-relaxed">By accessing or using Email Metrics (the &quot;Service&quot;), you agree to be bound by these Terms &amp; Conditions. If you do not agree, you must not use the Service.</p>
             <h2 className="mt-10">2. The Service</h2>
@@ -26,6 +26,8 @@ export default function TermsPage() {
                 <li>You are responsible for safeguarding your credentials.</li>
                 <li>You must be authorized to upload any data you submit.</li>
                 <li>We may suspend accounts for suspected abuse, security risk, or legal compliance.</li>
+                <li>We reserve the right to revoke access to complimentary accounts for any reason and at any time, with or without notice.</li>
+                <li>Each account is intended for use by a single user or organization only. Using multiple accounts or sharing access across multiple entities may result in immediate termination of all associated accounts without notice.</li>
             </ul>
             <h2 className="mt-10">5. Acceptable Use</h2>
             <ul className="list-disc pl-6">
