@@ -1517,6 +1517,36 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         );
     }
 
+    // No active account or no data yet: show a centered empty state (even for admin)
+    if (!HAS_ACTIVE_ACCOUNT || !dataHydrated) {
+        const headline = !HAS_ACTIVE_ACCOUNT ? 'Select an account to view your dashboard' : 'No data for this account yet';
+        const body = !HAS_ACTIVE_ACCOUNT
+            ? 'Choose an account to see metrics. If you were invited, pick the brand you were given access to.'
+            : 'Upload CSV reports to view metrics for this brand.';
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm px-6 py-8 max-w-lg w-full text-center space-y-4">
+                    <div className="relative h-12 w-12 mx-auto">
+                        <div className="absolute inset-0 rounded-full border-4 border-purple-200 border-t-purple-600 animate-spin" />
+                        <div className="absolute inset-2 rounded-full bg-white dark:bg-gray-800" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{headline}</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">{body}</p>
+                    <div className="flex items-center justify-center gap-3">
+                        <button
+                            type="button"
+                            disabled={!HAS_ACTIVE_ACCOUNT}
+                            onClick={() => setShowUploadModal(true)}
+                            className={`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white ${HAS_ACTIVE_ACCOUNT ? 'bg-purple-600 hover:bg-purple-700' : 'bg-purple-400 cursor-not-allowed opacity-70'}`}
+                        >
+                            Upload CSV reports
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     if (blockDashboard) {
         // Watchdog fallback (billing fetch stalled)
         if (!billingStatusKnown && billingWatchdogFired) {
