@@ -25,15 +25,16 @@ export async function GET(req: NextRequest) {
 
     // Enrich with email via Auth Admin API
     const memberships = data || [];
-    const ids = Array.from(new Set(memberships.map((m: any) => m.user_id).filter(Boolean)));
+    const ids = Array.from(new Set(memberships.map((m: any) => m.user_id).filter(Boolean))) as string[];
     const emailMap: Record<string, string> = {};
     for (const uid of ids) {
       try {
-        const { data: userLookup } = await (svc as any).auth.admin.getUserById(uid);
-        if (userLookup?.user?.email) emailMap[uid] = userLookup.user.email;
+        const lookup: any = await (svc as any).auth.admin.getUserById(uid);
+        const email = lookup?.data?.user?.email || lookup?.user?.email;
+        if (email) emailMap[uid] = email as string;
       } catch { /* ignore per-user */ }
     }
-    const enriched = memberships.map((m: any) => ({ ...m, email: emailMap[m.user_id] || null }));
+    const enriched = memberships.map((m: any) => ({ ...m, email: emailMap[m.user_id as string] || null }));
 
     return NextResponse.json({ memberships: enriched });
   } catch (e: any) {
