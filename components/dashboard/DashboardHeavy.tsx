@@ -932,22 +932,20 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     );
     const HAS_ACTIVE_ACCOUNT = useMemo(() => {
         if (isAdmin) return Boolean(selectedAccountId);
-        // For managers, wait for brand list to load and require a valid selection from that list
         if (!memberBrandsLoaded) return false;
         if (!memberSelectedId) return false;
         return memberAccounts.some(a => a.id === memberSelectedId);
     }, [isAdmin, selectedAccountId, memberBrandsLoaded, memberSelectedId, memberAccounts]);
 
     // Track loading state per account selection
-    const [accountLoadInFlight, setAccountLoadInFlight] = useState<boolean>(true);
+    const [accountLoadInFlight, setAccountLoadInFlight] = useState<boolean>(false);
     useEffect(() => {
-        // When account changes, consider data loading until we know otherwise
+        // Reset load state on account change
         setAccountLoadInFlight(Boolean(activeAccountId));
     }, [activeAccountId]);
     useEffect(() => {
         if (dataHydrated) setAccountLoadInFlight(false);
-        if (initialLoadComplete && !dataHydrated) setAccountLoadInFlight(false);
-    }, [dataHydrated, initialLoadComplete]);
+    }, [dataHydrated]);
     useEffect(() => { try { DataManager.setAccountId(EFFECTIVE_ACCOUNT_ID || null); } catch { } }, [EFFECTIVE_ACCOUNT_ID]);
     // Reference/end date for presets and bounds –
     // align with DataCoverageNotice by using DataManager's helper.
@@ -1538,23 +1536,23 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <div className="w-full max-w-sm">
                             <AdminAccountPicker
                                 accounts={allAccounts || []}
-                                value={selectedAccountId}
+                                value={selectedAccountId || ''}
                                 onChange={handleAdminAccountChange}
                                 placeholder="Select account"
                                 disabled={!!accountsError}
                             />
                         </div>
-                        ) : (
-                            <SelectBase
-                                value={memberSelectedId}
-                                onChange={e => setMemberSelectedId((e.target as HTMLSelectElement).value)}
-                                className="w-full max-w-sm text-sm"
-                                minWidthClass="sm:min-w-[260px]"
-                            >
-                                <option value="">Select account</option>
-                                {memberAccounts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
-                            </SelectBase>
-                        )}
+                    ) : (
+                        <SelectBase
+                            value={memberSelectedId || ''}
+                            onChange={e => setMemberSelectedId((e.target as HTMLSelectElement).value)}
+                            className="w-full max-w-sm text-sm"
+                            minWidthClass="sm:min-w-[260px]"
+                        >
+                            <option value="">Select account</option>
+                            {memberAccounts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+                        </SelectBase>
+                    )}
                 </div>
                 <div className="flex flex-col items-center justify-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm px-8 py-10 max-w-xl w-full text-center space-y-5">
                     {!accountLoadInFlight ? null : (
@@ -1572,12 +1570,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         }
                     </h2>
                     <p className="text-sm text-gray-600 dark:text-gray-300">
-                        {!HAS_ACTIVE_ACCOUNT
-                            ? 'Pick a brand you have access to. If you were invited, select that brand to see its reports.'
-                            : accountLoadInFlight
-                                ? 'Fetching your reports and metrics. This may take a few moments.'
-                                : 'Upload CSV reports to view metrics for this brand.'
-                        }
+                    {!HAS_ACTIVE_ACCOUNT
+                        ? 'Pick a brand you have access to. If you were invited, select that brand to see its reports.'
+                        : accountLoadInFlight
+                            ? 'Fetching your reports and metrics. This may take a few moments.'
+                            : 'Upload CSV reports to view metrics for this brand.'
+                    }
                     </p>
                     <div className="flex items-center justify-center">
                         <button
