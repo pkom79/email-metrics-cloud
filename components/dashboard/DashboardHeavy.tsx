@@ -936,11 +936,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         }
     }, [forceDataOverlay, blockDashboard, dataHydrated]);
     const hasData = dataHydrated;
-    useEffect(() => {
-        if (showUploadModal && dataHydrated && HAS_ACTIVE_ACCOUNT && !accountLoadInFlight) {
-            setShowUploadModal(false);
-        }
-    }, [showUploadModal, dataHydrated, HAS_ACTIVE_ACCOUNT, accountLoadInFlight]);
     // Active account resolution
     const EFFECTIVE_ACCOUNT_ID = useMemo(
         () => (isAdmin ? (selectedAccountId || '') : (memberSelectedId || '')),
@@ -972,6 +967,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     useEffect(() => {
         if (dataHydrated) setAccountLoadInFlight(false);
     }, [dataHydrated]);
+    useEffect(() => {
+        if (showUploadModal && dataHydrated && HAS_ACTIVE_ACCOUNT && !accountLoadInFlight) {
+            setShowUploadModal(false);
+        }
+    }, [showUploadModal, dataHydrated, HAS_ACTIVE_ACCOUNT, accountLoadInFlight]);
     useEffect(() => { try { DataManager.setAccountId(EFFECTIVE_ACCOUNT_ID || null); } catch { } }, [EFFECTIVE_ACCOUNT_ID]);
     // Reference/end date for presets and bounds –
     // align with DataCoverageNotice by using DataManager's helper.
