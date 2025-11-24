@@ -141,6 +141,24 @@ function SignupInner() {
         return v.toLowerCase();
     };
 
+    const authWithRetry = async <T>(fn: () => Promise<{ data: T; error: any }>, label: string) => {
+        let lastError: any = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            const res = await fn();
+            if (!res.error) return res;
+            lastError = res.error;
+            // Supabase Auth returns 429 when rate limited; back off and retry
+            if (res.error?.status === 429 || /rate/i.test(res.error?.message || '')) {
+                const delay = 300 * (attempt + 1);
+                diag(`${label}-retry`, { attempt: attempt + 1, status: res.error?.status, message: res.error?.message, delay });
+                await new Promise(r => setTimeout(r, delay));
+                continue;
+            }
+            break;
+        }
+        throw lastError;
+    };
+
     const onSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null); setOk(null);
@@ -231,11 +249,7 @@ function SignupInner() {
 
                 setTimeout(() => { window.location.assign('/dashboard'); }, 800);
             } else {
-                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-                if (error) {
-                    diag('signin-error', { message: error.message, status: error.status });
-                    throw error;
-                }
+                const { data } = await authWithRetry(() => supabase.auth.signInWithPassword({ email, password }), 'signin');
                 let session = data?.session ?? null;
                 if (!session) {
                     const { data: refreshed } = await supabase.auth.getSession();
@@ -257,8 +271,9 @@ function SignupInner() {
                 }
             }
         } catch (e: any) {
-            setError(e?.message || 'Failed');
-            diag('submit-error', { message: e?.message });
+            const msg = e?.message || 'Failed';
+            setError(msg);
+            diag('submit-error', { message: msg });
         } finally {
             setSubmitting(false);
         }
