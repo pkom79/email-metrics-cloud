@@ -771,12 +771,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         };
     }, [isAdmin]);
 
-    useEffect(() => {
-        if (showUploadModal && dataHydrated && HAS_ACTIVE_ACCOUNT && !accountLoadInFlight) {
-            setShowUploadModal(false);
-        }
-    }, [showUploadModal, dataHydrated, HAS_ACTIVE_ACCOUNT, accountLoadInFlight]);
-
     // Load accessible brands (owner + members + any agency-entitled) and default-select
     useEffect(() => {
         if (!adminCheckComplete || isAdmin) return;
@@ -942,6 +936,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         }
     }, [forceDataOverlay, blockDashboard, dataHydrated]);
     const hasData = dataHydrated;
+    useEffect(() => {
+        if (showUploadModal && dataHydrated && HAS_ACTIVE_ACCOUNT && !accountLoadInFlight) {
+            setShowUploadModal(false);
+        }
+    }, [showUploadModal, dataHydrated, HAS_ACTIVE_ACCOUNT, accountLoadInFlight]);
     // Active account resolution
     const EFFECTIVE_ACCOUNT_ID = useMemo(
         () => (isAdmin ? (selectedAccountId || '') : (memberSelectedId || '')),
