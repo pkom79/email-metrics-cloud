@@ -24,6 +24,7 @@ type Membership = {
     role: 'manager' | 'owner';
     created_at?: string;
     email?: string | null;
+    name?: string | null;
 };
 
 function normalizeStoreUrl(input: string) {
@@ -681,24 +682,29 @@ export default function AccountClient({ initial }: Props) {
                                             {(memberLists[account.id] || []).length === 0 && (
                                                 <div className="text-sm text-gray-500 dark:text-gray-400">No members yet.</div>
                                             )}
-                                            {(memberLists[account.id] || []).map(m => (
-                                                <div key={m.user_id} className="flex items-center justify-between rounded border border-gray-200 dark:border-gray-700 px-3 py-2">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-sm text-gray-800 dark:text-gray-100">{m.email || m.user_id}</span>
-                                                        <span className="text-xs text-gray-500 dark:text-gray-400">{m.role === 'owner' ? 'Owner' : 'Manager'}</span>
+                                            {(memberLists[account.id] || []).map(m => {
+                                                const primary = m.name || m.email || m.user_id;
+                                                const secondary = m.email && m.email !== primary ? m.email : (m.name && m.email ? m.email : null);
+                                                return (
+                                                    <div key={m.user_id} className="flex items-center justify-between rounded border border-gray-200 dark:border-gray-700 px-3 py-2">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm text-gray-800 dark:text-gray-100">{primary}</span>
+                                                            {secondary && <span className="text-xs text-gray-500 dark:text-gray-400">{secondary}</span>}
+                                                            <span className="text-xs text-gray-500 dark:text-gray-400">{m.role === 'owner' ? 'Owner' : 'Manager'}</span>
+                                                        </div>
+                                                        {m.role !== 'owner' && (
+                                                            <button
+                                                                type="button"
+                                                                disabled={memberLoading[account.id]}
+                                                                onClick={() => handleRemoveMember(account.id, m.user_id)}
+                                                                className="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-300"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                    {m.role !== 'owner' && (
-                                                        <button
-                                                            type="button"
-                                                            disabled={memberLoading[account.id]}
-                                                            onClick={() => handleRemoveMember(account.id, m.user_id)}
-                                                            className="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-300"
-                                                        >
-                                                            Remove
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                         <div className="grid gap-2 sm:grid-cols-5">
                                             <input
