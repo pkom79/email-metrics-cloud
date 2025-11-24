@@ -1541,6 +1541,21 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const showLoadingState = HAS_ACTIVE_ACCOUNT && accountLoadInFlight;
     const showNoDataState = HAS_ACTIVE_ACCOUNT && !accountLoadInFlight && !dataHydrated && accountHydrationAttempted;
 
+    const uploadModal = showUploadModal ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setShowUploadModal(false)} />
+            <div className="relative z-[61] w-[min(100%,900px)] max-h-[90vh] overflow-auto rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold">Upload New Reports</h3>
+                    <button onClick={() => setShowUploadModal(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+                <UploadWizard accountId={activeAccountId} />
+            </div>
+        </div>
+    ) : null;
+
     // No account selected or no data: show guidance before rendering dashboard
     if (showSelectAccountState || showLoadingState || showNoDataState) {
         const label = activeAccountLabel || 'this account';
@@ -1603,6 +1618,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         </div>
                     )}
                 </div>
+                {uploadModal}
             </div>
         );
     }
@@ -1963,15 +1979,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     </div>
                 </div>
             )}
-            {showUploadModal && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center">
-                    <div className="absolute inset-0 bg-black/50" onClick={() => setShowUploadModal(false)} />
-                    <div className="relative z-[61] w-[min(100%,900px)] max-h-[90vh] overflow-auto rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl p-6">
-                        <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold">Upload New Reports</h3><button onClick={() => setShowUploadModal(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"><X className="w-5 h-5" /></button></div>
-                        <UploadWizard accountId={activeAccountId} />
-                    </div>
-                </div>
-            )}
+            {uploadModal}
             {/* Klaviyo connect modal removed (CSV-only ingestion) */}
             {/* Filters bar (sticky) – hide when no active account */}
             {/* Mobile filters trigger (visible only on small screens) – hide when no active account */}
