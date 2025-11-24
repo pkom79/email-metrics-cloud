@@ -576,15 +576,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                         const requested = qp.get('account');
                                         if (requested && list.some((acc: AdminAccountOption) => acc.id === requested)) {
                                             initialSelection = requested;
-                                        } else {
-                                            initialSelection = list[0]?.id || '';
                                         }
-                                    } else if (list.length) {
-                                        initialSelection = list[0].id;
                                     }
-                                    if (initialSelection) {
-                                        setSelectedAccountId(initialSelection);
-                                    }
+                                    if (initialSelection) setSelectedAccountId(initialSelection);
                                     adminSelectionInitRef.current = true;
                                 }
                             }
@@ -639,10 +633,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 const trialEnds = subscription.trialEndsAt || null;
                 const currentEnd = subscription.currentPeriodEnd || null;
                 const hasCustomer = Boolean(subscription.hasCustomer);
-                const derivedAccountId: string | undefined = json.accountId || undefined;
-                if (!activeAccountId && derivedAccountId) {
-                    if (isAdmin) setSelectedAccountId(prev => prev || derivedAccountId); else setMemberSelectedId(prev => prev || derivedAccountId);
-                }
                 if (cancelled) return;
                 setBillingState(prev => ({ ...prev, status, trialEndsAt: trialEnds, currentPeriodEnd: currentEnd, loading: false, hasCustomer }));
                 setBillingStatusKnown(true);
