@@ -141,7 +141,7 @@ function SignupInner() {
         return v.toLowerCase();
     };
 
-    async function authWithRetry<T>(fn: () => Promise<{ data: T; error: any }>, label: string) {
+    async function authWithRetry<T>(fn: () => Promise<{ data: T; error: any }>, label: string): Promise<{ data: T; error: any }> {
         let lastError: any = null;
         for (let attempt = 0; attempt < 3; attempt++) {
             const res = await fn();
