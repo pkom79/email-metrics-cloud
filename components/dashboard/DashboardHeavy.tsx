@@ -938,12 +938,16 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         return memberAccounts.some(a => a.id === memberSelectedId);
     }, [isAdmin, selectedAccountId, memberBrandsLoaded, memberSelectedId, memberAccounts]);
 
-    // Auto-select when exactly one account is available (admin)
+    // Track loading state per account selection
+    const [accountLoadInFlight, setAccountLoadInFlight] = useState<boolean>(true);
     useEffect(() => {
-        if (isAdmin && !selectedAccountId && allAccounts && allAccounts.length === 1) {
-            setSelectedAccountId(allAccounts[0].id);
-        }
-    }, [isAdmin, selectedAccountId, allAccounts]);
+        // When account changes, consider data loading until we know otherwise
+        setAccountLoadInFlight(Boolean(activeAccountId));
+    }, [activeAccountId]);
+    useEffect(() => {
+        if (dataHydrated) setAccountLoadInFlight(false);
+        if (initialLoadComplete && !dataHydrated) setAccountLoadInFlight(false);
+    }, [dataHydrated, initialLoadComplete]);
     useEffect(() => { try { DataManager.setAccountId(EFFECTIVE_ACCOUNT_ID || null); } catch { } }, [EFFECTIVE_ACCOUNT_ID]);
     // Reference/end date for presets and bounds –
     // align with DataCoverageNotice by using DataManager's helper.
@@ -1540,28 +1544,40 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 disabled={!!accountsError}
                             />
                         </div>
-                    ) : (
-                        <SelectBase
-                            value={memberSelectedId}
-                            onChange={e => setMemberSelectedId((e.target as HTMLSelectElement).value)}
-                            className="w-full max-w-sm text-sm"
-                            minWidthClass="sm:min-w-[260px]"
-                        >
-                            <option value="">Select account</option>
-                            {memberAccounts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
-                        </SelectBase>
-                    )}
+                        ) : (
+                            <SelectBase
+                                value={memberSelectedId}
+                                onChange={e => setMemberSelectedId((e.target as HTMLSelectElement).value)}
+                                className="w-full max-w-sm text-sm"
+                                minWidthClass="sm:min-w-[260px]"
+                            >
+                                <option value="">Select account</option>
+                                {memberAccounts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+                            </SelectBase>
+                        )}
                 </div>
                 <div className="flex flex-col items-center justify-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm px-8 py-10 max-w-xl w-full text-center space-y-5">
-                    <div className="relative h-12 w-12 mx-auto">
-                        <div className="absolute inset-0 rounded-full border-4 border-purple-200 border-t-purple-600 animate-spin" />
-                        <div className="absolute inset-2 rounded-full bg-white dark:bg-gray-800" />
-                    </div>
+                    {!accountLoadInFlight ? null : (
+                        <div className="relative h-12 w-12 mx-auto">
+                            <div className="absolute inset-0 rounded-full border-4 border-purple-200 border-t-purple-600 animate-spin" />
+                            <div className="absolute inset-2 rounded-full bg-white dark:bg-gray-800" />
+                        </div>
+                    )}
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                        {HAS_ACTIVE_ACCOUNT ? `No data for ${label}` : 'Select an account to view your dashboard'}
+                        {!HAS_ACTIVE_ACCOUNT
+                            ? 'Select an account to view your dashboard'
+                            : accountLoadInFlight
+                                ? `Loading data for ${label}`
+                                : `No data for ${label}`
+                        }
                     </h2>
                     <p className="text-sm text-gray-600 dark:text-gray-300">
-                        {HAS_ACTIVE_ACCOUNT ? 'Upload CSV reports to view metrics for this brand.' : 'Pick a brand you have access to. If you were invited, select that brand to see its reports.'}
+                        {!HAS_ACTIVE_ACCOUNT
+                            ? 'Pick a brand you have access to. If you were invited, select that brand to see its reports.'
+                            : accountLoadInFlight
+                                ? 'Fetching your reports and metrics. This may take a few moments.'
+                                : 'Upload CSV reports to view metrics for this brand.'
+                        }
                     </p>
                     <div className="flex items-center justify-center">
                         <button
