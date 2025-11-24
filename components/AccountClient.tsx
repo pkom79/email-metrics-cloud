@@ -18,6 +18,14 @@ type AdminAccount = {
     isAdminFree: boolean;
 };
 
+type Membership = {
+    account_id: string;
+    user_id: string;
+    role: 'manager' | 'owner';
+    created_at?: string;
+    email?: string | null;
+};
+
 function normalizeStoreUrl(input: string) {
     let v = (input || '').trim();
     if (!v) return v;
@@ -57,6 +65,13 @@ export default function AccountClient({ initial }: Props) {
     const [editBusy, setEditBusy] = useState(false);
     const [adminManageError, setAdminManageError] = useState<string | null>(null);
     const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
+    const [memberLists, setMemberLists] = useState<Record<string, Membership[]>>({});
+    const [memberLoading, setMemberLoading] = useState<Record<string, boolean>>({});
+    const [inviteEmail, setInviteEmail] = useState<Record<string, string>>({});
+    const [inviteRole, setInviteRole] = useState<Record<string, 'manager' | 'owner'>>({});
+    const [inviteBusy, setInviteBusy] = useState<Record<string, boolean>>({});
+    const [inviteMsg, setInviteMsg] = useState<Record<string, string>>({});
+    const [inviteErr, setInviteErr] = useState<Record<string, string>>({});
 
     const [billingInfo, setBillingInfo] = useState({
         loading: true,
@@ -90,6 +105,29 @@ export default function AccountClient({ initial }: Props) {
                     billingMode: a.billingMode === 'admin_free' ? 'admin_free' : 'standard',
                     isAdminFree: Boolean(a.isAdminFree),
                 })));
+                // Preload member lists for accounts
+                if (!cancelled) {
+                    const loadMembers = async (accountId: string) => {
+                        setMemberLoading(prev => ({ ...prev, [accountId]: true }));
+                        try {
+                            const res = await fetch(`/api/admin/account-users?accountId=${accountId}`, { cache: 'no-store' });
+                            const json = await res.json().catch(() => ({}));
+                            if (res.ok) {
+                                const members: Membership[] = (json.memberships || []).map((m: any) => ({
+                                    account_id: m.account_id,
+                                    user_id: m.user_id,
+                                    role: m.role,
+                                    created_at: m.created_at,
+                                }));
+                                setMemberLists(prev => ({ ...prev, [accountId]: members }));
+                            }
+                        } catch { /* ignore */ }
+                        setMemberLoading(prev => ({ ...prev, [accountId]: false }));
+                    };
+                    for (const acct of j.accounts || []) {
+                        loadMembers(acct.id);
+                    }
+                }
             } catch (e: any) {
                 if (!cancelled) setAdminError(e?.message || 'Failed to load accounts');
             }
@@ -135,6 +173,70 @@ export default function AccountClient({ initial }: Props) {
     const handleError = (error: any, fallback = 'Something went wrong') => {
         const message = error?.message || (typeof error === 'string' ? error : fallback);
         setErr(message);
+    };
+
+    const handleInvite = async (accountId: string) => {
+        setInviteErr(prev => ({ ...prev, [accountId]: '' }));
+        setInviteMsg(prev => ({ ...prev, [accountId]: '' }));
+        const email = (inviteEmail[accountId] || '').trim();
+        const role = inviteRole[accountId] || 'manager';
+        if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+            setInviteErr(prev => ({ ...prev, [accountId]: 'Enter a valid email' }));
+            return;
+        }
+        setInviteBusy(prev => ({ ...prev, [accountId]: true }));
+        try {
+            const res = await fetch('/api/admin/account-users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accountId, email, role }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(json?.error || 'Failed to invite/add');
+            }
+            setInviteMsg(prev => ({ ...prev, [accountId]: role === 'owner' ? 'Owner set' : 'Access granted / invite sent' }));
+            // Refresh members list
+            const listRes = await fetch(`/api/admin/account-users?accountId=${accountId}`, { cache: 'no-store' });
+            const listJson = await listRes.json().catch(() => ({}));
+            if (listRes.ok) {
+                const members: Membership[] = (listJson.memberships || []).map((m: any) => ({
+                    account_id: m.account_id,
+                    user_id: m.user_id,
+                    role: m.role,
+                    created_at: m.created_at,
+                }));
+                setMemberLists(prev => ({ ...prev, [accountId]: members }));
+            }
+            setInviteEmail(prev => ({ ...prev, [accountId]: '' }));
+        } catch (e: any) {
+            setInviteErr(prev => ({ ...prev, [accountId]: e?.message || 'Failed to invite/add' }));
+        } finally {
+            setInviteBusy(prev => ({ ...prev, [accountId]: false }));
+        }
+    };
+
+    const handleRemoveMember = async (accountId: string, userId: string) => {
+        setMemberLoading(prev => ({ ...prev, [accountId]: true }));
+        try {
+            const res = await fetch('/api/admin/account-users', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accountId, userId }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok && json?.status !== 'not_found') {
+                throw new Error(json?.error || 'Failed to remove');
+            }
+            setMemberLists(prev => ({
+                ...prev,
+                [accountId]: (prev[accountId] || []).filter(m => m.user_id !== userId),
+            }));
+        } catch (e: any) {
+            setInviteErr(prev => ({ ...prev, [accountId]: e?.message || 'Failed to remove' }));
+        } finally {
+            setMemberLoading(prev => ({ ...prev, [accountId]: false }));
+        }
     };
 
     const onSaveCompany = async () => {
@@ -566,9 +668,70 @@ export default function AccountClient({ initial }: Props) {
                                         {account.storeUrl}
                                     </div>
                                 )}
-                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    {account.ownerEmail ? `Owner: ${account.ownerEmail}` : 'Owner email unavailable'}
-                                </div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        {account.ownerEmail ? `Owner: ${account.ownerEmail}` : 'Owner email unavailable'}
+                                    </div>
+                                    {/* Access management */}
+                                    <div className="mt-3 space-y-3 border-t border-dashed border-gray-200 pt-3 dark:border-gray-800">
+                                        <div className="flex items-center justify-between">
+                                            <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">Access</div>
+                                            {memberLoading[account.id] && <span className="text-xs text-gray-500">Updating…</span>}
+                                        </div>
+                                        <div className="space-y-2">
+                                            {(memberLists[account.id] || []).length === 0 && (
+                                                <div className="text-sm text-gray-500 dark:text-gray-400">No members yet.</div>
+                                            )}
+                                            {(memberLists[account.id] || []).map(m => (
+                                                <div key={m.user_id} className="flex items-center justify-between rounded border border-gray-200 dark:border-gray-700 px-3 py-2">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm text-gray-800 dark:text-gray-100">{m.email || m.user_id}</span>
+                                                        <span className="text-xs text-gray-500 dark:text-gray-400">{m.role === 'owner' ? 'Owner' : 'Manager'}</span>
+                                                    </div>
+                                                    {m.role !== 'owner' && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={memberLoading[account.id]}
+                                                            onClick={() => handleRemoveMember(account.id, m.user_id)}
+                                                            className="text-xs text-rose-600 hover:text-rose-700 dark:text-rose-300"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="grid gap-2 sm:grid-cols-5">
+                                            <input
+                                                type="email"
+                                                placeholder="user@example.com"
+                                                value={inviteEmail[account.id] || ''}
+                                                onChange={e => setInviteEmail(prev => ({ ...prev, [account.id]: e.target.value }))}
+                                                className="sm:col-span-3 h-10 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 text-sm text-gray-900 dark:text-gray-100"
+                                            />
+                                            <select
+                                                value={inviteRole[account.id] || 'manager'}
+                                                onChange={e => setInviteRole(prev => ({ ...prev, [account.id]: e.target.value as 'manager' | 'owner' }))}
+                                                className="sm:col-span-1 h-10 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 text-sm text-gray-900 dark:text-gray-100"
+                                            >
+                                                <option value="manager">Manager</option>
+                                                <option value="owner">Owner</option>
+                                            </select>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleInvite(account.id)}
+                                                disabled={inviteBusy[account.id]}
+                                                className="sm:col-span-1 inline-flex items-center justify-center rounded bg-purple-600 px-3 h-10 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-60"
+                                            >
+                                                {inviteBusy[account.id] ? 'Sending…' : 'Grant'}
+                                            </button>
+                                        </div>
+                                        {(inviteErr[account.id] || inviteMsg[account.id]) && (
+                                            <div className="text-xs text-gray-600 dark:text-gray-300">
+                                                {inviteErr[account.id] && <span className="text-rose-600 dark:text-rose-300">{inviteErr[account.id]}</span>}
+                                                {inviteMsg[account.id] && <span className="text-emerald-600 dark:text-emerald-300">{inviteMsg[account.id]}</span>}
+                                            </div>
+                                        )}
+                                    </div>
                                 {editingAccountId === account.id && (
                                     <div className="mt-3 space-y-3 border-t border-dashed border-gray-200 pt-3 dark:border-gray-800">
                                         <div className="grid gap-3 md:grid-cols-3">

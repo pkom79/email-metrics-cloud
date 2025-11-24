@@ -22,7 +22,20 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ memberships: data || [] });
+
+    // Enrich with email via Auth Admin API
+    const memberships = data || [];
+    const ids = Array.from(new Set(memberships.map((m: any) => m.user_id).filter(Boolean)));
+    const emailMap: Record<string, string> = {};
+    for (const uid of ids) {
+      try {
+        const { data: userLookup } = await (svc as any).auth.admin.getUserById(uid);
+        if (userLookup?.user?.email) emailMap[uid] = userLookup.user.email;
+      } catch { /* ignore per-user */ }
+    }
+    const enriched = memberships.map((m: any) => ({ ...m, email: emailMap[m.user_id] || null }));
+
+    return NextResponse.json({ memberships: enriched });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Server error' }, { status: 500 });
   }
@@ -36,9 +49,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const accountId = typeof body?.accountId === 'string' ? body.accountId : '';
     const userId = typeof body?.userId === 'string' ? body.userId : '';
+    const email = typeof body?.email === 'string' ? body.email.trim() : '';
     const role = body?.role === 'owner' ? 'owner' : 'manager';
     if (!accountId || !/^[0-9a-fA-F-]{36}$/.test(accountId)) return NextResponse.json({ error: 'Invalid accountId' }, { status: 400 });
-    if (!userId || !/^[0-9a-fA-F-]{36}$/.test(userId)) return NextResponse.json({ error: 'Invalid userId' }, { status: 400 });
 
     const svc = createServiceClient();
 
@@ -47,29 +60,42 @@ export async function POST(req: NextRequest) {
     if (acctErr) return NextResponse.json({ error: acctErr.message }, { status: 500 });
     if (!acct) return NextResponse.json({ error: 'Account not found' }, { status: 404 });
 
-    // Ensure user exists in Auth
-    try {
-      const { data: userLookup } = await (svc as any).auth.admin.getUserById(userId);
-      if (!userLookup?.user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    let targetUserId = userId;
+
+    // Resolve user by email if provided
+    if (!targetUserId && email) {
+      try {
+        const { data: found } = await (svc as any).auth.admin.listUsers({ email });
+        if (found?.users?.length) {
+          targetUserId = found.users[0].id;
+        } else {
+          // Invite user and use returned id
+          const { data: invited, error: inviteErr } = await (svc as any).auth.admin.inviteUserByEmail(email);
+          if (inviteErr) return NextResponse.json({ error: inviteErr.message || 'Invite failed' }, { status: 500 });
+          targetUserId = invited?.user?.id;
+        }
+      } catch (err: any) {
+        return NextResponse.json({ error: err?.message || 'User lookup/invite failed' }, { status: 500 });
       }
-    } catch (err: any) {
-      return NextResponse.json({ error: err?.message || 'User lookup failed' }, { status: 500 });
+    }
+
+    if (!targetUserId || !/^[0-9a-fA-F-]{36}$/.test(targetUserId)) {
+      return NextResponse.json({ error: 'Invalid user target (userId or email required)' }, { status: 400 });
     }
 
     if (role === 'owner') {
-      const { error: updErr } = await svc.from('accounts').update({ owner_user_id: userId }).eq('id', accountId);
+      const { error: updErr } = await svc.from('accounts').update({ owner_user_id: targetUserId }).eq('id', accountId);
       if (updErr) return NextResponse.json({ error: updErr.message || 'Failed to set owner' }, { status: 500 });
       // Trigger will sync owner row in account_users
-      return NextResponse.json({ status: 'ok', role: 'owner', accountId, userId });
+      return NextResponse.json({ status: 'ok', role: 'owner', accountId, userId: targetUserId, invited: Boolean(email && userId === '') });
     }
 
     const { error: upsertErr } = await svc
       .from('account_users')
-      .upsert({ account_id: accountId, user_id: userId, role: 'manager' } as any, { onConflict: 'account_id,user_id' });
+      .upsert({ account_id: accountId, user_id: targetUserId, role: 'manager' } as any, { onConflict: 'account_id,user_id' });
     if (upsertErr) return NextResponse.json({ error: upsertErr.message || 'Failed to add member' }, { status: 500 });
 
-    return NextResponse.json({ status: 'ok', role: 'manager', accountId, userId });
+    return NextResponse.json({ status: 'ok', role: 'manager', accountId, userId: targetUserId, invited: Boolean(email && userId === '') });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Server error' }, { status: 500 });
   }
