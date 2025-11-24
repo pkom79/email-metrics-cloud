@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerUser } from '../../../../lib/supabase/auth';
 import { createServiceClient } from '../../../../lib/supabase/server';
+import { ServerClient } from 'postmark';
 
 export const runtime = 'nodejs';
 
@@ -65,11 +66,13 @@ export async function POST(req: NextRequest) {
     const svc = createServiceClient();
 
     // Verify account exists
-    const { data: acct, error: acctErr } = await svc.from('accounts').select('id').eq('id', accountId).maybeSingle();
+    const { data: acct, error: acctErr } = await svc.from('accounts').select('id,name,company').eq('id', accountId).maybeSingle();
     if (acctErr) return NextResponse.json({ error: acctErr.message }, { status: 500 });
     if (!acct) return NextResponse.json({ error: 'Account not found' }, { status: 404 });
+    const accountLabel = (acct as any)?.company || (acct as any)?.name || 'Account';
 
     let targetUserId = userId;
+    let targetEmail = email || '';
 
     // Resolve user by email if provided
     if (!targetUserId && email) {
@@ -77,11 +80,13 @@ export async function POST(req: NextRequest) {
         const { data: found } = await (svc as any).auth.admin.listUsers({ email });
         if (found?.users?.length) {
           targetUserId = found.users[0].id;
+          targetEmail = found.users[0].email || email;
         } else {
           // Invite user and use returned id
           const { data: invited, error: inviteErr } = await (svc as any).auth.admin.inviteUserByEmail(email);
           if (inviteErr) return NextResponse.json({ error: inviteErr.message || 'Invite failed' }, { status: 500 });
           targetUserId = invited?.user?.id;
+          targetEmail = email;
         }
       } catch (err: any) {
         return NextResponse.json({ error: err?.message || 'User lookup/invite failed' }, { status: 500 });
@@ -96,6 +101,11 @@ export async function POST(req: NextRequest) {
       const { error: updErr } = await svc.from('accounts').update({ owner_user_id: targetUserId }).eq('id', accountId);
       if (updErr) return NextResponse.json({ error: updErr.message || 'Failed to set owner' }, { status: 500 });
       // Trigger will sync owner row in account_users
+      if (!targetEmail) {
+        const lookup: any = await (svc as any).auth.admin.getUserById(targetUserId);
+        targetEmail = lookup?.data?.user?.email || lookup?.user?.email || '';
+      }
+      await sendAccessEmail(targetEmail, accountLabel, accountId, 'owner');
       return NextResponse.json({ status: 'ok', role: 'owner', accountId, userId: targetUserId, invited: Boolean(email && userId === '') });
     }
 
@@ -103,6 +113,12 @@ export async function POST(req: NextRequest) {
       .from('account_users')
       .upsert({ account_id: accountId, user_id: targetUserId, role: 'manager' } as any, { onConflict: 'account_id,user_id' });
     if (upsertErr) return NextResponse.json({ error: upsertErr.message || 'Failed to add member' }, { status: 500 });
+
+    if (!targetEmail) {
+      const lookup: any = await (svc as any).auth.admin.getUserById(targetUserId);
+      targetEmail = lookup?.data?.user?.email || lookup?.user?.email || '';
+    }
+    await sendAccessEmail(targetEmail, accountLabel, accountId, 'manager');
 
     return NextResponse.json({ status: 'ok', role: 'manager', accountId, userId: targetUserId, invited: Boolean(email && userId === '') });
   } catch (e: any) {
@@ -142,5 +158,35 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ status: 'removed' });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Server error' }, { status: 500 });
+  }
+}
+
+async function sendAccessEmail(to: string, accountLabel: string, accountId: string, role: 'owner' | 'manager') {
+  if (!to) return;
+  const POSTMARK_SERVER_TOKEN = process.env.POSTMARK_SERVER_TOKEN;
+  const POSTMARK_FROM = process.env.POSTMARK_FROM;
+  const POSTMARK_TEMPLATE_MEMBER_INVITED_ID = process.env.POSTMARK_TEMPLATE_MEMBER_INVITED_ID || process.env.POSTMARK_TEMPLATE_NOTIFICATION_ID;
+  const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://emailmetrics.io';
+  const ctaUrl = `${SITE_URL}/dashboard?account=${accountId}`;
+  if (!POSTMARK_SERVER_TOKEN || !POSTMARK_FROM || !POSTMARK_TEMPLATE_MEMBER_INVITED_ID) {
+    return;
+  }
+  try {
+    const client = new ServerClient(POSTMARK_SERVER_TOKEN);
+    await client.sendEmailWithTemplate({
+      From: POSTMARK_FROM,
+      To: to,
+      TemplateId: Number(POSTMARK_TEMPLATE_MEMBER_INVITED_ID),
+      MessageStream: process.env.POSTMARK_STREAM || 'outbound',
+      TemplateModel: {
+        brand_name: accountLabel,
+        cta_url: ctaUrl,
+        role: role === 'owner' ? 'owner' : 'manager',
+        headline: `You've been granted access to ${accountLabel}`,
+        cta_label: 'Open dashboard',
+      },
+    });
+  } catch {
+    // best-effort; ignore errors to avoid blocking admin flow
   }
 }
