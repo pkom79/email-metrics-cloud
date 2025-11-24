@@ -1567,12 +1567,15 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     return (
         <div className="min-h-screen relative">
             {showOverlay && (
-                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/30 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl px-8 py-6 shadow-2xl border border-gray-200 dark:border-gray-700 flex items-center gap-3">
-                        <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full" />
-                        <span className="text-gray-900 dark:text-gray-100 font-medium text-sm">Loading data…</span>
+                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+                    <div className="flex flex-col items-center gap-4 text-center px-4">
+                        <div className="relative h-12 w-12">
+                            <div className="absolute inset-0 rounded-full border-4 border-purple-200 border-t-purple-600 animate-spin" />
+                            <div className="absolute inset-2 rounded-full bg-white dark:bg-gray-900" />
+                        </div>
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Preparing your dashboard…</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs">We’re loading your latest reports and metrics. This usually takes just a few moments.</p>
                     </div>
-                    {/* Status line removed per spec */}
                 </div>
             )}
             {/* Header */}
