@@ -27,6 +27,8 @@ function SignupInner() {
     const [businessName, setBusinessName] = useState('');
     const [storeUrl, setStoreUrl] = useState('');
     const [country, setCountry] = useState('');
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
     const [mode, setMode] = useState<'signin' | 'signup'>(qpMode);
     const [accountType, setAccountType] = useState<'brand' | 'agency'>('brand');
     const [error, setError] = useState<string | null>(null);
@@ -129,6 +131,7 @@ function SignupInner() {
     }, [country]);
 
     const isGdprCountry = useMemo(() => GDPR_COUNTRIES.has(country), [country]); // informational only, no blocking
+    const invitedFlow = Boolean(search.get('invite') || search.get('account'));
 
     const normalizeStoreUrl = (value: string) => {
         if (!value) return '';
@@ -151,7 +154,13 @@ function SignupInner() {
                     password,
                     options: {
                         // Email confirmation disabled - user is immediately authenticated
-                        data: { businessName, storeUrl: normalizeStoreUrl(storeUrl), country }
+                        data: {
+                            businessName: invitedFlow ? null : businessName,
+                            storeUrl: invitedFlow ? null : normalizeStoreUrl(storeUrl),
+                            country: invitedFlow ? null : country,
+                            firstName,
+                            lastName
+                        }
                     }
                 });
                 if (error) {
@@ -291,8 +300,30 @@ function SignupInner() {
             {/* Account type selection removed (agencies retired) */}
             <form onSubmit={onSubmit} className="space-y-4">
                 {mode === 'signup' && (
-                    <>
-                        {
+                    <div className="space-y-3">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <label className="text-sm text-gray-700 dark:text-gray-300">First name</label>
+                            <label className="text-sm text-gray-700 dark:text-gray-300">Last name</label>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <input
+                                type="text"
+                                required
+                                placeholder="Jane"
+                                value={firstName}
+                                onChange={e => setFirstName(e.target.value)}
+                                className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            />
+                            <input
+                                type="text"
+                                required
+                                placeholder="Doe"
+                                value={lastName}
+                                onChange={e => setLastName(e.target.value)}
+                                className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            />
+                        </div>
+                        {!invitedFlow && (
                             <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 space-y-2">
                                 <div className="space-y-1">
                                     <label className="text-sm text-gray-700 dark:text-gray-300">Business name</label>
@@ -308,7 +339,7 @@ function SignupInner() {
                                     <input
                                         type="text"
                                         inputMode="url"
-                                       placeholder="e.g. yourstore.com"
+                                        placeholder="e.g. yourstore.com"
                                         value={storeUrl}
                                         onChange={e => setStoreUrl(e.target.value)}
                                         className="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -328,8 +359,8 @@ function SignupInner() {
                                     </div>
                                 </div>
                             </div>
-                        }
-                    </>
+                        )}
+                    </div>
                 )}
 
                 {/* Email / Password */}
