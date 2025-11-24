@@ -673,6 +673,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         (async () => {
             setIsInitialLoading(true);
             setInitialLoadComplete(false);
+            setAccountLoadInFlight(true);
+            setAccountHydrationAttempted(false);
             try {
                 (dm as any).clearAllData?.();
             } catch { /* ignore */ }
@@ -703,7 +705,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             })();
             if (!cancelled) {
                 if (success) setDataVersion(v => v + 1);
+                setAccountLoadInFlight(false);
+                setAccountHydrationAttempted(true);
                 setIsInitialLoading(false);
+                setInitialLoadComplete(true);
             }
         })();
         return () => { cancelled = true; };
@@ -787,7 +792,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 setMemberAccounts(list);
                 const qp = new URLSearchParams(window.location.search);
                 const qId = qp.get('account');
-                const initial = (qId && list.some((ac: { id: string }) => ac.id === qId)) ? qId : (list[0]?.id || '');
+                let initial = '';
+                if (qId && list.some((ac: { id: string }) => ac.id === qId)) {
+                    initial = qId;
+                } else if (list.length === 1) {
+                    initial = list[0].id;
+                }
                 setMemberSelectedId(initial);
                 // If user has no accessible accounts, clear any cached dataset immediately
                 if (!initial) {
@@ -809,43 +819,48 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         if (billingRequiresPlan && !billingLoading) {
             try { (dm as any).clearAllData?.(); } catch { }
             setIsInitialLoading(false);
+            setAccountLoadInFlight(false);
+            setAccountHydrationAttempted(false);
+            setInitialLoadComplete(true);
+            return;
+        }
+        if (!memberSelectedId) {
+            setIsInitialLoading(false);
+            setAccountLoadInFlight(false);
+            setAccountHydrationAttempted(false);
             setInitialLoadComplete(true);
             return;
         }
         let cancelled = false;
         (async () => {
             // If user picked a brand, hydrate from cache first; fall back to server CSVs
-            if (memberSelectedId) {
-                try {
-                    const hydrated = await dm.ensureHydrated();
-                    if (hydrated && dm.hasRealData()) {
-                        if (!cancelled) { setDataVersion(v => v + 1); setIsInitialLoading(false); }
-                        return;
-                    }
-                    const ok = await loadAccountData(dm, memberSelectedId);
-                    if (!cancelled) setIsInitialLoading(false);
-                    if (!cancelled && ok) setDataVersion(v => v + 1);
-                    return;
-                } catch { }
-            }
             try {
-                // If there is no selected account and we still have cached data, clear it
-                if (!memberSelectedId && (dm.getCampaigns().length || dm.getFlowEmails().length || dm.getSubscribers().length)) {
-                    try { (dm as any).clearAllData?.(); } catch { }
-                    setDataVersion(v => v + 1);
-                    setIsInitialLoading(false);
+                const hydrated = await dm.ensureHydrated();
+                if (hydrated && dm.hasRealData()) {
+                    if (!cancelled) { setDataVersion(v => v + 1); setIsInitialLoading(false); setAccountLoadInFlight(false); setAccountHydrationAttempted(true); setInitialLoadComplete(true); }
                     return;
                 }
-                const list = await fetch('/api/snapshots/list', { cache: 'no-store' });
-                if (!list.ok) { setIsInitialLoading(false); return; }
+                const ok = await loadAccountData(dm, memberSelectedId);
+                if (!cancelled) {
+                    setIsInitialLoading(false);
+                    setAccountLoadInFlight(false);
+                    setAccountHydrationAttempted(true);
+                    setInitialLoadComplete(true);
+                }
+                if (!cancelled && ok) setDataVersion(v => v + 1);
+                return;
+            } catch { }
+            try {
+                const list = await fetch(`/api/snapshots/list?account_id=${memberSelectedId}`, { cache: 'no-store' });
+                if (!list.ok) { setIsInitialLoading(false); setAccountLoadInFlight(false); setAccountHydrationAttempted(true); setInitialLoadComplete(true); return; }
                 const j = await list.json().catch(() => ({}));
                 const latest = (j.snapshots || []).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-                if (!latest?.id) { setIsInitialLoading(false); return; }
+                if (!latest?.id) { setIsInitialLoading(false); setAccountLoadInFlight(false); setAccountHydrationAttempted(true); setInitialLoadComplete(true); return; }
                 const csvTypes = ['campaigns', 'flows', 'subscribers'];
                 const csvFiles: Record<string, File> = {};
                 for (const t of csvTypes) {
                     try {
-                        const r = await fetch(`/api/snapshots/download-csv?type=${t}`, { cache: 'no-store' });
+                        const r = await fetch(`/api/snapshots/download-csv?type=${t}&account_id=${memberSelectedId}`, { cache: 'no-store' });
                         if (r.ok) {
                             const csv = await r.text();
                             if (csv.trim()) {
@@ -861,17 +876,29 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         if (cancelled) return;
                         setDataVersion(v => v + 1);
                         setIsInitialLoading(false);
+                        setAccountLoadInFlight(false);
+                        setAccountHydrationAttempted(true);
+                        setInitialLoadComplete(true);
                         window.dispatchEvent(new CustomEvent('em:dataset-hydrated'));
                     } else {
                         setDashboardError('Failed to process server data');
                         setIsInitialLoading(false);
+                        setAccountLoadInFlight(false);
+                        setAccountHydrationAttempted(true);
+                        setInitialLoadComplete(true);
                     }
                 } else {
                     setIsInitialLoading(false);
+                    setAccountLoadInFlight(false);
+                    setAccountHydrationAttempted(true);
+                    setInitialLoadComplete(true);
                 }
             } catch (e: any) {
                 setDashboardError(`Failed to load data: ${e?.message || 'Unknown'}`);
                 setIsInitialLoading(false);
+                setAccountLoadInFlight(false);
+                setAccountHydrationAttempted(true);
+                setInitialLoadComplete(true);
             }
         })();
         return () => { cancelled = true };
@@ -929,10 +956,20 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     // Track loading state per account selection
     const [accountLoadInFlight, setAccountLoadInFlight] = useState<boolean>(false);
+    const [accountHydrationAttempted, setAccountHydrationAttempted] = useState<boolean>(false);
     useEffect(() => {
-        // Reset load state on account change
+        setAccountHydrationAttempted(false);
         setAccountLoadInFlight(Boolean(activeAccountId));
-    }, [activeAccountId]);
+        if (!activeAccountId) {
+            try { (dm as any).clearAllData?.(); } catch { /* ignore */ }
+            setDataVersion(v => v + 1);
+            setIsInitialLoading(false);
+            return;
+        }
+        try { (dm as any).clearAllData?.(); } catch { /* ignore */ }
+        setDataVersion(v => v + 1);
+        setInitialLoadComplete(false);
+    }, [activeAccountId, dm]);
     useEffect(() => {
         if (dataHydrated) setAccountLoadInFlight(false);
     }, [dataHydrated]);
@@ -1493,31 +1530,19 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     // If admin and there are zero accounts, don't block UI with overlay after initial load
     const noAccounts = isAdmin && (allAccounts?.length === 0);
-    const showOverlay = ((isInitialLoading || (!dataHydrated && !initialLoadComplete) || forceDataOverlay) && !noAccounts && !blockDashboard);
+    const showOverlay = (forceDataOverlay && !noAccounts && !blockDashboard);
 
     if (dashboardError) { return <div className="min-h-screen flex items-center justify-center p-6"><div className="max-w-md mx-auto text-center"><h2 className="text-lg font-semibold text-red-600 mb-4">Dashboard Error</h2><p className="text-gray-600 dark:text-gray-300 mb-6">{dashboardError}</p><div className="space-x-4"><button onClick={() => { setDashboardError(null); setDataVersion(v => v + 1); }} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Retry</button><button onClick={() => window.location.reload()} className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Reload Page</button></div></div></div>; }
 
     // Forced empty view (still respects header/footer from layout)
     if (forceEmpty) return <div className="min-h-screen" />;
 
-    // Unified loading gate: ensure initial hydration attempts (or fallback) ran
-    if ((!initialLoadComplete && !isAdmin && !blockDashboard) || (isAdmin && isInitialLoading)) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                <div className="flex flex-col items-center gap-4 text-center">
-                    <div className="relative h-12 w-12">
-                        <div className="absolute inset-0 rounded-full border-4 border-purple-200 border-t-purple-600 animate-spin" />
-                        <div className="absolute inset-2 rounded-full bg-white dark:bg-gray-900" />
-                    </div>
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Preparing your dashboard…</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs">We’re loading your latest reports and metrics. This usually takes just a few moments.</p>
-                </div>
-            </div>
-        );
-    }
+    const showSelectAccountState = !HAS_ACTIVE_ACCOUNT;
+    const showLoadingState = HAS_ACTIVE_ACCOUNT && accountLoadInFlight;
+    const showNoDataState = HAS_ACTIVE_ACCOUNT && !accountLoadInFlight && !dataHydrated && accountHydrationAttempted;
 
     // No account selected or no data: show guidance before rendering dashboard
-    if ((!HAS_ACTIVE_ACCOUNT || !dataHydrated) && initialLoadComplete) {
+    if (showSelectAccountState || showLoadingState || showNoDataState) {
         const label = activeAccountLabel || 'this account';
         return (
             <div className="min-h-screen flex flex-col items-center bg-gray-50 dark:bg-gray-900 px-4 py-8 gap-4">
@@ -1552,21 +1577,20 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         </div>
                     )}
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                        {!HAS_ACTIVE_ACCOUNT
+                        {showSelectAccountState
                             ? 'Select an account to view your dashboard'
-                            : accountLoadInFlight
+                            : showLoadingState
                                 ? `Loading data for ${label}`
                                 : `No data for ${label}`
                         }
                     </h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                    {!HAS_ACTIVE_ACCOUNT
-                        ? 'Pick a brand you have access to. If you were invited, select that brand to see its reports.'
-                        : accountLoadInFlight
-                            ? 'Fetching your reports and metrics. This may take a few moments.'
-                            : 'Upload CSV reports to view metrics for this brand.'
-                    }
-                    </p>
+                    {showSelectAccountState ? null : (
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                            {showLoadingState
+                                ? 'Fetching your reports and metrics. This may take a few moments.'
+                                : 'Upload CSV reports to view metrics for this brand.'}
+                        </p>
+                    )}
                     <div className="flex items-center justify-center">
                         <button
                             type="button"
@@ -1609,8 +1633,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <div className="absolute inset-0 rounded-full border-4 border-indigo-200 border-t-indigo-500 animate-spin" />
                         <div className="absolute inset-2 rounded-full bg-white dark:bg-gray-900" />
                     </div>
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Preparing your dashboard…</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs">We’re loading your latest reports and metrics. This usually takes just a few moments.</p>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Checking your plan…</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs">We’re confirming your subscription status so you can access the dashboard.</p>
                 </div>
                 {showPlansModal && (
                     <ModalPlans
@@ -1638,8 +1662,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             <div className="absolute inset-0 rounded-full border-4 border-purple-200 border-t-purple-600 animate-spin" />
                             <div className="absolute inset-2 rounded-full bg-white dark:bg-gray-900" />
                         </div>
-                        <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Preparing your dashboard…</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs">We’re loading your latest reports and metrics. This usually takes just a few moments.</p>
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Unlocking your dashboard…</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xs">We’re finalizing access so you can keep working.</p>
                     </div>
                 </div>
             )}
@@ -1659,6 +1683,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     <>
                                         {memberAccounts.length > 1 && (
                                             <SelectBase value={memberSelectedId} onChange={e => { const v = (e.target as HTMLSelectElement).value; setMemberSelectedId(v); const url = new URL(window.location.href); if (v) url.searchParams.set('account', v); else url.searchParams.delete('account'); window.history.replaceState(null, '', url.toString()); }} className="w-full sm:w-auto text-sm" minWidthClass="sm:min-w-[240px]">
+                                                <option value="">Select account</option>
                                                 {memberAccounts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
                                             </SelectBase>
                                         )}
