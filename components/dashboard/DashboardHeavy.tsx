@@ -936,11 +936,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         }
     }, [forceDataOverlay, blockDashboard, dataHydrated]);
     const hasData = dataHydrated;
-    useEffect(() => {
-        if (showUploadModal && dataHydrated && HAS_ACTIVE_ACCOUNT && !accountLoadInFlight) {
-            setShowUploadModal(false);
-        }
-    }, [showUploadModal, dataHydrated, HAS_ACTIVE_ACCOUNT, accountLoadInFlight]);
     // Active account resolution
     const EFFECTIVE_ACCOUNT_ID = useMemo(
         () => (isAdmin ? (selectedAccountId || '') : (memberSelectedId || '')),
@@ -952,6 +947,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         if (!memberSelectedId) return false;
         return memberAccounts.some(a => a.id === memberSelectedId);
     }, [isAdmin, selectedAccountId, memberBrandsLoaded, memberSelectedId, memberAccounts]);
+
+    useEffect(() => {
+        if (showUploadModal && dataHydrated && HAS_ACTIVE_ACCOUNT && !accountLoadInFlight) {
+            setShowUploadModal(false);
+        }
+    }, [showUploadModal, dataHydrated, HAS_ACTIVE_ACCOUNT, accountLoadInFlight]);
 
     // Track loading state per account selection
     const [accountLoadInFlight, setAccountLoadInFlight] = useState<boolean>(false);
