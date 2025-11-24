@@ -43,6 +43,8 @@ export default function ModalPlans({
     onClaimFreeAccess,
     claimingFreeAccess
 }: Props) {
+    // Suspend modal entirely for now
+    return null;
     const overlayRef = useRef<HTMLDivElement | null>(null);
     const hasRequestedFreeUnlock = useRef(false);
     const [showScheduler, setShowScheduler] = useState(false);
