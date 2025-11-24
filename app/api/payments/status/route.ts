@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
 
         const isOwner = account.owner_user_id === user.id;
         const isAdmin = (user.user_metadata as any)?.role === 'admin' || (user.app_metadata as any)?.role === 'admin' || (user.app_metadata as any)?.app_role === 'admin';
+        let isMember = false;
         if (!isOwner && !isAdmin) {
             const { data: membership, error: memberErr } = await svc
                 .from('account_users')
@@ -59,7 +60,8 @@ export async function GET(req: NextRequest) {
             if (memberErr) {
                 return NextResponse.json({ error: memberErr.message || 'Forbidden' }, { status: 403 });
             }
-            if ((membership as any)?.role !== 'owner') {
+            isMember = Boolean(membership);
+            if (!isMember) {
                 return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
             }
         }
@@ -75,7 +77,8 @@ export async function GET(req: NextRequest) {
                 subscriptionId: account.stripe_subscription_id,
                 hasCustomer: !!account.stripe_customer_id
             },
-            portalLoginUrl: process.env.NEXT_PUBLIC_STRIPE_PORTAL_LOGIN_URL || null
+            portalLoginUrl: process.env.NEXT_PUBLIC_STRIPE_PORTAL_LOGIN_URL || null,
+            canManage: isOwner || isAdmin
         };
 
         if (isComped) {
