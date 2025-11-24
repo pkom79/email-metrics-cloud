@@ -141,7 +141,7 @@ function SignupInner() {
         return v.toLowerCase();
     };
 
-    const authWithRetry = async <T>(fn: () => Promise<{ data: T; error: any }>, label: string) => {
+    async function authWithRetry<T>(fn: () => Promise<{ data: T; error: any }>, label: string) {
         let lastError: any = null;
         for (let attempt = 0; attempt < 3; attempt++) {
             const res = await fn();
@@ -157,7 +157,7 @@ function SignupInner() {
             break;
         }
         throw lastError;
-    };
+    }
 
     const onSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
