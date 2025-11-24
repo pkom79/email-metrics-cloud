@@ -49,7 +49,19 @@ export async function GET(req: NextRequest) {
         const isOwner = account.owner_user_id === user.id;
         const isAdmin = (user.user_metadata as any)?.role === 'admin' || (user.app_metadata as any)?.role === 'admin' || (user.app_metadata as any)?.app_role === 'admin';
         if (!isOwner && !isAdmin) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+            const { data: membership, error: memberErr } = await svc
+                .from('account_users')
+                .select('role')
+                .eq('account_id', accountId)
+                .eq('user_id', user.id)
+                .limit(1)
+                .maybeSingle();
+            if (memberErr) {
+                return NextResponse.json({ error: memberErr.message || 'Forbidden' }, { status: 403 });
+            }
+            if ((membership as any)?.role !== 'owner') {
+                return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+            }
         }
 
         const isComped = (account as any).billing_mode === 'admin_free';

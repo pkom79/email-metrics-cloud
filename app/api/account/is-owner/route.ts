@@ -27,7 +27,20 @@ export async function GET(req: NextRequest) {
       if (error) {
         return NextResponse.json({ error: error.message || 'Failed' }, { status: 500 });
       }
-      return NextResponse.json({ isOwnerOf: data?.owner_user_id === user.id });
+      if (data?.owner_user_id === user.id) {
+        return NextResponse.json({ isOwnerOf: true });
+      }
+      const { data: member, error: memberErr } = await svc
+        .from('account_users')
+        .select('role')
+        .eq('account_id', accountId)
+        .eq('user_id', user.id)
+        .limit(1)
+        .maybeSingle();
+      if (memberErr) {
+        return NextResponse.json({ error: memberErr.message || 'Failed' }, { status: 500 });
+      }
+      return NextResponse.json({ isOwnerOf: (member?.role as any) === 'owner' });
     }
 
     const { data } = await svc
@@ -36,7 +49,19 @@ export async function GET(req: NextRequest) {
       .eq('owner_user_id', user.id)
       .limit(1);
     const ownsAny = Array.isArray(data) && data.length > 0;
-    return NextResponse.json({ ownsAny, firstAccountId: ownsAny ? data![0].id : undefined });
+    let firstAccountId = ownsAny ? data![0].id : undefined;
+    if (!ownsAny) {
+      const { data: memberAcct } = await svc
+        .from('account_users')
+        .select('account_id')
+        .eq('user_id', user.id)
+        .eq('role', 'owner')
+        .limit(1);
+      if (Array.isArray(memberAcct) && memberAcct.length > 0) {
+        firstAccountId = (memberAcct as any)[0].account_id;
+      }
+    }
+    return NextResponse.json({ ownsAny: Boolean(firstAccountId), firstAccountId });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 });
   }

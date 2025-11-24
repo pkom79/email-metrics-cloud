@@ -50,24 +50,30 @@ export async function POST(request: Request) {
       const { data: acct } = await supabase.from('accounts').select('id').eq('owner_user_id', user.id).limit(1).maybeSingle();
       if (acct?.id) {
         accountId = acct.id;
-        console.log('link-pending-uploads: Found existing account:', accountId);
+        console.log('link-pending-uploads: Found existing owned account:', accountId);
       } else {
-        console.log('link-pending-uploads: Creating new account for user:', user.id);
-        const md = (user.user_metadata as any) || {};
-        const name = (md.name as string)?.trim() || user.email || 'My Account';
-        const businessName = (md.businessName as string)?.trim() || '';
-        const country = (md.country as string)?.trim() || null;
-        const insertPayload: any = { owner_user_id: user.id, name };
-        if (businessName) insertPayload.company = businessName;
-        if (country) insertPayload.country = country;
-        console.log('link-pending-uploads: Account payload:', insertPayload);
-        const { data: created, error: createErr } = await supabase.from('accounts').insert(insertPayload).select('id').single();
-        if (createErr || !created) {
-          console.error('link-pending-uploads: Failed to create account:', createErr?.message);
-          return NextResponse.json({ error: 'Failed to create account', details: createErr?.message }, { status: 500 });
+        const { data: memberAcct } = await supabase.from('account_users').select('account_id').eq('user_id', user.id).limit(1);
+        if (memberAcct && memberAcct.length) {
+          accountId = (memberAcct as any)[0].account_id;
+          console.log('link-pending-uploads: Using member account:', accountId);
+        } else {
+          console.log('link-pending-uploads: Creating new account for user:', user.id);
+          const md = (user.user_metadata as any) || {};
+          const name = (md.name as string)?.trim() || user.email || 'My Account';
+          const businessName = (md.businessName as string)?.trim() || '';
+          const country = (md.country as string)?.trim() || null;
+          const insertPayload: any = { owner_user_id: user.id, name };
+          if (businessName) insertPayload.company = businessName;
+          if (country) insertPayload.country = country;
+          console.log('link-pending-uploads: Account payload:', insertPayload);
+          const { data: created, error: createErr } = await supabase.from('accounts').insert(insertPayload).select('id').single();
+          if (createErr || !created) {
+            console.error('link-pending-uploads: Failed to create account:', createErr?.message);
+            return NextResponse.json({ error: 'Failed to create account', details: createErr?.message }, { status: 500 });
+          }
+          accountId = created.id;
+          console.log('link-pending-uploads: Created new account:', accountId);
         }
-        accountId = created.id;
-        console.log('link-pending-uploads: Created new account:', accountId);
       }
     }
 

@@ -6,6 +6,25 @@ import { ingestBucketName } from '../../../../lib/storage/ingest';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+async function hasAccountAccess(svc: ReturnType<typeof createServiceClient>, userId: string, accountId: string): Promise<boolean> {
+  const { data: acct, error: acctErr } = await svc
+    .from('accounts')
+    .select('owner_user_id')
+    .eq('id', accountId)
+    .limit(1)
+    .maybeSingle();
+  if (acctErr || !acct) return false;
+  if ((acct as any).owner_user_id === userId) return true;
+  const { data: membership } = await svc
+    .from('account_users')
+    .select('role')
+    .eq('account_id', accountId)
+    .eq('user_id', userId)
+    .limit(1)
+    .maybeSingle();
+  return Boolean(membership);
+}
+
 export async function GET(request: Request) {
     try {
         console.log('CSV Download - Starting request');
@@ -41,9 +60,24 @@ export async function GET(request: Request) {
         if (overrideAccountId && admin && /^[0-9a-fA-F-]{36}$/.test(overrideAccountId)) {
             targetAccountId = overrideAccountId;
         } else {
-            const { data: own } = await supabase.from('accounts').select('id').eq('owner_user_id', user.id).limit(1);
-            if (own && own.length) {
-                targetAccountId = own[0].id;
+            // If accountId provided, honor it when member/owner
+            if (overrideAccountId && /^[0-9a-fA-F-]{36}$/.test(overrideAccountId)) {
+                const allowed = await hasAccountAccess(supabase, user.id, overrideAccountId);
+                if (allowed) {
+                    targetAccountId = overrideAccountId;
+                }
+            }
+            if (!targetAccountId) {
+                const { data: own } = await supabase.from('accounts').select('id').eq('owner_user_id', user.id).order('created_at', { ascending: true }).limit(1);
+                if (own && own.length) {
+                    targetAccountId = own[0].id;
+                }
+            }
+            if (!targetAccountId) {
+                const { data: member } = await supabase.from('account_users').select('account_id').eq('user_id', user.id).limit(1);
+                if (member && member.length) {
+                    targetAccountId = (member as any)[0].account_id;
+                }
             }
             if (!targetAccountId) {
                 return NextResponse.json({ error: 'No accessible account found' }, { status: 404 });

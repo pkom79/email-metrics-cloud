@@ -34,7 +34,16 @@ export async function POST(request: Request) {
             if (acctErr) throw acctErr;
             if (!candidate) return NextResponse.json({ error: 'Account not found' }, { status: 404 });
             if (!isAdmin && candidate.owner_user_id !== user.id) {
-                return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+                const { data: membership } = await supabase
+                    .from('account_users')
+                    .select('role')
+                    .eq('account_id', accountId)
+                    .eq('user_id', user.id)
+                    .limit(1)
+                    .maybeSingle();
+                if (!membership) {
+                    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+                }
             }
             accountId = candidate.id;
         } else {
@@ -47,6 +56,16 @@ export async function POST(request: Request) {
                 .maybeSingle();
             if (acctSelErr) throw acctSelErr;
             accountId = acctRow?.id as string | undefined;
+            if (!accountId) {
+                const { data: memberRow } = await supabase
+                    .from('account_users')
+                    .select('account_id')
+                    .eq('user_id', user.id)
+                    .limit(1);
+                if (memberRow && memberRow.length) {
+                    accountId = (memberRow as any)[0].account_id;
+                }
+            }
         }
 
         if (!accountId) {

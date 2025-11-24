@@ -51,8 +51,22 @@ export async function POST(req: Request) {
     if (!account) {
       return NextResponse.json({ error: 'Account not found' }, { status: 404 });
     }
-    if (!isAdmin && account.owner_user_id !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!isAdmin) {
+      if (account.owner_user_id === user.id) {
+        // ok
+      } else {
+        const { data: membership } = await supabase
+          .from('account_users')
+          .select('role')
+          .eq('account_id', targetAccountId)
+          .eq('user_id', user.id)
+          .limit(1)
+          .maybeSingle();
+        const isOwnerRole = (membership as any)?.role === 'owner';
+        if (!isOwnerRole) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+      }
     }
 
     const updates: Record<string, string | null> = {

@@ -9,8 +9,24 @@ export async function GET(_req: NextRequest) {
     const user = await getServerUser();
     if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
     const supabase = createServiceClient();
-    const { data: acct } = await supabase.from('accounts').select('id').eq('owner_user_id', user.id).maybeSingle();
-    const accountId = (acct as any)?.id as string | undefined;
+    const { data: acct } = await supabase
+      .from('accounts')
+      .select('id')
+      .eq('owner_user_id', user.id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    let accountId = (acct as any)?.id as string | undefined;
+    if (!accountId) {
+      const { data: member } = await supabase
+        .from('account_users')
+        .select('account_id')
+        .eq('user_id', user.id)
+        .limit(1);
+      if (member && member.length) {
+        accountId = (member as any)[0].account_id;
+      }
+    }
     if (!accountId) return new Response(JSON.stringify({ error: 'NoAccount' }), { status: 404 });
     const { data: snap } = await supabase
       .from('snapshots')
@@ -24,4 +40,3 @@ export async function GET(_req: NextRequest) {
     return new Response(JSON.stringify({ error: 'Unexpected error', details: String(err?.message || err) }), { status: 500 });
   }
 }
-

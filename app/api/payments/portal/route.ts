@@ -30,8 +30,21 @@ export async function POST(req: NextRequest) {
         if (!account) {
             return NextResponse.json({ error: 'Account not found' }, { status: 404 });
         }
-        if (account.owner_user_id !== user.id) {
-            return NextResponse.json({ error: 'Only the account owner can manage billing' }, { status: 403 });
+        const isAdmin = (user.app_metadata as any)?.role === 'admin' || (user.app_metadata as any)?.app_role === 'admin';
+        if (!isAdmin && account.owner_user_id !== user.id) {
+            const { data: membership, error: memberErr } = await svc
+                .from('account_users')
+                .select('role')
+                .eq('account_id', accountId)
+                .eq('user_id', user.id)
+                .limit(1)
+                .maybeSingle();
+            if (memberErr) {
+                return NextResponse.json({ error: memberErr.message || 'Only the account owner can manage billing' }, { status: 403 });
+            }
+            if ((membership as any)?.role !== 'owner') {
+                return NextResponse.json({ error: 'Only the account owner can manage billing' }, { status: 403 });
+            }
         }
         if (!account.stripe_customer_id) {
             return NextResponse.json({ error: 'No billing customer ID' }, { status: 400 });

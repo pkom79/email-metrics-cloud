@@ -61,10 +61,17 @@ export async function POST(request: Request) {
                 .eq('id', accountId!)
                 .maybeSingle();
             if (acctErr) throw acctErr;
-            if (!acct || (acct as any).owner_user_id !== user.id) {
-                // Allow admin role
-                const isAdmin = user.app_metadata?.role === 'admin';
-                if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+            const isOwner = acct && (acct as any).owner_user_id === user.id;
+            const isAdminRole = user.app_metadata?.role === 'admin' || (user.app_metadata as any)?.app_role === 'admin';
+            if (!isOwner && !isAdminRole) {
+                const { data: membership } = await supabase
+                    .from('account_users')
+                    .select('role')
+                    .eq('account_id', accountId!)
+                    .eq('user_id', user.id)
+                    .limit(1)
+                    .maybeSingle();
+                if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
             }
         }
 

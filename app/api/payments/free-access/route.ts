@@ -30,7 +30,19 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Account not found' }, { status: 404 });
         }
         if (account.owner_user_id !== user.id) {
-            return NextResponse.json({ error: 'Only the account owner can unlock access' }, { status: 403 });
+            const { data: membership, error: memberErr } = await svc
+                .from('account_users')
+                .select('role')
+                .eq('account_id', accountId)
+                .eq('user_id', user.id)
+                .limit(1)
+                .maybeSingle();
+            if (memberErr) {
+                return NextResponse.json({ error: memberErr.message || 'Only the account owner can unlock access' }, { status: 403 });
+            }
+            if ((membership as any)?.role !== 'owner') {
+                return NextResponse.json({ error: 'Only the account owner can unlock access' }, { status: 403 });
+            }
         }
         if ((account as any).billing_mode === 'admin_free') {
             return NextResponse.json({ status: 'already_free' });

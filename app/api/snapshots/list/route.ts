@@ -4,6 +4,49 @@ import { createServiceClient } from '../../../../lib/supabase/server';
 
 export const runtime = 'nodejs';
 
+async function resolveAccountIdForUser(
+    svc: ReturnType<typeof createServiceClient>,
+    userId: string,
+    requestedId: string | null
+): Promise<{ accountId: string | null; error?: { message: string; status: number } }> {
+    if (requestedId) {
+        const { data: acct, error: acctErr } = await svc
+            .from('accounts')
+            .select('id, owner_user_id')
+            .eq('id', requestedId)
+            .maybeSingle();
+        if (acctErr) return { accountId: null, error: { message: acctErr.message, status: 500 } };
+        if (!acct) return { accountId: null, error: { message: 'Account not found', status: 404 } };
+        if (acct.owner_user_id === userId) return { accountId: acct.id };
+        const { data: membership } = await svc
+            .from('account_users')
+            .select('role')
+            .eq('account_id', requestedId)
+            .eq('user_id', userId)
+            .limit(1)
+            .maybeSingle();
+        if (membership) return { accountId: acct.id };
+        return { accountId: null, error: { message: 'No access to account', status: 403 } };
+    }
+
+    const { data: own } = await svc
+        .from('accounts')
+        .select('id')
+        .eq('owner_user_id', userId)
+        .order('created_at', { ascending: true })
+        .limit(1);
+    if (own && own.length) return { accountId: own[0].id };
+
+    const { data: member } = await svc
+        .from('account_users')
+        .select('account_id')
+        .eq('user_id', userId)
+        .limit(1);
+    if (member && member.length) return { accountId: (member as any)[0].account_id };
+
+    return { accountId: null };
+}
+
 export async function GET(request: Request) {
     try {
         const user = await getServerUser();
@@ -21,14 +64,14 @@ export async function GET(request: Request) {
         }
 
         if (!targetAccountId) {
-            const { data: own } = await supabase.from('accounts').select('id').eq('owner_user_id', user.id).limit(1);
-            if (own && own.length) {
-                targetAccountId = own[0].id;
+            const resolved = await resolveAccountIdForUser(supabase, user.id, overrideAccountId);
+            if (resolved.error) {
+                return NextResponse.json({ error: resolved.error.message }, { status: resolved.error.status });
             }
-        }
-
-        if (!targetAccountId) {
-            return NextResponse.json({ snapshots: [] });
+            targetAccountId = resolved.accountId;
+            if (!targetAccountId) {
+                return NextResponse.json({ snapshots: [] });
+            }
         }
 
         const { data: snaps, error: snapsErr } = await supabase
