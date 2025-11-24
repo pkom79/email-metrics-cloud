@@ -1525,56 +1525,50 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     }
 
     // No account selected or no data: show guidance before rendering dashboard
-    if (!HAS_ACTIVE_ACCOUNT && initialLoadComplete) {
+    if ((!HAS_ACTIVE_ACCOUNT || !dataHydrated) && initialLoadComplete) {
+        const label = activeAccountLabel || 'this account';
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm px-6 py-8 max-w-lg w-full text-center space-y-5">
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Select an account to view your dashboard</h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">Pick a brand you have access to. If you were invited, select that brand to see its reports.</p>
-                    <div className="flex items-center justify-center">
-                        {isAdmin ? (
-                            <div className="w-full max-w-sm">
-                                <AdminAccountPicker
-                                    accounts={allAccounts || []}
-                                    value={selectedAccountId}
-                                    onChange={handleAdminAccountChange}
-                                    placeholder="Select account"
-                                    disabled={!!accountsError}
-                                />
-                            </div>
-                        ) : (
-                            <SelectBase
-                                value={memberSelectedId}
-                                onChange={e => setMemberSelectedId((e.target as HTMLSelectElement).value)}
-                                className="w-full max-w-sm text-sm"
-                                minWidthClass="sm:min-w-[260px]"
-                            >
-                                <option value="">Select account</option>
-                                {memberAccounts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
-                            </SelectBase>
-                        )}
-                    </div>
+            <div className="min-h-screen flex flex-col items-center bg-gray-50 dark:bg-gray-900 px-4 py-8 gap-4">
+                <div className="w-full max-w-3xl flex items-center justify-center gap-3">
+                    {isAdmin ? (
+                        <div className="w-full max-w-sm">
+                            <AdminAccountPicker
+                                accounts={allAccounts || []}
+                                value={selectedAccountId}
+                                onChange={handleAdminAccountChange}
+                                placeholder="Select account"
+                                disabled={!!accountsError}
+                            />
+                        </div>
+                    ) : (
+                        <SelectBase
+                            value={memberSelectedId}
+                            onChange={e => setMemberSelectedId((e.target as HTMLSelectElement).value)}
+                            className="w-full max-w-sm text-sm"
+                            minWidthClass="sm:min-w-[260px]"
+                        >
+                            <option value="">Select account</option>
+                            {memberAccounts.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+                        </SelectBase>
+                    )}
                 </div>
-            </div>
-        );
-    }
-
-    if (!dataHydrated && initialLoadComplete) {
-        const label = activeAccountLabel || 'This account';
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm px-6 py-8 max-w-xl w-full text-center space-y-5">
+                <div className="flex flex-col items-center justify-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm px-8 py-10 max-w-xl w-full text-center space-y-5">
                     <div className="relative h-12 w-12 mx-auto">
                         <div className="absolute inset-0 rounded-full border-4 border-purple-200 border-t-purple-600 animate-spin" />
                         <div className="absolute inset-2 rounded-full bg-white dark:bg-gray-800" />
                     </div>
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">No data for {label}</h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">Upload CSV reports to view metrics for this brand.</p>
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                        {HAS_ACTIVE_ACCOUNT ? `No data for ${label}` : 'Select an account to view your dashboard'}
+                    </h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                        {HAS_ACTIVE_ACCOUNT ? 'Upload CSV reports to view metrics for this brand.' : 'Pick a brand you have access to. If you were invited, select that brand to see its reports.'}
+                    </p>
                     <div className="flex items-center justify-center">
                         <button
                             type="button"
+                            disabled={!HAS_ACTIVE_ACCOUNT}
                             onClick={() => setShowUploadModal(true)}
-                            className="inline-flex items-center justify-center rounded-lg px-5 py-2.5 text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700"
+                            className={`inline-flex items-center justify-center rounded-lg px-5 py-2.5 text-sm font-semibold text-white ${HAS_ACTIVE_ACCOUNT ? 'bg-purple-600 hover:bg-purple-700' : 'bg-purple-400 cursor-not-allowed opacity-70'}`}
                         >
                             Upload CSV reports
                         </button>
