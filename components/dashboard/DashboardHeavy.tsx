@@ -731,7 +731,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         const refreshLastUpdate = async () => {
             try { const r = await fetch('/api/snapshots/last/self', { cache: 'no-store' }); const j = await r.json().catch(() => ({})); if (j?.latest) setLastUpdate({ at: j.latest.created_at, source: j.latest.label }); } catch { }
         };
-        const onCreated = () => { setDataVersion(v => v + 1); setShowUploadModal(false); refreshLastUpdate(); };
+        const onCreated = () => { setDataVersion(v => v + 1); setAccountLoadInFlight(true); setAccountHydrationAttempted(false); refreshLastUpdate(); };
         const onHydrated = () => { setDataVersion(v => v + 1); setIsInitialLoading(false); refreshLastUpdate(); };
         window.addEventListener('em:snapshot-created', onCreated as EventListener);
         window.addEventListener('em:dataset-hydrated', onHydrated as EventListener);
@@ -755,6 +755,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     useEffect(() => {
         if (!isAdmin) return;
         const onSnapshotCreated = () => {
+            setAccountLoadInFlight(true);
+            setAccountHydrationAttempted(false);
             setAdminHydrateTick(t => t + 1);
         };
         const onDatasetHydrated = () => {
@@ -770,12 +772,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     }, [isAdmin]);
 
     useEffect(() => {
-        const onDatasetHydrated = () => {
+        if (showUploadModal && dataHydrated && HAS_ACTIVE_ACCOUNT && !accountLoadInFlight) {
             setShowUploadModal(false);
-        };
-        window.addEventListener('em:dataset-hydrated', onDatasetHydrated as EventListener);
-        return () => window.removeEventListener('em:dataset-hydrated', onDatasetHydrated as EventListener);
-    }, []);
+        }
+    }, [showUploadModal, dataHydrated, HAS_ACTIVE_ACCOUNT, accountLoadInFlight]);
 
     // Load accessible brands (owner + members + any agency-entitled) and default-select
     useEffect(() => {
