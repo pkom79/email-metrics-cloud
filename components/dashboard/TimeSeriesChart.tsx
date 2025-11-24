@@ -2,12 +2,13 @@
 import React, { useMemo, useState } from 'react';
 import SelectBase from "../ui/SelectBase";
 import TooltipPortal from "../TooltipPortal";
-import { ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
+import { ArrowUp, ArrowDown, ArrowRight, BarChart2, TrendingUp } from 'lucide-react';
 import { computeAxisMax, thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
 import { DataManager } from '../../lib/data/dataManager';
 
 type Granularity = 'daily' | 'weekly' | 'monthly';
 type CompareMode = 'prev-period' | 'prev-year';
+type ChartType = 'line' | 'bar';
 
 export type MetricKey = 'revenue' | 'avgOrderValue' | 'revenuePerEmail' | 'openRate' | 'clickRate' | 'clickToOpenRate' | 'emailsSent' | 'totalOrders' | 'conversionRate' | 'unsubscribeRate' | 'spamRate' | 'bounceRate';
 
@@ -49,10 +50,26 @@ const fmt = {
 
 export default function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigValue, primary, compare = null, colorHue = '#8b5cf6', darkColorHue, valueType, granularity, compareMode = 'prev-period', idSuffix = 'tsc', headerChange, headerIsPositive, headerPreviousValue, headerPreviousPeriod }: TimeSeriesChartProps) {
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+    const [chartType, setChartType] = useState<ChartType>('line');
     const width = 850; const height = 200; const innerH = 140; const padLeft = 72; const padRight = 20; const innerW = width - padLeft - padRight;
 
     const maxVal = useMemo(() => computeAxisMax(primary.map(p => Math.max(0, p.value)), (compare || undefined) ? (compare || []).map(p => Math.max(0, p.value)) : null, valueType === 'percentage' ? 'percentage' : (valueType as any)), [primary, compare, valueType]);
     const xScale = (i: number) => primary.length <= 1 ? padLeft + innerW / 2 : padLeft + (i / (primary.length - 1)) * innerW;
+    
+    // Bar chart helpers
+    const barWidth = useMemo(() => {
+        const count = primary.length;
+        if (count <= 1) return 40;
+        const available = innerW / count;
+        return Math.max(4, Math.min(40, available * 0.7));
+    }, [primary.length, innerW]);
+    
+    const xBar = (i: number) => {
+        const count = primary.length;
+        const step = innerW / count;
+        return padLeft + (i * step) + (step - barWidth) / 2;
+    };
+
     const yScale = (v: number) => {
         const y = innerH - (Math.max(0, v) / maxVal) * (innerH - 10);
         return Math.min(innerH, Math.max(0, y));
@@ -124,7 +141,26 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
     return (
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 mb-8">
             {/* Top controls: dropdown on right (no internal title) */}
-            <div className="flex items-start justify-end mb-3">
+            <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2">
+                    <h3 className="text-base font-medium text-gray-500 dark:text-gray-400">{title}</h3>
+                    <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5 border border-gray-200 dark:border-gray-700">
+                        <button
+                            onClick={() => setChartType('line')}
+                            className={`p-1 rounded-md transition-colors ${chartType === 'line' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                            title="Line Chart"
+                        >
+                            <TrendingUp className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => setChartType('bar')}
+                            className={`p-1 rounded-md transition-colors ${chartType === 'bar' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                            title="Bar Chart"
+                        >
+                            <BarChart2 className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
                 <div className="relative">
                     <SelectBase value={metricKey} onChange={e => onMetricChange?.((e.target as HTMLSelectElement).value as MetricKey)} className="px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                         {metricOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
@@ -177,31 +213,66 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                     <defs>
                         <linearGradient id={cmpAreaId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.22} /><stop offset="100%" stopColor={color} stopOpacity={0.08} /></linearGradient>
                     </defs>
-                    {/* Compare shaded area (previous period) */}
+                    {/* Compare shaded area (previous period) - always show as area/line for context */}
                     {cmpAreaD && <path d={cmpAreaD} fill={`url(#${cmpAreaId})`} stroke="none" />}
-                    {/* Primary line (selected date range) */}
-                    {pathD && (
-                        <path
-                            d={pathD}
-                            fill="none"
-                            stroke={color}
-                            strokeWidth={2.5}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            opacity={0.9}
-                        />
+                    
+                    {/* Primary Data */}
+                    {chartType === 'line' ? (
+                        pathD && (
+                            <path
+                                d={pathD}
+                                fill="none"
+                                stroke={color}
+                                strokeWidth={2.5}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                opacity={0.9}
+                            />
+                        )
+                    ) : (
+                        primary.map((p, i) => {
+                            const x = xBar(i);
+                            const y = yScale(p.value);
+                            const h = innerH - y;
+                            return (
+                                <rect
+                                    key={i}
+                                    x={x}
+                                    y={y}
+                                    width={barWidth}
+                                    height={h}
+                                    fill={color}
+                                    opacity={0.8}
+                                    rx={2}
+                                />
+                            );
+                        })
                     )}
+
                     {/* Y tick labels */}
                     {yTickValues.map((v, i) => { const y = yScale(v); const label = yTickLabels[i] ?? ''; return <text key={i} x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{label}</text>; })}
                     {/* X axis baseline */}
                     <line x1={padLeft} x2={width - padRight} y1={innerH} y2={innerH} className="stroke-gray-200 dark:stroke-gray-700" />
                     {/* X ticks */}
-                    {tickIdx.map(i => { const x = xScale(i) - 30; return <text key={i} x={x} y={height - 15} fontSize={11} textAnchor="start" className="fill-gray-500 dark:fill-gray-400">{primary[i]?.date || ''}</text>; })}
+                    {tickIdx.map(i => { 
+                        // For bars, align tick with bar center. For lines, align with point.
+                        const x = chartType === 'bar' ? xBar(i) + barWidth / 2 : xScale(i);
+                        return <text key={i} x={x} y={height - 15} fontSize={11} textAnchor="middle" className="fill-gray-500 dark:fill-gray-400">{primary[i]?.date || ''}</text>; 
+                    })}
                     {/* Hovers */}
-                    {primary.map((_, i) => { const x = xScale(i); const cellW = innerW / Math.max(1, (primary.length - 1)); return <rect key={i} x={x - cellW / 2} y={0} width={cellW} height={height} fill="transparent" onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)} />; })}
+                    {primary.map((_, i) => { 
+                        const count = primary.length;
+                        const step = innerW / count;
+                        // For bars, the slot is simpler
+                        const x = chartType === 'bar' ? padLeft + (i * step) : xScale(i);
+                        const cellW = chartType === 'bar' ? step : (innerW / Math.max(1, (primary.length - 1)));
+                        const xRect = chartType === 'bar' ? x : x - cellW / 2;
+                        
+                        return <rect key={i} x={xRect} y={0} width={cellW} height={height} fill="transparent" onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)} />; 
+                    })}
                 </svg>
                 {active && hoverIdx != null && (
-                    <div className="pointer-events-none absolute z-20 px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs rounded-lg shadow-lg border border-gray-200 dark:border-gray-700" style={{ left: `${(xScale(hoverIdx) / width) * 100}%`, top: '10%', transform: 'translate(-50%, 0)' }}>
+                    <div className="pointer-events-none absolute z-20 px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs rounded-lg shadow-lg border border-gray-200 dark:border-gray-700" style={{ left: `${((chartType === 'bar' ? xBar(hoverIdx) + barWidth/2 : xScale(hoverIdx)) / width) * 100}%`, top: '10%', transform: 'translate(-50%, 0)' }}>
                         {/* Current date (bold) */}
                         <div className="font-semibold text-gray-900 dark:text-gray-100">{formatFullDate(primary[hoverIdx]?.iso, labelForPoint(hoverIdx))}</div>
                         {/* Current value only */}

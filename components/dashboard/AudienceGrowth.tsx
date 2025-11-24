@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState, useCallback } from 'react';
-import { ArrowUpRight, Info, ArrowUp, ArrowDown, ArrowRight } from 'lucide-react';
+import { ArrowUpRight, Info, ArrowUp, ArrowDown, ArrowRight, BarChart2, TrendingUp } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
@@ -9,6 +9,7 @@ import { computeAxisMax, thirdTicks, formatTickLabels } from '../../lib/utils/ch
 interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; compareMode?: 'prev-period' | 'prev-year'; }
 
 type Metric = 'created' | 'firstActive' | 'subscribed';
+type ChartType = 'area' | 'bar';
 interface Bucket { label: string; fullLabel?: string; start: Date; countCreated: number; countFirst: number; countSubscribed: number; }
 
 // (Legacy) parsing helper no longer needed now that transformer exposes emailConsentTimestamp
@@ -28,6 +29,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
     // Active audience filter (consent or canReceiveEmail truthy). Fallback: all.
     const activeSubs = useMemo(() => subs.filter(s => (s.emailConsent || s.canReceiveEmail !== false)), [subs]);
     const [metric, setMetric] = useState<Metric>('created');
+    const [chartType, setChartType] = useState<ChartType>('area');
 
     // Range calc (mirrors existing component)
     const range = useMemo(() => {
@@ -196,9 +198,24 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                                     <p className="font-semibold mt-2 mb-1">Why</p>
                                     <p>Invest in sources and moments that generate genuine signups and early engagement.</p>
                                 </div>
-                            )}
-                        />
+                            )} />
                     </h3>
+                    <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5 border border-gray-200 dark:border-gray-700 ml-4">
+                        <button
+                            onClick={() => setChartType('area')}
+                            className={`p-1.5 rounded-md transition-colors ${chartType === 'area' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                            title="Area Chart"
+                        >
+                            <TrendingUp className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => setChartType('bar')}
+                            className={`p-1.5 rounded-md transition-colors ${chartType === 'bar' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                            title="Bar Chart"
+                        >
+                            <BarChart2 className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
                 <div className="flex gap-3 text-sm items-start">
                     <div className="relative">
@@ -232,38 +249,68 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
             <div className="relative" style={{ width: '100%' }}>
                 <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="block select-none">
                     <defs>
-                        <linearGradient id="ag-line" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.9} /><stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.4} /></linearGradient>
-                        <linearGradient id="ag-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.25} /><stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.05} /></linearGradient>
+                        <linearGradient id="ag-gradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.2} />
+                            <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.05} />
+                        </linearGradient>
                     </defs>
-                    {areaD && <path d={areaD} fill="url(#ag-area)" stroke="none" />}
-                    {pathD && <path d={pathD} fill="none" stroke="#8b5cf6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />}
-                    {/* Y axis */}
-                    {/* Y axis ticks (labels only, no horizontal grid lines) */}
-                    {yTickValues.map((v, i) => {
-                        const y = yScale(v); return (
-                            <g key={v}>
-                                <text x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{yTickLabels[i]}</text>
-                            </g>
-                        );
-                    })}
+                    
+                    {chartType === 'area' ? (
+                        <>
+                            {areaD && <path d={areaD} fill="url(#ag-gradient)" stroke="none" />}
+                            {pathD && <path d={pathD} fill="none" stroke="#8b5cf6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />}
+                        </>
+                    ) : (
+                        seriesVals.map((pt, i) => {
+                            const count = seriesVals.length;
+                            const step = innerW / count;
+                            const barW = Math.max(4, Math.min(40, step * 0.7));
+                            const x = padLeft + (i * step) + (step - barW) / 2;
+                            const y = yScale(pt.v);
+                            const h = innerH - y;
+                            return (
+                                <rect
+                                    key={i}
+                                    x={x}
+                                    y={y}
+                                    width={barW}
+                                    height={h}
+                                    fill="#8b5cf6"
+                                    opacity={0.8}
+                                    rx={2}
+                                />
+                            );
+                        })
+                    )}
+
+                    {/* Y tick labels */}
+                    {yTickValues.map((v, i) => { const y = yScale(v); const label = yTickLabels[i] ?? ''; return <text key={i} x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{label}</text>; })}
                     {/* X axis baseline */}
                     <line x1={padLeft} x2={width - padRight} y1={innerH} y2={innerH} className="stroke-gray-200 dark:stroke-gray-700" />
-                    {/* X axis ticks */}
-                    {tickIndices.map(i => {
-                        const b = buckets[i];
-                        const x = xScale(i);
-                        // For the last tick, anchor to end; for first, anchor to start; middle ticks centered
-                        const isLast = i === buckets.length - 1;
-                        const isFirst = i === 0;
-                        const anchor = isLast ? 'end' : isFirst ? 'start' : 'middle';
-                        return <text key={i} x={x} y={height - 15} fontSize={11} textAnchor={anchor} className="fill-gray-500 dark:fill-gray-400">{b.label}</text>;
+                    {/* X ticks */}
+                    {tickIndices.map(i => { 
+                        const pt = seriesVals[i];
+                        if (!pt) return null;
+                        const count = seriesVals.length;
+                        const step = innerW / count;
+                        // For bars, center tick in slot. For area, use point x.
+                        const x = chartType === 'bar' ? padLeft + (i * step) + step/2 : xScale(pt.x);
+                        return <text key={i} x={x} y={height - 15} fontSize={11} textAnchor="middle" className="fill-gray-500 dark:fill-gray-400">{buckets[i]?.label || ''}</text>; 
                     })}
-                    {/* Hover hit zones */}
-                    {buckets.map((b, i) => { const x = xScale(i); const cellW = innerW / Math.max(1, (buckets.length - 1)); return <rect key={i} x={x - cellW / 2} y={0} width={cellW} height={height} fill="transparent" onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)} />; })}
+                    {/* Hovers */}
+                    {buckets.map((_, i) => { 
+                        const count = buckets.length;
+                        const step = innerW / count;
+                        // For bars, use slot logic. For area, use point logic.
+                        const xRect = chartType === 'bar' ? padLeft + (i * step) : xScale(seriesVals[i].x) - (innerW / Math.max(1, buckets.length - 1)) / 2;
+                        const wRect = chartType === 'bar' ? step : innerW / Math.max(1, buckets.length - 1);
+                        
+                        return <rect key={i} x={xRect} y={0} width={wRect} height={height} fill="transparent" onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)} />; 
+                    })}
                 </svg>
                 {active && hoverIdx != null && (
-                    <div className="pointer-events-none absolute z-20 px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs rounded-lg shadow-lg border border-gray-200 dark:border-gray-700" style={{ left: `${(xScale(hoverIdx) / width) * 100}%`, top: '10%', transform: 'translate(-50%, 0)' }}>
-                        <div className="font-medium mb-0.5 text-gray-900 dark:text-gray-100">{active.fullLabel || active.label}</div>
+                    <div className="pointer-events-none absolute z-20 px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs rounded-lg shadow-lg border border-gray-200 dark:border-gray-700" style={{ left: `${((chartType === 'bar' ? (padLeft + (hoverIdx * (innerW / buckets.length)) + (innerW / buckets.length)/2) : xScale(seriesVals[hoverIdx].x)) / width) * 100}%`, top: '10%', transform: 'translate(-50%, 0)' }}>
+                        <div className="font-semibold mb-0.5">{active.fullLabel || active.label}</div>
                         <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">Created</span><span className="tabular-nums">{active.countCreated.toLocaleString()}</span></div>
                         <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">First Active</span><span className="tabular-nums">{active.countFirst.toLocaleString()}</span></div>
                         <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">Subscribed</span><span className="tabular-nums">{active.countSubscribed.toLocaleString()}</span></div>

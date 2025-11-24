@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useMemo, useEffect } from 'react';
-import { Workflow, AlertTriangle, ArrowUp, ArrowDown, ArrowRight, ChevronDown } from 'lucide-react';
+import { Workflow, AlertTriangle, ArrowUp, ArrowDown, ArrowRight, ChevronDown, BarChart2, TrendingUp } from 'lucide-react';
 import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
 import { thirdTicks, formatTickLabels, computeAxisMax } from '../../lib/utils/chartTicks';
@@ -15,6 +15,8 @@ const usdFormatter = new Intl.NumberFormat('en-US', {
 });
 
 const formatUsd = (value: number) => usdFormatter.format(value || 0);
+
+type ChartType = 'line' | 'bar';
 
 const MIN_STEP_EMAILS = 250;
 
@@ -138,6 +140,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         pointIndex: number;
     } | null>(null);
 
+    const [chartType, setChartType] = useState<ChartType>('line');
     const [selectedFlow, setSelectedFlow] = useState<string>('');
     const [selectedMetric, setSelectedMetric] = useState<string>('revenue');
     const [actionNoteExpanded, setActionNoteExpanded] = useState<boolean>(false);
@@ -1046,13 +1049,6 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
             changeNode = (
                 <span className={`text-sm font-semibold tabular-nums ${colorClass}`} title={trendTooltip} aria-label={trendTooltip}>
-                    {isZeroChange ? (
-                        <ArrowRight className="inline w-4 h-4 mr-1" />
-                    ) : (isIncrease ? (
-                        <ArrowUp className="inline w-4 h-4 mr-1" />
-                    ) : (
-                        <ArrowDown className="inline w-4 h-4 mr-1" />
-                    ))}
                     {isZeroChange ? '0.0' : (() => {
                         const changeValue = Math.abs(periodChange.change);
                         const formatted = changeValue.toFixed(1);
@@ -1263,6 +1259,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 {(() => {
                                     const points = sparklineData.map((point, i) => { const x = (i / (sparklineData.length - 1)) * 850; const y = 120 - ((point.value - yAxisRange.min) / (yAxisRange.max - yAxisRange.min)) * 100; return { x, y, value: point.value, date: point.date }; });
                                     if (points.length === 0) return null;
+                                    
+                                    // Line chart paths
                                     let pathD = `M ${points[0].x},${points[0].y}`;
                                     for (let i = 1; i < points.length; i++) {
                                         const cp1x = points[i - 1].x + (points[i].x - points[i - 1].x) * 0.4;
@@ -1310,48 +1308,81 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
                                     return (
                                         <g>
-                                            {/* Compare shaded area (previous period) */}
+                                            {/* Compare shaded area (previous period) - always show area for context */}
                                             {compareArea && (
                                                 <path d={compareArea} fill={`url(#cmp-gradient-${index})`} stroke="none" />
                                             )}
                                             {/* Ultra-light baseline within drawable area (draw once under line) */}
                                             <line x1={0} y1={120} x2={850} y2={120} className="stroke-gray-200 dark:stroke-gray-700" />
-                                            {/* Primary line (selected date range) */}
-                                            <path d={pathD} fill="none" stroke={chartColor} strokeWidth="2.5" />
+                                            
+                                            {/* Primary Data */}
+                                            {chartType === 'line' ? (
+                                                <path d={pathD} fill="none" stroke={chartColor} strokeWidth="2.5" />
+                                            ) : (
+                                                points.map((point, i) => {
+                                                    const count = points.length;
+                                                    const step = 850 / count;
+                                                    const barW = Math.max(4, Math.min(40, step * 0.7));
+                                                    // Center bar in slot
+                                                    const x = (i * step) + (step - barW) / 2;
+                                                    const h = 120 - point.y;
+                                                    return (
+                                                        <rect
+                                                            key={i}
+                                                            x={x}
+                                                            y={point.y}
+                                                            width={barW}
+                                                            height={h}
+                                                            fill={chartColor}
+                                                            opacity={0.8}
+                                                            rx={2}
+                                                        />
+                                                    );
+                                                })
+                                            )}
+
                                             {/* Overlay baseline to mask the line exactly at baseline for crisp resting effect */}
                                             <line x1={0} y1={120} x2={850} y2={120} className="stroke-gray-200 dark:stroke-gray-700" />
                                             {/* Hover rectangles (full-height zones for easier tooltip triggering) */}
                                             {(() => {
                                                 const cellW = 850 / Math.max(1, (points.length - 1));
-                                                return points.map((point, i) => (
-                                                    <rect
-                                                        key={i}
-                                                        x={point.x - cellW / 2}
-                                                        y={0}
-                                                        width={cellW}
-                                                        height={120}
-                                                        fill="transparent"
-                                                        style={{ cursor: 'pointer' }}
-                                                        onMouseEnter={(e) => {
-                                                            e.stopPropagation();
-                                                            setHoveredPoint({
-                                                                chartIndex: index,
-                                                                x: point.x,
-                                                                y: point.y,
-                                                                value: point.value,
-                                                                date: point.date,
-                                                                pointIndex: i
-                                                            });
-                                                        }}
-                                                        onMouseLeave={(e) => {
-                                                            e.stopPropagation();
-                                                            setHoveredPoint(null);
-                                                        }}
-                                                    />
-                                                ));
+                                                const step = 850 / points.length;
+                                                
+                                                return points.map((point, i) => {
+                                                    // For bars, use slot logic. For lines, use point logic.
+                                                    const xRect = chartType === 'bar' ? (i * step) : (point.x - cellW / 2);
+                                                    const wRect = chartType === 'bar' ? step : cellW;
+                                                    
+                                                    return (
+                                                        <rect
+                                                            key={i}
+                                                            x={xRect}
+                                                            y={0}
+                                                            width={wRect}
+                                                            height={120}
+                                                            fill="transparent"
+                                                            style={{ cursor: 'pointer' }}
+                                                            onMouseEnter={(e) => {
+                                                                e.stopPropagation();
+                                                                setHoveredPoint({
+                                                                    chartIndex: index,
+                                                                    x: chartType === 'bar' ? (i * step) + step/2 : point.x,
+                                                                    y: point.y,
+                                                                    value: point.value,
+                                                                    date: point.date,
+                                                                    pointIndex: i
+                                                                });
+                                                            }}
+                                                            onMouseLeave={(e) => {
+                                                                e.stopPropagation();
+                                                                setHoveredPoint(null);
+                                                            }}
+                                                        />
+                                                    );
+                                                });
                                             })()}
-                                            {/* Visible hover point */}
-                                            {hoveredPoint && hoveredPoint.chartIndex === index && (
+                                            {/* Visible hover point - only for line chart */}
+                                            {chartType === 'line' && hoveredPoint && hoveredPoint.chartIndex === index && (
                                                 <circle
                                                     cx={hoveredPoint.x}
                                                     cy={hoveredPoint.y}
@@ -1503,6 +1534,22 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                     </h3>
                 </div>
                 <div className="section-controls flex-wrap gap-y-2">
+                    <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5 border border-gray-200 dark:border-gray-700 mr-2">
+                        <button
+                            onClick={() => setChartType('line')}
+                            className={`p-1.5 rounded-md transition-colors ${chartType === 'line' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                            title="Line Chart"
+                        >
+                            <TrendingUp className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => setChartType('bar')}
+                            className={`p-1.5 rounded-md transition-colors ${chartType === 'bar' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                            title="Bar Chart"
+                        >
+                            <BarChart2 className="w-4 h-4" />
+                        </button>
+                    </div>
                     <div className="relative min-w-0 w-full sm:w-auto">
                         <SelectBase value={selectedFlow} onChange={(e) => setSelectedFlow((e.target as HTMLSelectElement).value)} className="w-full sm:w-auto px-4 py-2 pr-8 rounded-lg border cursor-pointer bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
                             {uniqueFlowNames.map((flow: string) => (<option key={flow} value={flow}>{flow}</option>))}
