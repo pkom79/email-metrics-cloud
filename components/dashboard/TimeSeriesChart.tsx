@@ -34,6 +34,8 @@ export interface TimeSeriesChartProps {
     headerIsPositive?: boolean;
     headerPreviousValue?: number;
     headerPreviousPeriod?: { startDate: Date; endDate: Date };
+    chartType?: ChartType;
+    onChartTypeChange?: (type: ChartType) => void;
 }
 
 // Formatters mirror Metric Cards
@@ -48,14 +50,14 @@ const fmt = {
     number: (v: number) => Math.round(v).toLocaleString('en-US')
 };
 
-export default function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigValue, primary, compare = null, colorHue = '#8b5cf6', darkColorHue, valueType, granularity, compareMode = 'prev-period', idSuffix = 'tsc', headerChange, headerIsPositive, headerPreviousValue, headerPreviousPeriod }: TimeSeriesChartProps) {
+export default function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigValue, primary, compare = null, colorHue = '#8b5cf6', darkColorHue, valueType, granularity, compareMode = 'prev-period', idSuffix = 'tsc', headerChange, headerIsPositive, headerPreviousValue, headerPreviousPeriod, chartType = 'line', onChartTypeChange }: TimeSeriesChartProps) {
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-    const [chartType, setChartType] = useState<ChartType>('line');
+    // const [chartType, setChartType] = useState<ChartType>('line'); // Lifted to parent
     const width = 850; const height = 200; const innerH = 140; const padLeft = 72; const padRight = 20; const innerW = width - padLeft - padRight;
 
     const maxVal = useMemo(() => computeAxisMax(primary.map(p => Math.max(0, p.value)), (compare || undefined) ? (compare || []).map(p => Math.max(0, p.value)) : null, valueType === 'percentage' ? 'percentage' : (valueType as any)), [primary, compare, valueType]);
     const xScale = (i: number) => primary.length <= 1 ? padLeft + innerW / 2 : padLeft + (i / (primary.length - 1)) * innerW;
-    
+
     // Bar chart helpers
     const barWidth = useMemo(() => {
         const count = primary.length;
@@ -63,7 +65,7 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
         const available = innerW / count;
         return Math.max(4, Math.min(40, available * 0.7));
     }, [primary.length, innerW]);
-    
+
     const xBar = (i: number) => {
         const count = primary.length;
         const step = innerW / count;
@@ -143,17 +145,17 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
             {/* Top controls: dropdown on right (no internal title) */}
             <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
-                    <h3 className="text-base font-medium text-gray-500 dark:text-gray-400">{title}</h3>
+                    {/* Title removed per request */}
                     <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5 border border-gray-200 dark:border-gray-700">
                         <button
-                            onClick={() => setChartType('line')}
+                            onClick={() => onChartTypeChange?.('line')}
                             className={`p-1 rounded-md transition-colors ${chartType === 'line' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
                             title="Line Chart"
                         >
                             <TrendingUp className="w-4 h-4" />
                         </button>
                         <button
-                            onClick={() => setChartType('bar')}
+                            onClick={() => onChartTypeChange?.('bar')}
                             className={`p-1 rounded-md transition-colors ${chartType === 'bar' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
                             title="Bar Chart"
                         >
@@ -215,7 +217,7 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                     </defs>
                     {/* Compare shaded area (previous period) - always show as area/line for context */}
                     {cmpAreaD && <path d={cmpAreaD} fill={`url(#${cmpAreaId})`} stroke="none" />}
-                    
+
                     {/* Primary Data */}
                     {chartType === 'line' ? (
                         pathD && (
@@ -254,25 +256,25 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
                     {/* X axis baseline */}
                     <line x1={padLeft} x2={width - padRight} y1={innerH} y2={innerH} className="stroke-gray-200 dark:stroke-gray-700" />
                     {/* X ticks */}
-                    {tickIdx.map(i => { 
+                    {tickIdx.map(i => {
                         // For bars, align tick with bar center. For lines, align with point.
                         const x = chartType === 'bar' ? xBar(i) + barWidth / 2 : xScale(i);
-                        return <text key={i} x={x} y={height - 15} fontSize={11} textAnchor="middle" className="fill-gray-500 dark:fill-gray-400">{primary[i]?.date || ''}</text>; 
+                        return <text key={i} x={x} y={height - 15} fontSize={11} textAnchor="middle" className="fill-gray-500 dark:fill-gray-400">{primary[i]?.date || ''}</text>;
                     })}
                     {/* Hovers */}
-                    {primary.map((_, i) => { 
+                    {primary.map((_, i) => {
                         const count = primary.length;
                         const step = innerW / count;
                         // For bars, the slot is simpler
                         const x = chartType === 'bar' ? padLeft + (i * step) : xScale(i);
                         const cellW = chartType === 'bar' ? step : (innerW / Math.max(1, (primary.length - 1)));
                         const xRect = chartType === 'bar' ? x : x - cellW / 2;
-                        
-                        return <rect key={i} x={xRect} y={0} width={cellW} height={height} fill="transparent" onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)} />; 
+
+                        return <rect key={i} x={xRect} y={0} width={cellW} height={height} fill="transparent" onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)} />;
                     })}
                 </svg>
                 {active && hoverIdx != null && (
-                    <div className="pointer-events-none absolute z-20 px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs rounded-lg shadow-lg border border-gray-200 dark:border-gray-700" style={{ left: `${((chartType === 'bar' ? xBar(hoverIdx) + barWidth/2 : xScale(hoverIdx)) / width) * 100}%`, top: '10%', transform: 'translate(-50%, 0)' }}>
+                    <div className="pointer-events-none absolute z-20 px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs rounded-lg shadow-lg border border-gray-200 dark:border-gray-700" style={{ left: `${((chartType === 'bar' ? xBar(hoverIdx) + barWidth / 2 : xScale(hoverIdx)) / width) * 100}%`, top: '10%', transform: 'translate(-50%, 0)' }}>
                         {/* Current date (bold) */}
                         <div className="font-semibold text-gray-900 dark:text-gray-100">{formatFullDate(primary[hoverIdx]?.iso, labelForPoint(hoverIdx))}</div>
                         {/* Current value only */}

@@ -11,9 +11,10 @@ interface SparklineProps {
     hasInsufficientData?: boolean;
     forceZeroStyle?: boolean; // treat as displayed zero (purple style)
     category?: 'email' | 'campaign' | 'flow';
+    chartType?: 'line' | 'bar';
 }
 
-const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, isNegativeMetric = false, data, valueFormat = 'number', hasInsufficientData = false, forceZeroStyle = false, category }) => {
+const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, isNegativeMetric = false, data, valueFormat = 'number', hasInsufficientData = false, forceZeroStyle = false, category, chartType = 'line' }) => {
     const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; value: number; date: string } | null>(null);
     const svgRef = useRef<SVGSVGElement>(null);
 
@@ -165,7 +166,26 @@ const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, is
                         <stop offset="100%" stopColor={colorScheme.gradientEnd} stopOpacity={0.05} />
                     </linearGradient>
                 </defs>
-                {curvePath && <path d={curvePath} stroke={colorScheme.stroke} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />}
+                {chartType === 'bar' ? (
+                    coords.map((coord, i) => {
+                        const barWidth = Math.max(2, ((width - padding * 2) / coords.length) * 0.6);
+                        const barHeight = Math.max(0, height - padding - coord.y);
+                        return (
+                            <rect
+                                key={i}
+                                x={coord.x - barWidth / 2}
+                                y={coord.y}
+                                width={barWidth}
+                                height={barHeight}
+                                fill={colorScheme.stroke}
+                                opacity={0.8}
+                                rx={1}
+                            />
+                        );
+                    })
+                ) : (
+                    curvePath && <path d={curvePath} stroke={colorScheme.stroke} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
+                )}
                 {hoveredPoint && (
                     <circle cx={hoveredPoint.x} cy={hoveredPoint.y} r="4" fill={colorScheme.stroke} stroke="white" strokeWidth="2" className="drop-shadow-sm" />
                 )}

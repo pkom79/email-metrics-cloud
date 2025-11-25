@@ -22,6 +22,7 @@ interface MetricCardProps {
     previousPeriod?: { startDate: Date; endDate: Date };
     compareMode?: 'prev-period' | 'prev-year';
     category?: 'email' | 'campaign' | 'flow';
+    chartType?: 'line' | 'bar';
 }
 
 const MetricCard: React.FC<MetricCardProps> = ({
@@ -38,7 +39,8 @@ const MetricCard: React.FC<MetricCardProps> = ({
     previousValue,
     previousPeriod,
     compareMode = 'prev-period',
-    category
+    category,
+    chartType = 'line'
 }) => {
     const isAllTime = dateRange === 'all';
     const DISPLAY_EPS = 0.05; // <0.05% rounds to 0.0%
@@ -92,16 +94,17 @@ const MetricCard: React.FC<MetricCardProps> = ({
             </div>
 
             {!hideSparkline && variant !== 'stat' && (
-                <Sparkline
+                                <Sparkline
                     isPositive={shouldShowAsPositive}
                     change={change}
                     isAllTime={isAllTime}
                     isNegativeMetric={isNegativeMetric}
                     data={sparklineData}
-                    valueFormat={valueFormat as any}
+                    valueFormat={valueFormat}
                     hasInsufficientData={hasInsufficientData}
-                    forceZeroStyle={showChangeBlock ? isZeroDisplay : true /* if we hide arrow treat as purple */}
+                    forceZeroStyle={showChangeBlock ? isZeroDisplay : true}
                     category={category}
+                    chartType={chartType}
                 />
             )}
 

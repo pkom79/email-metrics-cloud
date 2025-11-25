@@ -254,7 +254,7 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                             <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.05} />
                         </linearGradient>
                     </defs>
-                    
+
                     {chartType === 'area' ? (
                         <>
                             {areaD && <path d={areaD} fill="url(#ag-gradient)" stroke="none" />}
@@ -288,28 +288,28 @@ export default function AudienceGrowth({ dateRange, granularity, customFrom, cus
                     {/* X axis baseline */}
                     <line x1={padLeft} x2={width - padRight} y1={innerH} y2={innerH} className="stroke-gray-200 dark:stroke-gray-700" />
                     {/* X ticks */}
-                    {tickIndices.map(i => { 
+                    {tickIndices.map(i => {
                         const pt = seriesVals[i];
                         if (!pt) return null;
                         const count = seriesVals.length;
                         const step = innerW / count;
                         // For bars, center tick in slot. For area, use point x.
-                        const x = chartType === 'bar' ? padLeft + (i * step) + step/2 : xScale(pt.x);
-                        return <text key={i} x={x} y={height - 15} fontSize={11} textAnchor="middle" className="fill-gray-500 dark:fill-gray-400">{buckets[i]?.label || ''}</text>; 
+                        const x = chartType === 'bar' ? padLeft + (i * step) + step / 2 : xScale(pt.x);
+                        return <text key={i} x={x} y={height - 15} fontSize={11} textAnchor="middle" className="fill-gray-500 dark:fill-gray-400">{buckets[i]?.label || ''}</text>;
                     })}
                     {/* Hovers */}
-                    {buckets.map((_, i) => { 
+                    {buckets.map((_, i) => {
                         const count = buckets.length;
                         const step = innerW / count;
                         // For bars, use slot logic. For area, use point logic.
                         const xRect = chartType === 'bar' ? padLeft + (i * step) : xScale(seriesVals[i].x) - (innerW / Math.max(1, buckets.length - 1)) / 2;
                         const wRect = chartType === 'bar' ? step : innerW / Math.max(1, buckets.length - 1);
-                        
-                        return <rect key={i} x={xRect} y={0} width={wRect} height={height} fill="transparent" onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)} />; 
+
+                        return <rect key={i} x={xRect} y={0} width={wRect} height={height} fill="transparent" onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)} />;
                     })}
                 </svg>
                 {active && hoverIdx != null && (
-                    <div className="pointer-events-none absolute z-20 px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs rounded-lg shadow-lg border border-gray-200 dark:border-gray-700" style={{ left: `${((chartType === 'bar' ? (padLeft + (hoverIdx * (innerW / buckets.length)) + (innerW / buckets.length)/2) : xScale(seriesVals[hoverIdx].x)) / width) * 100}%`, top: '10%', transform: 'translate(-50%, 0)' }}>
+                    <div className="pointer-events-none absolute z-20 px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs rounded-lg shadow-lg border border-gray-200 dark:border-gray-700" style={{ left: `${((chartType === 'bar' ? (padLeft + (hoverIdx * (innerW / buckets.length)) + (innerW / buckets.length) / 2) : xScale(seriesVals[hoverIdx].x)) / width) * 100}%`, top: '10%', transform: 'translate(-50%, 0)' }}>
                         <div className="font-semibold mb-0.5">{active.fullLabel || active.label}</div>
                         <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">Created</span><span className="tabular-nums">{active.countCreated.toLocaleString()}</span></div>
                         <div className="flex justify-between gap-3"><span className="text-gray-500 dark:text-gray-400">First Active</span><span className="tabular-nums">{active.countFirst.toLocaleString()}</span></div>

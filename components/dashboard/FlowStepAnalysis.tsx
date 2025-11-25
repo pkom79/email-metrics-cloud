@@ -1259,7 +1259,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 {(() => {
                                     const points = sparklineData.map((point, i) => { const x = (i / (sparklineData.length - 1)) * 850; const y = 120 - ((point.value - yAxisRange.min) / (yAxisRange.max - yAxisRange.min)) * 100; return { x, y, value: point.value, date: point.date }; });
                                     if (points.length === 0) return null;
-                                    
+
                                     // Line chart paths
                                     let pathD = `M ${points[0].x},${points[0].y}`;
                                     for (let i = 1; i < points.length; i++) {
@@ -1314,7 +1314,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                             )}
                                             {/* Ultra-light baseline within drawable area (draw once under line) */}
                                             <line x1={0} y1={120} x2={850} y2={120} className="stroke-gray-200 dark:stroke-gray-700" />
-                                            
+
                                             {/* Primary Data */}
                                             {chartType === 'line' ? (
                                                 <path d={pathD} fill="none" stroke={chartColor} strokeWidth="2.5" />
@@ -1347,12 +1347,12 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                             {(() => {
                                                 const cellW = 850 / Math.max(1, (points.length - 1));
                                                 const step = 850 / points.length;
-                                                
+
                                                 return points.map((point, i) => {
                                                     // For bars, use slot logic. For lines, use point logic.
                                                     const xRect = chartType === 'bar' ? (i * step) : (point.x - cellW / 2);
                                                     const wRect = chartType === 'bar' ? step : cellW;
-                                                    
+
                                                     return (
                                                         <rect
                                                             key={i}
@@ -1366,7 +1366,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                                                 e.stopPropagation();
                                                                 setHoveredPoint({
                                                                     chartIndex: index,
-                                                                    x: chartType === 'bar' ? (i * step) + step/2 : point.x,
+                                                                    x: chartType === 'bar' ? (i * step) + step / 2 : point.x,
                                                                     y: point.y,
                                                                     value: point.value,
                                                                     date: point.date,
