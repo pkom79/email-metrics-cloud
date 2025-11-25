@@ -143,14 +143,15 @@ function SignupInner() {
 
     async function authWithRetry<T extends { session?: any }>(fn: () => Promise<{ data: T; error: any }>, label: string): Promise<{ data: T; error: any }> {
         let lastError: any = null;
-        for (let attempt = 0; attempt < 3; attempt++) {
+        for (let attempt = 0; attempt < 6; attempt++) {
             const res = await fn();
             if (!res.error) return res;
             lastError = res.error;
             // Supabase Auth returns 429 when rate limited; back off and retry
             if (res.error?.status === 429 || /rate/i.test(res.error?.message || '')) {
-                const delay = 300 * (attempt + 1);
+                const delay = 400 * Math.pow(1.5, attempt);
                 diag(`${label}-retry`, { attempt: attempt + 1, status: res.error?.status, message: res.error?.message, delay });
+                setError(`Sign in is being rate limited. Retrying in ${Math.round(delay / 100) / 10}s...`);
                 await new Promise(r => setTimeout(r, delay));
                 continue;
             }
@@ -271,7 +272,9 @@ function SignupInner() {
                 }
             }
         } catch (e: any) {
-            const msg = e?.message || 'Failed';
+            const raw = e?.message || 'Failed';
+            const rateLimited = /429|rate/i.test(raw);
+            const msg = rateLimited ? 'Sign in temporarily rate limited. Please wait a few seconds and try again.' : raw;
             setError(msg);
             diag('submit-error', { message: msg });
         } finally {
