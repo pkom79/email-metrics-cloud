@@ -120,6 +120,9 @@ export default function AccountClient({ initial }: Props) {
                                     user_id: m.user_id,
                                     role: m.role,
                                     created_at: m.created_at,
+                                    email: m.email ?? null,
+                                    name: m.name ?? null,
+                                    last_login_at: m.last_login_at ?? null,
                                 }));
                                 setMemberLists(prev => ({ ...prev, [accountId]: members }));
                             }
@@ -207,6 +210,9 @@ export default function AccountClient({ initial }: Props) {
                     user_id: m.user_id,
                     role: m.role,
                     created_at: m.created_at,
+                    email: m.email ?? null,
+                    name: m.name ?? null,
+                    last_login_at: m.last_login_at ?? null,
                 }));
                 setMemberLists(prev => ({ ...prev, [accountId]: members }));
             }
