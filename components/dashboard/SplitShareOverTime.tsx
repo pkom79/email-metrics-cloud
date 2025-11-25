@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, memo } from 'react';
 import { SplitSquareVertical } from 'lucide-react';
 import { DataManager } from '../../lib/data/dataManager';
 import { ProcessedCampaign } from '../../lib/data/dataTypes';
@@ -22,7 +22,7 @@ type Metric = 'revenue' | 'emailsSent';
 const formatCurrency = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
 const formatNumber = (v: number) => Math.round(v).toLocaleString('en-US');
 
-export default function SplitShareOverTime({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period', filteredCampaigns, dateRangeBoundaries }: Props) {
+function SplitShareOverTime({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period', filteredCampaigns, dateRangeBoundaries }: Props) {
     const dm = DataManager.getInstance();
     const [metric, setMetric] = useState<Metric>('revenue');
 
@@ -48,29 +48,7 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
     }, [filteredCampaigns, dateRangeBoundaries, dateRange, customFrom, customTo]);
 
     const series = useMemo(() => {
-        // Debug: Show what Campaign vs Flow Split sees
-        const july2025Campaigns = campaigns.filter(c => c.sentDate.getFullYear() === 2025 && c.sentDate.getMonth() === 6);
-        console.log('📊 CAMPAIGN vs FLOW SPLIT DATA:', {
-            totalCampaigns: campaigns.length,
-            july2025Count: july2025Campaigns.length,
-            july2025Dates: july2025Campaigns.map(c => c.sentDate.toISOString().slice(0, 10)),
-            filteredCampaignsProvided: !!filteredCampaigns,
-            filteredCampaignsLength: filteredCampaigns?.length || 0,
-            usingFiltered: campaigns === filteredCampaigns,
-            usingUnfiltered: campaigns === dm.getCampaigns()
-        });
-
         // Build campaign-only and flow-only series with compare; always aggregate all flows
-        console.log('📊 Calling getMetricTimeSeriesWithCompare with:', {
-            campaignCount: campaigns.length,
-            dateRange,
-            effectiveDateRange,
-            effectiveCustomFrom,
-            effectiveCustomTo,
-            granularity,
-            metric,
-            campaignsReference: campaigns === dm.getCampaigns() ? 'SAME_REF' : 'DIFFERENT_REF'
-        });
         const camp = dm.getMetricTimeSeriesWithCompare(campaigns as any, [], metric, effectiveDateRange, granularity, compareMode, effectiveCustomFrom, effectiveCustomTo);
         const flo = dm.getMetricTimeSeriesWithCompare([], flows as any, metric, effectiveDateRange, granularity, compareMode, effectiveCustomFrom, effectiveCustomTo);
         const primaryLen = Math.min(camp.primary.length, flo.primary.length);
@@ -116,14 +94,11 @@ export default function SplitShareOverTime({ dateRange, granularity, customFrom,
                 if (!isNaN(d.getTime())) {
                     const boundaries = dm.getWeekBoundaries(d);
                     rangeLabel = boundaries.rangeLabel;
-                    console.log('🏷️ Generated rangeLabel:', { iso, rangeLabel, label, monday: boundaries.monday.toISOString().slice(0, 10), sunday: boundaries.sunday.toISOString().slice(0, 10) });
                     // Check if this week is incomplete (first or last in range)
                     if (rangeStart && rangeEnd) {
                         isIncomplete = !boundaries.isCompleteWeek(rangeStart, rangeEnd);
                     }
                 }
-            } else {
-                console.log('⚠️ NOT generating rangeLabel:', { granularity, iso, hasIso: !!iso });
             }
 
             const row: any = { label, iso, rangeLabel, isIncomplete, campVal: c, flowVal: f, total, campPct, flowPct };
@@ -274,7 +249,6 @@ function BarShareChart({
                 }}>
                     <div className="font-medium mb-1 text-gray-900 dark:text-gray-100">
                         {(() => {
-                            console.log('📍 Tooltip rendering:', { rangeLabel: active.rangeLabel, iso: active.iso, label: active.label, hasRangeLabel: !!active.rangeLabel });
                             if (active.rangeLabel) return active.rangeLabel;
                             // Use ISO anchor from DataManager when available to avoid parsing short labels (e.g., "Oct 01" -> year 2001)
                             const baseIso = active.iso;
@@ -344,3 +318,5 @@ function BarShareChart({
         </div>
     );
 }
+
+export default memo(SplitShareOverTime);

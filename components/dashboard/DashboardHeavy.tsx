@@ -1121,27 +1121,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             const from = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
             const to = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
 
-            console.log('🔍 [DashboardHeavy] FILTERING CAMPAIGNS:', {
-                effectiveCustomFrom,
-                effectiveCustomTo,
-                totalCampaigns: ALL_CAMPAIGNS.length,
-                from: from.toISOString(),
-                to: to.toISOString(),
-                sampleCampaigns: ALL_CAMPAIGNS.slice(0, 3).map(c => ({
-                    date: c.sentDate.toISOString(),
-                    timestamp: c.sentDate.getTime(),
-                    isAfterFrom: c.sentDate >= from,
-                    isBeforeTo: c.sentDate <= to,
-                    willBeIncluded: c.sentDate >= from && c.sentDate <= to
-                }))
-            });
-
             list = list.filter(c => c.sentDate >= from && c.sentDate <= to);
-
-            console.log('🔍 [DashboardHeavy] FILTER RESULT:', {
-                filteredCount: list.length,
-                filteredDates: list.map(c => c.sentDate.toISOString().slice(0, 10))
-            });
 
             boundaries = { start: from, end: to };
         } else if (effectiveDateRange !== 'all') {
@@ -1335,17 +1315,27 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     }, []);
 
     // Metrics calculations
+    // Helper to aggregate all metrics in a single pass (performance optimization)
+    type EmailMetrics = { revenue: number; emailsSent: number; totalOrders: number; uniqueOpens: number; uniqueClicks: number; unsubscribesCount: number; spamComplaintsCount: number; bouncesCount: number };
+    const aggregateMetrics = (items: EmailMetrics[]) => {
+        let totalRevenue = 0, totalEmailsSent = 0, totalOrders = 0, totalOpens = 0, totalClicks = 0, totalUnsubs = 0, totalSpam = 0, totalBounces = 0;
+        for (const e of items) {
+            totalRevenue += e.revenue;
+            totalEmailsSent += e.emailsSent;
+            totalOrders += e.totalOrders;
+            totalOpens += e.uniqueOpens;
+            totalClicks += e.uniqueClicks;
+            totalUnsubs += e.unsubscribesCount;
+            totalSpam += e.spamComplaintsCount;
+            totalBounces += e.bouncesCount;
+        }
+        return { totalRevenue, totalEmailsSent, totalOrders, totalOpens, totalClicks, totalUnsubs, totalSpam, totalBounces };
+    };
+
     const overviewMetrics = useMemo(() => {
         const all = [...defCampaigns, ...defFlowsOverview]; // use ALL flows for overview
         if (!all.length) return null as any;
-        const totalRevenue = all.reduce((s, e) => s + e.revenue, 0);
-        const totalEmailsSent = all.reduce((s, e) => s + e.emailsSent, 0);
-        const totalOrders = all.reduce((s, e) => s + e.totalOrders, 0);
-        const totalOpens = all.reduce((s, e) => s + e.uniqueOpens, 0);
-        const totalClicks = all.reduce((s, e) => s + e.uniqueClicks, 0);
-        const totalUnsubs = all.reduce((s, e) => s + e.unsubscribesCount, 0);
-        const totalSpam = all.reduce((s, e) => s + e.spamComplaintsCount, 0);
-        const totalBounces = all.reduce((s, e) => s + e.bouncesCount, 0);
+        const { totalRevenue, totalEmailsSent, totalOrders, totalOpens, totalClicks, totalUnsubs, totalSpam, totalBounces } = aggregateMetrics(all);
         const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
         const revenuePerEmail = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0;
         const openRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0;
@@ -1378,14 +1368,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const campaignMetrics = useMemo(() => {
         const all = defCampaigns;
         if (!all.length) return null as any;
-        const totalRevenue = all.reduce((s, e) => s + e.revenue, 0);
-        const totalEmailsSent = all.reduce((s, e) => s + e.emailsSent, 0);
-        const totalOrders = all.reduce((s, e) => s + e.totalOrders, 0);
-        const totalOpens = all.reduce((s, e) => s + e.uniqueOpens, 0);
-        const totalClicks = all.reduce((s, e) => s + e.uniqueClicks, 0);
-        const totalUnsubs = all.reduce((s, e) => s + e.unsubscribesCount, 0);
-        const totalSpam = all.reduce((s, e) => s + e.spamComplaintsCount, 0);
-        const totalBounces = all.reduce((s, e) => s + e.bouncesCount, 0);
+        const { totalRevenue, totalEmailsSent, totalOrders, totalOpens, totalClicks, totalUnsubs, totalSpam, totalBounces } = aggregateMetrics(all);
         const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
         const revenuePerEmail = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0;
         const openRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0;
@@ -1415,7 +1398,38 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         };
     }, [defCampaigns, calcPoP]);
 
-    const flowMetrics = useMemo(() => { const all = defFlows; if (!all.length) return null as any; const totalRevenue = all.reduce((s, e) => s + e.revenue, 0); const totalEmailsSent = all.reduce((s, e) => s + e.emailsSent, 0); const totalOrders = all.reduce((s, e) => s + e.totalOrders, 0); const totalOpens = all.reduce((s, e) => s + e.uniqueOpens, 0); const totalClicks = all.reduce((s, e) => s + e.uniqueClicks, 0); const totalUnsubs = all.reduce((s, e) => s + e.unsubscribesCount, 0); const totalSpam = all.reduce((s, e) => s + e.spamComplaintsCount, 0); const totalBounces = all.reduce((s, e) => s + e.bouncesCount, 0); const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0; const revenuePerEmail = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0; const openRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0; const clickRate = totalEmailsSent > 0 ? (totalClicks / totalEmailsSent) * 100 : 0; const clickToOpenRate = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0; const conversionRate = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0; const unsubscribeRate = totalEmailsSent > 0 ? (totalUnsubs / totalEmailsSent) * 100 : 0; const spamRate = totalEmailsSent > 0 ? (totalSpam / totalEmailsSent) * 100 : 0; const bounceRate = totalEmailsSent > 0 ? (totalBounces / totalEmailsSent) * 100 : 0; const mk = (k: string, v: number) => { const d = calcPoP(k, 'flows', { flowName: selectedFlow }); return { value: v, change: d.changePercent, isPositive: d.isPositive, previousValue: d.previousValue, previousPeriod: d.previousPeriod }; }; return { totalRevenue: mk('totalRevenue', totalRevenue), averageOrderValue: mk('avgOrderValue', avgOrderValue), revenuePerEmail: mk('revenuePerEmail', revenuePerEmail), openRate: mk('openRate', openRate), clickRate: mk('clickRate', clickRate), clickToOpenRate: mk('clickToOpenRate', clickToOpenRate), emailsSent: mk('emailsSent', totalEmailsSent), totalOrders: mk('totalOrders', totalOrders), conversionRate: mk('conversionRate', conversionRate), unsubscribeRate: mk('unsubscribeRate', unsubscribeRate), spamRate: mk('spamRate', spamRate), bounceRate: mk('bounceRate', bounceRate) }; }, [defFlows, calcPoP, selectedFlow]);
+    const flowMetrics = useMemo(() => {
+        const all = defFlows;
+        if (!all.length) return null as any;
+        const { totalRevenue, totalEmailsSent, totalOrders, totalOpens, totalClicks, totalUnsubs, totalSpam, totalBounces } = aggregateMetrics(all);
+        const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+        const revenuePerEmail = totalEmailsSent > 0 ? totalRevenue / totalEmailsSent : 0;
+        const openRate = totalEmailsSent > 0 ? (totalOpens / totalEmailsSent) * 100 : 0;
+        const clickRate = totalEmailsSent > 0 ? (totalClicks / totalEmailsSent) * 100 : 0;
+        const clickToOpenRate = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0;
+        const conversionRate = totalClicks > 0 ? (totalOrders / totalClicks) * 100 : 0;
+        const unsubscribeRate = totalEmailsSent > 0 ? (totalUnsubs / totalEmailsSent) * 100 : 0;
+        const spamRate = totalEmailsSent > 0 ? (totalSpam / totalEmailsSent) * 100 : 0;
+        const bounceRate = totalEmailsSent > 0 ? (totalBounces / totalEmailsSent) * 100 : 0;
+        const mk = (k: string, v: number) => {
+            const d = calcPoP(k, 'flows', { flowName: selectedFlow });
+            return { value: v, change: d.changePercent, isPositive: d.isPositive, previousValue: d.previousValue, previousPeriod: d.previousPeriod };
+        };
+        return {
+            totalRevenue: mk('totalRevenue', totalRevenue),
+            averageOrderValue: mk('avgOrderValue', avgOrderValue),
+            revenuePerEmail: mk('revenuePerEmail', revenuePerEmail),
+            openRate: mk('openRate', openRate),
+            clickRate: mk('clickRate', clickRate),
+            clickToOpenRate: mk('clickToOpenRate', clickToOpenRate),
+            emailsSent: mk('emailsSent', totalEmailsSent),
+            totalOrders: mk('totalOrders', totalOrders),
+            conversionRate: mk('conversionRate', conversionRate),
+            unsubscribeRate: mk('unsubscribeRate', unsubscribeRate),
+            spamRate: mk('spamRate', spamRate),
+            bounceRate: mk('bounceRate', bounceRate)
+        };
+    }, [defFlows, calcPoP, selectedFlow]);
 
     const effectiveSeriesRange = dateRange === 'custom' && customActive ? 'custom' : dateRange;
     const overviewSeries = useMemo(() => ({

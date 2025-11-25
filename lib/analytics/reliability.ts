@@ -288,12 +288,6 @@ export function computeReliability(periods: PeriodAggregate[], options: ComputeR
   // Scope revenues
   const series = periods.map(p => scope==='campaigns'? p.campaignRevenue : scope==='flows'? p.flowRevenue : p.totalRevenue);
   
-  // DEBUG: Log basic info
-  console.log('🔍 Revenue Reliability Debug:');
-  console.log(`  Total periods: ${periods.length}, Scope: ${scope}, WindowSize: ${windowSize}`);
-  console.log(`  Full series revenues:`, series);
-  console.log(`  Revenue range: min=${Math.min(...series)}, max=${Math.max(...series)}, sum=${series.reduce((a,b) => a+b, 0)}`);
-  
   // Get complete periods
   const completeIdx = periods.map((p,i)=> {
     const isComplete = 'isCompleteWeek' in p ? p.isCompleteWeek : p.isCompleteMonth;
@@ -301,14 +295,11 @@ export function computeReliability(periods: PeriodAggregate[], options: ComputeR
   }).filter(i=>i>=0);
   
   const completeSeries = completeIdx.map(i=> series[i]);
-  console.log(`  Complete periods: ${completeSeries.length}/${periods.length}`);
-  console.log(`  Complete series revenues:`, completeSeries);
   
   if (completeSeries.length < minPeriods) return { reliability: null, trendDelta: null, windowWeeks: completeSeries.length, points: [], median: null, mad: null };
   
   // Start with the most recent `windowSize` complete periods
   let useWindow = completeSeries.slice(-windowSize);
-  console.log(`  Analysis window (last ${windowSize}):`, useWindow);
 
   // If the recent window contains too few non-zero values, expand backward to include earlier complete periods
   const desiredNonZero = Math.min(3, Math.max(1, Math.floor(windowSize / 4))); // aim for at least a few non-zero observations
@@ -322,7 +313,6 @@ export function computeReliability(periods: PeriodAggregate[], options: ComputeR
     }
     const newStart = Math.max(0, startIdx + 1);
     useWindow = completeSeries.slice(newStart);
-    console.log(`  Expanded analysis window to include earlier data. New window length: ${useWindow.length}, nonZeroCount: ${nonZeroCount}`);
   }
 
   const positiveValues = useWindow.filter(n => n > 0);
@@ -335,32 +325,25 @@ export function computeReliability(periods: PeriodAggregate[], options: ComputeR
     // Use up to `windowSize` most recent non-zero values
     const fallback = lastNonZeros.slice(-Math.min(lastNonZeros.length, windowSize));
     if (fallback.length) {
-      console.log(`  Falling back to last ${fallback.length} non-zero values across the series for median calc:`, fallback);
       valuesForMedian = fallback;
     }
   }
-  console.log(`  Values for median calculation:`, valuesForMedian);
   
   const med = median(valuesForMedian);
-  console.log(`  Calculated median: ${med}`);
   
   if (med <= 0) {
     return { reliability: 0, trendDelta: null, windowWeeks: useWindow.length, points: [], median: 0, mad: 0 };
   }
   
   const absDev = useWindow.map(v => Math.abs(v - med));
-  console.log(`  Absolute deviations from median:`, absDev);
   
   const mad = median(absDev);
-  console.log(`  Calculated MAD: ${mad}`);
   
   const robustCv = mad / med; // dispersion proxy
-  console.log(`  Robust CV (MAD/median): ${robustCv}`);
   
   const k = 1.15; // calibration constant
   const raw = Math.exp(-k * robustCv);
   const reliability = Math.round(raw * 100);
-  console.log(`  Final reliability score: ${reliability}%`);
   
   // Trend delta: preceding window of equal size just before current window (shifted by one period)
   let trendDelta: number | null = null;

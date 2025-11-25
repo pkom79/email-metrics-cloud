@@ -31,15 +31,24 @@ export async function GET() {
         .order('created_at', { ascending: false });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // Collect unique owner user IDs
-    const ownerIds = Array.from(new Set((data || []).map((r: any) => (r as any).owner_user_id).filter(Boolean)));
+    // Collect unique owner user IDs and fetch emails in parallel (fixes N+1 query)
+    const ownerIds = Array.from(new Set((data || []).map((r: any) => (r as any).owner_user_id).filter(Boolean))) as string[];
     const emailMap: Record<string, string> = {};
-    for (const oid of ownerIds as string[]) {
+    
+    // Batch fetch all user emails in parallel instead of sequential loop
+    const userPromises = ownerIds.map(async (oid) => {
         try {
             const { data: usr } = await (service as any).auth.admin.getUserById(oid);
-            if (usr?.user?.email) emailMap[oid] = usr.user.email;
-        } catch { /* ignore individual failures */ }
+            return { oid, email: usr?.user?.email || null };
+        } catch {
+            return { oid, email: null };
+        }
+    });
+    const userResults = await Promise.all(userPromises);
+    for (const { oid, email } of userResults) {
+        if (email) emailMap[oid] = email;
     }
+    
     const looksLikeEmail = (s: string | null) => !!s && /@/.test(s);
     const trimmed = (s: string | null | undefined) => (s && s.trim()) || null;
     const derived = (data || []).map((a: {

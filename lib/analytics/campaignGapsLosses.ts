@@ -59,20 +59,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
   let longestGapOverride: string[] | null = null;
   let suspectedCsvCoverageGap: { weeks: number; start: string; end: string } | null = null;
 
-  // Debug: log ALL weeks from buildWeeklyAggregatesInRange
-  try {
-    console.log('🔍 ALL WEEKS from buildWeeklyAggregatesInRange:', weeks.map(w => ({
-      start: w.weekStart.toISOString().slice(0,10),
-      end: new Date(w.weekStart.getTime() + 7*ONE_DAY - 1).toISOString().slice(0,10),
-      label: w.label,
-      campaignsSent: w.campaignsSent || 0,
-      isComplete: w.isCompleteWeek
-    })));
-    console.log('🔍 Date Range:', {
-      start: rangeStart.toISOString().slice(0,10),
-      end: rangeEnd.toISOString().slice(0,10)
-    });
-  } catch {}
+
 
   // REVISED LOGIC: Include weeks in gap analysis if their Monday start falls within the selected range,
   // regardless of whether the full week is within range. The isCompleteWeek flag is only used for
@@ -200,8 +187,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
       altMap[key] = (altMap[key] || 0) + 1;
     }
     
-    console.log('🔍 [CampaignGaps] Campaign dates in dataset:', campaignDates.slice(0,20), '... (showing first 20)');
-    console.log('🔍 [CampaignGaps] Campaigns in selected range:', campaignsInRange, 'out of', campaigns.length, 'total');
+
     
 
   const altWeeks = fullInRangeWeeks.map(w => ({ key: w.weekStart.toISOString(), sent: (altMap[w.weekStart.toISOString()]||0) > 0, count: (altMap[w.weekStart.toISOString()]||0) }));
@@ -228,12 +214,7 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
     // CRITICAL FIX: ALWAYS use the alternative calculation because it directly buckets
     // campaigns by UTC Monday, which is more accurate than the weekly aggregation.
     // The weekly aggregation can miss campaigns due to timezone/date issues.
-    if (zeroWeeksFromAlt.length !== zeroSendWeeks) {
-      console.log('[CampaignGaps&Losses] MISMATCH - primary found', zeroSendWeeks, 'zero weeks, alt found', zeroWeeksFromAlt.length);
-      console.log('[CampaignGaps&Losses] Zero weeks from alt:', zeroWeeksFromAlt.map(w => ({ week: w.key.slice(0,10), count: w.count })));
-      console.log('[CampaignGaps&Losses] Zero weeks from primary:', fullInRangeWeeks.filter(w => (w.campaignsSent||0)===0).map(w => ({ week: w.weekStart.toISOString().slice(0,10), count: w.campaignsSent||0 })));
-      console.log('[CampaignGaps&Losses] USING ALT CALCULATION as source of truth');
-    }
+
     
     // ALWAYS use the alternative calculation - it's the source of truth
     // It directly buckets campaigns by UTC Monday which is more accurate than aggregation
@@ -289,14 +270,6 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
       longestGap = 0;
       longestGapOverride = null;
     }
-    // Show final comparison
-    const zeroWeeksList = zeroWeeksFromAlt.map(w => w.key.slice(0,10));
-    console.log('🔍 GAP ANALYSIS FINAL:', {
-      reliabilityWeeks: weeks.length,
-      gapAnalysisWeeks: fullInRangeWeeks.length, 
-      zeroSendWeeks: zeroSendWeeks,
-      gapsDetected: zeroWeeksList.length > 0 ? zeroWeeksList : 'NONE - showing Good job message'
-    });
   } catch {}
 
   // Low-Effectiveness Campaigns: count individual campaigns with revenue==0 in COMPLETE weeks only

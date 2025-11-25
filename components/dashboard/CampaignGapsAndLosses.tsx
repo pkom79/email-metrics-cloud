@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { AlertTriangle, CalendarRange, Layers, LineChart, MailX, Percent } from 'lucide-react';
 import MetricCard from './MetricCard';
 import InfoTooltipIcon from '../InfoTooltipIcon';
@@ -21,7 +21,7 @@ interface Props {
     filteredCampaigns?: ProcessedCampaign[];
 }
 
-export default function CampaignGapsAndLosses({ dateRange, granularity, customFrom, customTo, filteredCampaigns }: Props) {
+function CampaignGapsAndLosses({ dateRange, granularity, customFrom, customTo, filteredCampaigns }: Props) {
     const dm = DataManager.getInstance();
     const campaigns = filteredCampaigns || dm.getCampaigns();
     // Intentionally exclude flows from this module; other modules still use them
@@ -406,3 +406,5 @@ export default function CampaignGapsAndLosses({ dateRange, granularity, customFr
         </div>
     );
 }
+
+export default memo(CampaignGapsAndLosses);

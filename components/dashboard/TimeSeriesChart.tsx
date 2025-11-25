@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, memo } from 'react';
 import SelectBase from "../ui/SelectBase";
 import TooltipPortal from "../TooltipPortal";
 import { ArrowUp, ArrowDown, ArrowRight, BarChart2, TrendingUp } from 'lucide-react';
@@ -50,7 +50,7 @@ const fmt = {
     number: (v: number) => Math.round(v).toLocaleString('en-US')
 };
 
-export default function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigValue, primary, compare = null, colorHue = '#8b5cf6', darkColorHue, valueType, granularity, compareMode = 'prev-period', idSuffix = 'tsc', headerChange, headerIsPositive, headerPreviousValue, headerPreviousPeriod, chartType = 'line', onChartTypeChange }: TimeSeriesChartProps) {
+function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigValue, primary, compare = null, colorHue = '#8b5cf6', darkColorHue, valueType, granularity, compareMode = 'prev-period', idSuffix = 'tsc', headerChange, headerIsPositive, headerPreviousValue, headerPreviousPeriod, chartType = 'line', onChartTypeChange }: TimeSeriesChartProps) {
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
     // const [chartType, setChartType] = useState<ChartType>('line'); // Lifted to parent
     const width = 850; const height = 200; const innerH = 140; const padLeft = 72; const padRight = 20; const innerW = width - padLeft - padRight;
@@ -310,3 +310,5 @@ export default function TimeSeriesChart({ title, metricKey, metricOptions, onMet
         </div>
     );
 }
+
+export default memo(TimeSeriesChart);

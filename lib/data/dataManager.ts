@@ -72,39 +72,8 @@ export class DataManager {
     }
 
     private _buildBaseBucketsForSubset(campaigns: ProcessedCampaign[], flows: ProcessedFlowEmail[], granularity: 'daily' | 'weekly' | 'monthly', startDate: Date, endDate: Date) {
-        // Debug logging BEFORE filtering to see raw data
-        if (campaigns.length > 0) {
-            const firstCampaign = campaigns[0];
-            console.log('🔍 [DataManager] PRE-FILTER Campaign Check:', {
-                campaignDate: firstCampaign.sentDate?.toISOString(),
-                campaignTimestamp: firstCampaign.sentDate?.getTime(),
-                startDate: startDate.toISOString(),
-                startTimestamp: startDate.getTime(),
-                endDate: endDate.toISOString(),
-                endTimestamp: endDate.getTime(),
-                isInstanceOfDate: firstCampaign.sentDate instanceof Date,
-                isNotNaN: !isNaN(firstCampaign.sentDate.getTime()),
-                isAfterStart: firstCampaign.sentDate >= startDate,
-                isAfterStartDebug: `${firstCampaign.sentDate?.getTime()} >= ${startDate.getTime()} = ${firstCampaign.sentDate >= startDate}`,
-                isBeforeEnd: firstCampaign.sentDate <= endDate,
-                isBeforeEndDebug: `${firstCampaign.sentDate?.getTime()} <= ${endDate.getTime()} = ${firstCampaign.sentDate <= endDate}`
-            });
-        }
-        
         // Build a per-day map of subset sums, then iterate across the full day range to zero-fill gaps
         const all = [...campaigns, ...flows].filter(e => e.sentDate instanceof Date && !isNaN(e.sentDate.getTime()) && e.sentDate >= startDate && e.sentDate <= endDate);
-        
-        // Debug logging for subset filtering
-        if (campaigns.length > 0 || flows.length > 0) {
-            console.log('🔍 [DataManager] _buildBaseBucketsForSubset:', {
-                inputCampaigns: campaigns.length,
-                inputFlows: flows.length,
-                filteredTotal: all.length,
-                granularity,
-                startDate: startDate.toISOString(),
-                endDate: endDate.toISOString()
-            });
-        }
         
         const dailyMap: Map<string, { revenue: number; emailsSent: number; totalOrders: number; uniqueOpens: number; uniqueClicks: number; unsubscribesCount: number; spamComplaintsCount: number; bouncesCount: number; emailCount: number; date: Date }> = new Map();
         for (const e of all) {
@@ -114,8 +83,6 @@ export class DataManager {
             if (!rec) { rec = { revenue: 0, emailsSent: 0, totalOrders: 0, uniqueOpens: 0, uniqueClicks: 0, unsubscribesCount: 0, spamComplaintsCount: 0, bouncesCount: 0, emailCount: 0, date: d }; dailyMap.set(key, rec); }
             rec.revenue += e.revenue; rec.emailsSent += e.emailsSent; rec.totalOrders += e.totalOrders; rec.uniqueOpens += e.uniqueOpens; rec.uniqueClicks += e.uniqueClicks; rec.unsubscribesCount += e.unsubscribesCount; rec.spamComplaintsCount += e.spamComplaintsCount; rec.bouncesCount += e.bouncesCount; rec.emailCount += 1;
         }
-        
-        console.log('🔍 [DataManager] dailyMap keys:', Array.from(dailyMap.keys()).slice(0,10));
 
         // Build continuous list of day keys between start and end
         const dayKeys: string[] = [];
