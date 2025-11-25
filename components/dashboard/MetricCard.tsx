@@ -94,7 +94,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
             </div>
 
             {!hideSparkline && variant !== 'stat' && (
-                                <Sparkline
+                <Sparkline
                     isPositive={shouldShowAsPositive}
                     change={change}
                     isAllTime={isAllTime}

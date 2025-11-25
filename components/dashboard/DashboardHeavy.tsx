@@ -1078,8 +1078,8 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         let flows = liveFlows;
         // PERFORMANCE: Use deferred values to avoid blocking UI during date changes
         const effectiveDateRange = deferredDateRange;
-        const effectiveCustomFrom = useDeferredValue(customFrom);
-        const effectiveCustomTo = useDeferredValue(customTo);
+        const effectiveCustomFrom = deferredCustomFrom;
+        const effectiveCustomTo = deferredCustomTo;
         const effectiveCustomActive = effectiveDateRange === 'custom' && effectiveCustomFrom && effectiveCustomTo;
 
         if (effectiveDateRange === 'custom' && effectiveCustomActive) {
