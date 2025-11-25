@@ -25,6 +25,7 @@ type Membership = {
     created_at?: string;
     email?: string | null;
     name?: string | null;
+    last_login_at?: string | null;
 };
 
 function normalizeStoreUrl(input: string) {
@@ -683,14 +684,16 @@ export default function AccountClient({ initial }: Props) {
                                                 <div className="text-sm text-gray-500 dark:text-gray-400">No members yet.</div>
                                             )}
                                             {(memberLists[account.id] || []).map(m => {
-                                                const primary = m.name || m.email || m.user_id;
-                                                const secondary = m.email && m.email !== primary ? m.email : (m.name && m.email ? m.email : null);
+                                                const primary = m.email || m.name || m.user_id;
+                                                const secondary = m.name && m.name !== primary ? m.name : null;
+                                                const lastLogin = m.last_login_at ? new Date(m.last_login_at).toLocaleString() : 'No recent login';
                                                 return (
                                                     <div key={m.user_id} className="flex items-center justify-between rounded border border-gray-200 dark:border-gray-700 px-3 py-2">
                                                         <div className="flex flex-col">
                                                             <span className="text-sm text-gray-800 dark:text-gray-100">{primary}</span>
                                                             {secondary && <span className="text-xs text-gray-500 dark:text-gray-400">{secondary}</span>}
                                                             <span className="text-xs text-gray-500 dark:text-gray-400">{m.role === 'owner' ? 'Owner' : 'Manager'}</span>
+                                                            <span className="text-[11px] text-gray-400 dark:text-gray-500">Last login: {lastLogin}</span>
                                                         </div>
                                                         {m.role !== 'owner' && (
                                                             <button

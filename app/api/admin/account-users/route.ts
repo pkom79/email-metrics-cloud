@@ -29,20 +29,25 @@ export async function GET(req: NextRequest) {
     const ids = Array.from(new Set(memberships.map((m: any) => m.user_id).filter(Boolean))) as string[];
     const emailMap: Record<string, string> = {};
     const nameMap: Record<string, string> = {};
+    const lastLoginMap: Record<string, string | null> = {};
     for (const uid of ids) {
       try {
         const lookup: any = await (svc as any).auth.admin.getUserById(uid);
         const userObj = lookup?.data?.user || lookup?.user;
         const email = userObj?.email;
-        const name = (userObj?.user_metadata as any)?.name || userObj?.email;
+        const meta = (userObj?.user_metadata as any) || {};
+        const name = meta?.name || [meta?.firstName, meta?.lastName].filter(Boolean).join(' ').trim() || userObj?.email;
+        const lastLogin = userObj?.last_sign_in_at || null;
         if (email) emailMap[uid] = email as string;
         if (name) nameMap[uid] = name as string;
+        if (uid) lastLoginMap[uid] = lastLogin;
       } catch { /* ignore per-user */ }
     }
     const enriched = memberships.map((m: any) => ({
       ...m,
       email: emailMap[m.user_id as string] || null,
       name: nameMap[m.user_id as string] || null,
+      last_login_at: lastLoginMap[m.user_id as string] || null,
     }));
 
     return NextResponse.json({ memberships: enriched });
