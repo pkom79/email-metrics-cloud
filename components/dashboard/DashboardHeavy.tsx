@@ -2320,7 +2320,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             {/* Revenue Split Bar */}
                             <RevenueSplitBar campaigns={defCampaigns} flows={defFlowsOverview} />
                             {/* Split Share Over Time */}
-                            <SplitShareOverTime 
+                            <SplitShareOverTime
                                 dateRange={dateRange}
                                 granularity={granularity}
                                 customFrom={customFrom}
@@ -2333,7 +2333,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     )}
                     {/* Send Volume Impact */}
                     {HAS_ACTIVE_ACCOUNT && (
-                        <SendVolumeImpact 
+                        <SendVolumeImpact
                             dateRange={dateRange}
                             granularity={granularity}
                             customFrom={customFrom}
@@ -2400,20 +2400,20 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     )}
                     {/* Campaign Send Frequency */}
                     {HAS_ACTIVE_ACCOUNT && defCampaigns.length > 0 && (
-                        <CampaignSendFrequency 
+                        <CampaignSendFrequency
                             campaigns={defCampaigns}
                             onGuidance={setFrequencyGuidance}
                         />
                     )}
                     {/* Audience Size Performance */}
                     {HAS_ACTIVE_ACCOUNT && defCampaigns.length > 0 && (
-                        <AudienceSizePerformance 
+                        <AudienceSizePerformance
                             campaigns={defCampaigns}
                         />
                     )}
                     {/* Campaign Gaps and Losses */}
                     {HAS_ACTIVE_ACCOUNT && (
-                        <CampaignGapsAndLosses 
+                        <CampaignGapsAndLosses
                             dateRange={dateRange}
                             granularity={granularity}
                             customFrom={customFrom}
@@ -2424,12 +2424,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     {/* Day of Week and Hour of Day Performance */}
                     {HAS_ACTIVE_ACCOUNT && defCampaigns.length > 0 && (
                         <>
-                            <DayOfWeekPerformance 
+                            <DayOfWeekPerformance
                                 filteredCampaigns={defCampaigns}
                                 dateRange={dateRange}
                                 frequencyRecommendation={frequencyGuidance ? deriveFrequencyRecommendation(frequencyGuidance) : undefined}
                             />
-                            <HourOfDayPerformance 
+                            <HourOfDayPerformance
                                 filteredCampaigns={defCampaigns}
                                 dateRange={dateRange}
                             />

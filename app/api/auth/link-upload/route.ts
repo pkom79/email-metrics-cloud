@@ -33,16 +33,20 @@ export async function POST(request: Request) {
                 .maybeSingle();
             if (acctErr) throw acctErr;
             if (!candidate) return NextResponse.json({ error: 'Account not found' }, { status: 404 });
-            if (!isAdmin && candidate.owner_user_id !== user.id) {
-                const { data: membership } = await supabase
-                    .from('account_users')
-                    .select('role')
-                    .eq('account_id', accountId)
-                    .eq('user_id', user.id)
-                    .limit(1)
-                    .maybeSingle();
-                if (!membership) {
-                    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+            
+            // Admins have access to all accounts; non-admins must be owner or member
+            if (!isAdmin) {
+                if (candidate.owner_user_id !== user.id) {
+                    const { data: membership } = await supabase
+                        .from('account_users')
+                        .select('role')
+                        .eq('account_id', accountId)
+                        .eq('user_id', user.id)
+                        .limit(1)
+                        .maybeSingle();
+                    if (!membership) {
+                        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+                    }
                 }
             }
             accountId = candidate.id;
