@@ -120,6 +120,7 @@ export default function UploadWizard({ accountId }: UploadWizardProps = {}) {
             }
 
             if (authedUser) {
+                console.log('[UploadWizard] Calling link-upload API with:', { uploadId, accountId });
                 const linkRes = await fetch('/api/auth/link-upload', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -127,11 +128,13 @@ export default function UploadWizard({ accountId }: UploadWizardProps = {}) {
                     body: JSON.stringify({ uploadId, accountId }),
                 });
                 const linkJson = await linkRes.json().catch(() => ({}));
+                console.log('[UploadWizard] Link response:', { status: linkRes.status, ok: linkRes.ok, body: linkJson });
                 if (diagEnabled) {
                     recordDiag('upload:link', 'Link response received', { status: linkRes.status, body: linkJson });
                 }
 
                 if (!linkRes.ok || !linkJson?.ok) {
+                    console.error('[UploadWizard] Link-upload failed:', { status: linkRes.status, error: linkJson?.error, fullResponse: linkJson });
                     throw new Error(linkJson?.error || 'Failed to finalize upload');
                 }
                 snapshotId = linkJson?.snapshotId;
@@ -182,7 +185,14 @@ export default function UploadWizard({ accountId }: UploadWizardProps = {}) {
             setLoading(false);
         } catch (e: any) {
             setNotice(null);
-            setErrors([e?.message || 'Upload failed']);
+            const errorMessage = e?.message || 'Upload failed';
+            setErrors([errorMessage]);
+            console.error('[UploadWizard] Upload failed:', {
+                message: e?.message,
+                error: e,
+                accountId,
+                hasFiles: { campaigns: !!campaigns, flows: !!flows, subscribers: !!subscribers }
+            });
             if (diagEnabled) {
                 recordDiag('upload:error', 'Upload flow failed', { message: e?.message, stack: e?.stack });
             }
