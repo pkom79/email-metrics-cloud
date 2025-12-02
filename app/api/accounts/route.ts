@@ -16,7 +16,8 @@ type AdminAccount = {
 
 // Returns list of all accounts with owner email & metadata (admin only)
 export async function GET() {
-    const userClient = createRouteHandlerClient({ cookies });
+    const cookieStore = await cookies();
+    const userClient = createRouteHandlerClient({ cookies: () => cookieStore });
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const isAdmin = user.app_metadata?.role === 'admin' || user.app_metadata?.app_role === 'admin';
@@ -94,7 +95,8 @@ export async function GET() {
 // Create a new admin-comped account (admin only)
 export async function POST(request: Request) {
     try {
-        const supabase = createRouteHandlerClient({ cookies });
+        const cookieStore = await cookies();
+        const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         const isAdmin = user.app_metadata?.role === 'admin' || user.app_metadata?.app_role === 'admin';
@@ -154,7 +156,8 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
     try {
-        const supabase = createRouteHandlerClient({ cookies });
+        const cookieStore = await cookies();
+        const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         const isAdmin = user.app_metadata?.role === 'admin' || user.app_metadata?.app_role === 'admin';
@@ -232,7 +235,8 @@ export async function PATCH(request: Request) {
 // Soft delete an account (admin only). Body: { accountId: string, hard?: boolean }
 export async function DELETE(request: Request) {
     try {
-        const supabase = createRouteHandlerClient({ cookies });
+        const cookieStore = await cookies();
+        const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         const isAdmin = user.app_metadata?.role === 'admin' || user.app_metadata?.app_role === 'admin';

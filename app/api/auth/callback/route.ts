@@ -8,7 +8,8 @@ export async function GET(request: Request) {
     const token_hash = url.searchParams.get('token_hash');
     const type = url.searchParams.get('type');
 
-    const supabase = createRouteHandlerClient({ cookies });
+    const cookieStore = await cookies();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
 
     try {
         if (code) {

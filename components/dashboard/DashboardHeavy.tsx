@@ -2307,7 +2307,66 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 <MetricCard title="Spam Rate" value={formatPercent(overviewMetrics.spamRate.value)} change={overviewMetrics.spamRate.change} isPositive={overviewMetrics.spamRate.isPositive} previousValue={overviewMetrics.spamRate.previousValue} previousPeriod={overviewMetrics.spamRate.previousPeriod} dateRange={dateRange} metricKey="spamRate" sparklineData={overviewSeries.spamRate} compareMode={compareMode} category="email" chartType={emailChartType} />
                                 <MetricCard title="Bounce Rate" value={formatPercent(overviewMetrics.bounceRate.value)} change={overviewMetrics.bounceRate.change} isPositive={overviewMetrics.bounceRate.isPositive} previousValue={overviewMetrics.bounceRate.previousValue} previousPeriod={overviewMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={overviewSeries.bounceRate} compareMode={compareMode} category="email" chartType={emailChartType} />
                             </div>
+                            {/* Revenue Split Bar */}
+                            <RevenueSplitBar campaigns={defCampaigns} flows={defFlowsOverview} />
+                            {/* Split Share Over Time */}
+                            <SplitShareOverTime 
+                                dateRange={dateRange}
+                                granularity={granularity}
+                                customFrom={customFrom}
+                                customTo={customTo}
+                                compareMode={compareMode}
+                                filteredCampaigns={defCampaigns}
+                                dateRangeBoundaries={dateRangeBoundaries}
+                            />
                         </section>
+                    )}
+                    {/* Day of Week and Hour of Day Performance */}
+                    {HAS_ACTIVE_ACCOUNT && defCampaigns.length > 0 && (
+                        <>
+                            <DayOfWeekPerformance 
+                                filteredCampaigns={defCampaigns}
+                                dateRange={dateRange}
+                                frequencyRecommendation={frequencyGuidance ? deriveFrequencyRecommendation(frequencyGuidance) : undefined}
+                            />
+                            <HourOfDayPerformance 
+                                filteredCampaigns={defCampaigns}
+                                dateRange={dateRange}
+                            />
+                        </>
+                    )}
+                    {/* Send Volume Impact */}
+                    {HAS_ACTIVE_ACCOUNT && (
+                        <SendVolumeImpact 
+                            dateRange={dateRange}
+                            granularity={granularity}
+                            customFrom={customFrom}
+                            customTo={customTo}
+                            compareMode={compareMode}
+                        />
+                    )}
+                    {/* Campaign Send Frequency */}
+                    {HAS_ACTIVE_ACCOUNT && defCampaigns.length > 0 && (
+                        <CampaignSendFrequency 
+                            campaigns={defCampaigns}
+                            onGuidance={setFrequencyGuidance}
+                        />
+                    )}
+                    {/* Campaign Gaps and Losses */}
+                    {HAS_ACTIVE_ACCOUNT && (
+                        <CampaignGapsAndLosses 
+                            dateRange={dateRange}
+                            granularity={granularity}
+                            customFrom={customFrom}
+                            customTo={customTo}
+                            filteredCampaigns={defCampaigns}
+                        />
+                    )}
+                    {/* Audience Size Performance */}
+                    {HAS_ACTIVE_ACCOUNT && defCampaigns.length > 0 && (
+                        <AudienceSizePerformance 
+                            campaigns={defCampaigns}
+                        />
                     )}
                     {campaignMetrics && (
                         <section>
@@ -2363,6 +2422,63 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 <MetricCard title="Unsubscribe Rate" value={formatPercent(campaignMetrics.unsubscribeRate.value)} change={campaignMetrics.unsubscribeRate.change} isPositive={campaignMetrics.unsubscribeRate.isPositive} previousValue={campaignMetrics.unsubscribeRate.previousValue} previousPeriod={campaignMetrics.unsubscribeRate.previousPeriod} dateRange={dateRange} metricKey="unsubscribeRate" sparklineData={campaignSeries.unsubscribeRate} compareMode={compareMode} category="campaign" chartType={campaignChartType} />
                                 <MetricCard title="Spam Rate" value={formatPercent(campaignMetrics.spamRate.value)} change={campaignMetrics.spamRate.change} isPositive={campaignMetrics.spamRate.isPositive} previousValue={campaignMetrics.spamRate.previousValue} previousPeriod={campaignMetrics.spamRate.previousPeriod} dateRange={dateRange} metricKey="spamRate" sparklineData={campaignSeries.spamRate} compareMode={compareMode} category="campaign" chartType={campaignChartType} />
                                 <MetricCard title="Bounce Rate" value={formatPercent(campaignMetrics.bounceRate.value)} change={campaignMetrics.bounceRate.change} isPositive={campaignMetrics.bounceRate.isPositive} previousValue={campaignMetrics.bounceRate.previousValue} previousPeriod={campaignMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={campaignSeries.bounceRate} compareMode={compareMode} category="campaign" chartType={campaignChartType} />
+                            </div>
+                        </section>
+                    )}
+                    {flowMetrics && (
+                        <section>
+                            <div className="flex items-center gap-2 mb-3">
+                                <Zap className="w-5 h-5 text-purple-600" />
+                                <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Flow Performance
+                                    <InfoTooltipIcon placement="top" content={(
+                                        <div>
+                                            <p className="font-semibold mb-1">What</p>
+                                            <p>KPIs for flow emails only.</p>
+                                            <p className="font-semibold mt-2 mb-1">How</p>
+                                            <p>Compare flow performance metrics over time to identify trends and opportunities.</p>
+                                            <p className="font-semibold mt-2 mb-1">Why</p>
+                                            <p>Optimize your automated email sequences for better engagement and revenue.</p>
+                                        </div>
+                                    )} />
+                                </h2>
+                            </div>
+                            {/* Flow Timeseries Chart */}
+                            <TimeSeriesChart
+                                title="Flow Performance"
+                                metricKey={flowChartMetric}
+                                metricOptions={campaignMetricOptions as any}
+                                onMetricChange={m => setFlowChartMetric(m)}
+                                bigValue={bigValueForFlows(flowChartMetric)}
+                                primary={flowChartSeries.primary}
+                                compare={flowChartSeries.compare}
+                                valueType={metricValueType(flowChartMetric)}
+                                granularity={granularity}
+                                compareMode={compareMode}
+                                headerChange={flowMetrics[(flowChartMetric === 'revenue' ? 'totalRevenue' : flowChartMetric === 'avgOrderValue' ? 'averageOrderValue' : flowChartMetric) as keyof typeof flowMetrics]?.change as any}
+                                headerIsPositive={flowMetrics[(flowChartMetric === 'revenue' ? 'totalRevenue' : flowChartMetric === 'avgOrderValue' ? 'averageOrderValue' : flowChartMetric) as keyof typeof flowMetrics]?.isPositive as any}
+                                headerPreviousValue={flowMetrics[(flowChartMetric === 'revenue' ? 'totalRevenue' : flowChartMetric === 'avgOrderValue' ? 'averageOrderValue' : flowChartMetric) as keyof typeof flowMetrics]?.previousValue as any}
+                                headerPreviousPeriod={flowMetrics[(flowChartMetric === 'revenue' ? 'totalRevenue' : flowChartMetric === 'avgOrderValue' ? 'averageOrderValue' : flowChartMetric) as keyof typeof flowMetrics]?.previousPeriod as any}
+                                colorHue="#10b981" // emerald (flows)
+                                idSuffix="flows"
+                                chartType={flowChartType}
+                                onChartTypeChange={setFlowChartType}
+                            />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                {/* Row 1 */}
+                                <MetricCard title="Total Revenue" value={formatCurrency(flowMetrics.totalRevenue.value)} change={flowMetrics.totalRevenue.change} isPositive={flowMetrics.totalRevenue.isPositive} previousValue={flowMetrics.totalRevenue.previousValue} previousPeriod={flowMetrics.totalRevenue.previousPeriod} dateRange={dateRange} metricKey="revenue" sparklineData={flowSeries.totalRevenue} compareMode={compareMode} category="flow" chartType={flowChartType} />
+                                <MetricCard title="Average Order Value" value={formatCurrency(flowMetrics.averageOrderValue.value)} change={flowMetrics.averageOrderValue.change} isPositive={flowMetrics.averageOrderValue.isPositive} previousValue={flowMetrics.averageOrderValue.previousValue} previousPeriod={flowMetrics.averageOrderValue.previousPeriod} dateRange={dateRange} metricKey="avgOrderValue" sparklineData={flowSeries.averageOrderValue} compareMode={compareMode} category="flow" chartType={flowChartType} />
+                                <MetricCard title="Total Orders" value={formatNumber(flowMetrics.totalOrders.value)} change={flowMetrics.totalOrders.change} isPositive={flowMetrics.totalOrders.isPositive} previousValue={flowMetrics.totalOrders.previousValue} previousPeriod={flowMetrics.totalOrders.previousPeriod} dateRange={dateRange} metricKey="totalOrders" sparklineData={flowSeries.totalOrders} compareMode={compareMode} category="flow" chartType={flowChartType} />
+                                <MetricCard title="Conversion Rate" value={formatPercent(flowMetrics.conversionRate.value)} change={flowMetrics.conversionRate.change} isPositive={flowMetrics.conversionRate.isPositive} previousValue={flowMetrics.conversionRate.previousValue} previousPeriod={flowMetrics.conversionRate.previousPeriod} dateRange={dateRange} metricKey="conversionRate" sparklineData={flowSeries.conversionRate} compareMode={compareMode} category="flow" chartType={flowChartType} />
+                                {/* Row 2 */}
+                                <MetricCard title="Open Rate" value={formatPercent(flowMetrics.openRate.value)} change={flowMetrics.openRate.change} isPositive={flowMetrics.openRate.isPositive} previousValue={flowMetrics.openRate.previousValue} previousPeriod={flowMetrics.openRate.previousPeriod} dateRange={dateRange} metricKey="openRate" sparklineData={flowSeries.openRate} compareMode={compareMode} category="flow" chartType={flowChartType} />
+                                <MetricCard title="Click Rate" value={formatPercent(flowMetrics.clickRate.value)} change={flowMetrics.clickRate.change} isPositive={flowMetrics.clickRate.isPositive} previousValue={flowMetrics.clickRate.previousValue} previousPeriod={flowMetrics.clickRate.previousPeriod} dateRange={dateRange} metricKey="clickRate" sparklineData={flowSeries.clickRate} compareMode={compareMode} category="flow" chartType={flowChartType} />
+                                <MetricCard title="Click-to-Open Rate" value={formatPercent(flowMetrics.clickToOpenRate.value)} change={flowMetrics.clickToOpenRate.change} isPositive={flowMetrics.clickToOpenRate.isPositive} previousValue={flowMetrics.clickToOpenRate.previousValue} previousPeriod={flowMetrics.clickToOpenRate.previousPeriod} dateRange={dateRange} metricKey="clickToOpenRate" sparklineData={flowSeries.clickToOpenRate} compareMode={compareMode} category="flow" chartType={flowChartType} />
+                                <MetricCard title="Revenue per Email" value={formatCurrency(flowMetrics.revenuePerEmail.value)} change={flowMetrics.revenuePerEmail.change} isPositive={flowMetrics.revenuePerEmail.isPositive} previousValue={flowMetrics.revenuePerEmail.previousValue} previousPeriod={flowMetrics.revenuePerEmail.previousPeriod} dateRange={dateRange} metricKey="revenuePerEmail" sparklineData={flowSeries.revenuePerEmail} compareMode={compareMode} category="flow" chartType={flowChartType} />
+                                {/* Row 3 */}
+                                <MetricCard title="Emails Sent" value={formatNumber(flowMetrics.emailsSent.value)} change={flowMetrics.emailsSent.change} isPositive={flowMetrics.emailsSent.isPositive} previousValue={flowMetrics.emailsSent.previousValue} previousPeriod={flowMetrics.emailsSent.previousPeriod} dateRange={dateRange} metricKey="emailsSent" sparklineData={flowSeries.emailsSent} compareMode={compareMode} category="flow" chartType={flowChartType} />
+                                <MetricCard title="Unsubscribe Rate" value={formatPercent(flowMetrics.unsubscribeRate.value)} change={flowMetrics.unsubscribeRate.change} isPositive={flowMetrics.unsubscribeRate.isPositive} previousValue={flowMetrics.unsubscribeRate.previousValue} previousPeriod={flowMetrics.unsubscribeRate.previousPeriod} dateRange={dateRange} metricKey="unsubscribeRate" sparklineData={flowSeries.unsubscribeRate} compareMode={compareMode} category="flow" chartType={flowChartType} />
+                                <MetricCard title="Spam Rate" value={formatPercent(flowMetrics.spamRate.value)} change={flowMetrics.spamRate.change} isPositive={flowMetrics.spamRate.isPositive} previousValue={flowMetrics.spamRate.previousValue} previousPeriod={flowMetrics.spamRate.previousPeriod} dateRange={dateRange} metricKey="spamRate" sparklineData={flowSeries.spamRate} compareMode={compareMode} category="flow" chartType={flowChartType} />
+                                <MetricCard title="Bounce Rate" value={formatPercent(flowMetrics.bounceRate.value)} change={flowMetrics.bounceRate.change} isPositive={flowMetrics.bounceRate.isPositive} previousValue={flowMetrics.bounceRate.previousValue} previousPeriod={flowMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={flowSeries.bounceRate} compareMode={compareMode} category="flow" chartType={flowChartType} />
                             </div>
                         </section>
                     )}

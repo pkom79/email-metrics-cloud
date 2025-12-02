@@ -4,7 +4,8 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 // Session sync endpoint used by the client-side Supabase auth listener
 export async function POST(request: Request) {
-    const supabase = createRouteHandlerClient({ cookies });
+    const cookieStore = await cookies();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
     try {
         const { event, session } = (await request.json()) as { event?: string; session?: any };
         if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {

@@ -9,7 +9,8 @@ export const runtime = 'nodejs';
 // GET /api/notifications/logs?limit=50&status=all|pending|processing|sent|error|dead
 export async function GET(request: Request) {
   try {
-    const userClient = createRouteHandlerClient({ cookies });
+    const cookieStore = await cookies();
+    const userClient = createRouteHandlerClient({ cookies: () => cookieStore });
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const isAdmin = user.app_metadata?.role === 'admin' || user.app_metadata?.app_role === 'admin';
