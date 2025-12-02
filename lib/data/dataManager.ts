@@ -798,14 +798,14 @@ export class DataManager {
         metricKey: string,
         dateRange: string,
         granularity: 'daily' | 'weekly' | 'monthly',
-        compareMode: 'prev-period' | 'prev-year' = 'prev-period',
+        compareMode: 'none' | 'prev-period' | 'prev-year' = 'prev-period',
         customFrom?: string,
         customTo?: string
     ): { primary: { value: number; date: string }[]; compare: { value: number; date: string }[] | null } {
         try {
             const primary = this.getMetricTimeSeries(campaigns, flows, metricKey, dateRange, granularity, customFrom, customTo);
-            // Do not compute compare for 'all'
-            if (dateRange === 'all') return { primary, compare: null };
+            // Do not compute compare for 'all' or 'none'
+            if (dateRange === 'all' || compareMode === 'none') return { primary, compare: null };
 
             // Resolve current window to derive previous window
             const range = this._computeDateRangeForTimeSeries(dateRange, customFrom, customTo);
@@ -1086,7 +1086,7 @@ export class DataManager {
         metricKey: string,
         dateRange: string,
         dataType: 'all' | 'campaigns' | 'flows' = 'all',
-        options?: { flowName?: string; compareMode?: 'prev-period' | 'prev-year' }
+        options?: { flowName?: string; compareMode?: 'none' | 'prev-period' | 'prev-year' }
     ): { currentValue: number; previousValue: number | null; changePercent: number; isPositive: boolean; currentPeriod?: { startDate: Date; endDate: Date }; previousPeriod?: { startDate: Date; endDate: Date } } {
         // Threshold constants (Option C implementation)
         const MIN_EMAILS_SENT = 20;
@@ -1118,6 +1118,12 @@ export class DataManager {
 
         // Comparison mode (default prev-period)
         const compareMode = options?.compareMode || 'prev-period';
+        
+        // If compareMode is 'none', return zero comparison
+        if (compareMode === 'none') {
+            return { currentValue: 0, previousValue: null, changePercent: 0, isPositive: true, currentPeriod: { startDate, endDate }, previousPeriod: undefined };
+        }
+        
         let prevStartDate: Date; let prevEndDate: Date;
         if (compareMode === 'prev-year') {
             prevStartDate = new Date(startDate);

@@ -7,7 +7,7 @@ import { computeAxisMax, thirdTicks, formatTickLabels } from '../../lib/utils/ch
 import { DataManager } from '../../lib/data/dataManager';
 
 type Granularity = 'daily' | 'weekly' | 'monthly';
-type CompareMode = 'prev-period' | 'prev-year';
+type CompareMode = 'none' | 'prev-period' | 'prev-year';
 type ChartType = 'line' | 'bar';
 
 export type MetricKey = 'revenue' | 'avgOrderValue' | 'revenuePerEmail' | 'openRate' | 'clickRate' | 'clickToOpenRate' | 'emailsSent' | 'totalOrders' | 'conversionRate' | 'unsubscribeRate' | 'spamRate' | 'bounceRate';
@@ -55,7 +55,7 @@ function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigV
     // const [chartType, setChartType] = useState<ChartType>('line'); // Lifted to parent
     const width = 850; const height = 200; const innerH = 140; const padLeft = 72; const padRight = 20; const innerW = width - padLeft - padRight;
 
-    const maxVal = useMemo(() => computeAxisMax(primary.map(p => Math.max(0, p.value)), (compare || undefined) ? (compare || []).map(p => Math.max(0, p.value)) : null, valueType === 'percentage' ? 'percentage' : (valueType as any)), [primary, compare, valueType]);
+    const maxVal = useMemo(() => computeAxisMax(primary.map(p => Math.max(0, p.value)), (compareMode !== 'none' && compare) ? (compare || []).map(p => Math.max(0, p.value)) : null, valueType === 'percentage' ? 'percentage' : (valueType as any)), [primary, compare, compareMode, valueType]);
     const xScale = (i: number) => primary.length <= 1 ? padLeft + innerW / 2 : padLeft + (i / (primary.length - 1)) * innerW;
 
     // Bar chart helpers
@@ -97,7 +97,7 @@ function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigV
     const pts = primary.map((p, i) => ({ x: xScale(i), y: yScale(p.value) }));
     const pathD = buildSmoothPath(pts);
 
-    const cmpPts = (compare || undefined) ? (compare || []).map((p, i) => ({ x: xScale(i), y: yScale(p.value) })) : [];
+    const cmpPts = (compareMode !== 'none' && compare) ? (compare || []).map((p, i) => ({ x: xScale(i), y: yScale(p.value) })) : [];
     const cmpPathD = cmpPts.length >= 2 ? buildSmoothPath(cmpPts) : '';
     const cmpAreaD = cmpPathD ? `${cmpPathD} L ${xScale((compare || []).length - 1)} ${innerH} L ${xScale(0)} ${innerH} Z` : '';
 

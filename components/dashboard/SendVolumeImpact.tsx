@@ -11,7 +11,7 @@ import { computeSendVolumeGuidance } from '../../lib/analytics/sendVolumeGuidanc
 import type { SendVolumeGuidanceResult, SendVolumeStatus } from '../../lib/analytics/sendVolumeGuidance';
 import { computeAxisMax, thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
 
-interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; compareMode?: 'prev-period' | 'prev-year'; }
+interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; compareMode?: 'none' | 'prev-period' | 'prev-year'; }
 
 type MetricKey = 'totalRevenue' | 'unsubsPer1k' | 'spamPer1k' | 'bouncesPer1k';
 type SourceScope = 'all' | 'campaigns' | 'flows';

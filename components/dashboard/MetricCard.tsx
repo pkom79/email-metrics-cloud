@@ -20,7 +20,7 @@ interface MetricCardProps {
     // Previous period tooltip data
     previousValue?: number;
     previousPeriod?: { startDate: Date; endDate: Date };
-    compareMode?: 'prev-period' | 'prev-year';
+    compareMode?: 'none' | 'prev-period' | 'prev-year';
     category?: 'email' | 'campaign' | 'flow';
     chartType?: 'line' | 'bar';
 }

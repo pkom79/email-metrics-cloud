@@ -294,7 +294,7 @@ type FlowMetricTotals = {
 export async function buildLlmExportJson(params: {
   dateRange: string;
   granularity: "daily" | "weekly" | "monthly";
-  compareMode: "prev-period" | "prev-year";
+  compareMode: "none" | "prev-period" | "prev-year";
   customFrom?: string;
   customTo?: string;
   account?: { name?: string | null; url?: string | null };

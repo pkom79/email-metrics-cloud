@@ -6,7 +6,7 @@ import SelectBase from "../ui/SelectBase";
 import { DataManager } from '../../lib/data/dataManager';
 import { computeAxisMax, thirdTicks, formatTickLabels } from '../../lib/utils/chartTicks';
 
-interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; compareMode?: 'prev-period' | 'prev-year'; }
+interface Props { dateRange: string; granularity: 'daily' | 'weekly' | 'monthly'; customFrom?: string; customTo?: string; compareMode?: 'none' | 'prev-period' | 'prev-year'; }
 
 type Metric = 'created' | 'firstActive' | 'subscribed';
 type ChartType = 'area' | 'bar';

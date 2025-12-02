@@ -5,7 +5,7 @@ import { DataManager } from '../../lib/data/dataManager';
 import { ProcessedCampaign } from '../../lib/data/dataTypes';
 
 type Gran = 'daily' | 'weekly' | 'monthly';
-type CompareMode = 'prev-period' | 'prev-year';
+type CompareMode = 'none' | 'prev-period' | 'prev-year';
 
 interface Props {
     dateRange: string;

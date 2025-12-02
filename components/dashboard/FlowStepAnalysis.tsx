@@ -92,7 +92,7 @@ interface FlowStepAnalysisProps {
     granularity: 'daily' | 'weekly' | 'monthly';
     customFrom?: string;
     customTo?: string;
-    compareMode?: 'prev-period' | 'prev-year';
+    compareMode?: 'none' | 'prev-period' | 'prev-year';
 }
 
 interface FlowStepMetrics {
@@ -916,24 +916,15 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         return stepSeriesByPosition[sequencePosition]?.curr || [];
     }, [selectedFlow, stepSeriesByPosition]);
 
-    const sharedYAxisRange = useMemo(() => {
-        if (!selectedFlow) return { min: 0, max: 10 };
+    const getStepYAxisRange = (currSeries: { value: number; date: string }[], prevSeries: { value: number; date: string }[]) => {
         const metricConfig = METRIC_OPTIONS.find(m => m.value === selectedMetric);
         const type = metricConfig?.format === 'currency' ? 'currency' : metricConfig?.format === 'percentage' ? 'percentage' : 'number';
-        let allValues: number[] = [];
-        let allPrevValues: number[] = [];
-        for (let position = 1; flowSequenceInfo && position <= flowSequenceInfo.sequenceLength; position++) {
-            const series = stepSeriesByPosition[position];
-            const curr = series?.curr || [];
-            const prev = series?.prev || [];
-            if (curr.length) allValues = allValues.concat(curr.map(d => Math.max(0, d.value)));
-            if (prev.length) allPrevValues = allPrevValues.concat(prev.map(d => Math.max(0, d.value)));
-        }
-        if (allValues.length === 0 && allPrevValues.length === 0) return { min: 0, max: 10 };
-        const max = computeAxisMax(allValues, allPrevValues, type as any);
+        const currValues = currSeries.map(d => Math.max(0, d.value));
+        const prevValues = prevSeries.map(d => Math.max(0, d.value));
+        if (currValues.length === 0 && prevValues.length === 0) return { min: 0, max: 10 };
+        const max = computeAxisMax(currValues, prevValues.length > 0 ? prevValues : null, type as any);
         return { min: 0, max };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedFlow, selectedMetric, flowSequenceInfo, stepSeriesByPosition]);
+    };
 
     const getStepPeriodChange = (sequencePosition: number, metric: string): { change: number; isPositive: boolean; previousValue: number; previousPeriod: { startDate: Date; endDate: Date } } | null => {
         if (!selectedFlow || dateRange === 'all') return null;
@@ -1008,7 +999,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const prevSeries = stepSeriesByPosition[step.sequencePosition]?.prev || [];
         const periodChange = getStepPeriodChange(step.sequencePosition, selectedMetric);
         const value = step[selectedMetric as keyof FlowStepMetrics] as number;
-        const yAxisRange = sharedYAxisRange;
+        const yAxisRange = getStepYAxisRange(sparklineData, prevSeries);
         let chartColor = '#10b981';
         let dotColor = chartColor;
         let changeNode: React.ReactNode = null;
@@ -1250,6 +1241,13 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         <stop offset="100%" stopColor={chartColor} stopOpacity="0.08" />
                                     </linearGradient>
                                 </defs>
+                                {/* Y-axis tick marks and labels */}
+                                {yTicks.map((tick, i) => (
+                                    <g key={`ytick-${i}`}>
+                                        <line x1={0} y1={tick.y} x2={850} y2={tick.y} className="stroke-gray-200 dark:stroke-gray-700" strokeDasharray="3,3" opacity={0.5} />
+                                        <text x={-8} y={tick.y} textAnchor="end" fontSize="11" fill="#9ca3af" dominantBaseline="middle">{tick.label}</text>
+                                    </g>
+                                ))}
                                 {xTicks.map((tick, i) => (
                                     <g key={i}>
                                         {/* Removed vertical tick mark to simplify design; keep label */}

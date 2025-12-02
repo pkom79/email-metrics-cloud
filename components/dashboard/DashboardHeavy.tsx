@@ -202,7 +202,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const deferredCustomTo = useDeferredValue(customTo);
     const customDays = useMemo(() => { if (!customActive) return 0; const from = new Date(customFrom!); from.setHours(0, 0, 0, 0); const to = new Date(customTo!); to.setHours(23, 59, 59, 999); const diff = Math.floor((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1; return Math.max(diff, 1); }, [customActive, customFrom, customTo]);
     const [granularity, setGranularity] = useState<'daily' | 'weekly' | 'monthly'>('daily');
-    const [compareMode, setCompareMode] = useState<'prev-period' | 'prev-year'>('prev-period');
+    const [compareMode, setCompareMode] = useState<'none' | 'prev-period' | 'prev-year'>('prev-period');
     const [selectedFlow, setSelectedFlow] = useState('all');
     const [selectedCampaignMetric, setSelectedCampaignMetric] = useState('revenue');
     // Shared guidance outputs
@@ -2130,6 +2130,15 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                         >
                                             Prev Year
                                         </button>
+                                        <button
+                                            onClick={() => setCompareMode('none')}
+                                            className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${compareMode === 'none'
+                                                ? 'bg-purple-600 text-white border-purple-600'
+                                                : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'
+                                                }`}
+                                        >
+                                            None
+                                        </button>
                                     </div>
                                 </div>
                             );
@@ -2198,6 +2207,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                             <div className="flex gap-2">
                                                 <button onClick={() => prevAvail && setMfCompareMode('prev-period')} disabled={!prevAvail} className={`px-3 py-1.5 rounded text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${mfCompareMode === 'prev-period' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Prev Period</button>
                                                 <button onClick={() => yearAvail && setMfCompareMode('prev-year')} disabled={!yearAvail} className={`px-3 py-1.5 rounded text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${mfCompareMode === 'prev-year' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>Prev Year</button>
+                                                <button onClick={() => setMfCompareMode('none')} className={`px-3 py-1.5 rounded text-sm font-medium border transition-colors ${mfCompareMode === 'none' ? 'bg-purple-600 text-white border-purple-600' : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700'}`}>None</button>
                                             </div>
                                         </div>
                                     );
