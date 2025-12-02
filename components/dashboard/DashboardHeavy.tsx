@@ -2321,20 +2321,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             />
                         </section>
                     )}
-                    {/* Day of Week and Hour of Day Performance */}
-                    {HAS_ACTIVE_ACCOUNT && defCampaigns.length > 0 && (
-                        <>
-                            <DayOfWeekPerformance 
-                                filteredCampaigns={defCampaigns}
-                                dateRange={dateRange}
-                                frequencyRecommendation={frequencyGuidance ? deriveFrequencyRecommendation(frequencyGuidance) : undefined}
-                            />
-                            <HourOfDayPerformance 
-                                filteredCampaigns={defCampaigns}
-                                dateRange={dateRange}
-                            />
-                        </>
-                    )}
                     {/* Send Volume Impact */}
                     {HAS_ACTIVE_ACCOUNT && (
                         <SendVolumeImpact 
@@ -2343,29 +2329,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             customFrom={customFrom}
                             customTo={customTo}
                             compareMode={compareMode}
-                        />
-                    )}
-                    {/* Campaign Send Frequency */}
-                    {HAS_ACTIVE_ACCOUNT && defCampaigns.length > 0 && (
-                        <CampaignSendFrequency 
-                            campaigns={defCampaigns}
-                            onGuidance={setFrequencyGuidance}
-                        />
-                    )}
-                    {/* Campaign Gaps and Losses */}
-                    {HAS_ACTIVE_ACCOUNT && (
-                        <CampaignGapsAndLosses 
-                            dateRange={dateRange}
-                            granularity={granularity}
-                            customFrom={customFrom}
-                            customTo={customTo}
-                            filteredCampaigns={defCampaigns}
-                        />
-                    )}
-                    {/* Audience Size Performance */}
-                    {HAS_ACTIVE_ACCOUNT && defCampaigns.length > 0 && (
-                        <AudienceSizePerformance 
-                            campaigns={defCampaigns}
                         />
                     )}
                     {campaignMetrics && (
@@ -2424,6 +2387,43 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 <MetricCard title="Bounce Rate" value={formatPercent(campaignMetrics.bounceRate.value)} change={campaignMetrics.bounceRate.change} isPositive={campaignMetrics.bounceRate.isPositive} previousValue={campaignMetrics.bounceRate.previousValue} previousPeriod={campaignMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={campaignSeries.bounceRate} compareMode={compareMode} category="campaign" chartType={campaignChartType} />
                             </div>
                         </section>
+                    )}
+                    {/* Campaign Send Frequency */}
+                    {HAS_ACTIVE_ACCOUNT && defCampaigns.length > 0 && (
+                        <CampaignSendFrequency 
+                            campaigns={defCampaigns}
+                            onGuidance={setFrequencyGuidance}
+                        />
+                    )}
+                    {/* Audience Size Performance */}
+                    {HAS_ACTIVE_ACCOUNT && defCampaigns.length > 0 && (
+                        <AudienceSizePerformance 
+                            campaigns={defCampaigns}
+                        />
+                    )}
+                    {/* Campaign Gaps and Losses */}
+                    {HAS_ACTIVE_ACCOUNT && (
+                        <CampaignGapsAndLosses 
+                            dateRange={dateRange}
+                            granularity={granularity}
+                            customFrom={customFrom}
+                            customTo={customTo}
+                            filteredCampaigns={defCampaigns}
+                        />
+                    )}
+                    {/* Day of Week and Hour of Day Performance */}
+                    {HAS_ACTIVE_ACCOUNT && defCampaigns.length > 0 && (
+                        <>
+                            <DayOfWeekPerformance 
+                                filteredCampaigns={defCampaigns}
+                                dateRange={dateRange}
+                                frequencyRecommendation={frequencyGuidance ? deriveFrequencyRecommendation(frequencyGuidance) : undefined}
+                            />
+                            <HourOfDayPerformance 
+                                filteredCampaigns={defCampaigns}
+                                dateRange={dateRange}
+                            />
+                        </>
                     )}
                     {flowMetrics && (
                         <section>
