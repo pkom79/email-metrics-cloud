@@ -975,6 +975,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             setShowUploadModal(false);
         }
     }, [showUploadModal, dataHydrated, HAS_ACTIVE_ACCOUNT, accountLoadInFlight]);
+    
+    // Debug logging for upload modal
+    useEffect(() => {
+        if (showUploadModal) {
+            console.log('[Dashboard] Upload modal opened, rendering UploadWizard with accountId:', activeAccountId);
+        }
+    }, [showUploadModal, activeAccountId]);
+    
     useEffect(() => { try { DataManager.setAccountId(EFFECTIVE_ACCOUNT_ID || null); } catch { } }, [EFFECTIVE_ACCOUNT_ID]);
     // Reference/end date for presets and bounds –
     // align with DataCoverageNotice by using DataManager's helper.
@@ -1607,7 +1615,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <X className="w-5 h-5" />
                     </button>
                 </div>
-                {console.log('[Dashboard] Rendering UploadWizard with accountId:', activeAccountId)}
                 <UploadWizard accountId={activeAccountId} />
             </div>
         </div>
