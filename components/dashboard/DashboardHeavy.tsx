@@ -1607,6 +1607,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <X className="w-5 h-5" />
                     </button>
                 </div>
+                {console.log('[Dashboard] Rendering UploadWizard with accountId:', activeAccountId)}
                 <UploadWizard accountId={activeAccountId} />
             </div>
         </div>
@@ -1781,7 +1782,15 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 </>)}
                                 <button
                                     type="button"
-                                    onClick={() => setShowUploadModal(true)}
+                                    onClick={() => {
+                                        console.log('[Dashboard] Upload New Reports button clicked', {
+                                            HAS_ACTIVE_ACCOUNT,
+                                            activeAccountId,
+                                            currentShowUploadModal: showUploadModal
+                                        });
+                                        setShowUploadModal(true);
+                                        console.log('[Dashboard] setShowUploadModal(true) called');
+                                    }}
                                     disabled={!HAS_ACTIVE_ACCOUNT}
                                     className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white w-full sm:w-auto ${HAS_ACTIVE_ACCOUNT ? 'bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900' : 'bg-purple-400 cursor-not-allowed opacity-70'}`}
                                 >
