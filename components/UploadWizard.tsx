@@ -42,9 +42,10 @@ function FileRow({
 
 type UploadWizardProps = {
     accountId?: string;
+    onClose?: () => void;
 };
 
-export default function UploadWizard({ accountId }: UploadWizardProps = {}) {
+export default function UploadWizard({ accountId, onClose }: UploadWizardProps = {}) {
     const diagEnabled = useMemo(() => isDiagEnabled(), []);
     const [campaigns, setCampaigns] = useState<File | null>(null);
     const [flows, setFlows] = useState<File | null>(null);
@@ -180,6 +181,12 @@ export default function UploadWizard({ accountId }: UploadWizardProps = {}) {
             try {
                 window.dispatchEvent(new CustomEvent('em:snapshot-created', { detail: { snapshotId } }));
             } catch { /* ignore */ }
+
+            // Close modal after successful upload
+            if (onClose) {
+                console.log('[UploadWizard] Upload successful, calling onClose');
+                onClose();
+            }
 
             // Done
             setLoading(false);

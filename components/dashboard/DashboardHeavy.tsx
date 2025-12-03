@@ -1626,7 +1626,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                         <X className="w-5 h-5" />
                     </button>
                 </div>
-                <UploadWizard accountId={activeAccountId} />
+                <UploadWizard accountId={activeAccountId} onClose={() => setShowUploadModal(false)} />
             </div>
         </div>
     ) : null;
@@ -2170,6 +2170,28 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                     </div>
                                 </div>
                             );
+                        })()}
+                        {/* Flow Selector */}
+                        {(() => {
+                            try {
+                                const liveFlows = (dm.getFlowEmails?.() || []).filter((e: any) => e?.status && String(e.status).toLowerCase() === 'live');
+                                const namesSet = new Set<string>();
+                                for (const e of liveFlows) { if (e?.flowName) namesSet.add(e.flowName); }
+                                const names = Array.from(namesSet).sort();
+                                if (names.length === 0) return null;
+                                return (
+                                    <div className="flex items-center gap-1.5">
+                                        <Zap className="w-4 h-4 text-gray-500" />
+                                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Flow:</span>
+                                        <div className="relative">
+                                            <SelectBase value={selectedFlow} onChange={e => setSelectedFlow((e.target as HTMLSelectElement).value)} className="px-2 py-1 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">
+                                                <option value="all">All Flows</option>
+                                                {names.map(n => <option key={n} value={n}>{n}</option>)}
+                                            </SelectBase>
+                                        </div>
+                                    </div>
+                                );
+                            } catch { return null; }
                         })()}
                     </div></div></div></div>
             )}
