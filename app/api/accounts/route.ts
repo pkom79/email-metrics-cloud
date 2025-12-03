@@ -233,6 +233,7 @@ export async function PATCH(request: Request) {
 }
 
 // Soft delete an account (admin only). Body: { accountId: string, hard?: boolean }
+// Force rebuild - ensuring DELETE handler is included in deployment
 export async function DELETE(request: Request) {
     console.log('[DELETE /api/accounts] Request received');
     try {
