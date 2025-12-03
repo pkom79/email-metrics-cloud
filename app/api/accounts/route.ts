@@ -257,41 +257,69 @@ export async function DELETE(request: Request) {
             return NextResponse.json({ error: 'Cannot delete admin root account' }, { status: 400 });
         }
 
+        // Use service client for admin operations to bypass RLS
+        const service = createServiceClient();
+        
         // Ensure account exists
-        const { data: acct, error: acctErr } = await supabase
+        const { data: acct, error: acctErr } = await service
             .from('accounts')
             .select('id, deleted_at, owner_user_id, billing_mode')
             .eq('id', accountId)
             .maybeSingle();
-        if (acctErr) return NextResponse.json({ error: acctErr.message }, { status: 500 });
-        if (!acct) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        if (acctErr) {
+            console.log('[DELETE /api/accounts] Error fetching account:', acctErr);
+            return NextResponse.json({ error: acctErr.message }, { status: 500 });
+        }
+        if (!acct) {
+            console.log('[DELETE /api/accounts] Account not found:', accountId);
+            return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        }
         const ownerMatches = (acct as any).owner_user_id === user.id;
         const isAdminFree = (acct as any).billing_mode === 'admin_free';
         if (ownerMatches && !isAdminFree) {
+            console.log('[DELETE /api/accounts] Cannot delete own non-admin-free account');
             return NextResponse.json({ error: 'Cannot delete account you own via admin API' }, { status: 400 });
         }
 
         if (hard) {
             // Hard delete: rely on ON DELETE CASCADE for children
-            const { error: delErr } = await supabase.from('accounts').delete().eq('id', accountId);
-            if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+            console.log('[DELETE /api/accounts] Performing hard delete');
+            const { error: delErr } = await service.from('accounts').delete().eq('id', accountId);
+            if (delErr) {
+                console.log('[DELETE /api/accounts] Hard delete error:', delErr);
+                return NextResponse.json({ error: delErr.message }, { status: 500 });
+            }
+            console.log('[DELETE /api/accounts] Hard delete successful');
             return NextResponse.json({ status: 'hard-deleted' });
         }
 
         // Soft delete: set deleted_at and purge children manually for immediate cleanup
-        const { error: updErr } = await supabase
+        console.log('[DELETE /api/accounts] Performing soft delete');
+        const { error: updErr } = await service
             .from('accounts')
             .update({ deleted_at: new Date().toISOString() })
             .eq('id', accountId);
-        if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+        if (updErr) {
+            console.log('[DELETE /api/accounts] Soft delete error:', updErr);
+            return NextResponse.json({ error: updErr.message }, { status: 500 });
+        }
 
-        // Call helper function to purge children (service role needed; fallback: direct deletes)
-        // Using RPC would require exposing function; for now attempt direct deletes since RLS allows admin.
-        const { error: snapsErr } = await supabase.from('snapshots').delete().eq('account_id', accountId);
-        if (snapsErr) return NextResponse.json({ error: snapsErr.message }, { status: 500 });
-        const { error: uploadsErr } = await supabase.from('uploads').delete().eq('account_id', accountId);
-        if (uploadsErr) return NextResponse.json({ error: uploadsErr.message }, { status: 500 });
+        // Purge children using service client to bypass RLS
+        console.log('[DELETE /api/accounts] Deleting snapshots');
+        const { error: snapsErr } = await service.from('snapshots').delete().eq('account_id', accountId);
+        if (snapsErr) {
+            console.log('[DELETE /api/accounts] Snapshots delete error:', snapsErr);
+            return NextResponse.json({ error: snapsErr.message }, { status: 500 });
+        }
+        
+        console.log('[DELETE /api/accounts] Deleting uploads');
+        const { error: uploadsErr } = await service.from('uploads').delete().eq('account_id', accountId);
+        if (uploadsErr) {
+            console.log('[DELETE /api/accounts] Uploads delete error:', uploadsErr);
+            return NextResponse.json({ error: uploadsErr.message }, { status: 500 });
+        }
 
+        console.log('[DELETE /api/accounts] Soft delete completed successfully');
         return NextResponse.json({ status: 'soft-deleted' });
     } catch (e: any) {
         return NextResponse.json({ error: e?.message || 'Delete failed' }, { status: 500 });
