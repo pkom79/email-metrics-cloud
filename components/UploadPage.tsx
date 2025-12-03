@@ -185,12 +185,12 @@ export default function UploadPage() {
             allUploaded,
             isProcessing,
         });
-        
+
         if (!fileRefs.current.campaigns || !fileRefs.current.flows || !fileRefs.current.subscribers) {
             console.error('[UploadPage] Missing files! Cannot proceed with upload');
             return;
         }
-        
+
         console.log('[UploadPage] All files present, starting processing...');
         setIsProcessing(true);
         setErrors([]);

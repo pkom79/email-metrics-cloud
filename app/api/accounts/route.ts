@@ -234,15 +234,18 @@ export async function PATCH(request: Request) {
 
 // Soft delete an account (admin only). Body: { accountId: string, hard?: boolean }
 export async function DELETE(request: Request) {
+    console.log('[DELETE /api/accounts] Request received');
     try {
         const cookieStore = await cookies();
         const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
         const { data: { user } } = await supabase.auth.getUser();
+        console.log('[DELETE /api/accounts] User:', user?.id, 'Admin:', user?.app_metadata?.role, user?.app_metadata?.app_role);
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         const isAdmin = user.app_metadata?.role === 'admin' || user.app_metadata?.app_role === 'admin';
         if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
         const { accountId, hard } = await request.json().catch(() => ({}));
+        console.log('[DELETE /api/accounts] accountId:', accountId, 'hard:', hard);
         if (!accountId || !/^[0-9a-fA-F-]{36}$/.test(accountId)) {
             return NextResponse.json({ error: 'Invalid accountId' }, { status: 400 });
         }

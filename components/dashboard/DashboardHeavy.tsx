@@ -978,7 +978,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             setShowUploadModal(false);
         }
     }, [showUploadModal, dataHydrated, HAS_ACTIVE_ACCOUNT, accountLoadInFlight, uploadModalJustOpened]);
-    
+
     // Debug logging for upload modal
     useEffect(() => {
         if (showUploadModal) {
@@ -993,7 +993,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             setUploadModalJustOpened(false);
         }
     }, [showUploadModal, activeAccountId]);
-    
+
     useEffect(() => { try { DataManager.setAccountId(EFFECTIVE_ACCOUNT_ID || null); } catch { } }, [EFFECTIVE_ACCOUNT_ID]);
     // Reference/end date for presets and bounds –
     // align with DataCoverageNotice by using DataManager's helper.
