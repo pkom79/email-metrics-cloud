@@ -2171,28 +2171,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 </div>
                             );
                         })()}
-                        {/* Flow Selector */}
-                        {(() => {
-                            try {
-                                const liveFlows = (dm.getFlowEmails?.() || []).filter((e: any) => e?.status && String(e.status).toLowerCase() === 'live');
-                                const namesSet = new Set<string>();
-                                for (const e of liveFlows) { if (e?.flowName) namesSet.add(e.flowName); }
-                                const names = Array.from(namesSet).sort();
-                                if (names.length === 0) return null;
-                                return (
-                                    <div className="flex items-center gap-1.5">
-                                        <Zap className="w-4 h-4 text-gray-500" />
-                                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100">Flow:</span>
-                                        <div className="relative">
-                                            <SelectBase value={selectedFlow} onChange={e => setSelectedFlow((e.target as HTMLSelectElement).value)} className="px-2 py-1 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">
-                                                <option value="all">All Flows</option>
-                                                {names.map(n => <option key={n} value={n}>{n}</option>)}
-                                            </SelectBase>
-                                        </div>
-                                    </div>
-                                );
-                            } catch { return null; }
-                        })()}
                     </div></div></div></div>
             )}
 
@@ -2487,20 +2465,39 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     )}
                     {flowMetrics && (
                         <section>
-                            <div className="flex items-center gap-2 mb-3">
-                                <Zap className="w-5 h-5 text-purple-600" />
-                                <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Flow Performance
-                                    <InfoTooltipIcon placement="top" content={(
-                                        <div>
-                                            <p className="font-semibold mb-1">What</p>
-                                            <p>KPIs for flow emails only.</p>
-                                            <p className="font-semibold mt-2 mb-1">How</p>
-                                            <p>Compare flow performance metrics over time to identify trends and opportunities.</p>
-                                            <p className="font-semibold mt-2 mb-1">Why</p>
-                                            <p>Optimize your automated email sequences for better engagement and revenue.</p>
-                                        </div>
-                                    )} />
-                                </h2>
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                    <Zap className="w-5 h-5 text-purple-600" />
+                                    <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">Flow Performance
+                                        <InfoTooltipIcon placement="top" content={(
+                                            <div>
+                                                <p className="font-semibold mb-1">What</p>
+                                                <p>KPIs for flow emails only.</p>
+                                                <p className="font-semibold mt-2 mb-1">How</p>
+                                                <p>Compare flow performance metrics over time to identify trends and opportunities.</p>
+                                                <p className="font-semibold mt-2 mb-1">Why</p>
+                                                <p>Optimize your automated email sequences for better engagement and revenue.</p>
+                                            </div>
+                                        )} />
+                                    </h2>
+                                </div>
+                                {(() => {
+                                    try {
+                                        const liveFlows = (dm.getFlowEmails?.() || []).filter((e: any) => e?.status && String(e.status).toLowerCase() === 'live');
+                                        const namesSet = new Set<string>();
+                                        for (const e of liveFlows) { if (e?.flowName) namesSet.add(e.flowName); }
+                                        const names = Array.from(namesSet).sort();
+                                        if (names.length === 0) return null;
+                                        return (
+                                            <div className="relative">
+                                                <SelectBase value={selectedFlow} onChange={e => setSelectedFlow((e.target as HTMLSelectElement).value)} className="px-3 py-1.5 pr-8 rounded border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">
+                                                    <option value="all">All Flows</option>
+                                                    {names.map(n => <option key={n} value={n}>{n}</option>)}
+                                                </SelectBase>
+                                            </div>
+                                        );
+                                    } catch { return null; }
+                                })()}
                             </div>
                             {/* Flow Timeseries Chart */}
                             <TimeSeriesChart
