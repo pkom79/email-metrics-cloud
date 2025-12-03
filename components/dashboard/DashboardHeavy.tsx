@@ -980,6 +980,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     useEffect(() => {
         if (showUploadModal) {
             console.log('[Dashboard] Upload modal opened, rendering UploadWizard with accountId:', activeAccountId);
+            // Check if modal actually rendered in DOM
+            setTimeout(() => {
+                const modalElement = document.querySelector('[class*="z-[60]"]');
+                console.log('[Dashboard] Modal element in DOM:', !!modalElement, 'z-index:', modalElement ? window.getComputedStyle(modalElement).zIndex : 'N/A');
+            }, 100);
         }
     }, [showUploadModal, activeAccountId]);
     
@@ -1606,9 +1611,9 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const showNoDataState = HAS_ACTIVE_ACCOUNT && !accountLoadInFlight && !dataHydrated && accountHydrationAttempted;
 
     const uploadModal = showUploadModal ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/50" onClick={() => setShowUploadModal(false)} />
-            <div className="relative z-[61] w-[min(100%,900px)] max-h-[90vh] overflow-auto rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl p-6">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
+            <div className="absolute inset-0 bg-red-500/90" onClick={() => setShowUploadModal(false)} />
+            <div className="relative z-[10000] w-[min(100%,900px)] max-h-[90vh] overflow-auto rounded-2xl border-8 border-red-600 bg-white dark:bg-gray-900 shadow-2xl p-6">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold">Upload New Reports</h3>
                     <button onClick={() => setShowUploadModal(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
