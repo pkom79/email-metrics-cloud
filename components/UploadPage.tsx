@@ -171,7 +171,27 @@ export default function UploadPage() {
     };
 
     const processFiles = async () => {
-        if (!fileRefs.current.campaigns || !fileRefs.current.flows || !fileRefs.current.subscribers) return;
+        console.log('[UploadPage] processFiles called', {
+            hasFiles: {
+                campaigns: !!fileRefs.current.campaigns,
+                flows: !!fileRefs.current.flows,
+                subscribers: !!fileRefs.current.subscribers,
+            },
+            fileNames: {
+                campaigns: fileRefs.current.campaigns?.name,
+                flows: fileRefs.current.flows?.name,
+                subscribers: fileRefs.current.subscribers?.name,
+            },
+            allUploaded,
+            isProcessing,
+        });
+        
+        if (!fileRefs.current.campaigns || !fileRefs.current.flows || !fileRefs.current.subscribers) {
+            console.error('[UploadPage] Missing files! Cannot proceed with upload');
+            return;
+        }
+        
+        console.log('[UploadPage] All files present, starting processing...');
         setIsProcessing(true);
         setErrors([]);
         try {
@@ -491,7 +511,15 @@ export default function UploadPage() {
                         </div>
                         <div className="text-center">
                             <button
-                                onClick={() => (allUploaded && !isProcessing ? processFiles() : null)}
+                                onClick={() => {
+                                    console.log('[UploadPage] Button clicked', { allUploaded, isProcessing });
+                                    if (allUploaded && !isProcessing) {
+                                        console.log('[UploadPage] Calling processFiles...');
+                                        processFiles();
+                                    } else {
+                                        console.log('[UploadPage] Button click ignored - conditions not met');
+                                    }
+                                }}
                                 disabled={!allUploaded || isProcessing}
                                 className={`group relative px-12 py-4 rounded-full text-lg font-semibold transition-all duration-300 transform ${allUploaded && !isProcessing ? 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white shadow-lg hover:shadow-2xl hover:scale-105 hover:-translate-y-1' : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'}`}
                             >
