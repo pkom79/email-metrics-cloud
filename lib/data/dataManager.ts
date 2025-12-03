@@ -258,13 +258,6 @@ export class DataManager {
                 const startDate = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
                 const endDate = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
                 
-                console.log('🔍 [DataManager] Date range parsing:', {
-                    customFrom,
-                    customTo,
-                    startDateUTC: startDate.toISOString(),
-                    endDateUTC: endDate.toISOString()
-                });
-                
                 return { startDate, endDate };
             }
             const allEmails = [...this.campaigns, ...this.flowEmails].filter(e => e.sentDate instanceof Date && !isNaN(e.sentDate.getTime()));
