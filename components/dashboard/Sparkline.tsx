@@ -86,10 +86,25 @@ const Sparkline: React.FC<SparklineProps> = ({ isPositive, change, isAllTime, is
     }
     const range = maxValue - minValue;
 
-    const normalizedData = sparklineData.map(point => ({
-        ...point,
-        normalizedValue: range > 0 ? ((point.value - minValue) / range) * 70 + 15 : 50
-    }));
+    const normalizedData = sparklineData.map(point => {
+        if (chartType === 'bar') {
+            // For bar charts, always anchor to 0 and scale proportionally to max value
+            const max = Math.max(maxValue, 0);
+            if (max === 0) return { ...point, normalizedValue: 0 };
+            // Scale 0 to max -> 0 to 90 (leaving 10% headroom)
+            // Ensure negative values don't break it (though bars usually imply positive magnitude here)
+            const val = Math.max(0, point.value);
+            return {
+                ...point,
+                normalizedValue: (val / max) * 90
+            };
+        }
+        // Line chart logic: zoom in on the range [min, max]
+        return {
+            ...point,
+            normalizedValue: range > 0 ? ((point.value - minValue) / range) * 70 + 15 : (point.value === 0 ? 0 : 50)
+        };
+    });
 
     const width = 280;
     const height = 80;
