@@ -88,7 +88,17 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                 return { fromDate: dayjs(customFrom), toDate: dayjs(customTo) };
             }
             // For preset ranges, need to compute from actual last email date
-            const lastDataDate = dayjs(dm.getLastEmailDate());
+            // Calculate robust last data date (max of campaigns and flows)
+            const flows = dm.getFlowEmails();
+            const lastCampaignDate = campaigns.length > 0 
+                ? Math.max(...campaigns.map(c => c.sentDate.getTime())) 
+                : 0;
+            const lastFlowDate = flows.length > 0 
+                ? Math.max(...flows.map(f => f.sentDate.getTime())) 
+                : 0;
+            const maxTime = Math.max(lastCampaignDate, lastFlowDate);
+            const lastDataDate = maxTime > 0 ? dayjs(maxTime) : dayjs();
+
             const ranges: Record<string, { fromDate: dayjs.Dayjs; toDate: dayjs.Dayjs }> = {
                 "7d": { fromDate: lastDataDate.subtract(7, "days"), toDate: lastDataDate },
                 "14d": { fromDate: lastDataDate.subtract(14, "days"), toDate: lastDataDate },
@@ -105,10 +115,21 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         })();
 
         // Store for debug display
+        // Re-calculate lastDataDate for display consistency
+        const flows = dm.getFlowEmails();
+        const lastCampaignDate = campaigns.length > 0 
+            ? Math.max(...campaigns.map(c => c.sentDate.getTime())) 
+            : 0;
+        const lastFlowDate = flows.length > 0 
+            ? Math.max(...flows.map(f => f.sentDate.getTime())) 
+            : 0;
+        const maxTime = Math.max(lastCampaignDate, lastFlowDate);
+        const lastDataDate = maxTime > 0 ? dayjs(maxTime) : dayjs();
+
         setDebugDateRange({
             from: fromDate.format('MMM D, YYYY'),
             to: toDate.format('MMM D, YYYY'),
-            lastDataDate: dayjs(dm.getLastEmailDate()).format('MMM D, YYYY')
+            lastDataDate: lastDataDate.format('MMM D, YYYY')
         });
 
         // Filter campaigns in date range - EXACT SAME LOGIC AS ALGORITHM

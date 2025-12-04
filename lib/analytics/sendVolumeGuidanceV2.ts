@@ -213,7 +213,21 @@ function parseDateRange(
 ): { fromDate: dayjs.Dayjs; toDate: dayjs.Dayjs } {
     // Use the last email date from the uploaded data as reference, not today
     const dm = DataManager.getInstance();
-    const lastDataDate = dayjs(dm.getLastEmailDate());
+    
+    // Calculate robust last data date (max of campaigns and flows)
+    // dm.getLastEmailDate() can return today if data is missing or malformed, so we calculate manually to be safe
+    const campaigns = dm.getCampaigns();
+    const flows = dm.getFlowEmails();
+    
+    const lastCampaignDate = campaigns.length > 0 
+        ? Math.max(...campaigns.map(c => c.sentDate.getTime())) 
+        : 0;
+    const lastFlowDate = flows.length > 0 
+        ? Math.max(...flows.map(f => f.sentDate.getTime())) 
+        : 0;
+        
+    const maxTime = Math.max(lastCampaignDate, lastFlowDate);
+    const lastDataDate = maxTime > 0 ? dayjs(maxTime) : dayjs();
     
     if (dateRange === "custom" && customFrom && customTo) {
         return {
