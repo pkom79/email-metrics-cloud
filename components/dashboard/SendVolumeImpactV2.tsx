@@ -96,17 +96,15 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
 
         if (filteredCampaigns.length === 0) return [];
 
-        // Sort by send date (chronological for time series)
+        // Sort by volume descending (highest to lowest) - THIS IS THE POINT OF THE MODULE
         return filteredCampaigns
             .map(c => ({
                 id: c.id,
                 campaignName: c.campaignName,
                 volume: c.emailsSent,
-                revenue: c.revenue,
-                sentDate: c.sentDate,
-                date: c.sentDate.toISOString().split('T')[0]
+                revenue: c.revenue
             }))
-            .sort((a, b) => a.sentDate.getTime() - b.sentDate.getTime());
+            .sort((a, b) => b.volume - a.volume);
     }, [dm, dateRange, customFrom, customTo]);
 
     // Calculate monthly revenue for projections
@@ -221,9 +219,10 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                 </div>
             </div>
 
-            {/* Volume vs Revenue Chart - Timeline Style */}
+            {/* Volume vs Revenue Correlation Chart */}
             {chartData.length > 0 && (
                 <div className="mt-6 relative bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4">
+                    <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Revenue by Send Volume (Highest to Lowest)</div>
                     <svg width="100%" height="200" viewBox="0 0 850 200" className="block">
                         <defs>
                             <linearGradient id="svimpact-area" x1="0" y1="0" x2="0" y2="1">
@@ -236,14 +235,15 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                             const PAD_L = 72;
                             const PAD_R = 20;
                             const PAD_T = 10;
-                            const PAD_B = 40;
+                            const PAD_B = 50;
                             const WIDTH = 850 - PAD_L - PAD_R;
                             const HEIGHT = 200 - PAD_T - PAD_B;
                             const innerH = 140;
 
                             const maxRevenue = Math.max(...chartData.map(d => d.revenue), 1);
 
-                            // Scale functions
+                            // X-axis is campaign INDEX (sorted by volume high to low)
+                            // Y-axis is REVENUE
                             const xScale = (i: number) => chartData.length <= 1 ? PAD_L + WIDTH / 2 : PAD_L + (i / (chartData.length - 1)) * WIDTH;
                             const yScale = (v: number) => {
                                 const y = innerH - (Math.max(0, v) / maxRevenue) * (innerH - 10);
@@ -255,13 +255,11 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                                 x: xScale(i),
                                 y: yScale(d.revenue),
                                 id: d.id,
-                                campaignName: d.campaignName,
                                 volume: d.volume,
-                                revenue: d.revenue,
-                                date: d.date
+                                revenue: d.revenue
                             }));
 
-                            // Build smooth path
+                            // Build smooth path for revenue line
                             const buildPath = (pts: { x: number; y: number }[]) => {
                                 if (pts.length < 2) return '';
                                 const d: string[] = [`M${pts[0].x} ${pts[0].y}`];
@@ -282,13 +280,13 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                             const pathD = buildPath(points);
                             const areaD = pathD ? `${pathD} L ${xScale(chartData.length - 1)} ${innerH} L ${xScale(0)} ${innerH} Z` : '';
 
-                            // Y-axis ticks
+                            // Y-axis ticks (Revenue)
                             const yTicks = [0, 0.333, 0.666, 1].map(t => ({
                                 value: maxRevenue * t,
                                 y: innerH - (t * (innerH - 10))
                             }));
 
-                            // X-axis date labels
+                            // X-axis labels (Send Volume at key positions)
                             const desiredXTicks = 6;
                             const tickIdx: number[] = [];
                             if (chartData.length <= desiredXTicks) {
@@ -305,7 +303,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                                     {/* Y-axis line */}
                                     <line x1={PAD_L} y1={0} x2={PAD_L} y2={innerH} stroke="#D1D5DB" strokeWidth="1" className="dark:stroke-gray-700" />
 
-                                    {/* Y-axis labels */}
+                                    {/* Y-axis labels (Revenue) */}
                                     {yTicks.map((tick, i) => (
                                         <g key={i}>
                                             <line x1={PAD_L - 4} y1={tick.y} x2={PAD_L} y2={tick.y} stroke="#D1D5DB" strokeWidth="1" className="dark:stroke-gray-700" />
@@ -324,19 +322,23 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                                     {/* Revenue line */}
                                     <path d={pathD} fill="none" stroke="#6366F1" strokeWidth="2.5" />
 
-                                    {/* X-axis date labels */}
+                                    {/* X-axis labels (Volume) */}
                                     {tickIdx.map((idx, i) => {
                                         if (idx >= chartData.length) return null;
                                         const x = xScale(idx);
-                                        const dateStr = chartData[idx].date;
-                                        const d = new Date(dateStr);
-                                        const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                        const vol = chartData[idx].volume;
+                                        const label = vol >= 1000 ? `${Math.round(vol / 1000)}k` : vol.toString();
                                         return (
                                             <text key={i} x={x} y={innerH + 18} textAnchor="middle" fontSize="11" className="fill-gray-500 dark:fill-gray-400">
                                                 {label}
                                             </text>
                                         );
                                     })}
+
+                                    {/* X-axis label */}
+                                    <text x={PAD_L + WIDTH / 2} y={innerH + 35} textAnchor="middle" fontSize="11" className="fill-gray-600 dark:fill-gray-500 font-medium">
+                                        Send Volume (Highest → Lowest)
+                                    </text>
 
                                     {/* Interactive hover areas */}
                                     {points.map((p, i) => (

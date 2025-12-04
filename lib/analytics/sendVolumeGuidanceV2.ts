@@ -46,12 +46,12 @@ export function sendVolumeGuidanceV2(
     const { fromDate, toDate } = parseDateRange(dateRange, customFrom, customTo);
 
     // Step 2: Filter campaigns within user's date range
-    // Use inclusive comparisons (>= and <=) to include boundary dates
+    // Use inclusive comparisons to include boundary dates
     // Note: 72-hour attribution lag removed to match user expectations
     const campaignsInRange = allCampaigns.filter(c => {
         const sentDate = dayjs(c.sentDate);
-        return (sentDate.isAfter(fromDate) || sentDate.isSame(fromDate)) && 
-               (sentDate.isBefore(toDate) || sentDate.isSame(toDate));
+        return (sentDate.isAfter(fromDate) || sentDate.isSame(fromDate, 'day')) && 
+               (sentDate.isBefore(toDate) || sentDate.isSame(toDate, 'day'));
     });
 
     // Step 3: Apply Volume Floor (>= 500 recipients)
