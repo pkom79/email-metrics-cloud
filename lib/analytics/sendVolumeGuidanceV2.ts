@@ -45,18 +45,13 @@ export function sendVolumeGuidanceV2(
     // Step 1: Determine the user's selected date range
     const { fromDate, toDate } = parseDateRange(dateRange, customFrom, customTo);
 
-    // Step 2: Apply 72-hour attribution lag - exclude campaigns sent in last 72 hours
-    // Use the END of the data range (toDate) as reference, not current date
-    const attributionLagHours = 72;
-    const cutoffDate = toDate.subtract(attributionLagHours, 'hours');
-
-    // Filter campaigns within user's date range and before attribution cutoff
+    // Step 2: Filter campaigns within user's date range
     // Use inclusive comparisons (>= and <=) to include boundary dates
+    // Note: 72-hour attribution lag removed to match user expectations
     const campaignsInRange = allCampaigns.filter(c => {
         const sentDate = dayjs(c.sentDate);
         return (sentDate.isAfter(fromDate) || sentDate.isSame(fromDate)) && 
-               (sentDate.isBefore(toDate) || sentDate.isSame(toDate)) && 
-               sentDate.isBefore(cutoffDate);
+               (sentDate.isBefore(toDate) || sentDate.isSame(toDate));
     });
 
     // Step 3: Apply Volume Floor (>= 500 recipients)

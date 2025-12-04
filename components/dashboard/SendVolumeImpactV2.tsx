@@ -75,19 +75,20 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         const campaigns = dm.getCampaigns();
         if (!campaigns.length) return [];
 
-        // Parse the user's selected date range
+        // Parse the user's selected date range using last data date as reference
+        const lastDataDate = dm.getLastEmailDate();
         const { fromDate, toDate } = (() => {
-            const now = new Date();
             if (dateRange === 'custom' && customFrom && customTo) {
                 return { fromDate: new Date(customFrom), toDate: new Date(customTo) };
             }
             const days = parseInt(dateRange.replace('d', '')) || 90;
-            const from = new Date(now);
+            const to = new Date(lastDataDate);
+            const from = new Date(to);
             from.setDate(from.getDate() - days);
-            return { fromDate: from, toDate: now };
+            return { fromDate: from, toDate: to };
         })();
 
-        // Filter campaigns in date range (no 72-hour exclusion for chart)
+        // Filter campaigns in date range
         const filteredCampaigns = campaigns.filter(c => {
             const sentDate = new Date(c.sentDate);
             return sentDate >= fromDate && sentDate <= toDate && c.emailsSent >= 500;
@@ -220,7 +221,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             {/* Volume vs Revenue Chart - Full Width with Y-axis */}
             {chartData.length > 0 && (
                 <div className="mt-6 relative">
-                    <svg width="100%" height="200" viewBox="0 0 900 200" className="block">
+                    <svg width="100%" height="280" viewBox="0 0 900 280" className="block" style={{ minHeight: '280px' }}>
                         <defs>
                             <linearGradient id="volume-gradient-blue" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3" />
@@ -231,12 +232,12 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                         {(() => {
                             if (chartData.length < 2) return null;
                             
-                            const PAD_L = 60;
+                            const PAD_L = 70;
                             const PAD_R = 20;
                             const PAD_T = 20;
-                            const PAD_B = 40;
+                            const PAD_B = 60;
                             const WIDTH = 900 - PAD_L - PAD_R;
-                            const HEIGHT = 200 - PAD_T - PAD_B;
+                            const HEIGHT = 280 - PAD_T - PAD_B;
                             
                             const maxRevenue = Math.max(...chartData.map(d => d.revenue), 1);
                             const maxVolume = Math.max(...chartData.map(d => d.volume), 1);
@@ -298,38 +299,56 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                                     {/* Revenue line (blue, thicker) */}
                                     <path d={revenuePath} fill="none" stroke="#3B82F6" strokeWidth="2.5" />
                                     
-                                    {/* Interactive circles for hover */}
+                                    {/* X-axis volume labels */}
+                                    {[0, Math.floor(chartData.length / 4), Math.floor(chartData.length / 2), Math.floor(chartData.length * 3 / 4), chartData.length - 1].map((idx, i) => {
+                                        if (idx >= chartData.length) return null;
+                                        const x = PAD_L + (idx / (chartData.length - 1)) * WIDTH;
+                                        const vol = chartData[idx].volume;
+                                        return (
+                                            <text key={i} x={x} y={PAD_T + HEIGHT + 20} textAnchor="middle" fontSize="11" className="fill-gray-600 dark:fill-gray-400">
+                                                {vol >= 1000 ? Math.round(vol / 1000) + 'k' : vol}
+                                            </text>
+                                        );
+                                    })}
+                                    
+                                    {/* Interactive hover areas */}
                                     {points.map((p, i) => (
-                                        <circle
-                                            key={i}
-                                            cx={p.x}
-                                            cy={p.yRevenue}
-                                            r="4"
-                                            fill="#3B82F6"
-                                            className="cursor-pointer opacity-0 hover:opacity-100"
-                                            onMouseEnter={(e) => {
-                                                const rect = e.currentTarget.ownerSVGElement?.getBoundingClientRect();
-                                                if (rect) {
+                                        <g key={i}>
+                                            <circle
+                                                cx={p.x}
+                                                cy={p.yRevenue}
+                                                r="6"
+                                                fill="transparent"
+                                                className="cursor-pointer"
+                                                onMouseEnter={() => {
                                                     setHoveredPoint({
-                                                        x: rect.left + p.x * (rect.width / 900),
-                                                        y: rect.top + p.yRevenue * (rect.height / 200),
+                                                        x: p.x,
+                                                        y: p.yRevenue,
                                                         volume: p.volume,
                                                         revenue: p.revenue,
                                                         name: p.name
                                                     });
-                                                }
-                                            }}
-                                            onMouseLeave={() => setHoveredPoint(null)}
-                                        />
+                                                }}
+                                                onMouseLeave={() => setHoveredPoint(null)}
+                                            />
+                                            <circle
+                                                cx={p.x}
+                                                cy={p.yRevenue}
+                                                r="3"
+                                                fill="#3B82F6"
+                                                className="pointer-events-none"
+                                                style={{ opacity: hoveredPoint?.x === p.x ? 1 : 0 }}
+                                            />
+                                        </g>
                                     ))}
                                     
                                     {/* X-axis label */}
-                                    <text x={PAD_L + WIDTH / 2} y={200 - 5} textAnchor="middle" fontSize="12" className="fill-gray-600 dark:fill-gray-400 font-medium">
+                                    <text x={PAD_L + WIDTH / 2} y={280 - 10} textAnchor="middle" fontSize="12" className="fill-gray-600 dark:fill-gray-400 font-medium">
                                         Send Volume (Highest → Lowest)
                                     </text>
                                     
                                     {/* Y-axis label */}
-                                    <text x={15} y={PAD_T + HEIGHT / 2} textAnchor="middle" fontSize="12" className="fill-gray-600 dark:fill-gray-400 font-medium" transform={`rotate(-90 15 ${PAD_T + HEIGHT / 2})`}>
+                                    <text x={20} y={PAD_T + HEIGHT / 2} textAnchor="middle" fontSize="12" className="fill-gray-600 dark:fill-gray-400 font-medium" transform={`rotate(-90 20 ${PAD_T + HEIGHT / 2})`}>
                                         Revenue
                                     </text>
                                 </>
@@ -340,11 +359,11 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     {/* Tooltip */}
                     {hoveredPoint && (
                         <div
-                            className="absolute z-50 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg px-3 py-2 shadow-lg pointer-events-none"
+                            className="absolute z-50 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg px-3 py-2 shadow-lg pointer-events-none whitespace-nowrap"
                             style={{
-                                left: `${hoveredPoint.x}px`,
-                                top: `${hoveredPoint.y - 60}px`,
-                                transform: 'translateX(-50%)'
+                                left: `${(hoveredPoint.x / 900) * 100}%`,
+                                top: `${(hoveredPoint.y / 280) * 100}%`,
+                                transform: 'translate(-50%, -120%)'
                             }}
                         >
                             <div className="font-semibold mb-1">{hoveredPoint.name}</div>
