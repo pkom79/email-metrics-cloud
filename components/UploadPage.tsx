@@ -1,4 +1,4 @@
-/Users/pkom79/Library/Application Support/CleanShot/media/media_Fp88gEI0Rx/Screenshot-Google Chrome-007375.png"use client";
+"use client";
 import React, { useState, useRef, useEffect } from 'react';
 import Image, { StaticImageData } from 'next/image';
 import { useRouter } from 'next/navigation';
