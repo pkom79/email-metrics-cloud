@@ -51,10 +51,11 @@ export function sendVolumeGuidanceV2(
     const cutoffDate = toDate.subtract(attributionLagHours, 'hours');
 
     // Filter campaigns within user's date range and before attribution cutoff
+    // Use inclusive comparisons (>= and <=) to include boundary dates
     const campaignsInRange = allCampaigns.filter(c => {
         const sentDate = dayjs(c.sentDate);
-        return sentDate.isAfter(fromDate) && 
-               sentDate.isBefore(toDate) && 
+        return (sentDate.isAfter(fromDate) || sentDate.isSame(fromDate)) && 
+               (sentDate.isBefore(toDate) || sentDate.isSame(toDate)) && 
                sentDate.isBefore(cutoffDate);
     });
 
