@@ -44,7 +44,7 @@ const fmtPercent = (v: number) => `${v.toFixed(1)}%`;
 
 export default function SendVolumeImpact({ dateRange, granularity, customFrom, customTo }: Props) {
     const dm = DataManager.getInstance();
-    
+
     // Call V2 algorithm - campaigns only, date-range sensitive
     const [showDebug, setShowDebug] = useState(false);
 
@@ -68,11 +68,11 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             // For preset ranges, need to compute from actual last email date
             // Calculate robust last data date (max of campaigns and flows)
             const flows = dm.getFlowEmails();
-            const lastCampaignDate = campaigns.length > 0 
-                ? Math.max(...campaigns.map(c => c.sentDate.getTime())) 
+            const lastCampaignDate = campaigns.length > 0
+                ? Math.max(...campaigns.map(c => c.sentDate.getTime()))
                 : 0;
-            const lastFlowDate = flows.length > 0 
-                ? Math.max(...flows.map(f => f.sentDate.getTime())) 
+            const lastFlowDate = flows.length > 0
+                ? Math.max(...flows.map(f => f.sentDate.getTime()))
                 : 0;
             const maxTime = Math.max(lastCampaignDate, lastFlowDate);
             const lastDataDate = maxTime > 0 ? dayjs(maxTime) : dayjs();
@@ -94,11 +94,11 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
 
         // Store for debug display
         const flows = dm.getFlowEmails();
-        const lastCampaignDate = campaigns.length > 0 
-            ? Math.max(...campaigns.map(c => c.sentDate.getTime())) 
+        const lastCampaignDate = campaigns.length > 0
+            ? Math.max(...campaigns.map(c => c.sentDate.getTime()))
             : 0;
-        const lastFlowDate = flows.length > 0 
-            ? Math.max(...flows.map(f => f.sentDate.getTime())) 
+        const lastFlowDate = flows.length > 0
+            ? Math.max(...flows.map(f => f.sentDate.getTime()))
             : 0;
         const maxTime = Math.max(lastCampaignDate, lastFlowDate);
         const lastDataDate = maxTime > 0 ? dayjs(maxTime) : dayjs();
@@ -121,20 +121,20 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
 
         // Aggregate by week
         const weeklyData: Record<string, { volume: number; revenue: number; count: number; weekStart: string }> = {};
-        
+
         filteredCampaigns.forEach(c => {
             const sentDate = dayjs(c.sentDate);
             const weekKey = `${sentDate.year()}-W${sentDate.isoWeek()}`;
-            
+
             if (!weeklyData[weekKey]) {
-                weeklyData[weekKey] = { 
-                    volume: 0, 
-                    revenue: 0, 
+                weeklyData[weekKey] = {
+                    volume: 0,
+                    revenue: 0,
                     count: 0,
                     weekStart: sentDate.startOf('isoWeek').format('MMM D')
                 };
             }
-            
+
             weeklyData[weekKey].volume += (c.emailsSent || 0);
             weeklyData[weekKey].revenue += (c.revenue || 0);
             weeklyData[weekKey].count += 1;
