@@ -64,42 +64,46 @@ function catmullRom2bezier(points: { x: number, y: number }[], yMin?: number, yM
 
 export default function SendVolumeImpact({ dateRange, granularity, customFrom, customTo }: Props) {
     const dm = DataManager.getInstance();
-    
+
     // Call V2 algorithm - campaigns only, date-range sensitive
     const guidance = useMemo(
         () => sendVolumeGuidanceV2(dateRange, customFrom, customTo),
         [dateRange, customFrom, customTo]
     );
 
-    // Get campaign data for chart
+    // Get campaign data for chart - respects date range
     const chartData = useMemo(() => {
         const campaigns = dm.getCampaigns();
         if (!campaigns.length) return [];
-        
-        // Group by week and calculate averages
-        const weekMap = new Map<string, { volumes: number[], revenues: number[] }>();
-        
-        campaigns.forEach(c => {
-            if (c.emailsSent < 500) return; // Apply same filter as algorithm
-            const weekKey = new Date(c.sentDate).toISOString().slice(0, 10); // Use date as key
-            if (!weekMap.has(weekKey)) {
-                weekMap.set(weekKey, { volumes: [], revenues: [] });
+
+        // Parse the user's selected date range
+        const { fromDate, toDate } = (() => {
+            const now = new Date();
+            if (dateRange === 'custom' && customFrom && customTo) {
+                return { fromDate: new Date(customFrom), toDate: new Date(customTo) };
             }
-            const week = weekMap.get(weekKey)!;
-            week.volumes.push(c.emailsSent);
-            week.revenues.push(c.revenue);
+            const days = parseInt(dateRange.replace('d', '')) || 90;
+            const from = new Date(now);
+            from.setDate(from.getDate() - days);
+            return { fromDate: from, toDate: now };
+        })();
+
+        // Filter campaigns in date range (no 72-hour exclusion for chart)
+        const filteredCampaigns = campaigns.filter(c => {
+            const sentDate = new Date(c.sentDate);
+            return sentDate >= fromDate && sentDate <= toDate && c.emailsSent >= 500;
         });
-        
-        // Calculate weekly averages and sort by volume
-        const data = Array.from(weekMap.values())
-            .map(week => ({
-                avgVolume: week.volumes.reduce((a, b) => a + b, 0) / week.volumes.length,
-                avgRevenue: week.revenues.reduce((a, b) => a + b, 0) / week.revenues.length
+
+        if (filteredCampaigns.length === 0) return [];
+
+        // Sort by volume and return individual campaigns (not grouped)
+        return filteredCampaigns
+            .map(c => ({
+                volume: c.emailsSent,
+                revenue: c.revenue
             }))
-            .sort((a, b) => b.avgVolume - a.avgVolume); // Sort highest to lowest
-        
-        return data;
-    }, [dm]);
+            .sort((a, b) => b.volume - a.volume); // Highest to lowest
+    }, [dm, dateRange, customFrom, customTo]);
 
     // Calculate monthly revenue for projections
     const monthlyRevenue = useMemo(() => {
@@ -113,11 +117,11 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     // Calculate revenue opportunity projection for "Send More" status
     const revenueProjection = useMemo(() => {
         if (guidance.status !== 'send-more' || !guidance.correlationCoefficient) return null;
-        
+
         const r = guidance.correlationCoefficient;
         let efficiency: number;
         let tier: string;
-        
+
         // Tiered efficiency based on correlation strength
         if (r >= 0.4) {
             efficiency = 0.85;
@@ -131,11 +135,11 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         } else {
             return null; // Below threshold
         }
-        
+
         const volumeIncrease = 0.20; // 20% volume increase
         const projectedLift = volumeIncrease * efficiency;
         const projectedIncrease = monthlyRevenue * projectedLift;
-        
+
         return {
             amount: projectedIncrease,
             percentage: projectedLift * 100,
@@ -213,87 +217,82 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                 </div>
             </div>
 
-            {/* Volume vs Revenue Chart */}
+            {/* Volume vs Revenue Chart - Full Width */}
             {chartData.length > 0 && (
-                <div className="mt-6 relative" style={{ width: '100%', height: '160px' }}>
-                    <svg width="100%" height="160" viewBox="0 0 900 160" className="block">
+                <div className="mt-6 relative" style={{ width: '100%' }}>
+                    <svg width="100%" viewBox="0 0 100 20" preserveAspectRatio="none" className="block" style={{ height: '200px' }}>
                         <defs>
-                            <linearGradient id="volume-gradient" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#6366F1" stopOpacity="0.2" />
-                                <stop offset="100%" stopColor="#6366F1" stopOpacity="0.05" />
+                            <linearGradient id="volume-area-gradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#8B5CF6" stopOpacity="0.25" />
+                                <stop offset="100%" stopColor="#8B5CF6" stopOpacity="0.05" />
                             </linearGradient>
                         </defs>
-                        
-                        {/* Render chart with volume on X-axis (high to low) and avg weekly revenue on Y-axis */}
+
                         {(() => {
-                            const VIEW_W = 900;
-                            const VIEW_H = 160;
-                            const GRAPH_H = 120;
-                            const PAD_L = 60;
-                            const PAD_R = 40;
-                            const innerW = VIEW_W - PAD_L - PAD_R;
-                            
-                            const maxRevenue = Math.max(...chartData.map(d => d.avgRevenue), 1);
-                            const maxVolume = Math.max(...chartData.map(d => d.avgVolume), 1);
-                            
-                            const xScale = (i: number) => PAD_L + (i / (chartData.length - 1)) * innerW;
-                            const yRevenue = (v: number) => GRAPH_H - (v / maxRevenue) * (GRAPH_H - 10);
-                            
-                            const revenuePts = chartData.map((d, i) => ({
-                                x: xScale(i),
-                                y: Math.max(10, Math.min(GRAPH_H, yRevenue(d.avgRevenue)))
+                            if (chartData.length < 2) return null;
+
+                            const maxRevenue = Math.max(...chartData.map(d => d.revenue), 1);
+                            const maxVolume = Math.max(...chartData.map(d => d.volume), 1);
+
+                            // Normalize to 0-20 range for viewBox
+                            const points = chartData.map((d, i) => ({
+                                x: (i / (chartData.length - 1)) * 100,
+                                yRevenue: 20 - (d.revenue / maxRevenue) * 18, // Revenue line
+                                yVolume: 20 - (d.volume / maxVolume) * 18 // Volume for shading
                             }));
-                            
-                            const revenuePath = catmullRom2bezier(revenuePts, 10, GRAPH_H);
-                            
-                            // X-axis labels (volume)
-                            const xLabels = [0, Math.floor(chartData.length / 2), chartData.length - 1]
-                                .filter(i => i < chartData.length)
-                                .map(i => ({
-                                    x: xScale(i),
-                                    label: `${Math.round(chartData[i].avgVolume / 1000)}k`
-                                }));
-                            
-                            // Y-axis labels (revenue)
-                            const yTicks = [
-                                { val: maxRevenue, y: 10 },
-                                { val: maxRevenue / 2, y: (GRAPH_H + 10) / 2 },
-                                { val: 0, y: GRAPH_H }
-                            ];
-                            
+
+                            // Create volume area path (shaded background)
+                            const volumeArea = [
+                                `M ${points[0].x} ${points[0].yVolume}`,
+                                ...points.slice(1).map(p => `L ${p.x} ${p.yVolume}`),
+                                `L ${points[points.length - 1].x} 20`,
+                                `L ${points[0].x} 20`,
+                                'Z'
+                            ].join(' ');
+
+                            // Create revenue line path (smooth curve)
+                            const revenuePts = points.map(p => ({ x: p.x, y: p.yRevenue }));
+                            const revenuePath = catmullRom2bezier(revenuePts, 1, 19);
+
                             return (
                                 <>
-                                    {/* Y-axis labels */}
-                                    {yTicks.map((t, i) => (
-                                        <text key={i} x={PAD_L - 8} y={t.y + 4} textAnchor="end" fontSize={11} className="fill-gray-600 dark:fill-gray-400">
-                                            {fmtCurrency(t.val)}
-                                        </text>
-                                    ))}
-                                    
-                                    {/* Baseline */}
-                                    <line x1={PAD_L} y1={GRAPH_H} x2={VIEW_W - PAD_R} y2={GRAPH_H} className="stroke-gray-200 dark:stroke-gray-700" strokeWidth={1} />
-                                    
+                                    {/* Volume area (shaded) */}
+                                    <path d={volumeArea} fill="url(#volume-area-gradient)" />
+
                                     {/* Revenue line */}
-                                    <path d={revenuePath} fill="none" stroke="#6366F1" strokeWidth={2.5} />
-                                    
-                                    {/* X-axis labels */}
-                                    {xLabels.map((t, i) => (
-                                        <text key={i} x={t.x} y={GRAPH_H + 20} textAnchor={i === 0 ? 'start' : i === xLabels.length - 1 ? 'end' : 'middle'} fontSize={11} className="fill-gray-600 dark:fill-gray-400">
-                                            {t.label}
-                                        </text>
-                                    ))}
-                                    <text x={PAD_L} y={GRAPH_H + 35} textAnchor="start" fontSize={10} className="font-medium fill-gray-600 dark:fill-gray-400">
-                                        Send Volume (Highest → Lowest)
-                                    </text>
+                                    <path d={revenuePath} fill="none" stroke="#6366F1" strokeWidth="0.3" vectorEffect="non-scaling-stroke" />
                                 </>
                             );
                         })()}
                     </svg>
+
+                    {/* Chart labels overlay */}
+                    <div className="flex justify-between items-end mt-2 px-2 text-xs text-gray-600 dark:text-gray-400">
+                        <div>
+                            <span className="font-medium">{chartData.length > 0 ? Math.round(chartData[0].volume / 1000) + 'k' : ''}</span>
+                        </div>
+                        <div className="text-center">
+                            <span className="text-gray-500 dark:text-gray-500">Send Volume (Highest → Lowest)</span>
+                        </div>
+                        <div>
+                            <span className="font-medium">{chartData.length > 0 ? Math.round(chartData[chartData.length - 1].volume / 1000) + 'k' : ''}</span>
+                        </div>
+                    </div>
+                    <div className="mt-1 px-2 text-xs text-gray-500 dark:text-gray-500">
+                        <span className="inline-flex items-center gap-1">
+                            <span className="w-3 h-3 bg-purple-200 dark:bg-purple-800 rounded-sm"></span>
+                            Volume (shaded)
+                        </span>
+                        <span className="ml-3 inline-flex items-center gap-1">
+                            <span className="w-3 h-0.5 bg-indigo-500 rounded"></span>
+                            Revenue (line)
+                        </span>
+                    </div>
                 </div>
             )}
 
-            {/* Metrics Grid: 4 cards (2x2 on mobile, 1x4 on desktop) */}
-            <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">
+            {/* Metrics Grid: 3 cards (responsive layout) */}
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
                 {/* Correlation */}
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
                     <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Correlation</div>
@@ -302,14 +301,6 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         {getCorrelationLabel(guidance.correlationCoefficient)}
-                    </div>
-                </div>
-
-                {/* Campaigns Analyzed */}
-                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 flex flex-col justify-between">
-                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Campaigns</div>
-                    <div className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-gray-100 tabular-nums leading-none">
-                        {guidance.sampleSize}
                     </div>
                 </div>
 
@@ -342,7 +333,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     <div className="flex-1">
                         <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Campaign Action Note</p>
                         <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{guidance.message}</p>
-                        
+
                         {/* Revenue Opportunity Projection */}
                         {revenueProjection && (
                             <div className="mt-4 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
@@ -355,7 +346,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                                     {' '}per month ({revenueProjection.percentage.toFixed(0)}% lift).
                                 </div>
                                 <div className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
-                                    Based on {revenueProjection.tier} correlation (r = {guidance.correlationCoefficient?.toFixed(3)}) 
+                                    Based on {revenueProjection.tier} correlation (r = {guidance.correlationCoefficient?.toFixed(3)})
                                     with {revenueProjection.efficiency.toFixed(0)}% efficiency factor.
                                 </div>
                             </div>
@@ -365,13 +356,12 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     {/* Badge(s) */}
                     <div className="flex flex-wrap gap-2 self-start">
                         <span
-                            className={`px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap ${
-                                STATUS_BADGE_CLASSES[guidance.status]
-                            }`}
+                            className={`px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap ${STATUS_BADGE_CLASSES[guidance.status]
+                                }`}
                         >
                             {STATUS_LABELS[guidance.status]}
                         </span>
-                        
+
                         {/* Yellow Zone: High Risk Badge */}
                         {guidance.highRisk && (
                             <span className="px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 flex items-center gap-1">

@@ -46,8 +46,9 @@ export function sendVolumeGuidanceV2(
     const { fromDate, toDate } = parseDateRange(dateRange, customFrom, customTo);
 
     // Step 2: Apply 72-hour attribution lag - exclude campaigns sent in last 72 hours
+    // Use the END of the data range (toDate) as reference, not current date
     const attributionLagHours = 72;
-    const cutoffDate = dayjs().subtract(attributionLagHours, 'hours');
+    const cutoffDate = toDate.subtract(attributionLagHours, 'hours');
 
     // Filter campaigns within user's date range and before attribution cutoff
     const campaignsInRange = allCampaigns.filter(c => {
@@ -207,14 +208,16 @@ export function sendVolumeGuidanceV2(
 
 /**
  * Parse date range string into dayjs objects
- * For "all", we'll use the actual data range instead of a hardcoded date
+ * Uses the last email date from uploaded data as the reference point, not today's date
  */
 function parseDateRange(
     dateRange: string,
     customFrom?: string,
     customTo?: string
 ): { fromDate: dayjs.Dayjs; toDate: dayjs.Dayjs } {
-    const now = dayjs();
+    // Use the last email date from the uploaded data as reference, not today
+    const dm = DataManager.getInstance();
+    const lastDataDate = dayjs(dm.getLastEmailDate());
     
     if (dateRange === "custom" && customFrom && customTo) {
         return {
@@ -223,17 +226,17 @@ function parseDateRange(
         };
     }
 
-    // Parse standard ranges
+    // Parse standard ranges relative to the last data point
     const ranges: Record<string, { fromDate: dayjs.Dayjs; toDate: dayjs.Dayjs }> = {
-        "7d": { fromDate: now.subtract(7, "days"), toDate: now },
-        "14d": { fromDate: now.subtract(14, "days"), toDate: now },
-        "30d": { fromDate: now.subtract(30, "days"), toDate: now },
-        "60d": { fromDate: now.subtract(60, "days"), toDate: now },
-        "90d": { fromDate: now.subtract(90, "days"), toDate: now },
-        "180d": { fromDate: now.subtract(180, "days"), toDate: now },
-        "365d": { fromDate: now.subtract(365, "days"), toDate: now },
-        "730d": { fromDate: now.subtract(730, "days"), toDate: now },
-        "all": { fromDate: now.subtract(730, "days"), toDate: now }, // Cap at 2 years for "all"
+        "7d": { fromDate: lastDataDate.subtract(7, "days"), toDate: lastDataDate },
+        "14d": { fromDate: lastDataDate.subtract(14, "days"), toDate: lastDataDate },
+        "30d": { fromDate: lastDataDate.subtract(30, "days"), toDate: lastDataDate },
+        "60d": { fromDate: lastDataDate.subtract(60, "days"), toDate: lastDataDate },
+        "90d": { fromDate: lastDataDate.subtract(90, "days"), toDate: lastDataDate },
+        "180d": { fromDate: lastDataDate.subtract(180, "days"), toDate: lastDataDate },
+        "365d": { fromDate: lastDataDate.subtract(365, "days"), toDate: lastDataDate },
+        "730d": { fromDate: lastDataDate.subtract(730, "days"), toDate: lastDataDate },
+        "all": { fromDate: lastDataDate.subtract(730, "days"), toDate: lastDataDate }, // Cap at 2 years
     };
 
     return ranges[dateRange] || ranges["90d"];
