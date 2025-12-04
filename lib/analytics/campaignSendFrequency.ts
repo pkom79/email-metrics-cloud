@@ -177,7 +177,7 @@ export interface SendFrequencyGuidanceResult {
 }
 
 const MIN_TOTAL_WEEKS_FOR_REC = 12;
-const TEST_WEEKS_THRESHOLD = 4; // If target has < 4 weeks, it's a test.
+const TEST_WEEKS_THRESHOLD = 3; // If target has < 3 weeks, it's a test.
 
 // Thresholds
 const SPAM_GREEN_LIMIT = 0.1; // < 0.1%
@@ -263,7 +263,36 @@ export function computeSendFrequencyGuidance(
   }
 
   // 4. Pick Best by Revenue (Independent of Dominant)
-  const bestBucket = candidates.sort((a, b) => getRevenueValue(b) - getRevenueValue(a))[0];
+  // Filter out buckets with only 1 week of data (insufficient significance)
+  const validCandidates = candidates.filter(b => b.weeksCount >= 2);
+  
+  // If no valid candidates (e.g. all high performers are 1-week anomalies), fallback to dominant if it's safe
+  let bestBucket = validCandidates.sort((a, b) => getRevenueValue(b) - getRevenueValue(a))[0];
+
+  if (!bestBucket) {
+      // If dominant is safe, default to it. Otherwise, we have no recommendation.
+      const dominantIsSafe = candidates.some(c => c.key === dominant.key);
+      if (dominantIsSafe) {
+          bestBucket = dominant;
+      } else {
+          // Dominant is Red, and no other safe bucket has > 1 week.
+          return {
+             status: 'send-less',
+             recommendationKind: 'reduce',
+             cadenceLabel: labelForFrequencyBucket(dominant.key),
+             title: `Stabilize at ${actionLabelForFrequencyBucket(dominant.key)}`,
+             message: `${labelForFrequencyBucket(dominant.key)} is generating high spam/bounce rates (> ${SPAM_RED_LIMIT}% spam or > ${BOUNCE_RED_LIMIT}% bounce). Focus on list cleaning and content quality before scaling.`,
+             sample: formatSample(),
+             baselineKey: dominant.key,
+             targetKey: dominant.key,
+             baselineWeeklyRevenue: getRevenueValue(dominant),
+             targetWeeklyRevenue: getRevenueValue(dominant),
+             estimatedWeeklyGain: null,
+             estimatedMonthlyGain: null,
+             metadata: { strategy: 'stabilize-emergency' },
+          };
+      }
+  }
   
   // 5. Check Risk Level of Best Bucket
   const isYellow = bestBucket.spamRate >= SPAM_GREEN_LIMIT || bestBucket.bounceRate >= BOUNCE_GREEN_LIMIT;
@@ -275,7 +304,19 @@ export function computeSendFrequencyGuidance(
   const targetRevenue = getRevenueValue(bestBucket);
   const lift = baselineRevenue === 0 ? (targetRevenue > 0 ? Infinity : 0) : (targetRevenue - baselineRevenue) / baselineRevenue;
   const liftPct = lift === Infinity ? 'from zero' : formatPercent(lift);
-  const weeklyDiff = targetRevenue - baselineRevenue;
+  
+  // Calculate Overall Average Weekly Revenue for Projection Baseline
+  // (Revenue per week for the entire look back period)
+  const totalRevenueAll = buckets.reduce((sum, b) => sum + b.sumRevenue, 0);
+  const overallAvgWeeklyRevenue = totalWeeksAll > 0 ? totalRevenueAll / totalWeeksAll : 0;
+
+  // Helper to calculate conservative projected gain
+  // Formula: (Target Weekly - Overall Average Weekly) * 4 weeks * 50% conservative factor
+  const calculateProjectedGain = (targetWeeklyRev: number) => {
+      const weeklyGain = targetWeeklyRev - overallAvgWeeklyRevenue;
+      if (weeklyGain <= 0) return null;
+      return weeklyGain * 4 * 0.5;
+  };
 
   // Case A: Stay (Best is Dominant)
   if (bestBucket.key === dominant.key) {
@@ -301,38 +342,46 @@ export function computeSendFrequencyGuidance(
       const isConfident = bestBucket.weeksCount >= TEST_WEEKS_THRESHOLD;
       const recKind = isConfident ? 'scale' : 'test';
       
+      // Only show revenue projection for Full recommendations (isConfident)
+      const projectedMonthlyGain = isConfident ? calculateProjectedGain(targetRevenue) : null;
+      
       return {
         status: 'send-more',
         recommendationKind: recKind,
         cadenceLabel: labelForFrequencyBucket(bestBucket.key) + riskLabel,
         title: `Send ${actionLabelForFrequencyBucket(bestBucket.key)}`,
-        message: `${labelForFrequencyBucket(bestBucket.key)} generates ${liftPct} more weekly revenue than your current cadence.${riskWarning} ${isConfident ? 'Scale up to this frequency.' : 'Try this frequency for a month to see if results hold.'}`,
+        message: `${labelForFrequencyBucket(bestBucket.key)} generates ${liftPct} more weekly revenue than your most frequent cadence.${riskWarning} ${isConfident ? 'Scale up to this frequency.' : 'Consider testing this bucket to see if results hold.'}`,
         sample: formatSample(),
         baselineKey: dominant.key,
         targetKey: bestBucket.key,
         baselineWeeklyRevenue: baselineRevenue,
         targetWeeklyRevenue: targetRevenue,
-        estimatedWeeklyGain: weeklyDiff,
-        estimatedMonthlyGain: weeklyDiff * 4,
+        estimatedWeeklyGain: null, // Deprecated in favor of monthly projection logic
+        estimatedMonthlyGain: projectedMonthlyGain,
         metadata: { strategy: 'scale-revenue-max', risk: isYellow ? 'yellow' : 'green' },
       };
   }
 
   // Case C: Scale Down (Best is Lower Frequency)
   if (Number(bestBucket.key) < Number(dominant.key)) {
+      const isConfident = bestBucket.weeksCount >= TEST_WEEKS_THRESHOLD;
+      
+      // Only show revenue projection for Full recommendations
+      const projectedMonthlyGain = isConfident ? calculateProjectedGain(targetRevenue) : null;
+
       return {
         status: 'send-less',
         recommendationKind: 'reduce',
         cadenceLabel: labelForFrequencyBucket(bestBucket.key) + riskLabel,
         title: `Send ${actionLabelForFrequencyBucket(bestBucket.key)}`,
-        message: `${labelForFrequencyBucket(bestBucket.key)} generates ${liftPct} more revenue than your current cadence.${riskWarning} Consider reducing frequency to maximize return.`,
+        message: `${labelForFrequencyBucket(bestBucket.key)} generates ${liftPct} more revenue than your most frequent cadence.${riskWarning} ${isConfident ? 'Consider reducing frequency to maximize return.' : 'Consider testing this lower frequency.'}`,
         sample: formatSample(),
         baselineKey: dominant.key,
         targetKey: bestBucket.key,
         baselineWeeklyRevenue: baselineRevenue,
         targetWeeklyRevenue: targetRevenue,
-        estimatedWeeklyGain: weeklyDiff,
-        estimatedMonthlyGain: weeklyDiff * 4,
+        estimatedWeeklyGain: null,
+        estimatedMonthlyGain: projectedMonthlyGain,
         metadata: { strategy: 'reduce-revenue-max', risk: isYellow ? 'yellow' : 'green' },
       };
   }
