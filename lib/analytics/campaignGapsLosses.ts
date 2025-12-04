@@ -74,21 +74,6 @@ export function computeCampaignGapsAndLosses({ campaigns, flows, rangeStart, ran
     // A week is included if its Monday start date falls within the selected range
     const isInRange = weekStart >= rangeStart && weekStart <= rangeEnd;
     
-    // Debug: log all weeks to help diagnose issues
-    try {
-      const weekEndMs = weekStartMs + (7 * ONE_DAY - 1);
-      console.debug('[CampaignGaps&Losses] Week evaluation', {
-        start: w.weekStart.toISOString().slice(0,10),
-        end: new Date(weekEndMs).toISOString().slice(0,10),
-        campaignsSent: w.campaignsSent || 0,
-        isComplete: w.isCompleteWeek,
-        isInRange: isInRange,
-        rangeStart: rangeStart.toISOString().slice(0,10),
-        rangeEnd: rangeEnd.toISOString().slice(0,10),
-        included: isInRange
-      });
-    } catch {}
-    
     return isInRange;
   });
 

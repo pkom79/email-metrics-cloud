@@ -36,11 +36,6 @@ function CampaignGapsAndLosses({ dateRange, granularity, customFrom, customTo, f
                 const start = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
                 const end = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
 
-                try {
-                    // eslint-disable-next-line no-console
-                    console.debug('[CampaignGaps&Losses] custom range', { dateRange, start: start.toISOString(), end: end.toISOString(), campaignsCount: campaigns.length });
-                } catch { }
-
                 return { start, end };
             }
 
@@ -59,11 +54,6 @@ function CampaignGapsAndLosses({ dateRange, granularity, customFrom, customTo, f
 
             const startAligned = new Date(start); startAligned.setHours(0, 0, 0, 0);
             const endAligned = new Date(end); endAligned.setHours(23, 59, 59, 999);
-
-            try {
-                // eslint-disable-next-line no-console
-                console.debug('[CampaignGaps&Losses] preset range', { dateRange, start: startAligned.toISOString(), end: endAligned.toISOString(), campaignsCount: campaigns.length });
-            } catch { }
 
             return { start: startAligned, end: endAligned };
         } catch { return null; }
