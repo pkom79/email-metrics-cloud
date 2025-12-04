@@ -56,7 +56,7 @@ export interface LlmExportJson {
   // Send Frequency Optimization over the selected lookback period (not trimmed to full months)
   campaignSendFrequency?: {
     buckets: Array<{
-      key: '1' | '2' | '3' | '4+';
+      key: string;
       weeksCount: number;
       totalCampaigns: number; // number of campaigns in this bucket during lookback
       perWeek: { avgWeeklyRevenue: number; avgWeeklyOrders: number; avgWeeklyEmails: number };
