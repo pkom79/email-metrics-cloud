@@ -7,7 +7,7 @@ import HourOfDayPerformance from './HourOfDayPerformance';
 import RevenueSplitBar from './RevenueSplitBar';
 import SplitShareOverTime from './SplitShareOverTime';
 // Revenue Reliability module removed: placeholder used to preserve layout
-import SendVolumeImpact from './SendVolumeImpact';
+import SendVolumeImpactV2 from './SendVolumeImpactV2';
 import AudienceCharts from './AudienceCharts';
 import TimeSeriesChart from './TimeSeriesChart';
 import FlowStepAnalysis from './FlowStepAnalysis';
@@ -2359,16 +2359,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                             />
                         </section>
                     )}
-                    {/* Send Volume Impact */}
-                    {HAS_ACTIVE_ACCOUNT && (
-                        <SendVolumeImpact
-                            dateRange={dateRange}
-                            granularity={granularity}
-                            customFrom={customFrom}
-                            customTo={customTo}
-                            compareMode={compareMode}
-                        />
-                    )}
                     {campaignMetrics && (
                         <section>
                             <div className="flex items-center gap-2 mb-3">
@@ -2425,6 +2415,16 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 <MetricCard title="Bounce Rate" value={formatPercent(campaignMetrics.bounceRate.value)} change={campaignMetrics.bounceRate.change} isPositive={campaignMetrics.bounceRate.isPositive} previousValue={campaignMetrics.bounceRate.previousValue} previousPeriod={campaignMetrics.bounceRate.previousPeriod} dateRange={dateRange} metricKey="bounceRate" sparklineData={campaignSeries.bounceRate} compareMode={compareMode} category="campaign" chartType={campaignChartType} />
                             </div>
                         </section>
+                    )}
+                    {/* Campaign Send Volume Impact - moved above Send Frequency */}
+                    {HAS_ACTIVE_ACCOUNT && (
+                        <SendVolumeImpactV2
+                            dateRange={dateRange}
+                            granularity={granularity}
+                            customFrom={customFrom}
+                            customTo={customTo}
+                            compareMode={compareMode}
+                        />
                     )}
                     {/* Campaign Send Frequency */}
                     {HAS_ACTIVE_ACCOUNT && defCampaigns.length > 0 && (
