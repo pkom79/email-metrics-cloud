@@ -320,6 +320,34 @@ export function computeSendFrequencyGuidance(
 
   // Case A: Stay (Best is Dominant)
   if (bestBucket.key === dominant.key) {
+      // Growth Mindset Check:
+      // If current metrics are Green (Safe) AND we haven't tried higher frequencies (or they are missing from data),
+      // recommend testing the next level up.
+      const currentFreq = Number(dominant.key);
+      const nextFreq = currentFreq + 1;
+      const nextFreqKey = String(nextFreq);
+      
+      // Check if next frequency exists in ANY bucket (even Red ones)
+      const nextBucketExists = buckets.some(b => b.key === nextFreqKey);
+      
+      if (!isYellow && !nextBucketExists) {
+          return {
+              status: 'send-more',
+              recommendationKind: 'test',
+              cadenceLabel: `Test ${nextFreq} ${pluralize('campaign', nextFreq)} / week`,
+              title: `Test ${nextFreq} ${pluralize('campaign', nextFreq)} a week`,
+              message: `${labelForFrequencyBucket(dominant.key)} is performing well with healthy deliverability. Consider testing ${nextFreq} ${pluralize('campaign', nextFreq)} a week to see if you can scale revenue further.`,
+              sample: formatSample(),
+              baselineKey: dominant.key,
+              targetKey: nextFreqKey,
+              baselineWeeklyRevenue: baselineRevenue,
+              targetWeeklyRevenue: baselineRevenue, // Unknown
+              estimatedWeeklyGain: null,
+              estimatedMonthlyGain: null,
+              metadata: { strategy: 'growth-experiment', risk: 'green' },
+          };
+      }
+
       return {
           status: 'keep-as-is',
           recommendationKind: 'stay',
