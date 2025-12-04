@@ -81,11 +81,6 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         const campaigns = dm.getCampaigns();
         if (!campaigns.length) return [];
 
-        // Calculate actual last date from campaigns in memory
-        const actualLastDate = campaigns.length > 0
-            ? dayjs(Math.max(...campaigns.map(c => new Date(c.sentDate).getTime())))
-            : dayjs();
-
         // Parse the user's selected date range using last data date as reference
         // MUST match the exact logic in sendVolumeGuidanceV2.ts
         const { fromDate, toDate } = (() => {
@@ -93,8 +88,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                 return { fromDate: dayjs(customFrom), toDate: dayjs(customTo) };
             }
             // For preset ranges, need to compute from actual last email date
-            // Use actualLastDate (max campaign date) to match sendVolumeGuidanceV2.ts
-            const lastDataDate = actualLastDate;
+            const lastDataDate = dayjs(dm.getLastEmailDate());
             const ranges: Record<string, { fromDate: dayjs.Dayjs; toDate: dayjs.Dayjs }> = {
                 "7d": { fromDate: lastDataDate.subtract(7, "days"), toDate: lastDataDate },
                 "14d": { fromDate: lastDataDate.subtract(14, "days"), toDate: lastDataDate },
@@ -114,7 +108,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         setDebugDateRange({
             from: fromDate.format('MMM D, YYYY'),
             to: toDate.format('MMM D, YYYY'),
-            lastDataDate: actualLastDate.format('MMM D, YYYY')
+            lastDataDate: dayjs(dm.getLastEmailDate()).format('MMM D, YYYY')
         });
 
         // Filter campaigns in date range - EXACT SAME LOGIC AS ALGORITHM

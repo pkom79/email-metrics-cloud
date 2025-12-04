@@ -213,12 +213,7 @@ function parseDateRange(
 ): { fromDate: dayjs.Dayjs; toDate: dayjs.Dayjs } {
     // Use the last email date from the uploaded data as reference, not today
     const dm = DataManager.getInstance();
-    // Use max campaign date instead of generic last email date (which includes flows)
-    // This ensures campaign analysis is anchored to actual campaign activity
-    const campaigns = dm.getCampaigns();
-    const lastDataDate = campaigns.length > 0
-        ? dayjs(Math.max(...campaigns.map(c => new Date(c.sentDate).getTime())))
-        : dayjs(dm.getLastEmailDate());
+    const lastDataDate = dayjs(dm.getLastEmailDate());
     
     if (dateRange === "custom" && customFrom && customTo) {
         return {
