@@ -1,10 +1,11 @@
 "use client";
 import React, { useMemo, useState, useCallback } from 'react';
-import { Activity, AlertTriangle } from 'lucide-react';
+import { Activity, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import { sendVolumeGuidanceV2 } from '../../lib/analytics/sendVolumeGuidanceV2';
 import type { SendVolumeGuidanceResultV2, SendVolumeStatusV2 } from '../../lib/analytics/sendVolumeGuidanceV2';
 import { DataManager } from '../../lib/data/dataManager';
+import dayjs from '../../lib/dayjs';
 
 interface Props {
     dateRange: string;
@@ -67,6 +68,8 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; volume: number; revenue: number; name: string } | null>(null);
 
     // Call V2 algorithm - campaigns only, date-range sensitive
+    const [showDebug, setShowDebug] = useState(false);
+
     const guidance = useMemo(
         () => sendVolumeGuidanceV2(dateRange, customFrom, customTo),
         [dateRange, customFrom, customTo]
@@ -102,7 +105,8 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                 id: c.id,
                 campaignName: c.campaignName,
                 volume: c.emailsSent,
-                revenue: c.revenue
+                revenue: c.revenue,
+                sentDate: c.sentDate
             }))
             .sort((a, b) => b.volume - a.volume);
     }, [dm, dateRange, customFrom, customTo]);
@@ -253,6 +257,58 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                         {guidance.avgBounceRate.toFixed(2)}%
                     </div>
                 </div>
+            </div>
+
+            {/* Campaign List Debug - Collapsible */}
+            <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900">
+                <button
+                    onClick={() => setShowDebug(!showDebug)}
+                    className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors rounded-lg"
+                >
+                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        Campaigns Included ({chartData.length})
+                    </span>
+                    {showDebug ? (
+                        <ChevronUp className="w-4 h-4 text-gray-500" />
+                    ) : (
+                        <ChevronDown className="w-4 h-4 text-gray-500" />
+                    )}
+                </button>
+                
+                {showDebug && (
+                    <div className="border-t border-gray-200 dark:border-gray-700 p-4 max-h-96 overflow-y-auto">
+                        <div className="space-y-2">
+                            {chartData.map((c, idx) => (
+                                <div key={c.id} className="text-xs border-b border-gray-100 dark:border-gray-800 pb-2 last:border-0">
+                                    <div className="font-semibold text-gray-900 dark:text-gray-100">
+                                        {idx + 1}. {c.campaignName}
+                                    </div>
+                                    <div className="mt-1 space-y-1 text-gray-600 dark:text-gray-400">
+                                        <div>
+                                            <span className="font-medium">Campaign ID:</span> {c.id}
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <div>
+                                                <span className="font-medium">Date:</span> {dayjs(c.sentDate).format('MMM D, YYYY')}
+                                            </div>
+                                            <div>
+                                                <span className="font-medium">Emails:</span> {c.volume.toLocaleString()}
+                                            </div>
+                                            <div>
+                                                <span className="font-medium">Revenue:</span> {fmtCurrency(c.revenue)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            {chartData.length === 0 && (
+                                <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">
+                                    No campaigns found in selected date range
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Action Note with Revenue Projection */}
