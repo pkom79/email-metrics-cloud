@@ -65,12 +65,12 @@ function catmullRom2bezier(points: { x: number, y: number }[], yMin?: number, yM
 export default function SendVolumeImpact({ dateRange, granularity, customFrom, customTo }: Props) {
     const dm = DataManager.getInstance();
     const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; volume: number; revenue: number; name: string } | null>(null);
-    
+
     // Call V2 algorithm - campaigns only, date-range sensitive
     const guidance = useMemo(
         () => sendVolumeGuidanceV2(dateRange, customFrom, customTo),
         [dateRange, customFrom, customTo]
-    );    // Get campaign data for chart - respects date range
+    );    // Get campaign data for chart - use all campaigns that passed the algorithm filter
     const chartData = useMemo(() => {
         const campaigns = dm.getCampaigns();
         if (!campaigns.length) return [];
@@ -88,7 +88,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             return { fromDate: from, toDate: to };
         })();
 
-        // Filter campaigns in date range
+        // Filter campaigns in date range - same logic as algorithm
         const filteredCampaigns = campaigns.filter(c => {
             const sentDate = new Date(c.sentDate);
             return sentDate >= fromDate && sentDate <= toDate && c.emailsSent >= 500;
@@ -96,14 +96,17 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
 
         if (filteredCampaigns.length === 0) return [];
 
-        // Sort by volume and return individual campaigns (not grouped)
+        // Sort by send date (chronological for time series)
         return filteredCampaigns
-            .map((c: any) => ({
+            .map(c => ({
+                id: c.id,
+                campaignName: c.campaignName,
                 volume: c.emailsSent,
                 revenue: c.revenue,
-                name: c.name || c.subject || 'Campaign'
+                sentDate: c.sentDate,
+                date: c.sentDate.toISOString().split('T')[0]
             }))
-            .sort((a, b) => b.volume - a.volume); // Highest to lowest
+            .sort((a, b) => a.sentDate.getTime() - b.sentDate.getTime());
     }, [dm, dateRange, customFrom, customTo]);
 
     // Calculate monthly revenue for projections
@@ -218,171 +221,173 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                 </div>
             </div>
 
-            {/* Volume vs Revenue Chart - Full Width with Y-axis */}
+            {/* Volume vs Revenue Chart - Timeline Style */}
             {chartData.length > 0 && (
-                <div className="mt-6 relative">
-                    <svg width="100%" height="280" viewBox="0 0 900 280" className="block" style={{ minHeight: '280px' }}>
+                <div className="mt-6 relative bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-4">
+                    <svg width="100%" height="200" viewBox="0 0 850 200" className="block">
                         <defs>
-                            <linearGradient id="volume-gradient-blue" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3" />
-                                <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.05" />
+                            <linearGradient id="svimpact-area" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#6366F1" stopOpacity="0.2" />
+                                <stop offset="100%" stopColor="#6366F1" stopOpacity="0.05" />
                             </linearGradient>
                         </defs>
-                        
+
                         {(() => {
-                            if (chartData.length < 2) return null;
-                            
-                            const PAD_L = 70;
+                            const PAD_L = 72;
                             const PAD_R = 20;
-                            const PAD_T = 20;
-                            const PAD_B = 60;
-                            const WIDTH = 900 - PAD_L - PAD_R;
-                            const HEIGHT = 280 - PAD_T - PAD_B;
-                            
+                            const PAD_T = 10;
+                            const PAD_B = 40;
+                            const WIDTH = 850 - PAD_L - PAD_R;
+                            const HEIGHT = 200 - PAD_T - PAD_B;
+                            const innerH = 140;
+
                             const maxRevenue = Math.max(...chartData.map(d => d.revenue), 1);
-                            const maxVolume = Math.max(...chartData.map(d => d.volume), 1);
-                            
+
                             // Scale functions
-                            const xScale = (i: number) => PAD_L + (i / (chartData.length - 1)) * WIDTH;
-                            const yRevenue = (v: number) => PAD_T + HEIGHT - (v / maxRevenue) * HEIGHT;
-                            const yVolume = (v: number) => PAD_T + HEIGHT - (v / maxVolume) * HEIGHT;
-                            
+                            const xScale = (i: number) => chartData.length <= 1 ? PAD_L + WIDTH / 2 : PAD_L + (i / (chartData.length - 1)) * WIDTH;
+                            const yScale = (v: number) => {
+                                const y = innerH - (Math.max(0, v) / maxRevenue) * (innerH - 10);
+                                return Math.min(innerH, Math.max(0, y));
+                            };
+
                             // Create data points
                             const points = chartData.map((d, i) => ({
                                 x: xScale(i),
-                                yRevenue: yRevenue(d.revenue),
-                                yVolume: yVolume(d.volume),
+                                y: yScale(d.revenue),
+                                id: d.id,
+                                campaignName: d.campaignName,
                                 volume: d.volume,
                                 revenue: d.revenue,
-                                name: d.name
+                                date: d.date
                             }));
-                            
-                            // Volume area path
-                            const volumeArea = [
-                                `M ${PAD_L} ${PAD_T + HEIGHT}`,
-                                ...points.map(p => `L ${p.x} ${p.yVolume}`),
-                                `L ${points[points.length - 1].x} ${PAD_T + HEIGHT}`,
-                                'Z'
-                            ].join(' ');
-                            
-                            // Revenue line path (smooth)
-                            const revenuePts = points.map(p => ({ x: p.x, y: p.yRevenue }));
-                            const revenuePath = catmullRom2bezier(revenuePts, PAD_T, PAD_T + HEIGHT);
-                            
-                            // Y-axis ticks for revenue
-                            const yTicks = [0, 0.25, 0.5, 0.75, 1].map(t => ({
+
+                            // Build smooth path
+                            const buildPath = (pts: { x: number; y: number }[]) => {
+                                if (pts.length < 2) return '';
+                                const d: string[] = [`M${pts[0].x} ${pts[0].y}`];
+                                for (let i = 0; i < pts.length - 1; i++) {
+                                    const p0 = pts[i - 1] || pts[i];
+                                    const p1 = pts[i];
+                                    const p2 = pts[i + 1];
+                                    const p3 = pts[i + 2] || p2;
+                                    const cp1x = p1.x + (p2.x - p0.x) / 6;
+                                    const cp1y = Math.min(innerH, Math.max(0, p1.y + (p2.y - p0.y) / 6));
+                                    const cp2x = p2.x - (p3.x - p1.x) / 6;
+                                    const cp2y = Math.min(innerH, Math.max(0, p2.y - (p3.y - p1.y) / 6));
+                                    d.push(`C${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x} ${p2.y}`);
+                                }
+                                return d.join(' ');
+                            };
+
+                            const pathD = buildPath(points);
+                            const areaD = pathD ? `${pathD} L ${xScale(chartData.length - 1)} ${innerH} L ${xScale(0)} ${innerH} Z` : '';
+
+                            // Y-axis ticks
+                            const yTicks = [0, 0.333, 0.666, 1].map(t => ({
                                 value: maxRevenue * t,
-                                y: PAD_T + HEIGHT - (HEIGHT * t)
+                                y: innerH - (t * (innerH - 10))
                             }));
-                            
+
+                            // X-axis date labels
+                            const desiredXTicks = 6;
+                            const tickIdx: number[] = [];
+                            if (chartData.length <= desiredXTicks) {
+                                for (let i = 0; i < chartData.length; i++) tickIdx.push(i);
+                            } else {
+                                for (let i = 0; i < desiredXTicks; i++) {
+                                    const idx = Math.round((i / (desiredXTicks - 1)) * (chartData.length - 1));
+                                    if (!tickIdx.includes(idx)) tickIdx.push(idx);
+                                }
+                            }
+
                             return (
                                 <>
                                     {/* Y-axis line */}
-                                    <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={PAD_T + HEIGHT} stroke="#9CA3AF" strokeWidth="1" />
-                                    
-                                    {/* Y-axis labels (Revenue) */}
+                                    <line x1={PAD_L} y1={0} x2={PAD_L} y2={innerH} stroke="#D1D5DB" strokeWidth="1" className="dark:stroke-gray-700" />
+
+                                    {/* Y-axis labels */}
                                     {yTicks.map((tick, i) => (
                                         <g key={i}>
-                                            <line x1={PAD_L - 5} y1={tick.y} x2={PAD_L} y2={tick.y} stroke="#9CA3AF" strokeWidth="1" />
-                                            <text x={PAD_L - 8} y={tick.y + 4} textAnchor="end" fontSize="11" className="fill-gray-600 dark:fill-gray-400">
+                                            <line x1={PAD_L - 4} y1={tick.y} x2={PAD_L} y2={tick.y} stroke="#D1D5DB" strokeWidth="1" className="dark:stroke-gray-700" />
+                                            <text x={PAD_L - 8} y={tick.y + 4} textAnchor="end" fontSize="11" className="fill-gray-500 dark:fill-gray-400">
                                                 {fmtCurrency(tick.value)}
                                             </text>
                                         </g>
                                     ))}
-                                    
+
                                     {/* X-axis baseline */}
-                                    <line x1={PAD_L} y1={PAD_T + HEIGHT} x2={900 - PAD_R} y2={PAD_T + HEIGHT} stroke="#9CA3AF" strokeWidth="1" />
-                                    
-                                    {/* Volume shaded area (blue) */}
-                                    <path d={volumeArea} fill="url(#volume-gradient-blue)" />
-                                    
-                                    {/* Revenue line (blue, thicker) */}
-                                    <path d={revenuePath} fill="none" stroke="#3B82F6" strokeWidth="2.5" />
-                                    
-                                    {/* X-axis volume labels */}
-                                    {[0, Math.floor(chartData.length / 4), Math.floor(chartData.length / 2), Math.floor(chartData.length * 3 / 4), chartData.length - 1].map((idx, i) => {
+                                    <line x1={PAD_L} y1={innerH} x2={850 - PAD_R} y2={innerH} stroke="#D1D5DB" strokeWidth="1" className="dark:stroke-gray-700" />
+
+                                    {/* Revenue area (shaded) */}
+                                    <path d={areaD} fill="url(#svimpact-area)" />
+
+                                    {/* Revenue line */}
+                                    <path d={pathD} fill="none" stroke="#6366F1" strokeWidth="2.5" />
+
+                                    {/* X-axis date labels */}
+                                    {tickIdx.map((idx, i) => {
                                         if (idx >= chartData.length) return null;
-                                        const x = PAD_L + (idx / (chartData.length - 1)) * WIDTH;
-                                        const vol = chartData[idx].volume;
+                                        const x = xScale(idx);
+                                        const dateStr = chartData[idx].date;
+                                        const d = new Date(dateStr);
+                                        const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                                         return (
-                                            <text key={i} x={x} y={PAD_T + HEIGHT + 20} textAnchor="middle" fontSize="11" className="fill-gray-600 dark:fill-gray-400">
-                                                {vol >= 1000 ? Math.round(vol / 1000) + 'k' : vol}
+                                            <text key={i} x={x} y={innerH + 18} textAnchor="middle" fontSize="11" className="fill-gray-500 dark:fill-gray-400">
+                                                {label}
                                             </text>
                                         );
                                     })}
-                                    
+
                                     {/* Interactive hover areas */}
                                     {points.map((p, i) => (
                                         <g key={i}>
                                             <circle
                                                 cx={p.x}
-                                                cy={p.yRevenue}
-                                                r="6"
+                                                cy={p.y}
+                                                r="8"
                                                 fill="transparent"
                                                 className="cursor-pointer"
                                                 onMouseEnter={() => {
                                                     setHoveredPoint({
                                                         x: p.x,
-                                                        y: p.yRevenue,
+                                                        y: p.y,
                                                         volume: p.volume,
                                                         revenue: p.revenue,
-                                                        name: p.name
+                                                        name: `Campaign #${p.id}`
                                                     });
                                                 }}
                                                 onMouseLeave={() => setHoveredPoint(null)}
                                             />
                                             <circle
                                                 cx={p.x}
-                                                cy={p.yRevenue}
-                                                r="3"
-                                                fill="#3B82F6"
+                                                cy={p.y}
+                                                r="3.5"
+                                                fill="#6366F1"
                                                 className="pointer-events-none"
                                                 style={{ opacity: hoveredPoint?.x === p.x ? 1 : 0 }}
                                             />
                                         </g>
                                     ))}
-                                    
-                                    {/* X-axis label */}
-                                    <text x={PAD_L + WIDTH / 2} y={280 - 10} textAnchor="middle" fontSize="12" className="fill-gray-600 dark:fill-gray-400 font-medium">
-                                        Send Volume (Highest → Lowest)
-                                    </text>
-                                    
-                                    {/* Y-axis label */}
-                                    <text x={20} y={PAD_T + HEIGHT / 2} textAnchor="middle" fontSize="12" className="fill-gray-600 dark:fill-gray-400 font-medium" transform={`rotate(-90 20 ${PAD_T + HEIGHT / 2})`}>
-                                        Revenue
-                                    </text>
                                 </>
                             );
                         })()}
                     </svg>
-                    
+
                     {/* Tooltip */}
                     {hoveredPoint && (
                         <div
                             className="absolute z-50 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg px-3 py-2 shadow-lg pointer-events-none whitespace-nowrap"
                             style={{
-                                left: `${(hoveredPoint.x / 900) * 100}%`,
-                                top: `${(hoveredPoint.y / 280) * 100}%`,
-                                transform: 'translate(-50%, -120%)'
+                                left: `${(hoveredPoint.x / 850) * 100}%`,
+                                top: `${(hoveredPoint.y / 200) * 100}%`,
+                                transform: 'translate(-50%, calc(-100% - 10px))'
                             }}
                         >
                             <div className="font-semibold mb-1">{hoveredPoint.name}</div>
-                            <div>Volume: {hoveredPoint.volume.toLocaleString()}</div>
+                            <div>Volume: {hoveredPoint.volume.toLocaleString()} emails</div>
                             <div>Revenue: {fmtCurrency(hoveredPoint.revenue)}</div>
                         </div>
                     )}
-                    
-                    {/* Legend */}
-                    <div className="mt-3 px-2 text-xs text-gray-500 dark:text-gray-500 flex items-center justify-center gap-4">
-                        <span className="inline-flex items-center gap-1">
-                            <span className="w-3 h-3 bg-blue-200 dark:bg-blue-800 rounded-sm"></span>
-                            Volume (shaded) 
-                        </span>
-                        <span className="inline-flex items-center gap-1">
-                            <span className="w-3 h-0.5 bg-blue-500 rounded"></span>
-                            Revenue (line)
-                        </span>
-                    </div>
                 </div>
             )}            {/* Metrics Grid: 3 cards (responsive layout) */}
             <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
