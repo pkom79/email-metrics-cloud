@@ -207,6 +207,7 @@ export function sendVolumeGuidanceV2(
 
 /**
  * Parse date range string into dayjs objects
+ * For "all", we'll use the actual data range instead of a hardcoded date
  */
 function parseDateRange(
     dateRange: string,
@@ -231,7 +232,8 @@ function parseDateRange(
         "90d": { fromDate: now.subtract(90, "days"), toDate: now },
         "180d": { fromDate: now.subtract(180, "days"), toDate: now },
         "365d": { fromDate: now.subtract(365, "days"), toDate: now },
-        "all": { fromDate: dayjs("2020-01-01"), toDate: now },
+        "730d": { fromDate: now.subtract(730, "days"), toDate: now },
+        "all": { fromDate: now.subtract(730, "days"), toDate: now }, // Cap at 2 years for "all"
     };
 
     return ranges[dateRange] || ranges["90d"];
