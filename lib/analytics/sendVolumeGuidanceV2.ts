@@ -234,6 +234,7 @@ function parseDateRange(
         "30d": { fromDate: lastDataDate.subtract(30, "days"), toDate: lastDataDate },
         "60d": { fromDate: lastDataDate.subtract(60, "days"), toDate: lastDataDate },
         "90d": { fromDate: lastDataDate.subtract(90, "days"), toDate: lastDataDate },
+        "120d": { fromDate: lastDataDate.subtract(120, "days"), toDate: lastDataDate },
         "180d": { fromDate: lastDataDate.subtract(180, "days"), toDate: lastDataDate },
         "365d": { fromDate: lastDataDate.subtract(365, "days"), toDate: lastDataDate },
         "730d": { fromDate: lastDataDate.subtract(730, "days"), toDate: lastDataDate },
