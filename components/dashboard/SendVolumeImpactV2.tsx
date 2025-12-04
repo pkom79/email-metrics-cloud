@@ -73,7 +73,10 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     const guidance = useMemo(
         () => sendVolumeGuidanceV2(dateRange, customFrom, customTo),
         [dateRange, customFrom, customTo]
-    );    // Get campaign data for chart - use all campaigns that passed the algorithm filter
+    );    // Store date range for display in debug section
+    const [debugDateRange, setDebugDateRange] = useState<{ from: string; to: string; lastDataDate: string } | null>(null);
+
+    // Get campaign data for chart - use all campaigns that passed the algorithm filter
     const chartData = useMemo(() => {
         const campaigns = dm.getCampaigns();
         if (!campaigns.length) return [];
@@ -100,12 +103,19 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             return ranges[dateRange] || ranges["90d"];
         })();
 
+        // Store for debug display
+        setDebugDateRange({
+            from: fromDate.format('MMM D, YYYY'),
+            to: toDate.format('MMM D, YYYY'),
+            lastDataDate: lastDataDate.format('MMM D, YYYY')
+        });
+
         // Filter campaigns in date range - EXACT SAME LOGIC AS ALGORITHM
         const filteredCampaigns = campaigns.filter(c => {
             const sentDate = dayjs(c.sentDate);
-            return (sentDate.isAfter(fromDate) || sentDate.isSame(fromDate, 'day')) && 
-                   (sentDate.isBefore(toDate) || sentDate.isSame(toDate, 'day')) && 
-                   c.emailsSent >= 500;
+            return (sentDate.isAfter(fromDate) || sentDate.isSame(fromDate, 'day')) &&
+                (sentDate.isBefore(toDate) || sentDate.isSame(toDate, 'day')) &&
+                c.emailsSent >= 500;
         });
 
         if (filteredCampaigns.length === 0) return [];
@@ -285,36 +295,33 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                         <ChevronDown className="w-4 h-4 text-gray-500" />
                     )}
                 </button>
-                
+
                 {showDebug && (
                     <div className="border-t border-gray-200 dark:border-gray-700 p-4 max-h-96 overflow-y-auto">
                         {/* Date Range Info */}
                         <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-xs">
-                            <div className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Date Range Filter:</div>
-                            <div className="space-y-1 text-gray-600 dark:text-gray-400">
-                                <div>
-                                    <span className="font-medium">Last Data Date:</span> {dayjs(dm.getLastEmailDate()).format('MMM D, YYYY')}
+                            <div className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Date Range Filter (ACTUAL):</div>
+                            {debugDateRange && (
+                                <div className="space-y-1 text-gray-600 dark:text-gray-400">
+                                    <div>
+                                        <span className="font-medium">Last Data Date:</span> {debugDateRange.lastDataDate}
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">From:</span> {debugDateRange.from}
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">To:</span> {debugDateRange.to}
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">Filter Type:</span> {dateRange === 'custom' ? 'Custom Range' : `Last ${dateRange}`}
+                                    </div>
+                                    <div className="mt-2 pt-2 border-t border-gray-300 dark:border-gray-600">
+                                        <span className="font-medium">Campaigns Found:</span> {chartData.length} matching filter criteria (≥500 emails sent)
+                                    </div>
                                 </div>
-                                <div>
-                                    <span className="font-medium">From:</span> {(() => {
-                                        const lastDataDate = dayjs(dm.getLastEmailDate());
-                                        if (dateRange === 'custom' && customFrom) return dayjs(customFrom).format('MMM D, YYYY');
-                                        const days = parseInt(dateRange.replace('d', '')) || 90;
-                                        return lastDataDate.subtract(days, 'days').format('MMM D, YYYY');
-                                    })()}
-                                </div>
-                                <div>
-                                    <span className="font-medium">To:</span> {(() => {
-                                        if (dateRange === 'custom' && customTo) return dayjs(customTo).format('MMM D, YYYY');
-                                        return dayjs(dm.getLastEmailDate()).format('MMM D, YYYY');
-                                    })()}
-                                </div>
-                                <div>
-                                    <span className="font-medium">Filter:</span> {dateRange === 'custom' ? 'Custom Range' : `Last ${dateRange}`}
-                                </div>
-                            </div>
+                            )}
                         </div>
-                        
+
                         <div className="space-y-2">
                             {chartData.map((c, idx) => (
                                 <div key={c.id} className="text-xs border-b border-gray-100 dark:border-gray-800 pb-2 last:border-0">
