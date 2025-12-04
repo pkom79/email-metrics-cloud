@@ -19,6 +19,7 @@ type GuidanceResult = SendFrequencyGuidanceResult;
 
 interface Props {
     campaigns: ProcessedCampaign[];
+    allCampaigns?: ProcessedCampaign[];
     onGuidance?: (g: GuidanceResult | null) => void;
 }
 
@@ -46,12 +47,12 @@ function formatCurrency(v: number) {
 function formatPercent(v: number) { return `${(v || 0).toFixed(2)}%`; }
 function formatNumber(v: number) { return v.toLocaleString('en-US', { maximumFractionDigits: 2 }); }
 
-export default function CampaignSendFrequency({ campaigns, onGuidance }: Props) {
+export default function CampaignSendFrequency({ campaigns, allCampaigns, onGuidance }: Props) {
     const [mode, setMode] = useState<'week' | 'campaign'>('week');
     // Default metric for each mode
     const [metric, setMetric] = useState<string>('avgWeeklyRevenue');
 
-    const buckets = useMemo<BucketAggregate[]>(() => computeCampaignSendFrequency(campaigns), [campaigns]);
+    const buckets = useMemo<BucketAggregate[]>(() => computeCampaignSendFrequency(campaigns, allCampaigns), [campaigns, allCampaigns]);
 
     // Adjust metric if switching modes and current metric not valid in new mode
     React.useEffect(() => {
@@ -82,6 +83,13 @@ export default function CampaignSendFrequency({ campaigns, onGuidance }: Props) 
 
     const bucketLabel = (k: BucketKey) => labelForFrequencyBucket(k);
     const formatVal = (v: number) => selectedMeta.kind === 'currency' ? formatCurrency(v) : selectedMeta.kind === 'percent' ? formatPercent(v) : formatNumber(v);
+
+    // Dynamic grid layout based on number of buckets
+    const gridClass = buckets.length === 1 ? 'grid-cols-1 max-w-xs mx-auto' :
+                      buckets.length === 2 ? 'grid-cols-2 max-w-md mx-auto' :
+                      buckets.length === 3 ? 'grid-cols-3 max-w-3xl mx-auto' :
+                      buckets.length === 4 ? 'grid-cols-2 md:grid-cols-4' :
+                      'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'; // Wrap for > 4
 
     return (
         <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
@@ -118,7 +126,7 @@ export default function CampaignSendFrequency({ campaigns, onGuidance }: Props) 
                 </div>
             </div>
             {/* description moved into tooltip above */}
-            <div className={`grid gap-6 ${buckets.length === 1 ? 'grid-cols-1 max-w-xs mx-auto' : buckets.length === 2 ? 'grid-cols-2 max-w-md mx-auto' : buckets.length === 3 ? 'grid-cols-3 max-w-3xl mx-auto' : 'grid-cols-2 md:grid-cols-4'}`}>
+            <div className={`grid gap-6 ${gridClass}`}>
                 {buckets.map(b => {
                     const val = getValue(b);
                     const heightPct = (val / maxVal) * 100;
@@ -162,11 +170,19 @@ export default function CampaignSendFrequency({ campaigns, onGuidance }: Props) 
                 <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4 mt-6">
                     <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{guidance.title}</p>
                     <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{guidance.message}</p>
+                    
+                    {/* Revenue Opportunity Projection */}
                     {guidance.estimatedMonthlyGain != null && guidance.estimatedMonthlyGain > 0 && (
-                        <p className="mt-3 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                            Monthly revenue could increase by an estimated {formatCurrency(guidance.estimatedMonthlyGain)} with optimized send frequency.
-                        </p>
+                        <div className="mt-4 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
+                            <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 mb-1">
+                                Revenue Opportunity Projection
+                            </div>
+                            <div className="text-sm text-emerald-800 dark:text-emerald-200">
+                                Optimizing send frequency could generate an estimated {formatCurrency(guidance.estimatedMonthlyGain)} increase in monthly revenue.
+                            </div>
+                        </div>
                     )}
+                    
                     {guidance.sample && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{guidance.sample}</p>}
                 </div>
             )}

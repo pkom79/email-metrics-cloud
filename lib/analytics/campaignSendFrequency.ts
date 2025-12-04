@@ -1,6 +1,6 @@
 import type { ProcessedCampaign } from "../data/dataTypes";
 
-export type FrequencyBucketKey = '1' | '2' | '3' | '4+';
+export type FrequencyBucketKey = string;
 
 export interface FrequencyBucketAggregate {
   key: FrequencyBucketKey;
@@ -36,16 +36,18 @@ export interface FrequencyBucketAggregate {
 }
 
 /**
- * Compute Campaign Send Frequency buckets identical to the dashboard module.
- * Groups campaigns by ISO-week starting Monday and aggregates metrics by bucket:
- * 1, 2, 3, 4+ campaigns per week.
+ * Compute Campaign Send Frequency buckets with Seasonal Anomaly Filter (90th Percentile).
+ * 1. Analyzes last 365 days (from allCampaignsForHistory) to find the 90th percentile frequency.
+ * 2. Excludes weeks in the current 'campaigns' set that exceed this threshold (outliers).
+ * 3. Groups remaining weeks by frequency (1, 2, 3, 4, 5...) dynamically.
  */
 export function computeCampaignSendFrequency(
-  campaigns: ProcessedCampaign[]
+  campaigns: ProcessedCampaign[],
+  allCampaignsForHistory?: ProcessedCampaign[]
 ): FrequencyBucketAggregate[] {
   if (!campaigns?.length) return [];
 
-  // Monday of week
+  // Monday of week helper
   const mondayOf = (d: Date) => {
     const n = new Date(d);
     n.setHours(0, 0, 0, 0);
@@ -55,32 +57,70 @@ export function computeCampaignSendFrequency(
     return n;
   };
 
-  interface WeekAgg { key: string; campaignCount: number; campaigns: ProcessedCampaign[]; }
-  const weekMap = new Map<string, WeekAgg>();
-  for (const c of campaigns) {
-    if (!(c.sentDate instanceof Date) || isNaN(c.sentDate.getTime())) continue;
-    const m = mondayOf(c.sentDate);
-    const wk = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}-${String(m.getDate()).padStart(2, '0')}`;
-    let agg = weekMap.get(wk);
-    if (!agg) { agg = { key: wk, campaignCount: 0, campaigns: [] }; weekMap.set(wk, agg); }
-    agg.campaignCount += 1;
-    agg.campaigns.push(c);
+  // Helper to group campaigns by week
+  const groupWeeks = (list: ProcessedCampaign[]) => {
+    const map = new Map<string, { key: string; campaignCount: number; campaigns: ProcessedCampaign[] }>();
+    for (const c of list) {
+      if (!(c.sentDate instanceof Date) || isNaN(c.sentDate.getTime())) continue;
+      const m = mondayOf(c.sentDate);
+      const wk = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}-${String(m.getDate()).padStart(2, '0')}`;
+      let agg = map.get(wk);
+      if (!agg) { agg = { key: wk, campaignCount: 0, campaigns: [] }; map.set(wk, agg); }
+      agg.campaignCount += 1;
+      agg.campaigns.push(c);
+    }
+    return Array.from(map.values());
+  };
+
+  // 1. Calculate Anomaly Threshold (P90) from History
+  let maxAllowedFrequency = Infinity;
+  
+  if (allCampaignsForHistory?.length) {
+    // Filter to last 365 days relative to the latest campaign in history
+    const latestDate = allCampaignsForHistory.reduce((max, c) => c.sentDate > max ? c.sentDate : max, new Date(0));
+    const oneYearAgo = new Date(latestDate);
+    oneYearAgo.setDate(oneYearAgo.getDate() - 365);
+    
+    const historyWeeks = groupWeeks(allCampaignsForHistory.filter(c => c.sentDate >= oneYearAgo));
+    
+    if (historyWeeks.length > 0) {
+      const counts = historyWeeks.map(w => w.campaignCount).sort((a, b) => a - b);
+      const p90Index = Math.ceil(0.9 * counts.length) - 1;
+      const p90Value = counts[Math.max(0, p90Index)];
+      const maxValue = counts[counts.length - 1];
+
+      // "If the 90th Percentile equals the Maximum value, no data is excluded."
+      if (p90Value < maxValue) {
+        maxAllowedFrequency = p90Value;
+      }
+    }
   }
 
-  const weekAggs = Array.from(weekMap.values());
-  const bucketMap: Record<FrequencyBucketKey, WeekAgg[]> = { '1': [], '2': [], '3': [], '4+': [] };
-  for (const w of weekAggs) {
-    if (w.campaignCount >= 4) bucketMap['4+'].push(w);
-    else if (w.campaignCount === 3) bucketMap['3'].push(w);
-    else if (w.campaignCount === 2) bucketMap['2'].push(w);
-    else if (w.campaignCount === 1) bucketMap['1'].push(w);
+  // 2. Process Current Campaigns
+  const currentWeeks = groupWeeks(campaigns);
+  
+  // 3. Filter Outliers
+  const validWeeks = currentWeeks.filter(w => w.campaignCount <= maxAllowedFrequency);
+
+  // 4. Group by Frequency Bucket
+  const bucketMap = new Map<string, typeof validWeeks>();
+  
+  for (const w of validWeeks) {
+    const key = String(w.campaignCount);
+    if (!bucketMap.has(key)) bucketMap.set(key, []);
+    bucketMap.get(key)!.push(w);
   }
 
   const result: FrequencyBucketAggregate[] = [];
-  const pushBucket = (key: FrequencyBucketKey, arr: WeekAgg[]) => {
-    if (!arr.length) return; // omit empty bucket
+  
+  // Sort keys numerically
+  const sortedKeys = Array.from(bucketMap.keys()).sort((a, b) => Number(a) - Number(b));
+
+  for (const key of sortedKeys) {
+    const arr = bucketMap.get(key)!;
     const weeksCount = arr.length;
     let sumRevenue = 0, sumEmails = 0, sumOrders = 0, sumOpens = 0, sumClicks = 0, sumUnsubs = 0, sumSpam = 0, sumBounces = 0, totalCampaigns = 0;
+    
     arr.forEach(w => {
       totalCampaigns += w.campaignCount;
       w.campaigns.forEach(c => {
@@ -112,12 +152,7 @@ export function computeCampaignSendFrequency(
     const bounceRate = sumEmails > 0 ? (sumBounces / sumEmails) * 100 : 0;
 
     result.push({ key, weeksCount, totalCampaigns, sumRevenue, sumEmails, sumOrders, sumOpens, sumClicks, sumUnsubs, sumSpam, sumBounces, avgWeeklyRevenue, avgWeeklyOrders, avgWeeklyEmails, avgCampaignRevenue, avgCampaignOrders, avgCampaignEmails, aov, revenuePerEmail, openRate, clickRate, clickToOpenRate, conversionRate, unsubscribeRate, spamRate, bounceRate });
-  };
-
-  pushBucket('1', bucketMap['1']);
-  pushBucket('2', bucketMap['2']);
-  pushBucket('3', bucketMap['3']);
-  pushBucket('4+', bucketMap['4+']);
+  }
 
   return result;
 }
@@ -160,20 +195,13 @@ function pluralize(word: string, count: number) {
 }
 
 export function labelForFrequencyBucket(key: FrequencyBucketKey): string {
-  return ({ '1': '1 campaign / week', '2': '2 campaigns / week', '3': '3 campaigns / week', '4+': '4+ campaigns / week' }[key]);
+  const k = Number(key);
+  return `${k} ${pluralize('campaign', k)} / week`;
 }
 
 export function actionLabelForFrequencyBucket(key: FrequencyBucketKey): string {
-  switch (key) {
-    case '1':
-      return '1 campaign a week';
-    case '2':
-      return '2 campaigns a week';
-    case '3':
-      return '3 campaigns a week';
-    default:
-      return '4 campaigns a week';
-  }
+  const k = Number(key);
+  return `${k} ${pluralize('campaign', k)} a week`;
 }
 
 export function computeSendFrequencyGuidance(
@@ -184,7 +212,6 @@ export function computeSendFrequencyGuidance(
 
   const metricKey = mode === 'week' ? 'avgWeeklyRevenue' : 'avgCampaignRevenue';
   const getRevenueValue = (b: FrequencyBucketAggregate) => (b as any)[metricKey] as number;
-  const orderMap: Record<FrequencyBucketKey, number> = { '1': 1, '2': 2, '3': 3, '4+': 4 };
   const totalWeeksAll = buckets.reduce((sum, b) => sum + b.weeksCount, 0);
   const formatSample = () => totalWeeksAll ? `Based on ${totalWeeksAll} ${pluralize('week', totalWeeksAll)} of campaign data.` : null;
 
@@ -270,7 +297,7 @@ export function computeSendFrequencyGuidance(
   }
 
   // Case B: Scale Up / Test (Best is Higher Frequency)
-  if (orderMap[bestBucket.key] > orderMap[dominant.key]) {
+  if (Number(bestBucket.key) > Number(dominant.key)) {
       const isConfident = bestBucket.weeksCount >= TEST_WEEKS_THRESHOLD;
       const recKind = isConfident ? 'scale' : 'test';
       
@@ -292,7 +319,7 @@ export function computeSendFrequencyGuidance(
   }
 
   // Case C: Scale Down (Best is Lower Frequency)
-  if (orderMap[bestBucket.key] < orderMap[dominant.key]) {
+  if (Number(bestBucket.key) < Number(dominant.key)) {
       return {
         status: 'send-less',
         recommendationKind: 'reduce',

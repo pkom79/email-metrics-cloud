@@ -2430,6 +2430,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     {HAS_ACTIVE_ACCOUNT && defCampaigns.length > 0 && (
                         <CampaignSendFrequency
                             campaigns={defCampaigns}
+                            allCampaigns={ALL_CAMPAIGNS}
                             onGuidance={setFrequencyGuidance}
                         />
                     )}
