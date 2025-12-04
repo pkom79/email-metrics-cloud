@@ -187,15 +187,15 @@ export function sendVolumeGuidanceV2(
     if (r > 0.2) {
         // Positive correlation - more volume = more revenue
         status = "send-more";
-        message = "Statistical analysis shows a positive link between weekly send volume and revenue. Increasing your weekly volume drives more sales.";
+        message = `Statistical analysis of ${qualifiedCampaigns.length} campaigns shows a positive link between weekly send volume and revenue. Increasing your weekly volume drives more sales.`;
     } else if (r < -0.2) {
         // Negative correlation - more volume = less revenue
         status = "send-less";
-        message = "Analysis shows that increasing weekly volume is currently reducing total revenue returns, likely due to fatigue or spam filtering.";
+        message = `Analysis of ${qualifiedCampaigns.length} campaigns shows that increasing weekly volume is currently reducing total revenue returns, likely due to fatigue or spam filtering.`;
     } else {
         // Neutral correlation (-0.2 to 0.2)
         status = "optimize";
-        message = "Weekly send volume has no statistically significant impact on revenue. Focus on content quality (subject lines, segmentation, offers) rather than volume.";
+        message = `Weekly send volume across ${qualifiedCampaigns.length} campaigns has no statistically significant impact on revenue. Focus on content quality (subject lines, segmentation, offers) rather than volume.`;
     }
 
     // Step 11: Yellow Zone Check (Risk Overlay)

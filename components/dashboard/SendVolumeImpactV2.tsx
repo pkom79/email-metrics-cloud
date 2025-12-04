@@ -315,30 +315,6 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
 
                 {showDebug && (
                     <div className="border-t border-gray-200 dark:border-gray-700 p-4 max-h-96 overflow-y-auto">
-                        {/* Date Range Info */}
-                        <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-xs">
-                            <div className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Date Range Filter (ACTUAL):</div>
-                            {debugDateRange && (
-                                <div className="space-y-1 text-gray-600 dark:text-gray-400">
-                                    <div>
-                                        <span className="font-medium">Last Data Date:</span> {debugDateRange.lastDataDate}
-                                    </div>
-                                    <div>
-                                        <span className="font-medium">From:</span> {debugDateRange.from}
-                                    </div>
-                                    <div>
-                                        <span className="font-medium">To:</span> {debugDateRange.to}
-                                    </div>
-                                    <div>
-                                        <span className="font-medium">Filter Type:</span> {dateRange === 'custom' ? 'Custom Range' : `Last ${dateRange}`}
-                                    </div>
-                                    <div className="mt-2 pt-2 border-t border-gray-300 dark:border-gray-600">
-                                        <span className="font-medium">Weeks Found:</span> {weeklyDebugData.length} with activity
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
                         <div className="space-y-2">
                             {weeklyDebugData.map((w, idx) => (
                                 <div key={w.weekKey} className="text-xs border-b border-gray-100 dark:border-gray-800 pb-2 last:border-0">
@@ -374,12 +350,9 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             <div className="mt-8 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex-1">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Campaign Action Note</p>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Recommendation</p>
                         <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
                             {guidance.message}
-                            {guidance.sampleSize > 0 && (
-                                <span className="text-gray-500 dark:text-gray-500"> (Based on {guidance.sampleSize} campaign{guidance.sampleSize !== 1 ? 's' : ''})</span>
-                            )}
                         </p>
 
                         {/* Revenue Opportunity Projection */}
@@ -389,13 +362,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                                     Revenue Opportunity Projection
                                 </div>
                                 <div className="text-sm text-emerald-800 dark:text-emerald-200">
-                                    Increasing volume by 20% could generate an additional{' '}
-                                    <span className="font-bold">{fmtCurrency(revenueProjection.amount)}</span>
-                                    {' '}per month ({revenueProjection.percentage.toFixed(0)}% lift).
-                                </div>
-                                <div className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
-                                    Based on {revenueProjection.tier} correlation (r = {guidance.correlationCoefficient?.toFixed(3)})
-                                    with {revenueProjection.efficiency.toFixed(0)}% efficiency factor.
+                                    Increasing volume by 20% could generate a {revenueProjection.percentage.toFixed(0)}% increase in campaign revenue.
                                 </div>
                             </div>
                         )}
