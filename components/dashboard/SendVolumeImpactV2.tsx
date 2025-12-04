@@ -1,11 +1,14 @@
 "use client";
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Activity, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import { sendVolumeGuidanceV2 } from '../../lib/analytics/sendVolumeGuidanceV2';
 import type { SendVolumeGuidanceResultV2, SendVolumeStatusV2 } from '../../lib/analytics/sendVolumeGuidanceV2';
 import { DataManager } from '../../lib/data/dataManager';
 import dayjs from '../../lib/dayjs';
+import isoWeek from 'dayjs/plugin/isoWeek';
+
+dayjs.extend(isoWeek);
 
 interface Props {
     dateRange: string;
@@ -39,34 +42,9 @@ const fmtCurrency = (v: number) =>
 
 const fmtPercent = (v: number) => `${v.toFixed(1)}%`;
 
-// Catmull-Rom to Bezier spline for smooth curves
-function catmullRom2bezier(points: { x: number, y: number }[], yMin?: number, yMax?: number) {
-    if (points.length < 2) return '';
-    const d: string[] = [];
-    d.push(`M${points[0].x} ${points[0].y}`);
-    const clamp = (v: number) => {
-        if (typeof yMin === 'number' && v < yMin) return yMin;
-        if (typeof yMax === 'number' && v > yMax) return yMax;
-        return v;
-    };
-    for (let i = 0; i < points.length - 1; i++) {
-        const p0 = points[i - 1] || points[i];
-        const p1 = points[i];
-        const p2 = points[i + 1];
-        const p3 = points[i + 2] || p2;
-        const cp1x = p1.x + (p2.x - p0.x) / 6;
-        const cp1y = clamp(p1.y + (p2.y - p0.y) / 6);
-        const cp2x = p2.x - (p3.x - p1.x) / 6;
-        const cp2y = clamp(p2.y - (p3.y - p1.y) / 6);
-        d.push(`C${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x} ${p2.y}`);
-    }
-    return d.join(' ');
-}
-
 export default function SendVolumeImpact({ dateRange, granularity, customFrom, customTo }: Props) {
     const dm = DataManager.getInstance();
-    const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; volume: number; revenue: number; name: string } | null>(null);
-
+    
     // Call V2 algorithm - campaigns only, date-range sensitive
     const [showDebug, setShowDebug] = useState(false);
 
@@ -76,8 +54,8 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     );    // Store date range for display in debug section
     const [debugDateRange, setDebugDateRange] = useState<{ from: string; to: string; lastDataDate: string } | null>(null);
 
-    // Get campaign data for chart - use all campaigns that passed the algorithm filter
-    const chartData = useMemo(() => {
+    // Get weekly data for debug display
+    const weeklyDebugData = useMemo(() => {
         const campaigns = dm.getCampaigns();
         if (!campaigns.length) return [];
 
@@ -115,7 +93,6 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         })();
 
         // Store for debug display
-        // Re-calculate lastDataDate for display consistency
         const flows = dm.getFlowEmails();
         const lastCampaignDate = campaigns.length > 0 
             ? Math.max(...campaigns.map(c => c.sentDate.getTime())) 
@@ -132,7 +109,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             lastDataDate: lastDataDate.format('MMM D, YYYY')
         });
 
-        // Filter campaigns in date range - EXACT SAME LOGIC AS ALGORITHM
+        // Filter campaigns in date range
         const filteredCampaigns = campaigns.filter(c => {
             const sentDate = dayjs(c.sentDate);
             return (sentDate.isAfter(fromDate) || sentDate.isSame(fromDate, 'day')) &&
@@ -142,16 +119,34 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
 
         if (filteredCampaigns.length === 0) return [];
 
-        // Sort by volume descending (highest to lowest) - THIS IS THE POINT OF THE MODULE
-        return filteredCampaigns
-            .map(c => ({
-                id: c.id,
-                campaignName: c.campaignName,
-                volume: c.emailsSent,
-                revenue: c.revenue,
-                sentDate: c.sentDate
+        // Aggregate by week
+        const weeklyData: Record<string, { volume: number; revenue: number; count: number; weekStart: string }> = {};
+        
+        filteredCampaigns.forEach(c => {
+            const sentDate = dayjs(c.sentDate);
+            const weekKey = `${sentDate.year()}-W${sentDate.isoWeek()}`;
+            
+            if (!weeklyData[weekKey]) {
+                weeklyData[weekKey] = { 
+                    volume: 0, 
+                    revenue: 0, 
+                    count: 0,
+                    weekStart: sentDate.startOf('isoWeek').format('MMM D')
+                };
+            }
+            
+            weeklyData[weekKey].volume += (c.emailsSent || 0);
+            weeklyData[weekKey].revenue += (c.revenue || 0);
+            weeklyData[weekKey].count += 1;
+        });
+
+        // Convert to array and sort by week (descending)
+        return Object.entries(weeklyData)
+            .map(([key, data]) => ({
+                weekKey: key,
+                ...data
             }))
-            .sort((a, b) => b.volume - a.volume);
+            .sort((a, b) => b.weekKey.localeCompare(a.weekKey));
     }, [dm, dateRange, customFrom, customTo]);
 
     // Calculate monthly revenue for projections
@@ -309,7 +304,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                     className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors rounded-lg"
                 >
                     <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                        Campaigns Included ({chartData.length})
+                        Weekly Data Points ({weeklyDebugData.length})
                     </span>
                     {showDebug ? (
                         <ChevronUp className="w-4 h-4 text-gray-500" />
@@ -338,39 +333,36 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                                         <span className="font-medium">Filter Type:</span> {dateRange === 'custom' ? 'Custom Range' : `Last ${dateRange}`}
                                     </div>
                                     <div className="mt-2 pt-2 border-t border-gray-300 dark:border-gray-600">
-                                        <span className="font-medium">Campaigns Found:</span> {chartData.length} matching filter criteria (≥500 emails sent)
+                                        <span className="font-medium">Weeks Found:</span> {weeklyDebugData.length} with activity
                                     </div>
                                 </div>
                             )}
                         </div>
 
                         <div className="space-y-2">
-                            {chartData.map((c, idx) => (
-                                <div key={c.id} className="text-xs border-b border-gray-100 dark:border-gray-800 pb-2 last:border-0">
+                            {weeklyDebugData.map((w, idx) => (
+                                <div key={w.weekKey} className="text-xs border-b border-gray-100 dark:border-gray-800 pb-2 last:border-0">
                                     <div className="font-semibold text-gray-900 dark:text-gray-100">
-                                        {idx + 1}. {c.campaignName}
+                                        {idx + 1}. Week of {w.weekStart}
                                     </div>
                                     <div className="mt-1 space-y-1 text-gray-600 dark:text-gray-400">
-                                        <div>
-                                            <span className="font-medium">Campaign ID:</span> {c.id}
-                                        </div>
                                         <div className="grid grid-cols-3 gap-2">
                                             <div>
-                                                <span className="font-medium">Date:</span> {dayjs(c.sentDate).format('MMM D, YYYY')}
+                                                <span className="font-medium">Campaigns:</span> {w.count}
                                             </div>
                                             <div>
-                                                <span className="font-medium">Emails:</span> {c.volume.toLocaleString()}
+                                                <span className="font-medium">Total Volume:</span> {w.volume.toLocaleString()}
                                             </div>
                                             <div>
-                                                <span className="font-medium">Revenue:</span> {fmtCurrency(c.revenue)}
+                                                <span className="font-medium">Total Revenue:</span> {fmtCurrency(w.revenue)}
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             ))}
-                            {chartData.length === 0 && (
+                            {weeklyDebugData.length === 0 && (
                                 <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">
-                                    No campaigns found in selected date range
+                                    No data found in selected date range
                                 </p>
                             )}
                         </div>

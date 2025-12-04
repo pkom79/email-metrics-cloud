@@ -1,6 +1,9 @@
 import { DataManager } from "../data/dataManager";
 import type { ProcessedCampaign } from "../data/dataTypes";
 import dayjs from "../dayjs";
+import isoWeek from "dayjs/plugin/isoWeek";
+
+dayjs.extend(isoWeek);
 
 export type SendVolumeStatusV2 = "send-more" | "send-less" | "optimize" | "insufficient";
 
@@ -121,13 +124,33 @@ export function sendVolumeGuidanceV2(
         };
     }
 
-    // Step 7: Extract Volume and Revenue arrays
+    // Step 7: Extract Volume and Revenue arrays (Weekly Aggregation)
+    // Group campaigns by week (ISO week) and sum volume/revenue
+    const weeklyData: Record<string, { volume: number; revenue: number; count: number }> = {};
+    
+    qualifiedCampaigns.forEach(c => {
+        const sentDate = dayjs(c.sentDate);
+        // Use ISO week key (YYYY-Www)
+        const weekKey = `${sentDate.year()}-W${sentDate.isoWeek()}`;
+        
+        if (!weeklyData[weekKey]) {
+            weeklyData[weekKey] = { volume: 0, revenue: 0, count: 0 };
+        }
+        
+        weeklyData[weekKey].volume += (c.emailsSent || 0);
+        weeklyData[weekKey].revenue += (c.revenue || 0);
+        weeklyData[weekKey].count += 1;
+    });
+
     const volumes: number[] = [];
     const revenues: number[] = [];
     
-    qualifiedCampaigns.forEach(c => {
-        volumes.push(c.emailsSent || 0);
-        revenues.push(c.revenue || 0); // Include $0 revenue campaigns
+    // Only consider weeks where we actually sent campaigns (volume > 0)
+    Object.values(weeklyData).forEach(week => {
+        if (week.volume > 0) {
+            volumes.push(week.volume);
+            revenues.push(week.revenue);
+        }
     });
 
     // Step 8: Variance Check - Has user varied their send volume?
@@ -139,7 +162,7 @@ export function sendVolumeGuidanceV2(
     if (!hasVariance) {
         return {
             status: "send-more",
-            message: "Your send volume is too consistent to measure impact. Increase your send volume by 20-30% for a few campaigns to generate meaningful data.",
+            message: "Your weekly send volume is too consistent to measure impact. Increase your volume by 20-30% for a few weeks to generate meaningful data.",
             sampleSize: qualifiedCampaigns.length,
             correlationCoefficient: null,
             highRisk: false,
@@ -164,15 +187,15 @@ export function sendVolumeGuidanceV2(
     if (r > 0.2) {
         // Positive correlation - more volume = more revenue
         status = "send-more";
-        message = "Statistical analysis shows a positive link between send volume and total revenue. Your account has not yet reached its volume ceiling.";
+        message = "Statistical analysis shows a positive link between weekly send volume and revenue. Increasing your weekly volume drives more sales.";
     } else if (r < -0.2) {
         // Negative correlation - more volume = less revenue
         status = "send-less";
-        message = "Analysis shows that increasing volume is currently reducing total revenue returns, likely due to fatigue or spam filtering.";
+        message = "Analysis shows that increasing weekly volume is currently reducing total revenue returns, likely due to fatigue or spam filtering.";
     } else {
         // Neutral correlation (-0.2 to 0.2)
         status = "optimize";
-        message = "Send volume has no statistically significant impact on total revenue. Focus on content quality (subject lines, segmentation, offers) rather than volume.";
+        message = "Weekly send volume has no statistically significant impact on revenue. Focus on content quality (subject lines, segmentation, offers) rather than volume.";
     }
 
     // Step 11: Yellow Zone Check (Risk Overlay)
