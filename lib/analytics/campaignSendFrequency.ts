@@ -434,7 +434,8 @@ export function computeSendFrequencyGuidance(
       const N = targetBucket.weeksCount;
       const baselineAvg = dominant.weightedAvgWeeklyRevenue;
 
-      if (N < 2) return null; // Cannot calculate reliable confidence interval with N=1
+      // Guardrail: We need at least 3 weeks of data to calculate a meaningful standard deviation and confidence interval.
+      if (N < 3) return null; 
 
       const marginOfError = 1.96 * (targetStdDev / Math.sqrt(N));
       const lcb = targetAvg - marginOfError;
