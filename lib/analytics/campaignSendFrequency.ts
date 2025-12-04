@@ -24,6 +24,8 @@ export interface FrequencyBucketAggregate {
   avgCampaignOrders: number;
   avgCampaignEmails: number;
   // weighted metrics
+  weightedAvgWeeklyRevenue: number;
+  weightedStdDevWeeklyRevenue: number;
   aov: number;
   revenuePerEmail: number;
   openRate: number;
@@ -33,6 +35,65 @@ export interface FrequencyBucketAggregate {
   unsubscribeRate: number;
   spamRate: number;
   bounceRate: number;
+}
+
+function calculateMedian(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function calculateIQRFilterLimit(values: number[]): number {
+  if (values.length < 4) return Infinity;
+  const sorted = [...values].sort((a, b) => a - b);
+  const q1 = sorted[Math.floor(sorted.length * 0.25)];
+  const q3 = sorted[Math.floor(sorted.length * 0.75)];
+  const iqr = q3 - q1;
+  return q3 + (1.5 * iqr);
+}
+
+function calculateWeightedStats(
+  items: { value: number; date: Date }[],
+  datasetStartDate: Date,
+  datasetEndDate: Date
+): { mean: number; stdDev: number } {
+  if (items.length === 0) return { mean: 0, stdDev: 0 };
+
+  const totalDuration = datasetEndDate.getTime() - datasetStartDate.getTime();
+  // If duration is 0 (single day dataset), weight is 1
+  const duration = totalDuration <= 0 ? 1 : totalDuration;
+
+  let sumWeightedValues = 0;
+  let sumWeights = 0;
+  const weights: number[] = [];
+
+  for (const item of items) {
+    const daysSinceStart = item.date.getTime() - datasetStartDate.getTime();
+    // Ensure weight is at least a small positive number
+    const weight = Math.max(0.01, daysSinceStart / duration);
+    weights.push(weight);
+    sumWeightedValues += item.value * weight;
+    sumWeights += weight;
+  }
+
+  if (sumWeights === 0) return { mean: 0, stdDev: 0 };
+
+  const weightedMean = sumWeightedValues / sumWeights;
+
+  // Weighted Standard Deviation
+  let sumSquaredDiffs = 0;
+  for (let i = 0; i < items.length; i++) {
+    sumSquaredDiffs += weights[i] * Math.pow(items[i].value - weightedMean, 2);
+  }
+
+  const N = items.length;
+  // Using reliability weights formula for sample std dev
+  const denominator = N > 1 ? ((N - 1) / N) * sumWeights : sumWeights;
+  
+  const weightedStdDev = denominator > 0 ? Math.sqrt(sumSquaredDiffs / denominator) : 0;
+
+  return { mean: weightedMean, stdDev: weightedStdDev };
 }
 
 /**
@@ -88,9 +149,11 @@ export function computeCampaignSendFrequency(
       const p90Index = Math.ceil(0.9 * counts.length) - 1;
       const p90Value = counts[Math.max(0, p90Index)];
       const maxValue = counts[counts.length - 1];
+      const medianValue = calculateMedian(counts);
 
       // "If the 90th Percentile equals the Maximum value, no data is excluded."
-      if (p90Value < maxValue) {
+      // Exception: If median frequency > P90 (high volume sender), disable filter.
+      if (p90Value < maxValue && medianValue <= p90Value) {
         maxAllowedFrequency = p90Value;
       }
     }
@@ -99,7 +162,7 @@ export function computeCampaignSendFrequency(
   // 2. Process Current Campaigns
   const currentWeeks = groupWeeks(campaigns);
   
-  // 3. Filter Outliers
+  // 3. Filter Outliers (Filter A: Frequency Safety)
   const validWeeks = currentWeeks.filter(w => w.campaignCount <= maxAllowedFrequency);
 
   // 4. Group by Frequency Bucket
@@ -113,11 +176,39 @@ export function computeCampaignSendFrequency(
 
   const result: FrequencyBucketAggregate[] = [];
   
+  // Determine dataset range for weighting
+  // Use allCampaignsForHistory if available for broader context, otherwise current campaigns
+  const sourceForRange = allCampaignsForHistory?.length ? allCampaignsForHistory : campaigns;
+  const minDate = sourceForRange.reduce((min, c) => c.sentDate < min ? c.sentDate : min, new Date());
+  const maxDate = sourceForRange.reduce((max, c) => c.sentDate > max ? c.sentDate : max, new Date(0));
+
   // Sort keys numerically
   const sortedKeys = Array.from(bucketMap.keys()).sort((a, b) => Number(a) - Number(b));
 
   for (const key of sortedKeys) {
-    const arr = bucketMap.get(key)!;
+    const rawArr = bucketMap.get(key)!;
+    
+    // Filter B: Revenue Accuracy (IQR Filter)
+    // Calculate weekly revenue for each week in this bucket
+    const weeklyRevenues = rawArr.map(w => ({
+      week: w,
+      revenue: w.campaigns.reduce((sum, c) => sum + c.revenue, 0)
+    }));
+    
+    const revenueLimit = calculateIQRFilterLimit(weeklyRevenues.map(i => i.revenue));
+    
+    // Exclude high revenue outliers (likely holidays)
+    const validItems = weeklyRevenues.filter(i => i.revenue <= revenueLimit);
+    const arr = validItems.map(i => i.week);
+    
+    // Calculate Weighted Stats
+    const weekItems = validItems.map(i => ({
+      value: i.revenue,
+      date: new Date(i.week.key)
+    }));
+    
+    const { mean: weightedAvgWeeklyRevenue, stdDev: weightedStdDevWeeklyRevenue } = calculateWeightedStats(weekItems, minDate, maxDate);
+
     const weeksCount = arr.length;
     let sumRevenue = 0, sumEmails = 0, sumOrders = 0, sumOpens = 0, sumClicks = 0, sumUnsubs = 0, sumSpam = 0, sumBounces = 0, totalCampaigns = 0;
     
@@ -151,7 +242,36 @@ export function computeCampaignSendFrequency(
     const spamRate = sumEmails > 0 ? (sumSpam / sumEmails) * 100 : 0;
     const bounceRate = sumEmails > 0 ? (sumBounces / sumEmails) * 100 : 0;
 
-    result.push({ key, weeksCount, totalCampaigns, sumRevenue, sumEmails, sumOrders, sumOpens, sumClicks, sumUnsubs, sumSpam, sumBounces, avgWeeklyRevenue, avgWeeklyOrders, avgWeeklyEmails, avgCampaignRevenue, avgCampaignOrders, avgCampaignEmails, aov, revenuePerEmail, openRate, clickRate, clickToOpenRate, conversionRate, unsubscribeRate, spamRate, bounceRate });
+    result.push({ 
+      key, 
+      weeksCount, 
+      totalCampaigns, 
+      sumRevenue, 
+      sumEmails, 
+      sumOrders, 
+      sumOpens, 
+      sumClicks, 
+      sumUnsubs, 
+      sumSpam, 
+      sumBounces, 
+      avgWeeklyRevenue, 
+      avgWeeklyOrders, 
+      avgWeeklyEmails, 
+      avgCampaignRevenue, 
+      avgCampaignOrders, 
+      avgCampaignEmails, 
+      weightedAvgWeeklyRevenue,
+      weightedStdDevWeeklyRevenue,
+      aov, 
+      revenuePerEmail, 
+      openRate, 
+      clickRate, 
+      clickToOpenRate, 
+      conversionRate, 
+      unsubscribeRate, 
+      spamRate, 
+      bounceRate 
+    });
   }
 
   return result;
@@ -210,7 +330,7 @@ export function computeSendFrequencyGuidance(
 ): SendFrequencyGuidanceResult | null {
   if (!buckets.length) return null;
 
-  const metricKey = mode === 'week' ? 'avgWeeklyRevenue' : 'avgCampaignRevenue';
+  const metricKey = mode === 'week' ? 'weightedAvgWeeklyRevenue' : 'avgCampaignRevenue';
   const getRevenueValue = (b: FrequencyBucketAggregate) => (b as any)[metricKey] as number;
   const totalWeeksAll = buckets.reduce((sum, b) => sum + b.weeksCount, 0);
   const formatSample = () => totalWeeksAll ? `Based on ${totalWeeksAll} ${pluralize('week', totalWeeksAll)} of campaign data.` : null;
@@ -305,17 +425,24 @@ export function computeSendFrequencyGuidance(
   const lift = baselineRevenue === 0 ? (targetRevenue > 0 ? Infinity : 0) : (targetRevenue - baselineRevenue) / baselineRevenue;
   const liftPct = lift === Infinity ? 'from zero' : formatPercent(lift);
   
-  // Calculate Overall Average Weekly Revenue for Projection Baseline
-  // (Revenue per week for the entire look back period)
-  const totalRevenueAll = buckets.reduce((sum, b) => sum + b.sumRevenue, 0);
-  const overallAvgWeeklyRevenue = totalWeeksAll > 0 ? totalRevenueAll / totalWeeksAll : 0;
+  // Helper to calculate projected gain using Lower Confidence Bound (LCB)
+  // Formula: LCB = Target_Avg - (1.96 * (Target_StdDev / sqrt(N)))
+  // If LCB > Baseline_Avg, then Projected Monthly Increase = (LCB - Baseline_Avg) * 4
+  const calculateProjectedGain = (targetBucket: FrequencyBucketAggregate) => {
+      const targetAvg = targetBucket.weightedAvgWeeklyRevenue;
+      const targetStdDev = targetBucket.weightedStdDevWeeklyRevenue;
+      const N = targetBucket.weeksCount;
+      const baselineAvg = dominant.weightedAvgWeeklyRevenue;
 
-  // Helper to calculate conservative projected gain
-  // Formula: (Target Weekly - Overall Average Weekly) * 4 weeks * 50% conservative factor
-  const calculateProjectedGain = (targetWeeklyRev: number) => {
-      const weeklyGain = targetWeeklyRev - overallAvgWeeklyRevenue;
-      if (weeklyGain <= 0) return null;
-      return weeklyGain * 4 * 0.5;
+      if (N < 2) return null; // Cannot calculate reliable confidence interval with N=1
+
+      const marginOfError = 1.96 * (targetStdDev / Math.sqrt(N));
+      const lcb = targetAvg - marginOfError;
+
+      if (lcb > baselineAvg) {
+          return (lcb - baselineAvg) * 4;
+      }
+      return null; // Uncertain result
   };
 
   // Case A: Stay (Best is Dominant)
@@ -371,7 +498,7 @@ export function computeSendFrequencyGuidance(
       const recKind = isConfident ? 'scale' : 'test';
       
       // Only show revenue projection for Full recommendations (isConfident)
-      const projectedMonthlyGain = isConfident ? calculateProjectedGain(targetRevenue) : null;
+      const projectedMonthlyGain = isConfident ? calculateProjectedGain(bestBucket) : null;
       
       return {
         status: 'send-more',
@@ -395,7 +522,7 @@ export function computeSendFrequencyGuidance(
       const isConfident = bestBucket.weeksCount >= TEST_WEEKS_THRESHOLD;
       
       // Only show revenue projection for Full recommendations
-      const projectedMonthlyGain = isConfident ? calculateProjectedGain(targetRevenue) : null;
+      const projectedMonthlyGain = isConfident ? calculateProjectedGain(bestBucket) : null;
 
       return {
         status: 'send-less',
