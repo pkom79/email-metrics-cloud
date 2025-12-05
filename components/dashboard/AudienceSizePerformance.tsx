@@ -161,16 +161,16 @@ function calculateWeightedStats(
 // Dynamic bucket boundaries using natural breakpoints
 function computeDynamicBucketBoundaries(sortedEmails: number[]): number[] {
     if (sortedEmails.length === 0) return [];
-    
+
     const min = sortedEmails[0];
     const max = sortedEmails[sortedEmails.length - 1];
-    
+
     if (min === max) return [min, max];
-    
+
     // Use Jenks natural breaks algorithm approximation for dynamic bucketing
     // For simplicity, we use a combination of percentile gaps and value clustering
     const n = sortedEmails.length;
-    
+
     // Calculate gaps between consecutive values
     const gaps: { index: number; gap: number; normalizedGap: number }[] = [];
     for (let i = 1; i < n; i++) {
@@ -181,17 +181,17 @@ function computeDynamicBucketBoundaries(sortedEmails: number[]): number[] {
             normalizedGap: gap / (max - min),
         });
     }
-    
+
     // Find significant gaps (> 10% of total range or > 2x median gap)
     const sortedGaps = [...gaps].sort((a, b) => b.normalizedGap - a.normalizedGap);
-    const medianGap = gaps.length > 0 
-        ? [...gaps].sort((a, b) => a.gap - b.gap)[Math.floor(gaps.length / 2)].gap 
+    const medianGap = gaps.length > 0
+        ? [...gaps].sort((a, b) => a.gap - b.gap)[Math.floor(gaps.length / 2)].gap
         : 0;
-    
-    const significantGaps = sortedGaps.filter(g => 
+
+    const significantGaps = sortedGaps.filter(g =>
         g.normalizedGap > 0.1 || g.gap > medianGap * 2
     ).slice(0, 5); // Max 5 breakpoints = 6 buckets
-    
+
     // If no significant gaps, use percentile-based breaks
     if (significantGaps.length === 0 || n < 6) {
         const boundaries: number[] = [min];
@@ -204,7 +204,7 @@ function computeDynamicBucketBoundaries(sortedEmails: number[]): number[] {
         // Dedupe
         return [...new Set(boundaries)].sort((a, b) => a - b);
     }
-    
+
     // Use natural breaks
     const breakIndices = significantGaps.map(g => g.index).sort((a, b) => a - b);
     const boundaries: number[] = [min];
@@ -214,7 +214,7 @@ function computeDynamicBucketBoundaries(sortedEmails: number[]): number[] {
         }
     }
     boundaries.push(max);
-    
+
     // Dedupe and ensure we have at least 2 boundaries
     const unique = [...new Set(boundaries)].sort((a, b) => a - b);
     return unique.length >= 2 ? unique : [min, max];
@@ -245,7 +245,7 @@ function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; li
     const revenueValues = filtered.map(c => c.revenue);
     const revenueLimit = calculateIQRFilterLimit(revenueValues);
     const cleanedCampaigns = filtered.filter(c => c.revenue <= revenueLimit);
-    
+
     // Use cleaned campaigns if we still have enough data, otherwise use all
     const finalCampaigns = cleanedCampaigns.length >= 6 ? cleanedCampaigns : filtered;
 
@@ -263,7 +263,7 @@ function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; li
     const sorted = [...finalCampaigns].sort((a, b) => a.emailsSent - b.emailsSent);
     const sortedEmails = sorted.map(c => c.emailsSent);
     const boundaries = computeDynamicBucketBoundaries(sortedEmails);
-    
+
     if (boundaries.length < 2) {
         return { buckets: [], limited: true, lookbackWeeks: 0 };
     }
@@ -314,7 +314,7 @@ function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; li
                 value: c.revenue,
                 date: c.sentDate,
             }));
-        const { mean: weightedAvgCampaignRevenue, stdDev: weightedStdDevCampaignRevenue } = 
+        const { mean: weightedAvgCampaignRevenue, stdDev: weightedStdDevCampaignRevenue } =
             calculateWeightedStats(revenueItems, minDate, maxDate);
 
         const riskZone = getRiskZone(spamRate, bounceRate);
@@ -373,8 +373,8 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
     }
 
     // Filter qualified buckets
-    const qualified = buckets.filter(b => 
-        b.campaigns.length >= AUDIENCE_MIN_BUCKET_CAMPAIGNS && 
+    const qualified = buckets.filter(b =>
+        b.campaigns.length >= AUDIENCE_MIN_BUCKET_CAMPAIGNS &&
         b.sumEmails >= AUDIENCE_MIN_BUCKET_EMAILS
     );
 
@@ -392,7 +392,7 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
 
     // Filter out Red zone buckets from recommendations (but use them for baseline)
     const safeCandidates = qualified.filter(b => b.riskZone !== 'red');
-    
+
     if (!safeCandidates.length) {
         // All buckets are in Red zone
         return {
@@ -407,11 +407,11 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
     }
 
     // Find dominant bucket (most campaigns - this is the baseline)
-    const dominant = qualified.reduce<Bucket>((best, curr) => 
+    const dominant = qualified.reduce<Bucket>((best, curr) =>
         (curr.campaigns.length > best.campaigns.length ? curr : best), qualified[0]);
 
     // Find best performer by weighted average campaign revenue (among safe candidates)
-    const sortedByRevenue = [...safeCandidates].sort((a, b) => 
+    const sortedByRevenue = [...safeCandidates].sort((a, b) =>
         b.weightedAvgCampaignRevenue - a.weightedAvgCampaignRevenue
     );
     const bestBucket = sortedByRevenue[0];
@@ -420,51 +420,95 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
     // Formula: LCB = Target_Avg - (1.96 * (Target_StdDev / sqrt(N)))
     const calculateLCBProjection = (target: Bucket, baseline: Bucket): { gain: number | null; confidenceLevel: 'high' | 'medium' | 'low' } => {
         const N = target.campaigns.length;
-        
+
         // Need at least 3 campaigns for meaningful confidence
         if (N < 3) return { gain: null, confidenceLevel: 'low' };
-        
+
         const targetAvg = target.weightedAvgCampaignRevenue;
         const targetStdDev = target.weightedStdDevCampaignRevenue;
         const baselineAvg = baseline.weightedAvgCampaignRevenue;
-        
+
         const marginOfError = 1.96 * (targetStdDev / Math.sqrt(N));
         const lcb = targetAvg - marginOfError;
-        
+
         // Calculate coefficient of variation for confidence level
         const cv = targetAvg > 0 ? targetStdDev / targetAvg : Infinity;
-        const confidenceLevel: 'high' | 'medium' | 'low' = 
+        const confidenceLevel: 'high' | 'medium' | 'low' =
             cv < 0.3 && N >= 6 ? 'high' :
-            cv < 0.5 && N >= 4 ? 'medium' : 'low';
-        
+                cv < 0.5 && N >= 4 ? 'medium' : 'low';
+
         if (lcb > baselineAvg) {
             // Monthly projection: (LCB - baseline) * avg campaigns per week * 4 weeks
             const avgCampaignsPerWeek = lookbackWeeks > 0 ? target.campaigns.length / lookbackWeeks : 1;
             const weeklyGain = (lcb - baselineAvg) * avgCampaignsPerWeek;
             return { gain: weeklyGain * 4, confidenceLevel };
         }
-        
+
         return { gain: null, confidenceLevel };
     };
 
     const { gain: projectedMonthlyGain, confidenceLevel } = calculateLCBProjection(bestBucket, dominant);
-    
+
     const headerRange = (label: string) => `${label} total recipients per campaign`;
     const baselineRevenue = dominant.weightedAvgCampaignRevenue;
     const targetRevenue = bestBucket.weightedAvgCampaignRevenue;
     const lift = baselineRevenue === 0 ? (targetRevenue > 0 ? Infinity : 0) : (targetRevenue - baselineRevenue) / baselineRevenue;
     const liftPct = formatDeltaPct(lift);
     const isYellow = bestBucket.riskZone === 'yellow';
-    const riskWarning = isYellow 
-        ? ' Note: This audience size shows slightly elevated risk metrics (Yellow Zone), so monitor spam and bounce rates closely.' 
+    const riskWarning = isYellow
+        ? ' Note: This audience size shows slightly elevated risk metrics (Yellow Zone), so monitor spam and bounce rates closely.'
         : '';
+
+    // Calculate confidence level for the best bucket directly
+    const bestBucketN = bestBucket.campaigns.length;
+    const bestBucketCV = bestBucket.weightedAvgCampaignRevenue > 0 
+        ? bestBucket.weightedStdDevCampaignRevenue / bestBucket.weightedAvgCampaignRevenue 
+        : Infinity;
+    const bestBucketConfidence: 'high' | 'medium' | 'low' =
+        bestBucketCV < 0.3 && bestBucketN >= 6 ? 'high' :
+        bestBucketCV < 0.5 && bestBucketN >= 4 ? 'medium' : 'low';
 
     // Case A: Best is already dominant (stay)
     if (bestBucket.key === dominant.key) {
-        // Check if we should suggest testing larger audiences
+        // Check if there are larger buckets with insufficient data
         const largerBuckets = buckets.filter(b => b.rangeMin > bestBucket.rangeMax);
         const noLargerData = largerBuckets.every(b => b.campaigns.length < AUDIENCE_MIN_BUCKET_CAMPAIGNS);
-        
+        const hasLargerBuckets = largerBuckets.length > 0;
+
+        // If we have high confidence in the current best bucket
+        if (bestBucketConfidence === 'high') {
+            const growthHint = hasLargerBuckets && noLargerData && !isYellow
+                ? ` You could also test audiences above ${formatEmailsShort(bestBucket.rangeMax)} to explore further scaling.`
+                : '';
+            return {
+                title: `Send campaigns to ${headerRange(bestBucket.rangeLabel)}`,
+                message: `${bestBucket.rangeLabel} audiences generate the highest weighted revenue per campaign with strong statistical confidence.${growthHint}${riskWarning}`,
+                sample: formatSample(),
+                baselineRange: bestBucket.rangeLabel,
+                targetRange: bestBucket.rangeLabel,
+                estimatedWeeklyGain: 0,
+                estimatedMonthlyGain: 0,
+                confidenceLevel: 'high',
+                riskZone: bestBucket.riskZone,
+            };
+        }
+
+        // Medium confidence - still recommend but note room for improvement
+        if (bestBucketConfidence === 'medium') {
+            return {
+                title: `Send campaigns to ${headerRange(bestBucket.rangeLabel)}`,
+                message: `${bestBucket.rangeLabel} audiences generate the highest weighted revenue per campaign.${riskWarning}`,
+                sample: formatSample(),
+                baselineRange: bestBucket.rangeLabel,
+                targetRange: bestBucket.rangeLabel,
+                estimatedWeeklyGain: 0,
+                estimatedMonthlyGain: 0,
+                confidenceLevel: 'medium',
+                riskZone: bestBucket.riskZone,
+            };
+        }
+
+        // Low confidence - suggest testing larger if applicable
         if (!isYellow && noLargerData && bestBucket.rangeMax < 100000) {
             return {
                 title: `Test larger audiences above ${formatEmailsShort(bestBucket.rangeMax)}`,
@@ -474,7 +518,7 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
                 targetRange: `>${formatEmailsShort(bestBucket.rangeMax)}`,
                 estimatedWeeklyGain: null,
                 estimatedMonthlyGain: null,
-                confidenceLevel: 'medium',
+                confidenceLevel: 'low',
                 riskZone: bestBucket.riskZone,
             };
         }
@@ -487,14 +531,14 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
             targetRange: bestBucket.rangeLabel,
             estimatedWeeklyGain: 0,
             estimatedMonthlyGain: 0,
-            confidenceLevel,
+            confidenceLevel: bestBucketConfidence,
             riskZone: bestBucket.riskZone,
         };
     }
 
     // Case B: Best is different from dominant
     const isConfident = bestBucket.campaigns.length >= 6 && confidenceLevel !== 'low';
-    
+
     if (isConfident && projectedMonthlyGain && projectedMonthlyGain >= 500) {
         // High confidence recommendation with projection
         return {
@@ -669,13 +713,12 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                 })}
             </div>
             {guidance && (
-                <div className={`border rounded-xl p-4 mt-6 ${
-                    guidance.riskZone === 'red' 
-                        ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20' 
+                <div className={`border rounded-xl p-4 mt-6 ${guidance.riskZone === 'red'
+                        ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20'
                         : guidance.riskZone === 'yellow'
-                        ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20'
-                        : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900'
-                }`}>
+                            ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20'
+                            : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900'
+                    }`}>
                     <div className="flex items-start gap-2">
                         {guidance.riskZone && (
                             <span className={`mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${getRiskZoneColor(guidance.riskZone)}`} />
@@ -685,7 +728,7 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                             <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{guidance.message}</p>
                             {guidance.estimatedMonthlyGain != null && guidance.estimatedMonthlyGain >= 500 && (
                                 <p className="mt-3 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                                    {guidance.confidenceLevel === 'high' 
+                                    {guidance.confidenceLevel === 'high'
                                         ? `Monthly revenue could increase by an estimated ${formatCurrency(guidance.estimatedMonthlyGain)} by scaling to this audience size.`
                                         : `Monthly revenue could increase by approximately ${formatCurrency(guidance.estimatedMonthlyGain)} (moderate confidence).`
                                     }
@@ -693,7 +736,7 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                             )}
                             {guidance.confidenceLevel && guidance.confidenceLevel !== 'high' && !guidance.estimatedMonthlyGain && (
                                 <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
-                                    {guidance.confidenceLevel === 'low' 
+                                    {guidance.confidenceLevel === 'low'
                                         ? 'More data needed for revenue projections.'
                                         : 'Gathering more campaign data will improve projection accuracy.'
                                     }
