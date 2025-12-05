@@ -119,7 +119,7 @@ export function sendVolumeGuidanceV2(
     // We only trust the model if R^2 > 0.1 (Weak but usable correlation)
     if (regression.r2 < 0.1) {
         status = "optimize";
-        message = "No clear pattern detected between volume and revenue. Focus on content quality.";
+        message = "There is no consistent relationship between your send volume and revenue. This often means content quality or offer timing matters more than how many emails you send.";
     } else if (regression.b > 50) { 
         // Positive slope: Adding volume adds revenue
         // We use a threshold > 50 (dollars per log-unit) to ensure it's meaningful
@@ -133,16 +133,16 @@ export function sendVolumeGuidanceV2(
         // Weekly Gain -> Monthly Gain
         projectedGain = (targetPredictedRevenue - currentPredictedRevenue) * 4; 
         
-        message = `Increasing volume by 20% is projected to add ${formatCurrency(projectedGain)} in monthly revenue based on your historical performance curve.`;
+        message = "Your historical data shows a clear positive trend: as you increase send volume, revenue consistently grows. You haven't hit the point of diminishing returns yet, so there is room to scale.";
 
     } else if (regression.b < -50) {
         // Negative slope: Adding volume hurts revenue
         status = "send-less";
-        message = "Increasing volume is currently correlated with lower total revenue (Diminishing Returns). Scale back to improve efficiency.";
+        message = "Your data indicates diminishing returns. Recent high-volume weeks have yielded lower revenue efficiency. Scaling back could improve your ROI and protect deliverability.";
     } else {
         // Slope is near zero (Flat curve)
         status = "optimize";
-        message = "You have reached the point of diminishing returns. Increasing volume further will not significantly increase revenue.";
+        message = "Your revenue is relatively flat regardless of volume changes. This suggests your audience is saturated at current levels. Focus on improving content relevance instead of sending more.";
     }
 
     // Step 7: Yellow Zone Check
