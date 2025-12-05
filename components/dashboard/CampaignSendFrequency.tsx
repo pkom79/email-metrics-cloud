@@ -173,7 +173,7 @@ export default function CampaignSendFrequency({ campaigns, allCampaigns, onGuida
 
                     {dataContext.capped && (
                         <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
-                            Note: Data analysis capped at {dataContext.optimalCapDays} days for optimal accuracy ({dataContext.isHighVolume ? 'High' : 'Standard'} Volume Sender).
+                            Recommendation: For optimal accuracy, we recommend analyzing the last {dataContext.optimalCapDays} days based on your volume ({dataContext.isHighVolume ? 'High' : 'Standard'} Volume Sender).
                         </p>
                     )}
 

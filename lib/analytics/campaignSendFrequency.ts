@@ -159,22 +159,23 @@ export function computeCampaignSendFrequency(
   const isHighVolume = avgWeeklyVolume >= 3;
   const optimalCapDays = isHighVolume ? 180 : 365; // High=180d, Low=365d for Frequency Opt
   
-  // Apply Cap to current campaigns
+  // Check if current campaigns exceed the optimal cap (for UI message only)
   const capDate = new Date(latestDateRef);
   capDate.setDate(capDate.getDate() - optimalCapDays);
   
-  const cappedCampaigns = campaigns.filter(c => c.sentDate >= capDate);
+  // We do NOT filter the campaigns anymore, just check for the flag
+  const capped = campaigns.some(c => c.sentDate < capDate);
 
   // 1. Calculate Anomaly Threshold (P90) from History
   let maxAllowedFrequency = Infinity;
   
   if (allCampaignsForHistory?.length) {
-    // Filter to optimal lookback period relative to the latest campaign in history
+    // Filter to last 365 days relative to the latest campaign in history (Original Logic)
     const latestDate = allCampaignsForHistory.reduce((max, c) => c.sentDate > max ? c.sentDate : max, new Date(0));
-    const lookbackDate = new Date(latestDate);
-    lookbackDate.setDate(lookbackDate.getDate() - optimalCapDays);
+    const oneYearAgo = new Date(latestDate);
+    oneYearAgo.setDate(oneYearAgo.getDate() - 365);
     
-    const historyWeeks = groupWeeks(allCampaignsForHistory.filter(c => c.sentDate >= lookbackDate));
+    const historyWeeks = groupWeeks(allCampaignsForHistory.filter(c => c.sentDate >= oneYearAgo));
     
     if (historyWeeks.length > 0) {
       const counts = historyWeeks.map(w => w.campaignCount).sort((a, b) => a - b);
@@ -192,7 +193,7 @@ export function computeCampaignSendFrequency(
   }
 
   // 2. Process Current Campaigns
-  const currentWeeks = groupWeeks(cappedCampaigns);
+  const currentWeeks = groupWeeks(campaigns);
   
   // 3. Filter Outliers (Filter A: Frequency Safety)
   const validWeeks = currentWeeks.filter(w => w.campaignCount <= maxAllowedFrequency);
@@ -210,11 +211,7 @@ export function computeCampaignSendFrequency(
   
   // Determine dataset range for weighting
   // Use allCampaignsForHistory if available for broader context, otherwise current campaigns
-  // Apply the same optimal cap to the history source as well
-  const sourceForRange = allCampaignsForHistory?.length 
-    ? allCampaignsForHistory.filter(c => c.sentDate >= capDate)
-    : cappedCampaigns;
-
+  const sourceForRange = allCampaignsForHistory?.length ? allCampaignsForHistory : campaigns;
   const minDate = sourceForRange.reduce((min, c) => c.sentDate < min ? c.sentDate : min, new Date());
   const maxDate = sourceForRange.reduce((max, c) => c.sentDate > max ? c.sentDate : max, new Date(0));
 
@@ -315,7 +312,7 @@ export function computeCampaignSendFrequency(
     dataContext: {
       optimalCapDays,
       isHighVolume,
-      capped: campaigns.some(c => c.sentDate < capDate)
+      capped
     }
   };
 }

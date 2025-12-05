@@ -71,17 +71,12 @@ export function sendVolumeGuidanceV2(
     // Step 1: Date Range Parsing
     let { fromDate, toDate } = parseDateRange(dateRange, customFrom, customTo);
 
-    // Apply Optimal Cap
-    // If the selected range starts BEFORE the cap date, we truncate it.
+    // Apply Optimal Cap Logic (Informational Only)
+    // We calculate if the selected range exceeds the optimal cap, but we DO NOT truncate the data.
     const capDate = lastDataDate.subtract(optimalCapDays, 'days');
     let capped = false;
     
-    // Only apply cap if we are not in a custom range that is explicitly short?
-    // The rule says "The algorithm strictly cuts off".
-    // But if I select "Last 30 days", fromDate is > capDate (assuming cap is 90/180).
-    // If I select "All Time", fromDate is < capDate.
     if (fromDate.isBefore(capDate)) {
-        fromDate = capDate;
         capped = true;
     }
 
