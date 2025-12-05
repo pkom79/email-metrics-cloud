@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState } from 'react';
-import { Activity, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Activity, AlertTriangle, CalendarRange, ChevronDown, ChevronUp } from 'lucide-react';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import { sendVolumeGuidanceV2 } from '../../lib/analytics/sendVolumeGuidanceV2';
 import type { SendVolumeGuidanceResultV2, SendVolumeStatusV2 } from '../../lib/analytics/sendVolumeGuidanceV2';
@@ -51,7 +51,9 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     const guidance = useMemo(
         () => sendVolumeGuidanceV2(dateRange, customFrom, customTo),
         [dateRange, customFrom, customTo]
-    );    // Store date range for display in debug section
+    );
+
+    // Store date range for display in debug section
     const [debugDateRange, setDebugDateRange] = useState<{ from: string; to: string; lastDataDate: string } | null>(null);
 
     // Get weekly data for debug display
@@ -192,6 +194,11 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
         return 'text-gray-600 dark:text-gray-400';
     };
 
+    const minCampaignsRequired = guidance.dataContext?.minCampaignsRequired ?? 12;
+    const minLookbackDaysRequired = 90; // Matches the minimum in sendVolumeGuidanceV2
+    const lookbackDaysInRange = guidance.dataContext?.lookbackDays ?? 0;
+    const insufficientData = guidance.status === 'insufficient';
+
     return (
         <div className="mt-10 section-card">
             <div className="section-header">
@@ -219,6 +226,19 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                 </div>
             </div>
 
+            {insufficientData && (
+                <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-10 bg-white dark:bg-gray-900 flex flex-col items-center justify-center text-center">
+                    <CalendarRange className="w-10 h-10 text-gray-300 mb-3" />
+                    <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">More campaign data needed</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Send Volume Impact unlocks when this range includes at least {minCampaignsRequired} campaigns across {minLookbackDaysRequired}+ days. Choose a longer range or upload more campaign history to view this analysis.
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                        Campaigns counted {guidance.sampleSize.toLocaleString()} · Range length {lookbackDaysInRange > 0 ? `${Math.round(lookbackDaysInRange)} days` : 'shorter than 90 days'}
+                    </p>
+                </div>
+            )}
+            {!insufficientData && (
             {/* Metrics Grid: 3 cards (responsive layout) */}
             <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
                 {/* Correlation */}
@@ -312,6 +332,12 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                         <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
                             {guidance.message}
                         </p>
+
+                        {guidance.dataContext.capped && (
+                            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
+                                Note: Data analysis capped at {guidance.dataContext.optimalCapDays} days for optimal accuracy ({guidance.dataContext.isHighVolume ? 'High' : 'Standard'} Volume Sender).
+                            </p>
+                        )}
 
                         {/* Revenue Opportunity Projection */}
                         {guidance.projectedMonthlyGain !== null && guidance.projectedMonthlyGain > 0 && (

@@ -21,6 +21,9 @@ export interface SendVolumeGuidanceResultV2 {
         minCampaignsRequired: number;
         hasVariance: boolean;
         variancePercent: number;
+        optimalCapDays: number;
+        isHighVolume: boolean;
+        capped: boolean;
     };
 }
 
@@ -44,8 +47,43 @@ export function sendVolumeGuidanceV2(
     const dm = DataManager.getInstance();
     const allCampaigns = dm.getCampaigns();
 
+    // Step 0: Determine Sender Type (High vs Low/Med)
+    // Look at last 90 days of available data to determine volume
+    const lastCampaignDate = allCampaigns.length > 0 
+        ? Math.max(...allCampaigns.map(c => c.sentDate.getTime())) 
+        : Date.now();
+    const lastDataDate = dayjs(lastCampaignDate);
+    const ninetyDaysAgo = lastDataDate.subtract(90, 'days');
+    
+    const recentCampaigns = allCampaigns.filter(c => dayjs(c.sentDate).isAfter(ninetyDaysAgo));
+    // Calculate average weekly frequency in the last 90 days
+    // If data < 90 days, use actual duration
+    const firstRecent = recentCampaigns.length > 0 
+        ? recentCampaigns.reduce((min, c) => c.sentDate.getTime() < min ? c.sentDate.getTime() : min, lastCampaignDate)
+        : lastCampaignDate;
+    const durationDays = Math.max(1, dayjs(lastCampaignDate).diff(dayjs(firstRecent), 'days'));
+    const weeksInPeriod = Math.max(1, durationDays / 7);
+    const avgFreq = recentCampaigns.length / weeksInPeriod;
+    
+    const isHighVolume = avgFreq >= 3;
+    const optimalCapDays = isHighVolume ? 90 : 180;
+
     // Step 1: Date Range Parsing
-    const { fromDate, toDate } = parseDateRange(dateRange, customFrom, customTo);
+    let { fromDate, toDate } = parseDateRange(dateRange, customFrom, customTo);
+
+    // Apply Optimal Cap
+    // If the selected range starts BEFORE the cap date, we truncate it.
+    const capDate = lastDataDate.subtract(optimalCapDays, 'days');
+    let capped = false;
+    
+    // Only apply cap if we are not in a custom range that is explicitly short?
+    // The rule says "The algorithm strictly cuts off".
+    // But if I select "Last 30 days", fromDate is > capDate (assuming cap is 90/180).
+    // If I select "All Time", fromDate is < capDate.
+    if (fromDate.isBefore(capDate)) {
+        fromDate = capDate;
+        capped = true;
+    }
 
     // Step 2: Filter Campaigns
     const campaignsInRange = allCampaigns.filter(c => {
@@ -62,7 +100,15 @@ export function sendVolumeGuidanceV2(
     const lookbackDays = toDate.diff(fromDate, 'days');
 
     if (qualifiedCampaigns.length < MIN_CAMPAIGNS || lookbackDays < MIN_LOOKBACK_DAYS) {
-        return createInsufficientResponse(qualifiedCampaigns.length, lookbackDays, MIN_CAMPAIGNS, MIN_LOOKBACK_DAYS);
+        return createInsufficientResponse(
+            qualifiedCampaigns.length, 
+            lookbackDays, 
+            MIN_CAMPAIGNS, 
+            MIN_LOOKBACK_DAYS,
+            optimalCapDays,
+            isHighVolume,
+            capped
+        );
     }
 
     // Step 4: Safety Checks (The "Kill Switch")
@@ -77,7 +123,15 @@ export function sendVolumeGuidanceV2(
             highRisk: true,
             avgSpamRate: safetyMetrics.avgSpamRate,
             avgBounceRate: safetyMetrics.avgBounceRate,
-            dataContext: { lookbackDays, minCampaignsRequired: MIN_CAMPAIGNS, hasVariance: false, variancePercent: 0 },
+            dataContext: { 
+                lookbackDays, 
+                minCampaignsRequired: MIN_CAMPAIGNS, 
+                hasVariance: false, 
+                variancePercent: 0,
+                optimalCapDays,
+                isHighVolume,
+                capped
+            },
         };
     }
 
@@ -96,7 +150,15 @@ export function sendVolumeGuidanceV2(
             highRisk: false,
             avgSpamRate: safetyMetrics.avgSpamRate,
             avgBounceRate: safetyMetrics.avgBounceRate,
-            dataContext: { lookbackDays, minCampaignsRequired: MIN_CAMPAIGNS, hasVariance: false, variancePercent },
+            dataContext: { 
+                lookbackDays, 
+                minCampaignsRequired: MIN_CAMPAIGNS, 
+                hasVariance: false, 
+                variancePercent,
+                optimalCapDays,
+                isHighVolume,
+                capped
+            },
         };
     }
 
@@ -168,6 +230,9 @@ export function sendVolumeGuidanceV2(
             minCampaignsRequired: MIN_CAMPAIGNS,
             hasVariance: true,
             variancePercent,
+            optimalCapDays,
+            isHighVolume,
+            capped
         },
     };
 }
@@ -273,7 +338,10 @@ function createInsufficientResponse(
     count: number, 
     days: number, 
     minCount: number, 
-    minDays: number
+    minDays: number,
+    optimalCapDays: number = 90,
+    isHighVolume: boolean = false,
+    capped: boolean = false
 ): SendVolumeGuidanceResultV2 {
     return {
         status: "insufficient",
@@ -288,7 +356,10 @@ function createInsufficientResponse(
             lookbackDays: days, 
             minCampaignsRequired: minCount, 
             hasVariance: false, 
-            variancePercent: 0 
+            variancePercent: 0,
+            optimalCapDays,
+            isHighVolume,
+            capped
         }
     };
 }

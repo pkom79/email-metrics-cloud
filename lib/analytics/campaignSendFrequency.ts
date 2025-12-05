@@ -37,6 +37,15 @@ export interface FrequencyBucketAggregate {
   bounceRate: number;
 }
 
+export interface FrequencyAnalysisResult {
+  buckets: FrequencyBucketAggregate[];
+  dataContext: {
+    optimalCapDays: number;
+    isHighVolume: boolean;
+    capped: boolean;
+  };
+}
+
 function calculateMedian(values: number[]): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -105,8 +114,11 @@ function calculateWeightedStats(
 export function computeCampaignSendFrequency(
   campaigns: ProcessedCampaign[],
   allCampaignsForHistory?: ProcessedCampaign[]
-): FrequencyBucketAggregate[] {
-  if (!campaigns?.length) return [];
+): FrequencyAnalysisResult {
+  if (!campaigns?.length) return { 
+      buckets: [], 
+      dataContext: { optimalCapDays: 0, isHighVolume: false, capped: false } 
+  };
 
   // Monday of week helper
   const mondayOf = (d: Date) => {
@@ -133,16 +145,36 @@ export function computeCampaignSendFrequency(
     return Array.from(map.values());
   };
 
+  // 0. Optimal Lookback Period & Sender Classification
+  const sourceData = allCampaignsForHistory?.length ? allCampaignsForHistory : campaigns;
+  const latestDateRef = sourceData.reduce((max, c) => c.sentDate > max ? c.sentDate : max, new Date(0));
+  
+  // Calculate 90-day volume for classification
+  const ninetyDaysAgo = new Date(latestDateRef);
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  
+  const recentCampaigns = sourceData.filter(c => c.sentDate >= ninetyDaysAgo && c.sentDate <= latestDateRef);
+  const avgWeeklyVolume = recentCampaigns.length / 12.85; // 90 days / 7 = ~12.85 weeks
+  
+  const isHighVolume = avgWeeklyVolume >= 3;
+  const optimalCapDays = isHighVolume ? 180 : 365; // High=180d, Low=365d for Frequency Opt
+  
+  // Apply Cap to current campaigns
+  const capDate = new Date(latestDateRef);
+  capDate.setDate(capDate.getDate() - optimalCapDays);
+  
+  const cappedCampaigns = campaigns.filter(c => c.sentDate >= capDate);
+
   // 1. Calculate Anomaly Threshold (P90) from History
   let maxAllowedFrequency = Infinity;
   
   if (allCampaignsForHistory?.length) {
-    // Filter to last 365 days relative to the latest campaign in history
+    // Filter to optimal lookback period relative to the latest campaign in history
     const latestDate = allCampaignsForHistory.reduce((max, c) => c.sentDate > max ? c.sentDate : max, new Date(0));
-    const oneYearAgo = new Date(latestDate);
-    oneYearAgo.setDate(oneYearAgo.getDate() - 365);
+    const lookbackDate = new Date(latestDate);
+    lookbackDate.setDate(lookbackDate.getDate() - optimalCapDays);
     
-    const historyWeeks = groupWeeks(allCampaignsForHistory.filter(c => c.sentDate >= oneYearAgo));
+    const historyWeeks = groupWeeks(allCampaignsForHistory.filter(c => c.sentDate >= lookbackDate));
     
     if (historyWeeks.length > 0) {
       const counts = historyWeeks.map(w => w.campaignCount).sort((a, b) => a - b);
@@ -160,7 +192,7 @@ export function computeCampaignSendFrequency(
   }
 
   // 2. Process Current Campaigns
-  const currentWeeks = groupWeeks(campaigns);
+  const currentWeeks = groupWeeks(cappedCampaigns);
   
   // 3. Filter Outliers (Filter A: Frequency Safety)
   const validWeeks = currentWeeks.filter(w => w.campaignCount <= maxAllowedFrequency);
@@ -178,7 +210,11 @@ export function computeCampaignSendFrequency(
   
   // Determine dataset range for weighting
   // Use allCampaignsForHistory if available for broader context, otherwise current campaigns
-  const sourceForRange = allCampaignsForHistory?.length ? allCampaignsForHistory : campaigns;
+  // Apply the same optimal cap to the history source as well
+  const sourceForRange = allCampaignsForHistory?.length 
+    ? allCampaignsForHistory.filter(c => c.sentDate >= capDate)
+    : cappedCampaigns;
+
   const minDate = sourceForRange.reduce((min, c) => c.sentDate < min ? c.sentDate : min, new Date());
   const maxDate = sourceForRange.reduce((max, c) => c.sentDate > max ? c.sentDate : max, new Date(0));
 
@@ -274,7 +310,14 @@ export function computeCampaignSendFrequency(
     });
   }
 
-  return result;
+  return {
+    buckets: result,
+    dataContext: {
+      optimalCapDays,
+      isHighVolume,
+      capped: campaigns.some(c => c.sentDate < capDate)
+    }
+  };
 }
 
 export type SendFrequencyGuidanceStatus = 'send-more' | 'keep-as-is' | 'send-less' | 'insufficient';

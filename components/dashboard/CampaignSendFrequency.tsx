@@ -52,7 +52,7 @@ export default function CampaignSendFrequency({ campaigns, allCampaigns, onGuida
     // Default metric for each mode
     const [metric, setMetric] = useState<string>('avgWeeklyRevenue');
 
-    const buckets = useMemo<BucketAggregate[]>(() => computeCampaignSendFrequency(campaigns, allCampaigns), [campaigns, allCampaigns]);
+    const { buckets, dataContext } = useMemo(() => computeCampaignSendFrequency(campaigns, allCampaigns), [campaigns, allCampaigns]);
 
     // Adjust metric if switching modes and current metric not valid in new mode
     React.useEffect(() => {
@@ -170,6 +170,12 @@ export default function CampaignSendFrequency({ campaigns, allCampaigns, onGuida
                 <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4 mt-6">
                     <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{guidance.title}</p>
                     <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{guidance.message}</p>
+
+                    {dataContext.capped && (
+                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
+                            Note: Data analysis capped at {dataContext.optimalCapDays} days for optimal accuracy ({dataContext.isHighVolume ? 'High' : 'Standard'} Volume Sender).
+                        </p>
+                    )}
 
                     {/* Revenue Opportunity Projection */}
                     {guidance.estimatedMonthlyGain != null && guidance.estimatedMonthlyGain > 0 && (
