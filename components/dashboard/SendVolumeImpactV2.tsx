@@ -181,7 +181,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                                     const currentDays = guidance.dataContext.lookbackDays;
                                     const isOptimal = currentDays >= optimalDays * 0.9 && currentDays <= optimalDays * 1.1;
                                     const isTooShort = currentDays < optimalDays * 0.9;
-                                    
+
                                     if (isOptimal) {
                                         return (
                                             <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 italic">

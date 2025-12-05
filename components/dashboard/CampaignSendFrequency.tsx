@@ -177,7 +177,7 @@ export default function CampaignSendFrequency({ campaigns, allCampaigns, onGuida
                         const currentDays = dataContext.selectedRangeDays;
                         const isOptimal = currentDays >= optimalDays * 0.9 && currentDays <= optimalDays * 1.1;
                         const isTooShort = currentDays < optimalDays * 0.9;
-                        
+
                         if (isOptimal) {
                             return (
                                 <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 italic">
