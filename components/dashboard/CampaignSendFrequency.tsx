@@ -86,10 +86,10 @@ export default function CampaignSendFrequency({ campaigns, allCampaigns, onGuida
 
     // Dynamic grid layout based on number of buckets
     const gridClass = buckets.length === 1 ? 'grid-cols-1 max-w-xs mx-auto' :
-                      buckets.length === 2 ? 'grid-cols-2 max-w-md mx-auto' :
-                      buckets.length === 3 ? 'grid-cols-3 max-w-3xl mx-auto' :
-                      buckets.length === 4 ? 'grid-cols-2 md:grid-cols-4' :
-                      'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'; // Wrap for > 4
+        buckets.length === 2 ? 'grid-cols-2 max-w-md mx-auto' :
+            buckets.length === 3 ? 'grid-cols-3 max-w-3xl mx-auto' :
+                buckets.length === 4 ? 'grid-cols-2 md:grid-cols-4' :
+                    'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'; // Wrap for > 4
 
     return (
         <div className="mt-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
@@ -170,7 +170,7 @@ export default function CampaignSendFrequency({ campaigns, allCampaigns, onGuida
                 <div className="border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4 mt-6">
                     <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{guidance.title}</p>
                     <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{guidance.message}</p>
-                    
+
                     {/* Revenue Opportunity Projection */}
                     {guidance.estimatedMonthlyGain != null && guidance.estimatedMonthlyGain > 0 && (
                         <div className="mt-4 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
@@ -182,7 +182,7 @@ export default function CampaignSendFrequency({ campaigns, allCampaigns, onGuida
                             </div>
                         </div>
                     )}
-                    
+
                     {guidance.sample && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{guidance.sample}</p>}
                 </div>
             )}

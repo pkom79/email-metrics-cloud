@@ -11,8 +11,9 @@ export interface SendVolumeGuidanceResultV2 {
     status: SendVolumeStatusV2;
     message: string;
     sampleSize: number;
-    correlationCoefficient: number | null;
-    highRisk: boolean; // Yellow Zone flag
+    correlationCoefficient: number | null; // Represents R-squared in this V2 logic
+    projectedMonthlyGain: number | null;
+    highRisk: boolean;
     avgSpamRate: number;
     avgBounceRate: number;
     dataContext: {
@@ -28,15 +29,13 @@ interface SafetyMetrics {
     avgBounceRate: number;
 }
 
-/**
- * Calculate Send Volume Guidance V2 - Campaign-only correlation analysis
- * Follows algorithm spec with:
- * - 12 campaign minimum viable sample
- * - 90-day minimum lookback with dynamic extension
- * - 72-hour attribution lag exclusion
- * - Safety gates (Red/Yellow zones)
- * - Pearson correlation on (Volume, Total Revenue)
- */
+interface WeeklyDataPoint {
+    week: string;
+    volume: number; // x
+    revenue: number; // y
+    date: dayjs.Dayjs;
+}
+
 export function sendVolumeGuidanceV2(
     dateRange: string,
     customFrom?: string,
@@ -45,174 +44,122 @@ export function sendVolumeGuidanceV2(
     const dm = DataManager.getInstance();
     const allCampaigns = dm.getCampaigns();
 
-    // Step 1: Determine the user's selected date range
+    // Step 1: Date Range Parsing
     const { fromDate, toDate } = parseDateRange(dateRange, customFrom, customTo);
 
-    // Step 2: Filter campaigns within user's date range
-    // Use inclusive comparisons to include boundary dates
-    // Note: 72-hour attribution lag removed to match user expectations
+    // Step 2: Filter Campaigns
     const campaignsInRange = allCampaigns.filter(c => {
         const sentDate = dayjs(c.sentDate);
         return (sentDate.isAfter(fromDate) || sentDate.isSame(fromDate, 'day')) && 
                (sentDate.isBefore(toDate) || sentDate.isSame(toDate, 'day'));
     });
 
-    // Step 3: Apply Volume Floor (>= 500 recipients)
-    const qualifiedCampaigns = campaignsInRange.filter(c => 
-        (c.emailsSent || 0) >= 500
-    );
+    const qualifiedCampaigns = campaignsInRange.filter(c => (c.emailsSent || 0) >= 500);
 
-    // Step 4: Check Minimum Viable Sample (12 campaigns, 90 days)
+    // Step 3: Minimum Data Gates
     const MIN_CAMPAIGNS = 12;
     const MIN_LOOKBACK_DAYS = 90;
-    
-    let lookbackDays = toDate.diff(fromDate, 'days');
-    
-    // If user's range is < 90 days or has < 12 campaigns, we need to communicate that
-    const needsMoreData = qualifiedCampaigns.length < MIN_CAMPAIGNS || lookbackDays < MIN_LOOKBACK_DAYS;
-    
-    if (needsMoreData) {
-        const missingCampaigns = Math.max(0, MIN_CAMPAIGNS - qualifiedCampaigns.length);
-        const missingDays = Math.max(0, MIN_LOOKBACK_DAYS - lookbackDays);
-        
-        let insufficientMessage = "Not enough data to measure send volume impact. ";
-        if (missingCampaigns > 0 && missingDays > 0) {
-            insufficientMessage += `Need at least ${MIN_CAMPAIGNS} campaigns and ${MIN_LOOKBACK_DAYS} days of data. Currently have ${qualifiedCampaigns.length} campaigns over ${lookbackDays} days. Expand your date range.`;
-        } else if (missingCampaigns > 0) {
-            insufficientMessage += `Need ${missingCampaigns} more campaigns. Currently have ${qualifiedCampaigns.length} campaigns. Expand your date range to include more campaign activity.`;
-        } else {
-            insufficientMessage += `Need at least ${MIN_LOOKBACK_DAYS} days. Currently analyzing ${lookbackDays} days. Expand your date range.`;
-        }
-        
-        return {
-            status: "insufficient",
-            message: insufficientMessage,
-            sampleSize: qualifiedCampaigns.length,
-            correlationCoefficient: null,
-            highRisk: false,
-            avgSpamRate: 0,
-            avgBounceRate: 0,
-            dataContext: {
-                lookbackDays,
-                minCampaignsRequired: MIN_CAMPAIGNS,
-                hasVariance: false,
-                variancePercent: 0,
-            },
-        };
+    const lookbackDays = toDate.diff(fromDate, 'days');
+
+    if (qualifiedCampaigns.length < MIN_CAMPAIGNS || lookbackDays < MIN_LOOKBACK_DAYS) {
+        return createInsufficientResponse(qualifiedCampaigns.length, lookbackDays, MIN_CAMPAIGNS, MIN_LOOKBACK_DAYS);
     }
 
-    // Step 5: Calculate Safety Metrics
+    // Step 4: Safety Checks (The "Kill Switch")
     const safetyMetrics = calculateSafetyMetrics(qualifiedCampaigns);
-    
-    // Step 6: RED ZONE CHECK (Kill Switch) - Override everything
-    const isRedZone = safetyMetrics.avgSpamRate > 0.2 || safetyMetrics.avgBounceRate > 3.0;
-    if (isRedZone) {
+    if (safetyMetrics.avgSpamRate > 0.2 || safetyMetrics.avgBounceRate > 3.0) {
         return {
             status: "send-less",
-            message: "Critical deliverability risk detected. Your spam rate or bounce rate has exceeded safe thresholds. Reduce send volume immediately and review list quality.",
+            message: "Critical deliverability risk detected. Reduce volume immediately.",
             sampleSize: qualifiedCampaigns.length,
             correlationCoefficient: null,
+            projectedMonthlyGain: null,
             highRisk: true,
             avgSpamRate: safetyMetrics.avgSpamRate,
             avgBounceRate: safetyMetrics.avgBounceRate,
-            dataContext: {
-                lookbackDays,
-                minCampaignsRequired: MIN_CAMPAIGNS,
-                hasVariance: false,
-                variancePercent: 0,
-            },
+            dataContext: { lookbackDays, minCampaignsRequired: MIN_CAMPAIGNS, hasVariance: false, variancePercent: 0 },
         };
     }
 
-    // Step 7: Extract Volume and Revenue arrays (Weekly Aggregation)
-    // Group campaigns by week (ISO week) and sum volume/revenue
-    const weeklyData: Record<string, { volume: number; revenue: number; count: number }> = {};
-    
-    qualifiedCampaigns.forEach(c => {
-        const sentDate = dayjs(c.sentDate);
-        // Use ISO week key (YYYY-Www)
-        const weekKey = `${sentDate.year()}-W${sentDate.isoWeek()}`;
-        
-        if (!weeklyData[weekKey]) {
-            weeklyData[weekKey] = { volume: 0, revenue: 0, count: 0 };
-        }
-        
-        weeklyData[weekKey].volume += (c.emailsSent || 0);
-        weeklyData[weekKey].revenue += (c.revenue || 0);
-        weeklyData[weekKey].count += 1;
-    });
+    // Step 5: Aggregation & Variance
+    const weeklyPoints = aggregateWeeklyData(qualifiedCampaigns);
+    const volumes = weeklyPoints.map(p => p.volume);
+    const variancePercent = calculateVariance(volumes);
 
-    const volumes: number[] = [];
-    const revenues: number[] = [];
-    
-    // Only consider weeks where we actually sent campaigns (volume > 0)
-    Object.values(weeklyData).forEach(week => {
-        if (week.volume > 0) {
-            volumes.push(week.volume);
-            revenues.push(week.revenue);
-        }
-    });
-
-    // Step 8: Variance Check - Has user varied their send volume?
-    const avgVolume = volumes.reduce((sum, v) => sum + v, 0) / volumes.length;
-    const stdDev = calculateStandardDeviation(volumes);
-    const variancePercent = (stdDev / avgVolume) * 100;
-    const hasVariance = variancePercent >= 5.0; // 5% threshold
-
-    if (!hasVariance) {
+    if (variancePercent < 5.0) {
         return {
             status: "send-more",
-            message: "Your weekly send volume is too consistent to measure impact. Increase your volume by 20-30% for a few weeks to generate meaningful data.",
+            message: "Volume is too consistent to model. Increase volume by 20-30% to generate data.",
             sampleSize: qualifiedCampaigns.length,
             correlationCoefficient: null,
+            projectedMonthlyGain: null,
             highRisk: false,
             avgSpamRate: safetyMetrics.avgSpamRate,
             avgBounceRate: safetyMetrics.avgBounceRate,
-            dataContext: {
-                lookbackDays,
-                minCampaignsRequired: MIN_CAMPAIGNS,
-                hasVariance: false,
-                variancePercent,
-            },
+            dataContext: { lookbackDays, minCampaignsRequired: MIN_CAMPAIGNS, hasVariance: false, variancePercent },
         };
     }
 
-    // Step 9: Calculate Pearson Correlation Coefficient
-    const r = pearsonCorrelation(volumes, revenues);
+    // --- NEW LOGIC: Logarithmic Regression ---
 
-    // Step 10: Determine Base Recommendation from Correlation
-    let status: SendVolumeStatusV2;
-    let message: string;
+    // 1. Calculate Current Baseline (Last 4 active weeks average)
+    // Sort by date descending to get most recent
+    const sortedWeeks = [...weeklyPoints].sort((a, b) => b.date.valueOf() - a.date.valueOf());
+    const recentWeeks = sortedWeeks.slice(0, 4); 
+    const currentVolume = recentWeeks.reduce((sum, p) => sum + p.volume, 0) / recentWeeks.length;
+    
+    // 2. Perform Log Regression: Revenue = a + b * ln(Volume)
+    const regression = calculateLogRegression(weeklyPoints);
+    
+    // 3. Determine Status based on Slope (b) and Fit (R2)
+    let status: SendVolumeStatusV2 = "optimize";
+    let message = "";
+    let projectedGain = 0;
 
-    if (r > 0.2) {
-        // Positive correlation - more volume = more revenue
-        status = "send-more";
-        message = `Statistical analysis of ${qualifiedCampaigns.length} campaigns shows a positive link between weekly send volume and revenue. Increasing your weekly volume drives more sales.`;
-    } else if (r < -0.2) {
-        // Negative correlation - more volume = less revenue
-        status = "send-less";
-        message = `Analysis of ${qualifiedCampaigns.length} campaigns shows that increasing weekly volume is currently reducing total revenue returns, likely due to fatigue or spam filtering.`;
-    } else {
-        // Neutral correlation (-0.2 to 0.2)
+    // We only trust the model if R^2 > 0.1 (Weak but usable correlation)
+    if (regression.r2 < 0.1) {
         status = "optimize";
-        message = `Weekly send volume across ${qualifiedCampaigns.length} campaigns has no statistically significant impact on revenue. Focus on content quality (subject lines, segmentation, offers) rather than volume.`;
+        message = "No clear pattern detected between volume and revenue. Focus on content quality.";
+    } else if (regression.b > 50) { 
+        // Positive slope: Adding volume adds revenue
+        // We use a threshold > 50 (dollars per log-unit) to ensure it's meaningful
+        status = "send-more";
+        
+        // PROJECT THE GAIN
+        const targetVolume = currentVolume * 1.2; // +20%
+        const currentPredictedRevenue = regression.predict(currentVolume);
+        const targetPredictedRevenue = regression.predict(targetVolume);
+        
+        // Weekly Gain -> Monthly Gain
+        projectedGain = (targetPredictedRevenue - currentPredictedRevenue) * 4; 
+        
+        message = `Increasing volume by 20% is projected to add ${formatCurrency(projectedGain)} in monthly revenue based on your historical performance curve.`;
+
+    } else if (regression.b < -50) {
+        // Negative slope: Adding volume hurts revenue
+        status = "send-less";
+        message = "Increasing volume is currently correlated with lower total revenue (Diminishing Returns). Scale back to improve efficiency.";
+    } else {
+        // Slope is near zero (Flat curve)
+        status = "optimize";
+        message = "You have reached the point of diminishing returns. Increasing volume further will not significantly increase revenue.";
     }
 
-    // Step 11: Yellow Zone Check (Risk Overlay)
+    // Step 7: Yellow Zone Check
     const isYellowZone = (safetyMetrics.avgSpamRate >= 0.1 && safetyMetrics.avgSpamRate <= 0.2) ||
                          (safetyMetrics.avgBounceRate >= 2.0 && safetyMetrics.avgBounceRate <= 3.0);
-    
     const highRisk = status === "send-more" && isYellowZone;
 
     if (highRisk) {
-        message = "Revenue is growing with volume, but deliverability metrics are approaching risk thresholds. Proceed with caution and monitor spam/bounce rates closely.";
+        message += " Proceed with caution: Deliverability metrics are near warning thresholds.";
     }
 
     return {
         status,
         message,
         sampleSize: qualifiedCampaigns.length,
-        correlationCoefficient: r,
+        correlationCoefficient: regression.r2,
+        projectedMonthlyGain: Math.round(projectedGain),
         highRisk,
         avgSpamRate: safetyMetrics.avgSpamRate,
         avgBounceRate: safetyMetrics.avgBounceRate,
@@ -225,20 +172,133 @@ export function sendVolumeGuidanceV2(
     };
 }
 
+// --- HELPER FUNCTIONS ---
+
+function aggregateWeeklyData(campaigns: ProcessedCampaign[]): WeeklyDataPoint[] {
+    const weeklyData: Record<string, WeeklyDataPoint> = {};
+    
+    campaigns.forEach(c => {
+        const sentDate = dayjs(c.sentDate);
+        const weekKey = `${sentDate.year()}-W${sentDate.isoWeek()}`;
+        
+        if (!weeklyData[weekKey]) {
+            weeklyData[weekKey] = { 
+                week: weekKey, 
+                volume: 0, 
+                revenue: 0,
+                date: sentDate 
+            };
+        }
+        
+        weeklyData[weekKey].volume += (c.emailsSent || 0);
+        weeklyData[weekKey].revenue += (c.revenue || 0);
+        
+        if (sentDate.isAfter(weeklyData[weekKey].date)) {
+            weeklyData[weekKey].date = sentDate;
+        }
+    });
+
+    return Object.values(weeklyData).filter(w => w.volume > 0);
+}
+
 /**
- * Parse date range string into dayjs objects
- * Uses the last email date from uploaded data as the reference point, not today's date
+ * Calculates Logarithmic Regression: y = a + b * ln(x)
+ * Returns slope (b), intercept (a), and R-squared (r2)
  */
+function calculateLogRegression(points: WeeklyDataPoint[]) {
+    const n = points.length;
+    let sumLnX = 0;
+    let sumY = 0;
+    let sumLnX2 = 0; 
+    let sumY2 = 0;   
+    let sumLnXY = 0; 
+
+    points.forEach(p => {
+        const x = p.volume;
+        const y = p.revenue;
+        // Handle edge case if volume is 0 or negative (though filtered out)
+        if (x <= 0) return;
+        
+        const lnX = Math.log(x);
+
+        sumLnX += lnX;
+        sumY += y;
+        sumLnX2 += (lnX * lnX);
+        sumY2 += (y * y);
+        sumLnXY += (lnX * y);
+    });
+
+    const denominator = (n * sumLnX2) - (sumLnX * sumLnX);
+    
+    if (denominator === 0) return { a: 0, b: 0, r2: 0, predict: () => 0 };
+
+    const b = ((n * sumLnXY) - (sumLnX * sumY)) / denominator;
+    const a = (sumY - (b * sumLnX)) / n;
+
+    // Calculate R-Squared
+    const yMean = sumY / n;
+    let ssRes = 0;
+    let ssTot = 0;
+
+    points.forEach(p => {
+        if (p.volume <= 0) return;
+        const predictedY = a + (b * Math.log(p.volume));
+        ssRes += Math.pow(p.revenue - predictedY, 2);
+        ssTot += Math.pow(p.revenue - yMean, 2);
+    });
+
+    const r2 = ssTot === 0 ? 0 : 1 - (ssRes / ssTot);
+
+    return {
+        a,
+        b,
+        r2,
+        predict: (volume: number) => a + (b * Math.log(volume))
+    };
+}
+
+function calculateVariance(values: number[]): number {
+    if (values.length === 0) return 0;
+    const avg = values.reduce((s, v) => s + v, 0) / values.length;
+    if (avg === 0) return 0;
+    
+    const squareDiffs = values.map(v => Math.pow(v - avg, 2));
+    const variance = squareDiffs.reduce((s, v) => s + v, 0) / values.length;
+    const stdDev = Math.sqrt(variance);
+    
+    return (stdDev / avg) * 100;
+}
+
+function createInsufficientResponse(
+    count: number, 
+    days: number, 
+    minCount: number, 
+    minDays: number
+): SendVolumeGuidanceResultV2 {
+    return {
+        status: "insufficient",
+        message: `Not enough data. Need ${minCount} campaigns and ${minDays} days history.`,
+        sampleSize: count,
+        correlationCoefficient: null,
+        projectedMonthlyGain: null,
+        highRisk: false,
+        avgSpamRate: 0,
+        avgBounceRate: 0,
+        dataContext: { 
+            lookbackDays: days, 
+            minCampaignsRequired: minCount, 
+            hasVariance: false, 
+            variancePercent: 0 
+        }
+    };
+}
+
 function parseDateRange(
     dateRange: string,
     customFrom?: string,
     customTo?: string
 ): { fromDate: dayjs.Dayjs; toDate: dayjs.Dayjs } {
-    // Use the last email date from the uploaded data as reference, not today
     const dm = DataManager.getInstance();
-    
-    // Calculate robust last data date (max of campaigns and flows)
-    // dm.getLastEmailDate() can return today if data is missing or malformed, so we calculate manually to be safe
     const campaigns = dm.getCampaigns();
     const flows = dm.getFlowEmails();
     
@@ -259,7 +319,6 @@ function parseDateRange(
         };
     }
 
-    // Parse standard ranges relative to the last data point
     const ranges: Record<string, { fromDate: dayjs.Dayjs; toDate: dayjs.Dayjs }> = {
         "7d": { fromDate: lastDataDate.subtract(7, "days"), toDate: lastDataDate },
         "14d": { fromDate: lastDataDate.subtract(14, "days"), toDate: lastDataDate },
@@ -270,15 +329,12 @@ function parseDateRange(
         "180d": { fromDate: lastDataDate.subtract(180, "days"), toDate: lastDataDate },
         "365d": { fromDate: lastDataDate.subtract(365, "days"), toDate: lastDataDate },
         "730d": { fromDate: lastDataDate.subtract(730, "days"), toDate: lastDataDate },
-        "all": { fromDate: lastDataDate.subtract(730, "days"), toDate: lastDataDate }, // Cap at 2 years
+        "all": { fromDate: lastDataDate.subtract(730, "days"), toDate: lastDataDate },
     };
 
     return ranges[dateRange] || ranges["90d"];
 }
 
-/**
- * Calculate safety metrics (spam rate, bounce rate) for campaigns
- */
 function calculateSafetyMetrics(campaigns: ProcessedCampaign[]): SafetyMetrics {
     if (campaigns.length === 0) {
         return { avgSpamRate: 0, avgBounceRate: 0 };
@@ -301,46 +357,6 @@ function calculateSafetyMetrics(campaigns: ProcessedCampaign[]): SafetyMetrics {
     return { avgSpamRate, avgBounceRate };
 }
 
-/**
- * Calculate standard deviation of an array
- */
-function calculateStandardDeviation(values: number[]): number {
-    if (values.length === 0) return 0;
-    
-    const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
-    const squaredDiffs = values.map(v => Math.pow(v - mean, 2));
-    const variance = squaredDiffs.reduce((sum, v) => sum + v, 0) / values.length;
-    
-    return Math.sqrt(variance);
-}
-
-/**
- * Calculate Pearson Correlation Coefficient between two arrays
- * Returns value between -1 and +1
- */
-function pearsonCorrelation(xs: number[], ys: number[]): number {
-    if (xs.length !== ys.length || xs.length === 0) return 0;
-    
-    const n = xs.length;
-    const meanX = xs.reduce((sum, x) => sum + x, 0) / n;
-    const meanY = ys.reduce((sum, y) => sum + y, 0) / n;
-    
-    let numerator = 0;
-    let sumSquaredDiffX = 0;
-    let sumSquaredDiffY = 0;
-    
-    for (let i = 0; i < n; i++) {
-        const diffX = xs[i] - meanX;
-        const diffY = ys[i] - meanY;
-        
-        numerator += diffX * diffY;
-        sumSquaredDiffX += diffX * diffX;
-        sumSquaredDiffY += diffY * diffY;
-    }
-    
-    const denominator = Math.sqrt(sumSquaredDiffX * sumSquaredDiffY);
-    
-    if (denominator === 0) return 0;
-    
-    return numerator / denominator;
+function formatCurrency(amount: number): string {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount);
 }

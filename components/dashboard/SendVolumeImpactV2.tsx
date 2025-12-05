@@ -149,49 +149,6 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             .sort((a, b) => b.weekKey.localeCompare(a.weekKey));
     }, [dm, dateRange, customFrom, customTo]);
 
-    // Calculate monthly revenue for projections
-    const monthlyRevenue = useMemo(() => {
-        const campaigns = dm.getCampaigns();
-        const totalRevenue = campaigns.reduce((sum, c) => sum + (c.revenue || 0), 0);
-        // Estimate monthly from available data
-        const daysCovered = guidance.dataContext.lookbackDays || 90;
-        return (totalRevenue / daysCovered) * 30;
-    }, [dm, guidance.dataContext.lookbackDays]);
-
-    // Calculate revenue opportunity projection for "Send More" status
-    const revenueProjection = useMemo(() => {
-        if (guidance.status !== 'send-more' || !guidance.correlationCoefficient) return null;
-
-        const r = guidance.correlationCoefficient;
-        let efficiency: number;
-        let tier: string;
-
-        // Tiered efficiency based on correlation strength
-        if (r >= 0.4) {
-            efficiency = 0.85;
-            tier = 'Strong';
-        } else if (r >= 0.3) {
-            efficiency = 0.80;
-            tier = 'Moderate';
-        } else if (r >= 0.2) {
-            efficiency = 0.70;
-            tier = 'Weak';
-        } else {
-            return null; // Below threshold
-        }
-
-        const volumeIncrease = 0.20; // 20% volume increase
-        const projectedLift = volumeIncrease * efficiency;
-        const projectedIncrease = monthlyRevenue * projectedLift;
-
-        return {
-            amount: projectedIncrease,
-            percentage: projectedLift * 100,
-            tier,
-            efficiency: efficiency * 100
-        };
-    }, [guidance.status, guidance.correlationCoefficient, monthlyRevenue]);
-
     // Render helpers
     const getRateColor = (rate: number, type: 'spam' | 'bounce') => {
         if (type === 'spam') {
@@ -219,18 +176,19 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
 
     const getCorrelationLabel = (r: number | null) => {
         if (r === null) return 'N/A';
-        const abs = Math.abs(r);
-        if (abs < 0.1) return 'Negligible';
-        if (abs < 0.3) return 'Weak';
-        if (abs < 0.5) return 'Moderate';
-        if (abs < 0.7) return 'Strong';
-        return 'Very Strong';
+        // R-squared is always positive
+        if (r < 0.1) return 'Negligible Fit';
+        if (r < 0.25) return 'Weak Fit';
+        if (r < 0.5) return 'Moderate Fit';
+        if (r < 0.75) return 'Strong Fit';
+        return 'Very Strong Fit';
     };
 
     const getCorrelationColor = (r: number | null) => {
         if (r === null) return 'text-gray-600 dark:text-gray-400';
-        if (r > 0.05) return 'text-emerald-600 dark:text-emerald-400';
-        if (r < -0.05) return 'text-rose-600 dark:text-rose-400';
+        // R-squared strength coloring
+        if (r > 0.5) return 'text-emerald-600 dark:text-emerald-400';
+        if (r > 0.25) return 'text-blue-600 dark:text-blue-400';
         return 'text-gray-600 dark:text-gray-400';
     };
 
@@ -249,7 +207,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                                         <span className="font-semibold">What:</span> Statistical analysis of how send volume affects revenue.
                                     </div>
                                     <div className="mt-1">
-                                        <span className="font-semibold">How:</span> Pearson correlation between campaign volume and total revenue (campaigns only, 12+ sends required, 90+ days minimum).
+                                        <span className="font-semibold">How:</span> Logarithmic Regression ($y = a + b \cdot \ln(x)$) between campaign volume and revenue (12+ sends required).
                                     </div>
                                     <div className="mt-1">
                                         <span className="font-semibold">Why:</span> Know whether to send more, optimize content, or reduce volume based on actual data.
@@ -265,7 +223,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
                 {/* Correlation */}
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900">
-                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Correlation</div>
+                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Model Fit ($R^2$)</div>
                     <div className={`text-3xl font-semibold tabular-nums ${getCorrelationColor(guidance.correlationCoefficient)}`}>
                         {guidance.correlationCoefficient !== null ? guidance.correlationCoefficient.toFixed(3) : 'N/A'}
                     </div>
@@ -356,13 +314,13 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                         </p>
 
                         {/* Revenue Opportunity Projection */}
-                        {revenueProjection && (
+                        {guidance.projectedMonthlyGain !== null && guidance.projectedMonthlyGain > 0 && (
                             <div className="mt-4 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
                                 <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 mb-1">
                                     Revenue Opportunity Projection
                                 </div>
                                 <div className="text-sm text-emerald-800 dark:text-emerald-200">
-                                    Increasing volume by 20% could generate a {revenueProjection.percentage.toFixed(0)}% increase in campaign revenue.
+                                    Increasing volume by 20% is projected to add {fmtCurrency(guidance.projectedMonthlyGain)} in monthly revenue.
                                 </div>
                             </div>
                         )}
