@@ -171,11 +171,35 @@ export default function CampaignSendFrequency({ campaigns, allCampaigns, onGuida
                     <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{guidance.title}</p>
                     <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{guidance.message}</p>
 
-                    {dataContext.capped && (
-                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
-                            Recommendation: For optimal accuracy, we recommend analyzing the last {dataContext.optimalCapDays} days based on your volume ({dataContext.isHighVolume ? 'High' : 'Standard'} Volume Sender).
-                        </p>
-                    )}
+                    {/* Optimal Lookback Recommendation */}
+                    {(() => {
+                        const optimalDays = dataContext.optimalCapDays;
+                        // Estimate current range from sample text ("Based on X weeks")
+                        const totalWeeks = buckets.reduce((sum, b) => sum + b.weeksCount, 0);
+                        const currentDays = totalWeeks * 7;
+                        const isOptimal = currentDays >= optimalDays * 0.9 && currentDays <= optimalDays * 1.1;
+                        const isTooShort = currentDays < optimalDays * 0.9;
+                        
+                        if (isOptimal) {
+                            return (
+                                <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 italic">
+                                    ✓ You're analyzing the optimal date range ({optimalDays} days) for your account.
+                                </p>
+                            );
+                        } else if (isTooShort) {
+                            return (
+                                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
+                                    For optimal accuracy, we recommend analyzing the last {optimalDays} days based on your account's volume.
+                                </p>
+                            );
+                        } else {
+                            return (
+                                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
+                                    For optimal accuracy, we recommend analyzing the last {optimalDays} days based on your account's volume.
+                                </p>
+                            );
+                        }
+                    })()}
 
                     {/* Revenue Opportunity Projection */}
                     {guidance.estimatedMonthlyGain != null && guidance.estimatedMonthlyGain > 0 && (
