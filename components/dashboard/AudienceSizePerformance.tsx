@@ -158,66 +158,39 @@ function calculateWeightedStats(
     return { mean: weightedMean, stdDev: weightedStdDev };
 }
 
-// Dynamic bucket boundaries using natural breakpoints
-function computeDynamicBucketBoundaries(sortedEmails: number[]): number[] {
+// Compute bucket boundaries using quantiles to ensure statistically meaningful distribution
+// Each bucket will have roughly equal number of campaigns
+function computeQuantileBucketBoundaries(sortedEmails: number[], targetBuckets: number = 4): number[] {
     if (sortedEmails.length === 0) return [];
 
+    const n = sortedEmails.length;
     const min = sortedEmails[0];
     const max = sortedEmails[sortedEmails.length - 1];
 
     if (min === max) return [min, max];
 
-    // Use Jenks natural breaks algorithm approximation for dynamic bucketing
-    // For simplicity, we use a combination of percentile gaps and value clustering
-    const n = sortedEmails.length;
+    // Determine optimal bucket count based on sample size
+    // Need at least 3 campaigns per bucket for any statistical meaning
+    const MIN_PER_BUCKET = 3;
+    const maxBuckets = Math.floor(n / MIN_PER_BUCKET);
+    const numBuckets = Math.max(2, Math.min(targetBuckets, maxBuckets));
 
-    // Calculate gaps between consecutive values
-    const gaps: { index: number; gap: number; normalizedGap: number }[] = [];
-    for (let i = 1; i < n; i++) {
-        const gap = sortedEmails[i] - sortedEmails[i - 1];
-        gaps.push({
-            index: i,
-            gap,
-            normalizedGap: gap / (max - min),
-        });
-    }
-
-    // Find significant gaps (> 10% of total range or > 2x median gap)
-    const sortedGaps = [...gaps].sort((a, b) => b.normalizedGap - a.normalizedGap);
-    const medianGap = gaps.length > 0
-        ? [...gaps].sort((a, b) => a.gap - b.gap)[Math.floor(gaps.length / 2)].gap
-        : 0;
-
-    const significantGaps = sortedGaps.filter(g =>
-        g.normalizedGap > 0.1 || g.gap > medianGap * 2
-    ).slice(0, 5); // Max 5 breakpoints = 6 buckets
-
-    // If no significant gaps, use percentile-based breaks
-    if (significantGaps.length === 0 || n < 6) {
-        const boundaries: number[] = [min];
-        const numBuckets = Math.min(Math.max(2, Math.ceil(n / 3)), 5);
-        for (let i = 1; i < numBuckets; i++) {
-            const pctIdx = Math.floor((i / numBuckets) * (n - 1));
-            boundaries.push(sortedEmails[pctIdx]);
-        }
-        boundaries.push(max);
-        // Dedupe
-        return [...new Set(boundaries)].sort((a, b) => a - b);
-    }
-
-    // Use natural breaks
-    const breakIndices = significantGaps.map(g => g.index).sort((a, b) => a - b);
+    // Use quantiles to create bucket boundaries
     const boundaries: number[] = [min];
-    for (const idx of breakIndices) {
-        if (idx > 0 && idx < n) {
-            boundaries.push(sortedEmails[idx]);
+    for (let i = 1; i < numBuckets; i++) {
+        const pct = i / numBuckets;
+        const idx = Math.floor(pct * (n - 1));
+        const boundary = sortedEmails[idx];
+        // Only add if different from last boundary
+        if (boundary !== boundaries[boundaries.length - 1]) {
+            boundaries.push(boundary);
         }
     }
-    boundaries.push(max);
+    if (boundaries[boundaries.length - 1] !== max) {
+        boundaries.push(max);
+    }
 
-    // Dedupe and ensure we have at least 2 boundaries
-    const unique = [...new Set(boundaries)].sort((a, b) => a - b);
-    return unique.length >= 2 ? unique : [min, max];
+    return boundaries;
 }
 
 function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; limited: boolean; lookbackWeeks: number } {
@@ -262,7 +235,7 @@ function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; li
     // Dynamic bucket boundaries
     const sorted = [...finalCampaigns].sort((a, b) => a.emailsSent - b.emailsSent);
     const sortedEmails = sorted.map(c => c.emailsSent);
-    const boundaries = computeDynamicBucketBoundaries(sortedEmails);
+    const boundaries = computeQuantileBucketBoundaries(sortedEmails, 4);
 
     if (boundaries.length < 2) {
         return { buckets: [], limited: true, lookbackWeeks: 0 };
