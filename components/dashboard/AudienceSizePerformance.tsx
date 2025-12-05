@@ -325,53 +325,51 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
 
     const totalCampaigns = buckets.reduce((sum, b) => sum + b.campaigns.length, 0);
     const totalEmails = buckets.reduce((sum, b) => sum + b.sumEmails, 0);
+    const totalRevenue = buckets.reduce((sum, b) => sum + b.sumRevenue, 0);
+    const overallAvgCampaignRevenue = totalCampaigns > 0 ? totalRevenue / totalCampaigns : 0;
 
-    const formatSample = (override?: number) => {
-        const count = typeof override === 'number' ? override : totalCampaigns;
-        if (count <= 0) return null;
-        return `Based on ${count} ${pluralize('campaign', count)} in this date range.`;
+    const formatSample = () => {
+        if (totalCampaigns <= 0) return null;
+        return `Based on ${totalCampaigns} ${pluralize('campaign', totalCampaigns)} in this date range.`;
     };
 
     // Insufficient data check
     if (totalCampaigns < AUDIENCE_MIN_TOTAL_CAMPAIGNS || totalEmails < AUDIENCE_MIN_TOTAL_EMAILS) {
-        const message = `This date range includes only ${totalCampaigns} ${pluralize('campaign', totalCampaigns)} across distinct audience sizes. Expand the range or keep sending before adjusting targeting.`;
         return {
             title: 'Not enough data for a recommendation',
-            message,
-            sample: formatSample(totalCampaigns),
+            message: `This date range includes only ${totalCampaigns} ${pluralize('campaign', totalCampaigns)}. Expand the range or keep sending before adjusting targeting.`,
+            sample: formatSample(),
             estimatedWeeklyGain: null,
             estimatedMonthlyGain: null,
             confidenceLevel: 'low',
         };
     }
 
-    // Filter qualified buckets
+    // Filter qualified buckets (enough data for comparison)
     const qualified = buckets.filter(b =>
         b.campaigns.length >= AUDIENCE_MIN_BUCKET_CAMPAIGNS &&
         b.sumEmails >= AUDIENCE_MIN_BUCKET_EMAILS
     );
 
     if (!qualified.length) {
-        const message = 'Campaigns at each audience size are too sparse to compare. Gather more sends per size before changing targeting.';
         return {
             title: 'Not enough data for a recommendation',
-            message,
-            sample: formatSample(totalCampaigns),
+            message: 'Campaigns at each audience size are too sparse to compare. Gather more sends per size.',
+            sample: formatSample(),
             estimatedWeeklyGain: null,
             estimatedMonthlyGain: null,
             confidenceLevel: 'low',
         };
     }
 
-    // Filter out Red zone buckets from recommendations (but use them for baseline)
+    // Filter out Red zone buckets from recommendations
     const safeCandidates = qualified.filter(b => b.riskZone !== 'red');
 
     if (!safeCandidates.length) {
-        // All buckets are in Red zone
         return {
             title: 'Focus on list hygiene before scaling',
-            message: `All audience sizes show elevated spam (>${SPAM_RED_LIMIT}%) or bounce rates (>${BOUNCE_RED_LIMIT}%). Clean your list and improve email quality before expanding sends.`,
-            sample: formatSample(totalCampaigns),
+            message: `All audience sizes show elevated spam (>${SPAM_RED_LIMIT}%) or bounce rates (>${BOUNCE_RED_LIMIT}%). Clean your list and improve email quality first.`,
+            sample: formatSample(),
             estimatedWeeklyGain: null,
             estimatedMonthlyGain: null,
             confidenceLevel: 'low',
@@ -379,180 +377,48 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
         };
     }
 
-    // Find dominant bucket (most campaigns - this is the baseline)
-    const dominant = qualified.reduce<Bucket>((best, curr) =>
-        (curr.campaigns.length > best.campaigns.length ? curr : best), qualified[0]);
-
-    // Find best performer by weighted average campaign revenue (among safe candidates)
+    // Find best performer by weighted average campaign revenue
     const sortedByRevenue = [...safeCandidates].sort((a, b) =>
         b.weightedAvgCampaignRevenue - a.weightedAvgCampaignRevenue
     );
     const bestBucket = sortedByRevenue[0];
 
-    // LCB-based projection calculation
-    // Formula: LCB = Target_Avg - (1.96 * (Target_StdDev / sqrt(N)))
-    const calculateLCBProjection = (target: Bucket, baseline: Bucket): { gain: number | null; confidenceLevel: 'high' | 'medium' | 'low' } => {
-        const N = target.campaigns.length;
+    // Calculate confidence level for the best bucket
+    const N = bestBucket.campaigns.length;
+    const cv = bestBucket.weightedAvgCampaignRevenue > 0
+        ? bestBucket.weightedStdDevCampaignRevenue / bestBucket.weightedAvgCampaignRevenue
+        : Infinity;
+    const confidenceLevel: 'high' | 'medium' | 'low' =
+        cv < 0.3 && N >= 6 ? 'high' :
+        cv < 0.5 && N >= 4 ? 'medium' : 'low';
 
-        // Need at least 3 campaigns for meaningful confidence
-        if (N < 3) return { gain: null, confidenceLevel: 'low' };
+    // Calculate revenue opportunity vs overall average
+    // Using LCB for conservative estimate
+    const marginOfError = N >= 3 ? 1.96 * (bestBucket.weightedStdDevCampaignRevenue / Math.sqrt(N)) : 0;
+    const lcb = bestBucket.weightedAvgCampaignRevenue - marginOfError;
+    const revenueGainPerCampaign = lcb - overallAvgCampaignRevenue;
+    
+    let estimatedMonthlyGain: number | null = null;
+    if (revenueGainPerCampaign > 0 && lookbackWeeks > 0 && confidenceLevel !== 'low') {
+        const avgCampaignsPerWeek = totalCampaigns / lookbackWeeks;
+        estimatedMonthlyGain = revenueGainPerCampaign * avgCampaignsPerWeek * 4;
+    }
 
-        const targetAvg = target.weightedAvgCampaignRevenue;
-        const targetStdDev = target.weightedStdDevCampaignRevenue;
-        const baselineAvg = baseline.weightedAvgCampaignRevenue;
-
-        const marginOfError = 1.96 * (targetStdDev / Math.sqrt(N));
-        const lcb = targetAvg - marginOfError;
-
-        // Calculate coefficient of variation for confidence level
-        const cv = targetAvg > 0 ? targetStdDev / targetAvg : Infinity;
-        const confidenceLevel: 'high' | 'medium' | 'low' =
-            cv < 0.3 && N >= 6 ? 'high' :
-                cv < 0.5 && N >= 4 ? 'medium' : 'low';
-
-        if (lcb > baselineAvg) {
-            // Monthly projection: (LCB - baseline) * avg campaigns per week * 4 weeks
-            const avgCampaignsPerWeek = lookbackWeeks > 0 ? target.campaigns.length / lookbackWeeks : 1;
-            const weeklyGain = (lcb - baselineAvg) * avgCampaignsPerWeek;
-            return { gain: weeklyGain * 4, confidenceLevel };
-        }
-
-        return { gain: null, confidenceLevel };
-    };
-
-    const { gain: projectedMonthlyGain, confidenceLevel } = calculateLCBProjection(bestBucket, dominant);
-
-    const headerRange = (label: string) => `${label} total recipients per campaign`;
-    const baselineRevenue = dominant.weightedAvgCampaignRevenue;
-    const targetRevenue = bestBucket.weightedAvgCampaignRevenue;
-    const lift = baselineRevenue === 0 ? (targetRevenue > 0 ? Infinity : 0) : (targetRevenue - baselineRevenue) / baselineRevenue;
-    const liftPct = formatDeltaPct(lift);
     const isYellow = bestBucket.riskZone === 'yellow';
-    const riskWarning = isYellow
-        ? ' Note: This audience size shows slightly elevated risk metrics (Yellow Zone), so monitor spam and bounce rates closely.'
+    const riskNote = isYellow
+        ? ' Monitor spam and bounce rates closely at this size.'
         : '';
 
-    // Calculate confidence level for the best bucket directly
-    const bestBucketN = bestBucket.campaigns.length;
-    const bestBucketCV = bestBucket.weightedAvgCampaignRevenue > 0 
-        ? bestBucket.weightedStdDevCampaignRevenue / bestBucket.weightedAvgCampaignRevenue 
-        : Infinity;
-    const bestBucketConfidence: 'high' | 'medium' | 'low' =
-        bestBucketCV < 0.3 && bestBucketN >= 6 ? 'high' :
-        bestBucketCV < 0.5 && bestBucketN >= 4 ? 'medium' : 'low';
-
-    // Case A: Best is already dominant (stay)
-    if (bestBucket.key === dominant.key) {
-        // Check if there are larger buckets with insufficient data
-        const largerBuckets = buckets.filter(b => b.rangeMin > bestBucket.rangeMax);
-        const noLargerData = largerBuckets.every(b => b.campaigns.length < AUDIENCE_MIN_BUCKET_CAMPAIGNS);
-        const hasLargerBuckets = largerBuckets.length > 0;
-
-        // If we have high confidence in the current best bucket
-        if (bestBucketConfidence === 'high') {
-            const growthHint = hasLargerBuckets && noLargerData && !isYellow
-                ? ` You could also test audiences above ${formatEmailsShort(bestBucket.rangeMax)} to explore further scaling.`
-                : '';
-            return {
-                title: `Send campaigns to ${headerRange(bestBucket.rangeLabel)}`,
-                message: `${bestBucket.rangeLabel} audiences generate the highest weighted revenue per campaign with strong statistical confidence.${growthHint}${riskWarning}`,
-                sample: formatSample(),
-                baselineRange: bestBucket.rangeLabel,
-                targetRange: bestBucket.rangeLabel,
-                estimatedWeeklyGain: 0,
-                estimatedMonthlyGain: 0,
-                confidenceLevel: 'high',
-                riskZone: bestBucket.riskZone,
-            };
-        }
-
-        // Medium confidence - still recommend but note room for improvement
-        if (bestBucketConfidence === 'medium') {
-            return {
-                title: `Send campaigns to ${headerRange(bestBucket.rangeLabel)}`,
-                message: `${bestBucket.rangeLabel} audiences generate the highest weighted revenue per campaign.${riskWarning}`,
-                sample: formatSample(),
-                baselineRange: bestBucket.rangeLabel,
-                targetRange: bestBucket.rangeLabel,
-                estimatedWeeklyGain: 0,
-                estimatedMonthlyGain: 0,
-                confidenceLevel: 'medium',
-                riskZone: bestBucket.riskZone,
-            };
-        }
-
-        // Low confidence - suggest testing larger if applicable
-        if (!isYellow && noLargerData && bestBucket.rangeMax < 100000) {
-            return {
-                title: `Test larger audiences above ${formatEmailsShort(bestBucket.rangeMax)}`,
-                message: `${bestBucket.rangeLabel} recipients is your best performing audience size with healthy deliverability. Consider testing larger audiences to see if you can scale revenue further.`,
-                sample: formatSample(),
-                baselineRange: bestBucket.rangeLabel,
-                targetRange: `>${formatEmailsShort(bestBucket.rangeMax)}`,
-                estimatedWeeklyGain: null,
-                estimatedMonthlyGain: null,
-                confidenceLevel: 'low',
-                riskZone: bestBucket.riskZone,
-            };
-        }
-
-        return {
-            title: `Send campaigns to ${headerRange(bestBucket.rangeLabel)}`,
-            message: `${bestBucket.rangeLabel} audiences generate the highest weighted revenue per campaign.${riskWarning}`,
-            sample: formatSample(),
-            baselineRange: bestBucket.rangeLabel,
-            targetRange: bestBucket.rangeLabel,
-            estimatedWeeklyGain: 0,
-            estimatedMonthlyGain: 0,
-            confidenceLevel: bestBucketConfidence,
-            riskZone: bestBucket.riskZone,
-        };
-    }
-
-    // Case B: Best is different from dominant
-    const isConfident = bestBucket.campaigns.length >= 6 && confidenceLevel !== 'low';
-
-    if (isConfident && projectedMonthlyGain && projectedMonthlyGain >= 500) {
-        // High confidence recommendation with projection
-        return {
-            title: `Scale to ${headerRange(bestBucket.rangeLabel)}`,
-            message: `${bestBucket.rangeLabel} audiences generate ${liftPct} higher weighted revenue per campaign than your current focus.${riskWarning}`,
-            sample: formatSample(),
-            baselineRange: dominant.rangeLabel,
-            targetRange: bestBucket.rangeLabel,
-            estimatedWeeklyGain: projectedMonthlyGain / 4,
-            estimatedMonthlyGain: projectedMonthlyGain,
-            confidenceLevel,
-            riskZone: bestBucket.riskZone,
-        };
-    }
-
-    // Lower confidence - suggest testing
     return {
-        title: `Test ${headerRange(bestBucket.rangeLabel)}`,
-        message: `${bestBucket.rangeLabel} recipients show higher revenue potential (${liftPct}) but need more data for a confident recommendation.${riskWarning} Run targeted tests at this audience size.`,
+        title: `Target ${bestBucket.rangeLabel} recipients per campaign`,
+        message: `Campaigns sent to ${bestBucket.rangeLabel} recipients generate the highest average revenue.${riskNote}`,
         sample: formatSample(),
-        baselineRange: dominant.rangeLabel,
         targetRange: bestBucket.rangeLabel,
-        estimatedWeeklyGain: null,
-        estimatedMonthlyGain: null,
-        confidenceLevel: 'low',
+        estimatedWeeklyGain: estimatedMonthlyGain ? estimatedMonthlyGain / 4 : null,
+        estimatedMonthlyGain,
+        confidenceLevel,
         riskZone: bestBucket.riskZone,
     };
-}
-
-function ratioDelta(candidate: number, baseline: number) {
-    if (!isFinite(candidate) || !isFinite(baseline)) return 0;
-    if (baseline === 0) return candidate === 0 ? 0 : Infinity;
-    return (candidate - baseline) / baseline;
-}
-
-function formatDeltaPct(value: number) {
-    if (!isFinite(value)) return '∞%';
-    const abs = Math.abs(value * 100);
-    const decimals = abs >= 100 ? 0 : 1;
-    const sign = value >= 0 ? '+' : '-';
-    return `${sign}${abs.toFixed(decimals)}%`;
 }
 
 function pluralize(word: string, count: number) {
@@ -686,38 +552,35 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                 })}
             </div>
             {guidance && (
-                <div className={`border rounded-xl p-4 mt-6 ${guidance.riskZone === 'red'
-                        ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/20'
-                        : guidance.riskZone === 'yellow'
-                            ? 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20'
-                            : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900'
+                <div className="mt-6 space-y-3">
+                    {/* Main recommendation */}
+                    <div className={`flex items-start gap-2 ${
+                        guidance.riskZone === 'red' ? 'text-red-700 dark:text-red-300' :
+                        guidance.riskZone === 'yellow' ? 'text-amber-700 dark:text-amber-300' :
+                        'text-gray-900 dark:text-gray-100'
                     }`}>
-                    <div className="flex items-start gap-2">
                         {guidance.riskZone && (
-                            <span className={`mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0 ${getRiskZoneColor(guidance.riskZone)}`} />
+                            <span className={`mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 ${getRiskZoneColor(guidance.riskZone)}`} />
                         )}
-                        <div className="flex-1">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{guidance.title}</p>
-                            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{guidance.message}</p>
-                            {guidance.estimatedMonthlyGain != null && guidance.estimatedMonthlyGain >= 500 && (
-                                <p className="mt-3 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                                    {guidance.confidenceLevel === 'high'
-                                        ? `Monthly revenue could increase by an estimated ${formatCurrency(guidance.estimatedMonthlyGain)} by scaling to this audience size.`
-                                        : `Monthly revenue could increase by approximately ${formatCurrency(guidance.estimatedMonthlyGain)} (moderate confidence).`
-                                    }
-                                </p>
-                            )}
-                            {guidance.confidenceLevel && guidance.confidenceLevel !== 'high' && !guidance.estimatedMonthlyGain && (
-                                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
-                                    {guidance.confidenceLevel === 'low'
-                                        ? 'More data needed for revenue projections.'
-                                        : 'Gathering more campaign data will improve projection accuracy.'
-                                    }
-                                </p>
-                            )}
-                            {guidance.sample && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{guidance.sample}</p>}
+                        <div>
+                            <p className="text-sm font-semibold">{guidance.title}</p>
+                            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{guidance.message}</p>
                         </div>
                     </div>
+
+                    {/* Revenue Opportunity Projection - matches Send Frequency style */}
+                    {guidance.estimatedMonthlyGain != null && guidance.estimatedMonthlyGain > 0 && (
+                        <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
+                            <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 mb-1">
+                                Revenue Opportunity Projection
+                            </div>
+                            <div className="text-sm text-emerald-800 dark:text-emerald-200">
+                                Targeting this audience size could generate an estimated {formatCurrency(guidance.estimatedMonthlyGain)} increase in monthly revenue.
+                            </div>
+                        </div>
+                    )}
+
+                    {guidance.sample && <p className="text-xs text-gray-500 dark:text-gray-400">{guidance.sample}</p>}
                 </div>
             )}
         </div>
