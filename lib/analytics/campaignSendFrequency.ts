@@ -43,6 +43,7 @@ export interface FrequencyAnalysisResult {
     optimalCapDays: number;
     isHighVolume: boolean;
     capped: boolean;
+    selectedRangeDays: number;
   };
 }
 
@@ -117,7 +118,7 @@ export function computeCampaignSendFrequency(
 ): FrequencyAnalysisResult {
   if (!campaigns?.length) return { 
       buckets: [], 
-      dataContext: { optimalCapDays: 0, isHighVolume: false, capped: false } 
+      dataContext: { optimalCapDays: 0, isHighVolume: false, capped: false, selectedRangeDays: 0 } 
   };
 
   // Monday of week helper
@@ -307,12 +308,18 @@ export function computeCampaignSendFrequency(
     });
   }
 
+  // Calculate the actual selected range in days from campaign data
+  const earliestCampaign = campaigns.reduce((min, c) => c.sentDate < min ? c.sentDate : min, new Date());
+  const latestCampaign = campaigns.reduce((max, c) => c.sentDate > max ? c.sentDate : max, new Date(0));
+  const selectedRangeDays = Math.round((latestCampaign.getTime() - earliestCampaign.getTime()) / (1000 * 60 * 60 * 24));
+
   return {
     buckets: result,
     dataContext: {
       optimalCapDays,
       isHighVolume,
-      capped
+      capped,
+      selectedRangeDays
     }
   };
 }

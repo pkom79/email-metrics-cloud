@@ -174,9 +174,7 @@ export default function CampaignSendFrequency({ campaigns, allCampaigns, onGuida
                     {/* Optimal Lookback Recommendation */}
                     {(() => {
                         const optimalDays = dataContext.optimalCapDays;
-                        // Estimate current range from sample text ("Based on X weeks")
-                        const totalWeeks = buckets.reduce((sum, b) => sum + b.weeksCount, 0);
-                        const currentDays = totalWeeks * 7;
+                        const currentDays = dataContext.selectedRangeDays;
                         const isOptimal = currentDays >= optimalDays * 0.9 && currentDays <= optimalDays * 1.1;
                         const isTooShort = currentDays < optimalDays * 0.9;
                         
