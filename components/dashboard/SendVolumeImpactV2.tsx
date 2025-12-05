@@ -177,11 +177,11 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
     const getCorrelationLabel = (r: number | null) => {
         if (r === null) return 'N/A';
         // R-squared is always positive
-        if (r < 0.1) return 'Negligible Fit';
-        if (r < 0.25) return 'Weak Fit';
-        if (r < 0.5) return 'Moderate Fit';
-        if (r < 0.75) return 'Strong Fit';
-        return 'Very Strong Fit';
+        if (r < 0.1) return 'No Clear Pattern';
+        if (r < 0.25) return 'Weak Pattern';
+        if (r < 0.5) return 'Moderate Pattern';
+        if (r < 0.75) return 'Strong Pattern';
+        return 'Very Strong Pattern';
     };
 
     const getCorrelationColor = (r: number | null) => {
@@ -223,7 +223,7 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
             <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
                 {/* Correlation */}
                 <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900">
-                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Model Fit ($R^2$)</div>
+                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Pattern Strength</div>
                     <div className={`text-3xl font-semibold tabular-nums ${getCorrelationColor(guidance.correlationCoefficient)}`}>
                         {guidance.correlationCoefficient !== null ? guidance.correlationCoefficient.toFixed(3) : 'N/A'}
                     </div>
