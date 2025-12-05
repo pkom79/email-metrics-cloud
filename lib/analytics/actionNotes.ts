@@ -264,7 +264,7 @@ export function buildSendFrequencyNote(params: {
     params.customFrom,
     params.customTo
   );
-  const buckets = computeCampaignSendFrequency(campaigns);
+  const { buckets } = computeCampaignSendFrequency(campaigns);
   const guidance = computeSendFrequencyGuidance(buckets, 'week');
 
   if (!guidance) {

@@ -239,138 +239,141 @@ export default function SendVolumeImpact({ dateRange, granularity, customFrom, c
                 </div>
             )}
             {!insufficientData && (
-            {/* Metrics Grid: 3 cards (responsive layout) */}
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
-                {/* Correlation */}
-                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900">
-                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Pattern Strength</div>
-                    <div className={`text-3xl font-semibold tabular-nums ${getCorrelationColor(guidance.correlationCoefficient)}`}>
-                        {guidance.correlationCoefficient !== null ? guidance.correlationCoefficient.toFixed(3) : 'N/A'}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        {getCorrelationLabel(guidance.correlationCoefficient)}
-                    </div>
-                </div>
+                <>
+                    {/* Metrics Grid: 3 cards (responsive layout) */}
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {/* Correlation */}
+                        <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900">
+                            <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Pattern Strength</div>
+                            <div className={`text-3xl font-semibold tabular-nums ${getCorrelationColor(guidance.correlationCoefficient)}`}>
+                                {guidance.correlationCoefficient !== null ? guidance.correlationCoefficient.toFixed(3) : 'N/A'}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                {getCorrelationLabel(guidance.correlationCoefficient)}
+                            </div>
+                        </div>
 
-                {/* Average Spam Rate with dot indicator */}
-                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900">
-                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${getRateDot(guidance.avgSpamRate, 'spam')}`}></span>
-                        Avg Spam
-                    </div>
-                    <div className={`text-3xl font-semibold tabular-nums ${getRateColor(guidance.avgSpamRate, 'spam')}`}>
-                        {guidance.avgSpamRate.toFixed(3)}%
-                    </div>
-                </div>
+                        {/* Average Spam Rate with dot indicator */}
+                        <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900">
+                            <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${getRateDot(guidance.avgSpamRate, 'spam')}`}></span>
+                                Avg Spam
+                            </div>
+                            <div className={`text-3xl font-semibold tabular-nums ${getRateColor(guidance.avgSpamRate, 'spam')}`}>
+                                {guidance.avgSpamRate.toFixed(3)}%
+                            </div>
+                        </div>
 
-                {/* Average Bounce Rate with dot indicator */}
-                <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900">
-                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${getRateDot(guidance.avgBounceRate, 'bounce')}`}></span>
-                        Avg Bounce
-                    </div>
-                    <div className={`text-3xl font-semibold tabular-nums ${getRateColor(guidance.avgBounceRate, 'bounce')}`}>
-                        {guidance.avgBounceRate.toFixed(2)}%
-                    </div>
-                </div>
-            </div>
-
-            {/* Campaign List Debug - Collapsible */}
-            <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900">
-                <button
-                    onClick={() => setShowDebug(!showDebug)}
-                    className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors rounded-lg"
-                >
-                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                        Weekly Data Points ({weeklyDebugData.length})
-                    </span>
-                    {showDebug ? (
-                        <ChevronUp className="w-4 h-4 text-gray-500" />
-                    ) : (
-                        <ChevronDown className="w-4 h-4 text-gray-500" />
-                    )}
-                </button>
-
-                {showDebug && (
-                    <div className="border-t border-gray-200 dark:border-gray-700 p-4 max-h-96 overflow-y-auto">
-                        <div className="space-y-2">
-                            {weeklyDebugData.map((w, idx) => (
-                                <div key={w.weekKey} className="text-xs border-b border-gray-100 dark:border-gray-800 pb-2 last:border-0">
-                                    <div className="font-semibold text-gray-900 dark:text-gray-100">
-                                        {idx + 1}. Week of {w.weekStart}
-                                    </div>
-                                    <div className="mt-1 space-y-1 text-gray-600 dark:text-gray-400">
-                                        <div className="grid grid-cols-3 gap-2">
-                                            <div>
-                                                <span className="font-medium">Campaigns:</span> {w.count}
-                                            </div>
-                                            <div>
-                                                <span className="font-medium">Total Volume:</span> {w.volume.toLocaleString()}
-                                            </div>
-                                            <div>
-                                                <span className="font-medium">Total Revenue:</span> {fmtCurrency(w.revenue)}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                            {weeklyDebugData.length === 0 && (
-                                <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">
-                                    No data found in selected date range
-                                </p>
-                            )}
+                        {/* Average Bounce Rate with dot indicator */}
+                        <div className="relative border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900">
+                            <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${getRateDot(guidance.avgBounceRate, 'bounce')}`}></span>
+                                Avg Bounce
+                            </div>
+                            <div className={`text-3xl font-semibold tabular-nums ${getRateColor(guidance.avgBounceRate, 'bounce')}`}>
+                                {guidance.avgBounceRate.toFixed(2)}%
+                            </div>
                         </div>
                     </div>
-                )}
-            </div>
 
-            {/* Action Note with Revenue Projection */}
-            <div className="mt-8 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex-1">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Recommendation</p>
-                        <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                            {guidance.message}
-                        </p>
+                    {/* Campaign List Debug - Collapsible */}
+                    <div className="mt-6 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900">
+                        <button
+                            onClick={() => setShowDebug(!showDebug)}
+                            className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors rounded-lg"
+                        >
+                            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                Weekly Data Points ({weeklyDebugData.length})
+                            </span>
+                            {showDebug ? (
+                                <ChevronUp className="w-4 h-4 text-gray-500" />
+                            ) : (
+                                <ChevronDown className="w-4 h-4 text-gray-500" />
+                            )}
+                        </button>
 
-                        {guidance.dataContext.capped && (
-                            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
-                                Note: Data analysis capped at {guidance.dataContext.optimalCapDays} days for optimal accuracy ({guidance.dataContext.isHighVolume ? 'High' : 'Standard'} Volume Sender).
-                            </p>
-                        )}
-
-                        {/* Revenue Opportunity Projection */}
-                        {guidance.projectedMonthlyGain !== null && guidance.projectedMonthlyGain > 0 && (
-                            <div className="mt-4 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
-                                <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 mb-1">
-                                    Revenue Opportunity Projection
-                                </div>
-                                <div className="text-sm text-emerald-800 dark:text-emerald-200">
-                                    Increasing volume by 20% is projected to add {fmtCurrency(guidance.projectedMonthlyGain)} in monthly revenue.
+                        {showDebug && (
+                            <div className="border-t border-gray-200 dark:border-gray-700 p-4 max-h-96 overflow-y-auto">
+                                <div className="space-y-2">
+                                    {weeklyDebugData.map((w, idx) => (
+                                        <div key={w.weekKey} className="text-xs border-b border-gray-100 dark:border-gray-800 pb-2 last:border-0">
+                                            <div className="font-semibold text-gray-900 dark:text-gray-100">
+                                                {idx + 1}. Week of {w.weekStart}
+                                            </div>
+                                            <div className="mt-1 space-y-1 text-gray-600 dark:text-gray-400">
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    <div>
+                                                        <span className="font-medium">Campaigns:</span> {w.count}
+                                                    </div>
+                                                    <div>
+                                                        <span className="font-medium">Total Volume:</span> {w.volume.toLocaleString()}
+                                                    </div>
+                                                    <div>
+                                                        <span className="font-medium">Total Revenue:</span> {fmtCurrency(w.revenue)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {weeklyDebugData.length === 0 && (
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">
+                                            No data found in selected date range
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    {/* Badge(s) */}
-                    <div className="flex flex-wrap gap-2 self-start">
-                        <span
-                            className={`px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap ${STATUS_BADGE_CLASSES[guidance.status]
-                                }`}
-                        >
-                            {STATUS_LABELS[guidance.status]}
-                        </span>
+                    {/* Action Note with Revenue Projection */}
+                    <div className="mt-8 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="flex-1">
+                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Recommendation</p>
+                                <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                    {guidance.message}
+                                </p>
 
-                        {/* Yellow Zone: High Risk Badge */}
-                        {guidance.highRisk && (
-                            <span className="px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 flex items-center gap-1">
-                                <AlertTriangle className="w-3 h-3" />
-                                Higher Risk
-                            </span>
-                        )}
+                                {guidance.dataContext.capped && (
+                                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
+                                        Note: Data analysis capped at {guidance.dataContext.optimalCapDays} days for optimal accuracy ({guidance.dataContext.isHighVolume ? 'High' : 'Standard'} Volume Sender).
+                                    </p>
+                                )}
+
+                                {/* Revenue Opportunity Projection */}
+                                {guidance.projectedMonthlyGain !== null && guidance.projectedMonthlyGain > 0 && (
+                                    <div className="mt-4 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
+                                        <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 mb-1">
+                                            Revenue Opportunity Projection
+                                        </div>
+                                        <div className="text-sm text-emerald-800 dark:text-emerald-200">
+                                            Increasing volume by 20% is projected to add {fmtCurrency(guidance.projectedMonthlyGain)} in monthly revenue.
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Badge(s) */}
+                            <div className="flex flex-wrap gap-2 self-start">
+                                <span
+                                    className={`px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap ${STATUS_BADGE_CLASSES[guidance.status]
+                                        }`}
+                                >
+                                    {STATUS_LABELS[guidance.status]}
+                                </span>
+
+                                {/* Yellow Zone: High Risk Badge */}
+                                {guidance.highRisk && (
+                                    <span className="px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3" />
+                                        Higher Risk
+                                    </span>
+                                )}
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </div>
+                </>
+            )}
         </div>
     );
 }

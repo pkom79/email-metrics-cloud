@@ -780,7 +780,7 @@ export async function buildLlmExportJson(params: {
         const d = (c as any).sentDate as Date | undefined;
         return d instanceof Date && !isNaN(d.getTime()) && d >= s && d <= e;
       });
-      const agg = computeCampaignSendFrequency(campaigns);
+      const { buckets: agg } = computeCampaignSendFrequency(campaigns);
       json.campaignSendFrequency = {
         buckets: agg.map(b => ({
           key: b.key,
