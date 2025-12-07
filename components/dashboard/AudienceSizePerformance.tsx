@@ -39,6 +39,9 @@ type Bucket = {
     // weighted stats (new)
     weightedAvgCampaignRevenue: number;
     weightedStdDevCampaignRevenue: number;
+    // weighted revenue per email (for primary ranking)
+    weightedRevenuePerEmail: number;
+    weightedStdDevRevenuePerEmail: number;
     // risk zone (new)
     riskZone: 'green' | 'yellow' | 'red';
 };
@@ -78,8 +81,12 @@ interface AudienceGuidanceResult {
     targetRange?: string;
     estimatedWeeklyGain?: number | null;
     estimatedMonthlyGain?: number | null;
+    totalMonthlyRevenue?: number;
     confidenceLevel?: 'high' | 'medium' | 'low';
     riskZone?: 'green' | 'yellow' | 'red';
+    optimalCapDays?: number;
+    selectedRangeDays?: number;
+    isHighVolume?: boolean;
 }
 
 function niceRangeLabel(min: number, max: number) {
@@ -193,8 +200,8 @@ function computeQuantileBucketBoundaries(sortedEmails: number[], targetBuckets: 
     return boundaries;
 }
 
-function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; limited: boolean; lookbackWeeks: number } {
-    if (!campaigns.length) return { buckets: [], limited: true, lookbackWeeks: 0 };
+function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; limited: boolean; lookbackWeeks: number; optimalCapDays: number; selectedRangeDays: number; isHighVolume: boolean } {
+    if (!campaigns.length) return { buckets: [], limited: true, lookbackWeeks: 0, optimalCapDays: 180, selectedRangeDays: 0, isHighVolume: false };
 
     const valid = campaigns.filter(c => typeof c.emailsSent === 'number' && c.emailsSent >= 0);
     const total = valid.length;
@@ -212,7 +219,7 @@ function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; li
     const sample = filtered.length;
     const limited = sample < 12;
 
-    if (sample === 0) return { buckets: [], limited: true, lookbackWeeks: 0 };
+    if (sample === 0) return { buckets: [], limited: true, lookbackWeeks: 0, optimalCapDays: 180, selectedRangeDays: 0, isHighVolume: false };
 
     // IQR filter to exclude revenue outliers (holiday spikes)
     const revenueValues = filtered.map(c => c.revenue);
@@ -238,7 +245,7 @@ function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; li
     const boundaries = computeQuantileBucketBoundaries(sortedEmails, 4);
 
     if (boundaries.length < 2) {
-        return { buckets: [], limited: true, lookbackWeeks: 0 };
+        return { buckets: [], limited: true, lookbackWeeks: 0, optimalCapDays: 180, selectedRangeDays: 0, isHighVolume: false };
     }
 
     // Build dynamic number of buckets
@@ -290,6 +297,16 @@ function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; li
         const { mean: weightedAvgCampaignRevenue, stdDev: weightedStdDevCampaignRevenue } =
             calculateWeightedStats(revenueItems, minDate, maxDate);
 
+        // Calculate weighted revenue per email (primary ranking metric)
+        const revenuePerEmailItems = bucketCampaigns
+            .filter(c => c.sentDate instanceof Date && !isNaN(c.sentDate.getTime()) && c.emailsSent > 0)
+            .map(c => ({
+                value: c.revenue / c.emailsSent,
+                date: c.sentDate,
+            }));
+        const { mean: weightedRevenuePerEmail, stdDev: weightedStdDevRevenuePerEmail } =
+            calculateWeightedStats(revenuePerEmailItems, minDate, maxDate);
+
         const riskZone = getRiskZone(spamRate, bounceRate);
 
         return {
@@ -302,17 +319,31 @@ function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; li
             avgCampaignRevenue, avgCampaignEmails, aov, revenuePerEmail, openRate, clickRate, clickToOpenRate, conversionRate, unsubscribeRate, spamRate, bounceRate,
             weightedAvgCampaignRevenue,
             weightedStdDevCampaignRevenue,
+            weightedRevenuePerEmail,
+            weightedStdDevRevenuePerEmail,
             riskZone,
         };
     }).filter(b => b.campaigns.length > 0);
 
     let lookbackWeeks = 0;
+    let selectedRangeDays = 0;
     if (minDate.getTime() < maxDate.getTime()) {
         const days = Math.max(1, Math.round((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24))) + 1;
         lookbackWeeks = Math.max(1, Math.round(days / 7));
+        selectedRangeDays = days;
     }
 
-    return { buckets, limited, lookbackWeeks };
+    // Calculate optimal cap days based on send frequency and list size
+    // High volume senders (3+ campaigns/week) need less history (90 days)
+    // Low volume senders need more history (180 days) for statistical significance
+    const avgCampaignsPerWeek = lookbackWeeks > 0 ? sample / lookbackWeeks : 0;
+    const avgListSize = sample > 0 ? finalCampaigns.reduce((sum, c) => sum + c.emailsSent, 0) / sample : 0;
+    
+    // High volume: 3+ campaigns/week OR large list (50k+) with 2+ campaigns/week
+    const isHighVolume = avgCampaignsPerWeek >= 3 || (avgListSize >= 50000 && avgCampaignsPerWeek >= 2);
+    const optimalCapDays = isHighVolume ? 90 : 180;
+
+    return { buckets, limited, lookbackWeeks, optimalCapDays, selectedRangeDays, isHighVolume };
 }
 
 const AUDIENCE_MIN_TOTAL_CAMPAIGNS = 12;
@@ -320,13 +351,23 @@ const AUDIENCE_MIN_BUCKET_CAMPAIGNS = 3;
 const AUDIENCE_MIN_TOTAL_EMAILS = 50_000;
 const AUDIENCE_MIN_BUCKET_EMAILS = 10_000;
 
-function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): AudienceGuidanceResult | null {
+function computeAudienceSizeGuidance(
+    buckets: Bucket[], 
+    lookbackWeeks: number, 
+    optimalCapDays: number, 
+    selectedRangeDays: number,
+    isHighVolume: boolean
+): AudienceGuidanceResult | null {
     if (!buckets.length) return null;
 
     const totalCampaigns = buckets.reduce((sum, b) => sum + b.campaigns.length, 0);
     const totalEmails = buckets.reduce((sum, b) => sum + b.sumEmails, 0);
     const totalRevenue = buckets.reduce((sum, b) => sum + b.sumRevenue, 0);
-    const overallAvgCampaignRevenue = totalCampaigns > 0 ? totalRevenue / totalCampaigns : 0;
+    const overallRevenuePerEmail = totalEmails > 0 ? totalRevenue / totalEmails : 0;
+    
+    // Calculate monthly revenue for threshold comparison
+    const weeksInRange = Math.max(1, lookbackWeeks);
+    const monthlyRevenue = (totalRevenue / weeksInRange) * 4.33;
 
     const formatSample = () => {
         if (totalCampaigns <= 0) return null;
@@ -341,7 +382,11 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
             sample: formatSample(),
             estimatedWeeklyGain: null,
             estimatedMonthlyGain: null,
+            totalMonthlyRevenue: monthlyRevenue,
             confidenceLevel: 'low',
+            optimalCapDays,
+            selectedRangeDays,
+            isHighVolume,
         };
     }
 
@@ -358,7 +403,11 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
             sample: formatSample(),
             estimatedWeeklyGain: null,
             estimatedMonthlyGain: null,
+            totalMonthlyRevenue: monthlyRevenue,
             confidenceLevel: 'low',
+            optimalCapDays,
+            selectedRangeDays,
+            isHighVolume,
         };
     }
 
@@ -372,36 +421,42 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
             sample: formatSample(),
             estimatedWeeklyGain: null,
             estimatedMonthlyGain: null,
+            totalMonthlyRevenue: monthlyRevenue,
             confidenceLevel: 'low',
             riskZone: 'red',
+            optimalCapDays,
+            selectedRangeDays,
+            isHighVolume,
         };
     }
 
-    // Find best performer by weighted average campaign revenue
-    const sortedByRevenue = [...safeCandidates].sort((a, b) =>
-        b.weightedAvgCampaignRevenue - a.weightedAvgCampaignRevenue
+    // Find best performer by weighted Revenue per Email (primary metric)
+    // This encourages more targeted, smaller audience campaigns that deliver better per-email value
+    const sortedByRevenuePerEmail = [...safeCandidates].sort((a, b) =>
+        b.weightedRevenuePerEmail - a.weightedRevenuePerEmail
     );
-    const bestBucket = sortedByRevenue[0];
+    const bestBucket = sortedByRevenuePerEmail[0];
 
     // Calculate confidence level for the best bucket
     const N = bestBucket.campaigns.length;
-    const cv = bestBucket.weightedAvgCampaignRevenue > 0
-        ? bestBucket.weightedStdDevCampaignRevenue / bestBucket.weightedAvgCampaignRevenue
+    const cv = bestBucket.weightedRevenuePerEmail > 0
+        ? bestBucket.weightedStdDevRevenuePerEmail / bestBucket.weightedRevenuePerEmail
         : Infinity;
     const confidenceLevel: 'high' | 'medium' | 'low' =
         cv < 0.3 && N >= 6 ? 'high' :
         cv < 0.5 && N >= 4 ? 'medium' : 'low';
 
-    // Calculate revenue opportunity vs overall average
+    // Calculate revenue opportunity vs overall average using Revenue per Email
     // Using LCB for conservative estimate
-    const marginOfError = N >= 3 ? 1.96 * (bestBucket.weightedStdDevCampaignRevenue / Math.sqrt(N)) : 0;
-    const lcb = bestBucket.weightedAvgCampaignRevenue - marginOfError;
-    const revenueGainPerCampaign = lcb - overallAvgCampaignRevenue;
+    const marginOfError = N >= 3 ? 1.96 * (bestBucket.weightedStdDevRevenuePerEmail / Math.sqrt(N)) : 0;
+    const lcbRevenuePerEmail = bestBucket.weightedRevenuePerEmail - marginOfError;
+    const revenuePerEmailGain = lcbRevenuePerEmail - overallRevenuePerEmail;
     
     let estimatedMonthlyGain: number | null = null;
-    if (revenueGainPerCampaign > 0 && lookbackWeeks > 0 && confidenceLevel !== 'low') {
-        const avgCampaignsPerWeek = totalCampaigns / lookbackWeeks;
-        estimatedMonthlyGain = revenueGainPerCampaign * avgCampaignsPerWeek * 4;
+    if (revenuePerEmailGain > 0 && lookbackWeeks > 0 && confidenceLevel !== 'low') {
+        // Project based on total emails sent per month
+        const avgEmailsPerWeek = totalEmails / lookbackWeeks;
+        estimatedMonthlyGain = revenuePerEmailGain * avgEmailsPerWeek * 4;
     }
 
     const isYellow = bestBucket.riskZone === 'yellow';
@@ -409,15 +464,26 @@ function computeAudienceSizeGuidance(buckets: Bucket[], lookbackWeeks: number): 
         ? ' Monitor spam and bounce rates closely at this size.'
         : '';
 
+    // Check if smaller audiences perform better (indicates value of targeted campaigns)
+    const smallestBucket = safeCandidates.reduce((min, b) => b.rangeMin < min.rangeMin ? b : min, safeCandidates[0]);
+    const isSmallerBetter = bestBucket.key === smallestBucket.key;
+    const targetingNote = isSmallerBetter
+        ? ' Sending more targeted campaigns to smaller, well-segmented audiences tends to deliver better results.'
+        : '';
+
     return {
         title: `Target ${bestBucket.rangeLabel} recipients per campaign`,
-        message: `Campaigns sent to ${bestBucket.rangeLabel} recipients generate the highest average revenue.${riskNote}`,
+        message: `Campaigns sent to ${bestBucket.rangeLabel} recipients generate the highest revenue per email.${riskNote}${targetingNote}`,
         sample: formatSample(),
         targetRange: bestBucket.rangeLabel,
         estimatedWeeklyGain: estimatedMonthlyGain ? estimatedMonthlyGain / 4 : null,
         estimatedMonthlyGain,
+        totalMonthlyRevenue: monthlyRevenue,
         confidenceLevel,
         riskZone: bestBucket.riskZone,
+        optimalCapDays,
+        selectedRangeDays,
+        isHighVolume,
     };
 }
 
@@ -445,8 +511,8 @@ function getRiskZoneLabel(zone: 'green' | 'yellow' | 'red') {
 export default function AudienceSizePerformance({ campaigns }: Props) {
     const [metric, setMetric] = useState<string>('weightedAvgCampaignRevenue');
 
-    const { buckets, limited, lookbackWeeks } = useMemo(() => computeBuckets(campaigns || []), [campaigns]);
-    const guidance = useMemo(() => computeAudienceSizeGuidance(buckets, lookbackWeeks), [buckets, lookbackWeeks]);
+    const { buckets, limited, lookbackWeeks, optimalCapDays, selectedRangeDays, isHighVolume } = useMemo(() => computeBuckets(campaigns || []), [campaigns]);
+    const guidance = useMemo(() => computeAudienceSizeGuidance(buckets, lookbackWeeks, optimalCapDays, selectedRangeDays, isHighVolume), [buckets, lookbackWeeks, optimalCapDays, selectedRangeDays, isHighVolume]);
 
     if (!campaigns?.length) {
         return (
@@ -531,8 +597,8 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                                     <ul className="space-y-0.5">
                                         <li><span className="text-gray-500 dark:text-gray-400">Campaigns:</span> {b.campaigns.length}</li>
                                         <li><span className="text-gray-500 dark:text-gray-400">Total Emails:</span> {formatNumber(b.sumEmails)}</li>
+                                        <li><span className="text-gray-500 dark:text-gray-400">Weighted Rev/Email:</span> {formatCurrency(b.weightedRevenuePerEmail)}</li>
                                         <li><span className="text-gray-500 dark:text-gray-400">Weighted Avg Revenue:</span> {formatCurrency(b.weightedAvgCampaignRevenue)}</li>
-                                        <li><span className="text-gray-500 dark:text-gray-400">Simple Avg Revenue:</span> {formatCurrency(b.avgCampaignRevenue)}</li>
                                         <li><span className="text-gray-500 dark:text-gray-400">Total Revenue:</span> {formatCurrency(b.sumRevenue)}</li>
                                         <li><span className="text-gray-500 dark:text-gray-400">AOV:</span> {formatCurrency(b.aov)}</li>
                                         <li><span className="text-gray-500 dark:text-gray-400">Rev / Email:</span> {formatCurrency(b.revenuePerEmail)}</li>
@@ -568,17 +634,56 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                         </div>
                     </div>
 
-                    {/* Revenue Opportunity Projection - matches Send Frequency style */}
-                    {guidance.estimatedMonthlyGain != null && guidance.estimatedMonthlyGain > 0 && (
-                        <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
-                            <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 mb-1">
-                                Revenue Opportunity Projection
-                            </div>
-                            <div className="text-sm text-emerald-800 dark:text-emerald-200">
-                                Targeting this audience size could generate an estimated {formatCurrency(guidance.estimatedMonthlyGain)} increase in monthly revenue.
-                            </div>
-                        </div>
-                    )}
+                    {/* Optimal Lookback Recommendation */}
+                    {(() => {
+                        const optimalDays = guidance.optimalCapDays ?? 180;
+                        const currentDays = guidance.selectedRangeDays ?? 0;
+                        const isOptimal = currentDays >= optimalDays * 0.9 && currentDays <= optimalDays * 1.1;
+                        const isTooShort = currentDays < optimalDays * 0.9;
+
+                        if (isOptimal) {
+                            return (
+                                <p className="text-xs text-emerald-600 dark:text-emerald-400 italic">
+                                    ✓ You're analyzing the optimal date range ({optimalDays} days) for your account.
+                                </p>
+                            );
+                        } else if (isTooShort) {
+                            return (
+                                <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                                    For optimal accuracy, we recommend analyzing the last {optimalDays} days based on your account's volume.
+                                </p>
+                            );
+                        } else {
+                            return (
+                                <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                                    For optimal accuracy, we recommend analyzing the last {optimalDays} days based on your account's volume.
+                                </p>
+                            );
+                        }
+                    })()}
+
+                    {/* Revenue Opportunity Projection - only show if meaningful */}
+                    {/* Thresholds: >= $1,000/month OR >= 20% of total monthly revenue */}
+                    {(() => {
+                        const gain = guidance.estimatedMonthlyGain ?? 0;
+                        const totalRevenue = guidance.totalMonthlyRevenue ?? 0;
+                        const percentOfRevenue = totalRevenue > 0 ? (gain / totalRevenue) * 100 : 0;
+                        const isMeaningful = gain >= 1000 || percentOfRevenue >= 20;
+
+                        if (gain > 0 && isMeaningful) {
+                            return (
+                                <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
+                                    <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 mb-1">
+                                        Revenue Opportunity Projection
+                                    </div>
+                                    <div className="text-sm text-emerald-800 dark:text-emerald-200">
+                                        Targeting this audience size could generate an estimated {formatCurrency(gain)} increase in monthly revenue.
+                                    </div>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()}
 
                     {guidance.sample && <p className="text-xs text-gray-500 dark:text-gray-400">{guidance.sample}</p>}
                 </div>
