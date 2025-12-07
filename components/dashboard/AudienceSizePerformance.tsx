@@ -342,7 +342,7 @@ function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; li
     // Low volume senders need more history (180 days) for statistical significance
     const avgCampaignsPerWeek = lookbackWeeks > 0 ? sample / lookbackWeeks : 0;
     const avgListSize = sample > 0 ? finalCampaigns.reduce((sum, c) => sum + c.emailsSent, 0) / sample : 0;
-    
+
     // High volume: 3+ campaigns/week OR large list (50k+) with 2+ campaigns/week
     const isHighVolume = avgCampaignsPerWeek >= 3 || (avgListSize >= 50000 && avgCampaignsPerWeek >= 2);
     const optimalCapDays = isHighVolume ? 90 : 180;
@@ -356,9 +356,9 @@ const AUDIENCE_MIN_TOTAL_EMAILS = 50_000;
 const AUDIENCE_MIN_BUCKET_EMAILS = 10_000;
 
 function computeAudienceSizeGuidance(
-    buckets: Bucket[], 
-    lookbackWeeks: number, 
-    optimalCapDays: number, 
+    buckets: Bucket[],
+    lookbackWeeks: number,
+    optimalCapDays: number,
     selectedRangeDays: number,
     isHighVolume: boolean
 ): AudienceGuidanceResult | null {
@@ -368,7 +368,7 @@ function computeAudienceSizeGuidance(
     const totalEmails = buckets.reduce((sum, b) => sum + b.sumEmails, 0);
     const totalRevenue = buckets.reduce((sum, b) => sum + b.sumRevenue, 0);
     const overallRevenuePerEmail = totalEmails > 0 ? totalRevenue / totalEmails : 0;
-    
+
     // Calculate monthly revenue for threshold comparison
     const weeksInRange = Math.max(1, lookbackWeeks);
     const monthlyRevenue = (totalRevenue / weeksInRange) * 4.33;
@@ -442,37 +442,10 @@ function computeAudienceSizeGuidance(
     const bestBucket = sortedByRevenuePerEmail[0];
     const worstBucket = sortedByRevenuePerEmail[sortedByRevenuePerEmail.length - 1];
 
-    // Calculate confidence intervals for best and worst buckets
-    const calculateCI = (bucket: typeof bestBucket) => {
-        const n = bucket.campaigns.length;
-        const marginOfError = n >= 3 ? 1.96 * (bucket.weightedStdDevRevenuePerEmail / Math.sqrt(n)) : Infinity;
-        return {
-            mean: bucket.weightedRevenuePerEmail,
-            lower: bucket.weightedRevenuePerEmail - marginOfError,
-            upper: bucket.weightedRevenuePerEmail + marginOfError,
-        };
-    };
-    const bestCI = calculateCI(bestBucket);
-    const worstCI = calculateCI(worstBucket);
-
-    // Check if confidence intervals overlap (if they do, difference is not statistically significant)
-    const ciOverlap = bestCI.lower <= worstCI.upper;
-
-    // Calculate spread percentage (best vs worst)
+    // Calculate spread percentage (best vs worst) for messaging
     const spreadPct = bestBucket.weightedRevenuePerEmail > 0
         ? ((bestBucket.weightedRevenuePerEmail - worstBucket.weightedRevenuePerEmail) / bestBucket.weightedRevenuePerEmail) * 100
         : 0;
-
-    // Calculate absolute monthly opportunity from spread
-    const avgEmailsPerWeek = lookbackWeeks > 0 ? totalEmails / lookbackWeeks : 0;
-    const absoluteOpportunity = (bestBucket.weightedRevenuePerEmail - worstBucket.weightedRevenuePerEmail) * avgEmailsPerWeek * 4;
-
-    // Determine if difference is significant:
-    // - CIs must NOT overlap (statistically significant), AND
-    // - Either spread >= 15% OR absolute opportunity >= $1,000/month
-    const SIGNIFICANCE_SPREAD_THRESHOLD = 15; // 15%
-    const SIGNIFICANCE_ABSOLUTE_THRESHOLD = 1000; // $1,000/month
-    const isSignificant = !ciOverlap && (spreadPct >= SIGNIFICANCE_SPREAD_THRESHOLD || absoluteOpportunity >= SIGNIFICANCE_ABSOLUTE_THRESHOLD);
 
     // Calculate confidence level for the best bucket
     const N = bestBucket.campaigns.length;
@@ -481,20 +454,47 @@ function computeAudienceSizeGuidance(
         : Infinity;
     const confidenceLevel: 'high' | 'medium' | 'low' =
         cv < 0.3 && N >= 6 ? 'high' :
-        cv < 0.5 && N >= 4 ? 'medium' : 'low';
+            cv < 0.5 && N >= 4 ? 'medium' : 'low';
 
-    // Calculate revenue opportunity vs overall average using Revenue per Email
-    // Using LCB for conservative estimate
-    const marginOfError = N >= 3 ? 1.96 * (bestBucket.weightedStdDevRevenuePerEmail / Math.sqrt(N)) : 0;
-    const lcbRevenuePerEmail = bestBucket.weightedRevenuePerEmail - marginOfError;
-    const revenuePerEmailGain = lcbRevenuePerEmail - overallRevenuePerEmail;
+    // === NEW SIGNIFICANCE LOGIC ===
+    // Compare best bucket to OVERALL AVERAGE (not worst bucket or CI overlap)
+    // Calculate the actual monthly $ opportunity from switching to best bucket
     
-    let estimatedMonthlyGain: number | null = null;
-    if (revenuePerEmailGain > 0 && lookbackWeeks > 0 && confidenceLevel !== 'low') {
-        // Project based on total emails sent per month
-        const avgEmailsPerWeek = totalEmails / lookbackWeeks;
-        estimatedMonthlyGain = revenuePerEmailGain * avgEmailsPerWeek * 4;
-    }
+    // Best bucket's average revenue per campaign
+    const bestAvgRevPerCampaign = bestBucket.campaigns.length > 0 
+        ? bestBucket.sumRevenue / bestBucket.campaigns.length 
+        : 0;
+    
+    // Overall average revenue per campaign
+    const overallAvgRevPerCampaign = totalCampaigns > 0 
+        ? totalRevenue / totalCampaigns 
+        : 0;
+    
+    // Revenue gain per campaign if user switches to best bucket
+    const revenueGainPerCampaign = bestAvgRevPerCampaign - overallAvgRevPerCampaign;
+    
+    // Calculate campaigns per month based on lookback period
+    const weeksInPeriod = Math.max(1, lookbackWeeks);
+    const campaignsPerMonth = (totalCampaigns / weeksInPeriod) * 4.33;
+    
+    // Monthly opportunity = gain per campaign × campaigns per month
+    const monthlyOpportunity = revenueGainPerCampaign * campaignsPerMonth;
+    
+    // Practical significance thresholds:
+    // - Monthly opportunity >= $1,000, OR
+    // - Monthly opportunity >= 10% of monthly revenue
+    const SIGNIFICANCE_ABSOLUTE_THRESHOLD = 1000; // $1,000/month
+    const SIGNIFICANCE_PERCENT_THRESHOLD = 10; // 10% of monthly revenue
+    
+    const percentOfMonthlyRevenue = monthlyRevenue > 0 
+        ? (monthlyOpportunity / monthlyRevenue) * 100 
+        : 0;
+    
+    const isSignificant = monthlyOpportunity >= SIGNIFICANCE_ABSOLUTE_THRESHOLD || 
+                          percentOfMonthlyRevenue >= SIGNIFICANCE_PERCENT_THRESHOLD;
+
+    // For the Revenue Opportunity Projection, use the monthly opportunity we calculated
+    const estimatedMonthlyGain = monthlyOpportunity > 0 ? monthlyOpportunity : null;
 
     const isYellow = bestBucket.riskZone === 'yellow';
     const riskNote = isYellow
@@ -537,7 +537,7 @@ function computeAudienceSizeGuidance(
         isHighVolume,
         spreadPct,
         isSignificant,
-        absoluteOpportunity,
+        absoluteOpportunity: monthlyOpportunity,
     };
 }
 
@@ -674,11 +674,10 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
             {guidance && (
                 <div className="mt-6 space-y-3">
                     {/* Main recommendation */}
-                    <div className={`flex items-start gap-2 ${
-                        guidance.riskZone === 'red' ? 'text-red-700 dark:text-red-300' :
-                        guidance.riskZone === 'yellow' ? 'text-amber-700 dark:text-amber-300' :
-                        'text-gray-900 dark:text-gray-100'
-                    }`}>
+                    <div className={`flex items-start gap-2 ${guidance.riskZone === 'red' ? 'text-red-700 dark:text-red-300' :
+                            guidance.riskZone === 'yellow' ? 'text-amber-700 dark:text-amber-300' :
+                                'text-gray-900 dark:text-gray-100'
+                        }`}>
                         {guidance.riskZone && (
                             <span className={`mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 ${getRiskZoneColor(guidance.riskZone)}`} />
                         )}
