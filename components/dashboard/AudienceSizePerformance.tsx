@@ -87,6 +87,10 @@ interface AudienceGuidanceResult {
     optimalCapDays?: number;
     selectedRangeDays?: number;
     isHighVolume?: boolean;
+    // Significance detection
+    spreadPct?: number;
+    isSignificant?: boolean;
+    absoluteOpportunity?: number;
 }
 
 function niceRangeLabel(min: number, max: number) {
@@ -436,6 +440,39 @@ function computeAudienceSizeGuidance(
         b.weightedRevenuePerEmail - a.weightedRevenuePerEmail
     );
     const bestBucket = sortedByRevenuePerEmail[0];
+    const worstBucket = sortedByRevenuePerEmail[sortedByRevenuePerEmail.length - 1];
+
+    // Calculate confidence intervals for best and worst buckets
+    const calculateCI = (bucket: typeof bestBucket) => {
+        const n = bucket.campaigns.length;
+        const marginOfError = n >= 3 ? 1.96 * (bucket.weightedStdDevRevenuePerEmail / Math.sqrt(n)) : Infinity;
+        return {
+            mean: bucket.weightedRevenuePerEmail,
+            lower: bucket.weightedRevenuePerEmail - marginOfError,
+            upper: bucket.weightedRevenuePerEmail + marginOfError,
+        };
+    };
+    const bestCI = calculateCI(bestBucket);
+    const worstCI = calculateCI(worstBucket);
+
+    // Check if confidence intervals overlap (if they do, difference is not statistically significant)
+    const ciOverlap = bestCI.lower <= worstCI.upper;
+
+    // Calculate spread percentage (best vs worst)
+    const spreadPct = bestBucket.weightedRevenuePerEmail > 0
+        ? ((bestBucket.weightedRevenuePerEmail - worstBucket.weightedRevenuePerEmail) / bestBucket.weightedRevenuePerEmail) * 100
+        : 0;
+
+    // Calculate absolute monthly opportunity from spread
+    const avgEmailsPerWeek = lookbackWeeks > 0 ? totalEmails / lookbackWeeks : 0;
+    const absoluteOpportunity = (bestBucket.weightedRevenuePerEmail - worstBucket.weightedRevenuePerEmail) * avgEmailsPerWeek * 4;
+
+    // Determine if difference is significant:
+    // - CIs must NOT overlap (statistically significant), AND
+    // - Either spread >= 15% OR absolute opportunity >= $1,000/month
+    const SIGNIFICANCE_SPREAD_THRESHOLD = 15; // 15%
+    const SIGNIFICANCE_ABSOLUTE_THRESHOLD = 1000; // $1,000/month
+    const isSignificant = !ciOverlap && (spreadPct >= SIGNIFICANCE_SPREAD_THRESHOLD || absoluteOpportunity >= SIGNIFICANCE_ABSOLUTE_THRESHOLD);
 
     // Calculate confidence level for the best bucket
     const N = bestBucket.campaigns.length;
@@ -471,11 +508,25 @@ function computeAudienceSizeGuidance(
         ? ' Sending more targeted campaigns to smaller, well-segmented audiences tends to deliver better results.'
         : '';
 
+    // Generate title and message based on significance
+    let title: string;
+    let message: string;
+
+    if (isSignificant) {
+        // Action-oriented messaging - clear opportunity exists
+        title = `Target ${bestBucket.rangeLabel} recipients per campaign`;
+        message = `Campaigns sent to ${bestBucket.rangeLabel} recipients generate the highest revenue per email.${riskNote}${targetingNote}`;
+    } else {
+        // Flexibility messaging - all sizes perform similarly
+        title = 'All audience sizes perform well';
+        message = `Performance is consistent across audience sizes (within ${Math.round(spreadPct)}% variance). Choose based on your segmentation strategy, engagement goals, or list health priorities.${riskNote}`;
+    }
+
     return {
-        title: `Target ${bestBucket.rangeLabel} recipients per campaign`,
-        message: `Campaigns sent to ${bestBucket.rangeLabel} recipients generate the highest revenue per email.${riskNote}${targetingNote}`,
+        title,
+        message,
         sample: formatSample(),
-        targetRange: bestBucket.rangeLabel,
+        targetRange: isSignificant ? bestBucket.rangeLabel : undefined,
         estimatedWeeklyGain: estimatedMonthlyGain ? estimatedMonthlyGain / 4 : null,
         estimatedMonthlyGain,
         totalMonthlyRevenue: monthlyRevenue,
@@ -484,6 +535,9 @@ function computeAudienceSizeGuidance(
         optimalCapDays,
         selectedRangeDays,
         isHighVolume,
+        spreadPct,
+        isSignificant,
+        absoluteOpportunity,
     };
 }
 
@@ -662,9 +716,12 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                         }
                     })()}
 
-                    {/* Revenue Opportunity Projection - only show if meaningful */}
-                    {/* Thresholds: >= $1,000/month OR >= 20% of total monthly revenue */}
+                    {/* Revenue Opportunity Projection - only show if significant and meaningful */}
+                    {/* Only show when: isSignificant AND (>= $1,000/month OR >= 20% of total monthly revenue) */}
                     {(() => {
+                        // Don't show projection if all sizes perform similarly
+                        if (!guidance.isSignificant) return null;
+
                         const gain = guidance.estimatedMonthlyGain ?? 0;
                         const totalRevenue = guidance.totalMonthlyRevenue ?? 0;
                         const percentOfRevenue = totalRevenue > 0 ? (gain / totalRevenue) * 100 : 0;
