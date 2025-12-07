@@ -6,6 +6,29 @@ import { DataManager } from '../../lib/data/dataManager';
 import { thirdTicks, formatTickLabels, computeAxisMax } from '../../lib/utils/chartTicks';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import TooltipPortal from '../TooltipPortal';
+import {
+    getRiskZone,
+    getDeliverabilityPoints,
+    computeOptimalLookbackDays,
+    hasStatisticalSignificance,
+    getDeliverabilityRiskMessage,
+    getInsufficientDataMessage,
+    RiskZone,
+    SPAM_GREEN_LIMIT,
+    SPAM_RED_LIMIT,
+    BOUNCE_GREEN_LIMIT,
+    BOUNCE_RED_LIMIT,
+    MIN_SAMPLE_SIZE
+} from '../../lib/analytics/deliverabilityZones';
+import {
+    calculateMoneyPillarScore,
+    getAbsoluteRevenuePoints,
+    getCalibratedTiers
+} from '../../lib/analytics/revenueTiers';
+import {
+    inferFlowType,
+    projectNewStepRevenue
+} from '../../lib/analytics/flowDecayFactors';
 
 const usdFormatter = new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -480,11 +503,11 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
     }, [selectedFlow, flowSequenceInfo, currentFlowEmails, previousFlowEmails, selectedMetric, dateRange, granularity, customFrom, customTo, dataManager, dateWindows]);
 
     // Flow Step Score (0–100) with simplified pillars:
-    // Money (70) = Revenue Index (35) + Store (flows+campaigns) Revenue Share (35)
-    // Deliverability (20) = bin-based score with low-volume adjustment (<0.5% of account sends) applied only if base < 15
-    // Statistical Confidence (10) = 1 point per 100 sends, capped at 10
+    // Money (70) = Revenue Index (35) + Absolute Revenue (35) - auto-calibrated to account size
+    // Deliverability (20) = Spam Zone (10) + Bounce Zone (10) with green/yellow/red thresholds
+    // Statistical Confidence (10) = based on per-step dynamic lookback for statistical significance
     const stepScores = useMemo(() => {
-        if (!flowStepMetrics.length) return { results: [] as any[], context: { rpeBaseline: 0, s1Sends: 0 } };
+        if (!flowStepMetrics.length || !selectedFlow) return { results: [] as any[], context: { rpeBaseline: 0, s1Sends: 0, flowType: 'default' } };
         const arr = flowStepMetrics;
         const s1Sends = arr[0]?.emailsSent || 0;
         const flowRevenueTotal = arr.reduce((sum, s) => sum + (s.revenue || 0), 0);
@@ -499,21 +522,16 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const storeRevenueTotal = accountAgg.totalRevenue || 0;
         const accountSendsTotal = accountAgg.emailsSent || 0;
 
+        // Infer flow type for decay factors and projections
+        const flowType = inferFlowType(selectedFlow);
+
+        // Compute date range days for lookback calculations
+        const dateRangeDays = resolved
+            ? Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)))
+            : 30;
+
         const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 
-        const results: Array<any> = [];
-        // Helper mapper for Store share pillar bins (ERS stays as-is); RI is continuous 0–35
-        const storeShareToPoints = (share: number): number => {
-            if (!isFinite(share) || share <= 0) return 5;
-            const pct = share * 100;
-            if (pct >= 5) return 35;
-            if (pct >= 3) return 30;
-            if (pct >= 2) return 25;
-            if (pct >= 1) return 20;
-            if (pct >= 0.5) return 15;
-            if (pct >= 0.25) return 10;
-            return 5;
-        };
         // Compute RI baseline (median RPE across steps; if one-step flow, use flows-only account RPE)
         const rpesForBaseline = arr
             .filter(s => (s.emailsSent || 0) > 0)
@@ -527,108 +545,109 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             medianRPE = rpesForBaseline.length % 2 === 0 ? (rpesForBaseline[mid - 1] + rpesForBaseline[mid]) / 2 : rpesForBaseline[mid];
         }
         if (arr.length === 1) {
-            // flows-only RPE across account in the same window (exclude campaigns)
             try {
                 const flowsOnlyAgg = dm.getAggregatedMetricsForPeriod([], dm.getFlowEmails(), start, end);
                 medianRPE = flowsOnlyAgg.revenuePerEmail || 0;
             } catch { }
         }
 
+        // Get calibrated revenue tiers for the account (first tier is the "excellent" threshold)
+        const calibratedTiers = getCalibratedTiers(flowRevenueTotal);
+        const excellentRevThreshold = calibratedTiers.length > 0 ? calibratedTiers[0].threshold : 50000;
+
+        const results: Array<any> = [];
+
         for (let i = 0; i < arr.length; i++) {
             const s = arr[i];
             const emailsSent = s.emailsSent || 0;
-            const volumeSufficient = emailsSent >= MIN_STEP_EMAILS;
             const notes: string[] = [];
-            // Money pillar (max 70) = Revenue Index (35) + Store Revenue Share (35)
-            const rpe = (s.emailsSent || 0) > 0 ? (s.revenue || 0) / (s.emailsSent || 0) : 0;
-            const riRaw = medianRPE > 0 ? (rpe / medianRPE) : 0;
-            const riClipped = clamp(riRaw, 0, 2.0);
-            const riPts = 35 * (riClipped / 2);
-            const storeShare = storeRevenueTotal > 0 ? (s.revenue / storeRevenueTotal) : 0;
-            const storeSharePts = clamp(storeShareToPoints(storeShare), 0, 35);
-            if (riClipped >= 1.4) notes.push('High Revenue Index');
-            if (storeRevenueTotal <= 0) notes.push('No store revenue in window');
-            const moneyPoints = clamp(riPts + storeSharePts, 0, 70);
+            
+            // Calculate per-step optimal lookback and statistical significance
+            const sendShareOfAccount = accountSendsTotal > 0 ? emailsSent / accountSendsTotal : 0;
+            const optimalLookbackDays = computeOptimalLookbackDays(emailsSent, dateRangeDays);
+            const volumeSufficient = hasStatisticalSignificance(emailsSent, dateRangeDays, optimalLookbackDays);
 
-            // Deliverability Score D (0–20)
-            const unsub = s.unsubscribeRate; // percent
+            // Money pillar (max 70) using new calibrated scoring
+            const rpe = emailsSent > 0 ? s.revenue / emailsSent : 0;
+            const moneyScore = calculateMoneyPillarScore(rpe, medianRPE, s.revenue, flowRevenueTotal);
+
+            if (moneyScore.riValue >= 1.4) notes.push('High Revenue Index');
+            if (storeRevenueTotal <= 0) notes.push('No store revenue in window');
+
+            // Deliverability Score D (0–20) using zone-based scoring (spam + bounce only)
             const spam = s.spamRate; // percent
             const bounce = s.bounceRate; // percent
-            const openPct = s.openRate; // percent
-            const clickPct = s.clickRate; // percent (use click rate per spec)
+            
+            // Get individual zone for each metric
+            const overallZone = getRiskZone(spam, bounce);
+            // Infer individual zones based on thresholds
+            const spamZone: RiskZone = spam > SPAM_RED_LIMIT ? 'red' : spam >= SPAM_GREEN_LIMIT ? 'yellow' : 'green';
+            const bounceZone: RiskZone = bounce > BOUNCE_RED_LIMIT ? 'red' : bounce >= BOUNCE_GREEN_LIMIT ? 'yellow' : 'green';
+            
+            const deliverabilityResult = getDeliverabilityPoints(spam, bounce, sendShareOfAccount);
+            const deliverabilityPoints = deliverabilityResult.points;
+            // Calculate approximate spam/bounce points based on zone (10 points each max)
+            const spamPoints = spamZone === 'green' ? 10 : spamZone === 'yellow' ? 6 : 0;
+            const bouncePoints = bounceZone === 'green' ? 10 : bounceZone === 'yellow' ? 6 : 0;
+            const baseD = spamPoints + bouncePoints;
+            const lowVolumeAdjusted = deliverabilityResult.lowVolumeAdjusted;
 
-            // Additive bins per metric (weights total 20)
-            const spamPts = (() => {
-                if (spam < 0.05) return 7;
-                if (spam < 0.10) return 6;
-                if (spam < 0.20) return 3;
-                if (spam < 0.30) return 1;
-                return 0;
-            })();
-            const bouncePts = (() => {
-                if (bounce < 1.0) return 7;
-                if (bounce < 2.0) return 6;
-                if (bounce < 3.0) return 3;
-                if (bounce < 5.0) return 1;
-                return 0;
-            })();
-            const unsubPts = (() => {
-                if (unsub < 0.20) return 3;
-                if (unsub < 0.50) return 2.5;
-                if (unsub < 1.00) return 1;
-                return 0;
-            })();
-            const openPts = (() => {
-                if (openPct >= 30) return 2; // 30-40 and >40 both 2 pts
-                if (openPct >= 20) return 1;
-                return 0;
-            })();
-            const clickPts = (() => {
-                if (clickPct > 3) return 1;
-                if (clickPct >= 1) return 0.5;
-                return 0;
-            })();
-            let baseD = clamp(spamPts + bouncePts + unsubPts + openPts + clickPts, 0, 20);
+            // Determine if either metric is in red zone (high risk for action decisions)
+            const hasRedZone = spamZone === 'red' || bounceZone === 'red';
+            const hasYellowZone = spamZone === 'yellow' || bounceZone === 'yellow';
+            
+            // Statistical Confidence (max 10): based on statistical significance
+            const scPoints = volumeSufficient 
+                ? clamp(Math.floor(emailsSent / 100), 0, 10) 
+                : 0;
 
-            // Volume adjustment: only if base < 15 and volume% < 0.5% of account sends
-            const sendShareOfAccount = accountSendsTotal > 0 ? (s.emailsSent / accountSendsTotal) : 0;
-            const applyVolumeAdj = (baseD < 15) && (sendShareOfAccount > 0) && (sendShareOfAccount < 0.005);
-            const volumeFactor = applyVolumeAdj ? (1 - (sendShareOfAccount / 0.005)) : 0; // 0..1
-            const adjustedD = applyVolumeAdj ? (baseD + (20 - baseD) * volumeFactor) : baseD;
-            const lowVolumeAdjusted = applyVolumeAdj;
-            const D = clamp(adjustedD, 0, 20);
-
-            // Statistical Confidence (max 10): 1 point per 100 sends, cap 10
-            const scPoints = volumeSufficient ? clamp(Math.floor(emailsSent / 100), 0, 10) : 0;
-
-            const flowSendShare = totalFlowSendsInWindow > 0 ? (s.emailsSent / totalFlowSendsInWindow) : 0;
-            // High-risk guardrail using critical thresholds aligned with scoring bins
-            const riskHigh = (spam >= 0.30) || (unsub > 1.00) || (bounce >= 5.00) || (openPct < 20) || (clickPct < 1);
-            const highMoney = (moneyPoints >= 55) || (riClipped >= 1.4);
+            const moneyPoints = moneyScore.totalPoints;
+            const highMoney = (moneyPoints >= 55) || (moneyScore.riValue >= 1.4);
             const lowMoney = (moneyPoints <= 35);
-
-            const deliverabilityPoints = D; // 0..20
 
             let score = clamp(moneyPoints + deliverabilityPoints + scPoints, 0, 100);
             let action: 'scale' | 'keep' | 'improve' | 'pause' | 'insufficient' = 'improve';
-            if (lowMoney && riskHigh) action = 'pause';
-            else if (riskHigh && highMoney) action = 'keep';
-            else if (score >= 75) action = 'scale';
-            else if (score >= 60) action = 'keep';
-            else if (score >= 40) action = 'improve';
-            else action = 'pause';
-            // Guardrail for non-risk high revenue/share cases
-            const highAbsRevenue = s.revenue >= 5000;
-            const flowShareForGuard = flowRevenueTotal > 0 ? (s.revenue / flowRevenueTotal) : 0; // guardrail only
-            const highRevenueShare = flowShareForGuard >= 0.10;
-            if (!riskHigh && action === 'pause' && (highAbsRevenue || highRevenueShare)) {
+            
+            // Action determination based on zones
+            if (!volumeSufficient) {
+                // Insufficient data: show "insufficient" unless red zone → "pause"
+                action = hasRedZone ? 'pause' : 'insufficient';
+                if (hasRedZone) {
+                    const riskMsg = getDeliverabilityRiskMessage(overallZone, spam, bounce);
+                    if (riskMsg) notes.push(riskMsg);
+                } else {
+                    notes.push(getInsufficientDataMessage(emailsSent, dateRangeDays, optimalLookbackDays));
+                }
+            } else if (hasRedZone) {
+                // Red zone: pause regardless of revenue (deliverability is critical)
+                action = 'pause';
+                const riskMsg = getDeliverabilityRiskMessage(overallZone, spam, bounce);
+                if (riskMsg) notes.push(riskMsg);
+            } else if (hasYellowZone && highMoney) {
+                // Yellow zone with good money: keep but warn about risk
                 action = 'keep';
-                notes.push('High revenue guardrail');
+                notes.push('Deliverability risk: proceed with caution');
+            } else if (hasYellowZone && !highMoney) {
+                // Yellow zone with weak money: improve
+                action = 'improve';
+                notes.push('Address deliverability concerns');
+            } else if (score >= 75) {
+                action = 'scale';
+            } else if (score >= 60) {
+                action = 'keep';
+            } else if (score >= 40) {
+                action = 'improve';
+            } else {
+                action = 'pause';
             }
 
-            if (!volumeSufficient) {
-                action = 'insufficient';
-                notes.push('Needs ≥250 sends for reliable read');
+            // Guardrail for high absolute revenue cases (only if not in red zone)
+            const highAbsRevenue = s.revenue >= excellentRevThreshold;
+            const flowShareForGuard = flowRevenueTotal > 0 ? (s.revenue / flowRevenueTotal) : 0;
+            const highRevenueShare = flowShareForGuard >= 0.10;
+            if (!hasRedZone && action === 'pause' && (highAbsRevenue || highRevenueShare)) {
+                action = 'keep';
+                notes.push('High revenue guardrail');
             }
 
             const resObj = {
@@ -637,84 +656,133 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 volumeInsufficient: !volumeSufficient,
                 notes,
                 pillars: {
-                    money: { points: moneyPoints, ri: riClipped, riPts, storeSharePts, storeShare },
-                    deliverability: { points: deliverabilityPoints, base: baseD, lowVolumeAdjusted, riskHigh },
-                    confidence: { points: scPoints }
+                    money: { 
+                        points: moneyPoints, 
+                        ri: moneyScore.riValue, 
+                        riPts: moneyScore.riPoints, 
+                        absoluteRevPts: moneyScore.absoluteRevenuePoints,
+                        absoluteRevenue: s.revenue 
+                    },
+                    deliverability: { 
+                        points: deliverabilityPoints, 
+                        base: baseD, 
+                        lowVolumeAdjusted, 
+                        spamZone,
+                        bounceZone,
+                        spamPoints,
+                        bouncePoints,
+                        hasRedZone,
+                        hasYellowZone
+                    },
+                    confidence: { 
+                        points: scPoints,
+                        optimalLookbackDays,
+                        hasStatisticalSignificance: volumeSufficient
+                    }
                 },
-                baselines: { flowRevenueTotal, storeRevenueTotal },
+                baselines: { flowRevenueTotal, storeRevenueTotal, medianRPE, calibratedTiers },
             };
             results.push(resObj);
         }
 
-        return { results, context: { s1Sends, storeRevenueTotal, accountSendsTotal } } as const;
-    }, [flowStepMetrics, dataManager, dateRange, customFrom, customTo]);
+        return { results, context: { s1Sends, storeRevenueTotal, accountSendsTotal, flowType, medianRPE, calibratedTiers, excellentRevThreshold } } as const;
+    }, [flowStepMetrics, dataManager, dateRange, customFrom, customTo, selectedFlow]);
 
     // Summary and indicator availability
     const indicatorAvailable = useMemo(() => !hasDuplicateNames && isOrderConsistent, [hasDuplicateNames, isOrderConsistent]);
     const totalFlowSends = useMemo(() => flowStepMetrics.reduce((sum, s) => sum + (s.emailsSent || 0), 0), [flowStepMetrics]);
     const notEnoughDataCard = useMemo(() => totalFlowSends < 2000, [totalFlowSends]);
 
-    // Add-step suggestion logic + estimate (Option B)
+    // Add-step suggestion logic with variance-based projections
     const addStepSuggestion = useMemo(() => {
-        if (!indicatorAvailable || !flowStepMetrics.length) return { suggested: false } as any;
+        if (!indicatorAvailable || !flowStepMetrics.length || !selectedFlow) return { suggested: false } as any;
         const lastIdx = flowStepMetrics.length - 1;
         const last = flowStepMetrics[lastIdx];
         const s1Sends = (stepScores as any).context?.s1Sends as number;
-        const rpeMedianOld = (stepScores as any).context?.rpeBaseline as number; // legacy context (may be undefined after simplification)
+        const flowType = (stepScores as any).context?.flowType || 'default';
+        const medianRPE = (stepScores as any).context?.medianRPE || 0;
         const lastRes = (stepScores as any).results?.[lastIdx] as any | undefined;
-        const lastScoreVal = Number(lastRes?.score) || Number(lastRes?.stepScore?.score) || 0;
+        const lastScoreVal = Number(lastRes?.score) || 0;
+        
+        // Check if last step has any red zone issues
+        const lastHasRedZone = lastRes?.pillars?.deliverability?.hasRedZone;
+        
         const volumeOk = last.emailsSent >= Math.max(MIN_STEP_EMAILS, Math.round(0.05 * s1Sends));
-        // Deliverability gate removed. Rely on overall step score instead
-        const deliverabilityOk = true;
-        // Recompute median RPE across steps for gating (kept from earlier behavior)
-        const rpesAll = flowStepMetrics.map(s => s.revenuePerEmail).filter(v => isFinite(v) && v >= 0).sort((a, b) => a - b);
-        const rpeMedianNew = rpesAll.length ? (rpesAll.length % 2 ? rpesAll[(rpesAll.length - 1) / 2] : (rpesAll[rpesAll.length / 2 - 1] + rpesAll[rpesAll.length / 2]) / 2) : last.revenuePerEmail;
-        const rpeOk = last.revenuePerEmail >= (isFinite(rpeMedianOld) && rpeMedianOld > 0 ? rpeMedianOld : rpeMedianNew);
+        // Deliverability gate: no red zone on last step
+        const deliverabilityOk = !lastHasRedZone;
+        
+        // RPE checks
+        const rpeOk = medianRPE > 0 ? last.revenuePerEmail >= medianRPE : true;
         const prev = lastIdx > 0 ? flowStepMetrics[lastIdx - 1] : null;
         const deltaRpeOk = prev ? (last.revenuePerEmail - prev.revenuePerEmail) >= 0 : true;
+        
         const lastStepRevenue = last.revenue || 0;
         const flowRevenue = flowStepMetrics.reduce((sum, s) => sum + (s.revenue || 0), 0);
         const lastRevenuePct = flowRevenue > 0 ? (lastStepRevenue / flowRevenue) * 100 : 0;
+        
+        // Get calibrated tiers for absolute revenue check
+        const excellentRevThreshold = (stepScores as any).context?.excellentRevThreshold || 5000;
         const absoluteRevenueOk = (lastStepRevenue >= 500) || (lastRevenuePct >= 5);
 
-        // Date window gating: show if the selected range ends at the last email date (any length),
-        // or if it's a preset range (which we align to end at last email date). User asked to allow
-        // suggestions across all such ranges once volume threshold is met.
+        // Date window gating
         const dm = dataManager;
         const lastEmailDate = dm.getLastEmailDate();
-        // Treat 'all' as Last 2 Years. Any preset ends at last; custom must end at last.
         const endsAtLast = (dateRange === 'custom')
             ? (customTo ? new Date(customTo).toDateString() === lastEmailDate.toDateString() : false)
             : true;
-        // Compute window length in days using DataManager to cover 'all' and presets accurately
         const resolved = dm.getResolvedDateRange(dateRange, customFrom, customTo);
         const days = resolved ? Math.max(1, Math.ceil((resolved.endDate.getTime() - resolved.startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1) : 0;
-        const isRecentWindow = endsAtLast; // any end-at-last window qualifies
+        const weeksInRange = Math.max(1, days / 7);
+        const isRecentWindow = endsAtLast;
 
-        // Suggest add-step when last step has a strong overall score (>=75) and all gates pass.
-        const suggested = (lastScoreVal >= 75) && rpeOk && deltaRpeOk && volumeOk && absoluteRevenueOk && isRecentWindow;
+        // Suggest add-step when last step has a strong overall score (>=75), no red zones, and all gates pass
+        const suggested = (lastScoreVal >= 75) && deliverabilityOk && rpeOk && deltaRpeOk && volumeOk && absoluteRevenueOk && isRecentWindow;
 
-        // Estimate (Option B) when suggested or to include in JSON gates
-        const rpeFloor = (() => {
-            const rpes = flowStepMetrics.map(s => s.revenuePerEmail).filter(v => isFinite(v) && v >= 0).sort((a, b) => a - b);
-            if (!rpes.length) return last.revenuePerEmail;
-            const idx = Math.floor(0.25 * (rpes.length - 1));
-            let floor = rpes[idx];
-            if (!isFinite(floor)) floor = last.revenuePerEmail;
-            return Math.min(floor, last.revenuePerEmail);
-        })();
-        const projectedReach = Math.round(last.emailsSent * 0.5);
-        const estimatedRevenue = Math.round(projectedReach * rpeFloor * 100) / 100;
+        // Generate variance-based projection using the new utility
+        let projection = null;
+        if (suggested || (volumeOk && isRecentWindow)) {
+            const stepRPEs = flowStepMetrics.map(s => s.revenuePerEmail).filter(r => r > 0);
+            projection = projectNewStepRevenue(
+                selectedFlow,
+                last.emailsSent,
+                last.revenuePerEmail,
+                stepRPEs,
+                medianRPE,
+                weeksInRange
+            );
+        }
 
         const reason = suggested
-            ? (flowStepMetrics.length === 1 ? 'Strong RPE and healthy deliverability' : `S${last.sequencePosition} performing well; follow-up could add value`)
+            ? (flowStepMetrics.length === 1 
+                ? 'Strong RPE and healthy deliverability' 
+                : `Email ${last.sequencePosition} performing well; follow-up could add value`)
             : undefined;
 
         return {
             suggested,
             reason,
             horizonDays: isRecentWindow ? days : undefined,
-            estimate: suggested ? { projectedReach, rpeFloor, estimatedRevenue, assumptions: { reachPctOfLastStep: 0.5, rpePercentile: 25, clampedToLastStepRpe: true } } : undefined,
+            projection: projection ? {
+                expectedRevenue: projection.projectedRevenuePerWeek.mid,
+                lowEstimate: projection.projectedRevenuePerWeek.low,
+                highEstimate: projection.projectedRevenuePerWeek.high,
+                projectedReach: projection.projectedReachPerWeek,
+                expectedRPE: projection.conservativeRPE,
+                decayFactor: projection.decayFactor,
+                confidenceLevel: projection.confidenceLevel,
+                flowType: projection.flowType
+            } : undefined,
+            // Legacy estimate format for backward compatibility
+            estimate: projection ? { 
+                projectedReach: projection.projectedReachPerWeek, 
+                rpeFloor: projection.conservativeRPE,
+                estimatedRevenue: projection.projectedRevenuePerWeek.mid,
+                assumptions: { 
+                    reachPctOfLastStep: projection.decayFactor, 
+                    rpePercentile: 25, 
+                    clampedToLastStepRpe: true 
+                } 
+            } : undefined,
             gates: {
                 lastStepRevenue,
                 lastStepRevenuePctOfFlow: lastRevenuePct,
@@ -727,7 +795,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 lastScoreVal
             }
         } as const;
-    }, [indicatorAvailable, flowStepMetrics, stepScores, dataManager, dateRange, customFrom, customTo]);
+    }, [indicatorAvailable, flowStepMetrics, stepScores, dataManager, dateRange, customFrom, customTo, selectedFlow]);
 
     const flowActionNote = useMemo(() => {
         if (!selectedFlow || !flowStepMetrics.length) return null;
@@ -1107,61 +1175,60 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                             const baseD = res.pillars?.deliverability?.base;
                             const lva = res.pillars?.deliverability?.lowVolumeAdjusted;
                             const tipNode = (() => {
-                                // Helper formatters and color rules
-                                const pct1 = (v: number) => `${(v).toFixed(1)}%`;
+                                // Helper formatters
                                 const pct2 = (v: number) => `${(v).toFixed(2)}%`;
                                 const pct3 = (v: number) => `${(v).toFixed(3)}%`;
-                                const fmtOpen = (v: number) => `${v.toFixed(1)}%`;
-                                const fmtClick = (v: number) => `${v.toFixed(2)}%`;
-                                // Money: RI color based on points; ERS uses same thresholding
+                                const fmtUsd = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(v);
+                                
+                                // Money pillar values
                                 const riVal = res.pillars?.money?.ri ?? 0;
-                                const storeShare = (res.pillars?.money?.storeShare ?? 0) * 100;
-                                const flowColor = (res.pillars?.money?.riPts ?? 0) >= 25 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300';
-                                const storeColor = (res.pillars?.money?.storeSharePts ?? 0) >= 25 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300';
+                                const absoluteRev = res.pillars?.money?.absoluteRevenue ?? step.revenue ?? 0;
+                                const riPts = res.pillars?.money?.riPts ?? 0;
+                                const absRevPts = res.pillars?.money?.absoluteRevPts ?? 0;
+                                const flowColor = riPts >= 25 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300';
+                                const absRevColor = absRevPts >= 25 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300';
 
-                                // Deliverability metric points per current bins
+                                // Deliverability zone values (spam and bounce only)
                                 const spam = step.spamRate;
                                 const bounce = step.bounceRate;
-                                const unsub = step.unsubscribeRate;
-                                const open = step.openRate;
-                                const click = step.clickRate;
-                                const spamPts = spam < 0.05 ? 7 : (spam < 0.10 ? 6 : (spam < 0.20 ? 3 : (spam < 0.30 ? 1 : 0)));
-                                const bouncePts = bounce < 1.0 ? 7 : (bounce < 2.0 ? 6 : (bounce < 3.0 ? 3 : (bounce < 5.0 ? 1 : 0)));
-                                const unsubPts = unsub < 0.20 ? 3 : (unsub < 0.50 ? 2.5 : (unsub < 1.00 ? 1 : 0));
-                                const openPts = open >= 30 ? 2 : (open >= 20 ? 1 : 0);
-                                const clickPts = click > 3 ? 1 : (click >= 1 ? 0.5 : 0);
-                                const isExcellent = (metric: 'spam' | 'bounce' | 'unsub' | 'open' | 'click') => {
-                                    switch (metric) {
-                                        case 'spam': return spamPts === 7;
-                                        case 'bounce': return bouncePts === 7;
-                                        case 'unsub': return unsubPts === 3;
-                                        case 'open': return openPts === 2; // 30%+
-                                        case 'click': return clickPts === 1; // >3%
+                                const spamZone = res.pillars?.deliverability?.spamZone || 'green';
+                                const bounceZone = res.pillars?.deliverability?.bounceZone || 'green';
+                                const spamPts = res.pillars?.deliverability?.spamPoints ?? 0;
+                                const bouncePts = res.pillars?.deliverability?.bouncePoints ?? 0;
+                                
+                                // Zone color mapping
+                                const zoneColor = (zone: string) => {
+                                    switch (zone) {
+                                        case 'green': return 'text-emerald-600 dark:text-emerald-400';
+                                        case 'yellow': return 'text-amber-600 dark:text-amber-400';
+                                        case 'red': return 'text-rose-600 dark:text-rose-400';
+                                        default: return 'text-gray-700 dark:text-gray-300';
                                     }
                                 };
-                                const isDanger = (metric: 'spam' | 'bounce' | 'unsub' | 'open' | 'click') => {
-                                    switch (metric) {
-                                        case 'spam': return spam >= 0.30;
-                                        case 'bounce': return bounce >= 5.00;
-                                        case 'unsub': return unsub > 1.00;
-                                        case 'open': return open < 20;
-                                        case 'click': return click < 1;
-                                    }
+                                
+                                // Zone indicator dot
+                                const zoneDot = (zone: string) => {
+                                    const bgColor = zone === 'green' ? 'bg-emerald-500' : zone === 'yellow' ? 'bg-amber-500' : 'bg-rose-500';
+                                    return <span className={`inline-block w-2 h-2 rounded-full ${bgColor}`} />;
                                 };
-                                const colorFor = (metric: 'spam' | 'bounce' | 'unsub' | 'open' | 'click') => isDanger(metric) ? 'text-rose-600' : (isExcellent(metric) ? 'text-emerald-600' : 'text-gray-700 dark:text-gray-300');
 
-                                // Gating reason if riskHigh prevented scale
-                                const riskHigh = !!res?.pillars?.deliverability?.riskHigh;
+                                // Gating reasons based on zones
+                                const hasRedZone = res.pillars?.deliverability?.hasRedZone;
+                                const hasYellowZone = res.pillars?.deliverability?.hasYellowZone;
                                 const volumeLow = !!res?.volumeInsufficient;
-                                const gated = (res.action !== 'scale') && (riskHigh || volumeLow);
+                                const gated = (res.action !== 'scale') && (hasRedZone || hasYellowZone || volumeLow);
                                 const reasons: string[] = [];
-                                if (spam >= 0.30) reasons.push('spam ≥ 0.30%');
-                                if (unsub > 1.00) reasons.push('unsub > 1.00%');
-                                if (bounce >= 5.00) reasons.push('bounce ≥ 5.00%');
-                                if (open < 20) reasons.push('open < 20%');
-                                if (click < 1) reasons.push('click < 1%');
-                                if (volumeLow) reasons.push('emails < 250');
+                                if (spamZone === 'red') reasons.push('spam in red zone');
+                                if (bounceZone === 'red') reasons.push('bounce in red zone');
+                                if (spamZone === 'yellow') reasons.push('spam in yellow zone');
+                                if (bounceZone === 'yellow') reasons.push('bounce in yellow zone');
+                                if (volumeLow) reasons.push('insufficient data');
+                                
                                 const deltaAdj = typeof baseD === 'number' ? (d - baseD) : 0;
+                                
+                                // Confidence pillar values
+                                const optimalLookback = res.pillars?.confidence?.optimalLookbackDays;
+                                const hasSigificance = res.pillars?.confidence?.hasStatisticalSignificance;
 
                                 return (
                                     <div className="max-w-xs">
@@ -1169,33 +1236,72 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{label} · Score {Math.round(res.score)}</div>
                                         {/* Pillar summary */}
                                         <div className="mt-1 text-[11px] text-gray-600 dark:text-gray-400">Money {Math.round(m)} · Deliverability {Math.round(d)} · Confidence {Math.round(c)}</div>
-                                        {/* Money */}
+                                        
+                                        {/* Money Pillar */}
                                         <div className="mt-2 text-xs text-gray-700 dark:text-gray-300 space-y-1">
-                                            <div className="flex items-center gap-1"><span>Revenue Index:</span> <span className={`tabular-nums ${flowColor}`}>{`${(riVal).toFixed(1)}×`}</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{Math.round(res.pillars?.money?.riPts || 0)}/35</span></div>
-                                            <div className="flex items-center gap-1"><span>Email Rev Share (ERS):</span> <span className={`tabular-nums ${storeColor}`}>{pct1(storeShare)}</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{Math.round(res.pillars?.money?.storeSharePts || 0)}/35</span></div>
+                                            <div className="font-medium text-gray-800 dark:text-gray-200">Money</div>
+                                            <div className="flex items-center gap-1">
+                                                <span>Revenue Index:</span> 
+                                                <span className={`tabular-nums ${flowColor}`}>{`${(riVal).toFixed(1)}×`}</span> 
+                                                <span className="text-gray-500">→</span> 
+                                                <span className="tabular-nums">{Math.round(riPts)}/35</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <span>Total Revenue:</span> 
+                                                <span className={`tabular-nums ${absRevColor}`}>{fmtUsd(absoluteRev)}</span> 
+                                                <span className="text-gray-500">→</span> 
+                                                <span className="tabular-nums">{Math.round(absRevPts)}/35</span>
+                                            </div>
                                         </div>
-                                        {/* Deliverability metric-by-metric */}
+                                        
+                                        {/* Deliverability Pillar (Spam + Bounce zones only) */}
                                         <div className="mt-2 text-xs text-gray-700 dark:text-gray-300">
-                                            <div className="font-medium text-gray-800 dark:text-gray-200">Deliverability Breakdown</div>
+                                            <div className="font-medium text-gray-800 dark:text-gray-200">Deliverability</div>
                                             <div className="mt-1 space-y-0.5">
-                                                <div className={`flex items-center gap-1 ${colorFor('spam')}`}>Spam <span className="tabular-nums">({pct3(spam)})</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{spamPts}/7</span></div>
-                                                <div className={`flex items-center gap-1 ${colorFor('bounce')}`}>Bounce <span className="tabular-nums">({pct2(bounce)})</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{bouncePts}/7</span></div>
-                                                <div className={`flex items-center gap-1 ${colorFor('unsub')}`}>Unsub <span className="tabular-nums">({pct2(unsub)})</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{unsubPts}/3</span></div>
-                                                <div className={`flex items-center gap-1 ${colorFor('open')}`}>Open <span className="tabular-nums">({fmtOpen(open)})</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{openPts}/2</span></div>
-                                                <div className={`flex items-center gap-1 ${colorFor('click')}`}>Click <span className="tabular-nums">({fmtClick(click)})</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{clickPts}/1</span></div>
+                                                <div className={`flex items-center gap-1 ${zoneColor(spamZone)}`}>
+                                                    {zoneDot(spamZone)}
+                                                    <span>Spam</span> 
+                                                    <span className="tabular-nums">({pct3(spam)})</span> 
+                                                    <span className="text-gray-500">→</span> 
+                                                    <span className="tabular-nums">{spamPts}/10</span>
+                                                </div>
+                                                <div className={`flex items-center gap-1 ${zoneColor(bounceZone)}`}>
+                                                    {zoneDot(bounceZone)}
+                                                    <span>Bounce</span> 
+                                                    <span className="tabular-nums">({pct2(bounce)})</span> 
+                                                    <span className="text-gray-500">→</span> 
+                                                    <span className="tabular-nums">{bouncePts}/10</span>
+                                                </div>
                                             </div>
                                             {typeof baseD === 'number' && Math.abs(deltaAdj) > 0.05 ? (
                                                 <div className="mt-1 text-[11px] text-gray-600 dark:text-gray-400">Low-volume adj: +{(deltaAdj).toFixed(1)} → {Math.round(d)}</div>
                                             ) : null}
                                         </div>
-                                        {/* Confidence */}
+                                        
+                                        {/* Confidence Pillar */}
                                         <div className="mt-2 text-xs text-gray-700 dark:text-gray-300">
                                             <div className="font-medium text-gray-800 dark:text-gray-200">Confidence</div>
-                                            <div className="mt-1"><span>Emails sent:</span> <span className="tabular-nums">{(step.emailsSent || 0).toLocaleString('en-US')}</span> <span className="text-gray-500">→</span> <span className="tabular-nums">{Math.round(c)}/10</span></div>
+                                            <div className="mt-1 space-y-0.5">
+                                                <div>
+                                                    <span>Emails sent:</span> 
+                                                    <span className="tabular-nums ml-1">{(step.emailsSent || 0).toLocaleString('en-US')}</span> 
+                                                    <span className="text-gray-500 mx-1">→</span> 
+                                                    <span className="tabular-nums">{Math.round(c)}/10</span>
+                                                </div>
+                                                {optimalLookback && (
+                                                    <div className="text-[11px] text-gray-500">
+                                                        Optimal lookback: {optimalLookback} days
+                                                        {hasSigificance ? ' ✓' : ' (need more data)'}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
+                                        
                                         {/* Notes and gating reason */}
-                                        {gated ? (
-                                            <div className="pt-2 text-[11px] text-amber-700 dark:text-amber-300">Scale gated: {reasons.join(', ')}</div>
+                                        {gated && reasons.length > 0 ? (
+                                            <div className="pt-2 text-[11px] text-amber-700 dark:text-amber-300">
+                                                {hasRedZone ? 'Paused due to: ' : 'Caution: '}{reasons.join(', ')}
+                                            </div>
                                         ) : null}
                                         {res.notes?.length ? (
                                             <div className="pt-1 text-[11px] text-gray-600 dark:text-gray-400">{res.notes.join(' · ')}</div>

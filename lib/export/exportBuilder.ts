@@ -9,6 +9,9 @@ import type { AggregatedMetrics } from "../data/dataTypes";
 import { computeDeadWeightSavings } from "../analytics/deadWeightSavings";
 import { computeOpportunitySummary } from "../analytics/actionNotes";
 import type { OpportunitySummary, OpportunitySummaryItem } from "../analytics/actionNotes";
+import { getRiskZone, getDeliverabilityPoints, computeOptimalLookbackDays, hasStatisticalSignificance, getDeliverabilityRiskMessage } from "../analytics/deliverabilityZones";
+import { calculateMoneyPillarScore, getCalibratedTiers, getAbsoluteRevenuePoints } from "../analytics/revenueTiers";
+import { inferFlowType, projectNewStepRevenue } from "../analytics/flowDecayFactors";
 
 export interface LlmExportJson {
   // Metadata about this export and helpful descriptions
@@ -1125,97 +1128,69 @@ export async function buildLlmExportJson(params: {
 
           const stepScores = steps.map((s, i) => {
             const notes: string[] = [];
-            // Money pillar (max 70) = Revenue Index (35) + Email Rev Share (ERS, 35)
+
+            // Money pillar (max 70) = Revenue Index (35) + Absolute Revenue (35) using shared utility
             const rpe = (s.total.emailsSent || 0) > 0 ? (s.total.totalRevenue || 0) / (s.total.emailsSent || 1) : 0;
-            const riRaw = medianRPE > 0 ? (rpe / medianRPE) : 0;
-            const riClipped = clamp(riRaw, 0, 2.0);
-            const riPts = 35 * (riClipped / 2);
-            const ers = storeRevenueTotal > 0 ? (s.total.totalRevenue / storeRevenueTotal) : 0;
-            const ersPts = (() => {
-              if (!isFinite(ers) || ers <= 0) return 5;
-              const pct = ers * 100;
-              if (pct >= 5) return 35;
-              if (pct >= 3) return 30;
-              if (pct >= 2) return 25;
-              if (pct >= 1) return 20;
-              if (pct >= 0.5) return 15;
-              if (pct >= 0.25) return 10;
-              return 5;
-            })();
+            const moneyResult = calculateMoneyPillarScore(rpe, medianRPE, s.total.totalRevenue || 0, flowRevenueTotal);
+            const riClipped = moneyResult.riValue;
+            const absoluteRevenue = s.total.totalRevenue || 0;
             if (riClipped >= 1.4) notes.push('High Revenue Index');
             if (storeRevenueTotal <= 0) notes.push('No store revenue in window');
-            const moneyPoints = clamp(riPts + ersPts, 0, 70);
-            // Deliverability additive bins + proportional low-volume adjustment
-            const unsub = s.total.unsubscribeRate; const spam = s.total.spamRate; const bounce = s.total.bounceRate;
-            const openPct = s.total.openRate; const clickPct = s.total.clickRate;
-            const spamPts = ((): number => {
-              if (spam < 0.05) return 7;
-              if (spam < 0.10) return 6;
-              if (spam < 0.20) return 3;
-              if (spam < 0.30) return 1;
-              return 0;
-            })();
-            const bouncePts = ((): number => {
-              if (bounce < 1.0) return 7;
-              if (bounce < 2.0) return 6;
-              if (bounce < 3.0) return 3;
-              if (bounce < 5.0) return 1;
-              return 0;
-            })();
-            const unsubPts = ((): number => {
-              if (unsub < 0.20) return 3;
-              if (unsub < 0.50) return 2.5;
-              if (unsub < 1.00) return 1;
-              return 0;
-            })();
-            const openPts = ((): number => {
-              if (openPct >= 30) return 2; // 30-40 and >40 both 2 pts
-              if (openPct >= 20) return 1;
-              return 0;
-            })();
-            const clickPts = ((): number => {
-              if (clickPct > 3) return 1;
-              if (clickPct >= 1) return 0.5;
-              return 0;
-            })();
-            let baseD = clamp(spamPts + bouncePts + unsubPts + openPts + clickPts, 0, 20);
+            const moneyPoints = moneyResult.totalPoints;
+
+            // Deliverability pillar (max 20) - Zone-based scoring for spam & bounce only
+            const spam = s.total.spamRate;
+            const bounce = s.total.bounceRate;
             const sendShareOfAccount = accountSendsTotal > 0 ? ((s.total.emailsSent || 0) / accountSendsTotal) : 0;
-            const applyVolumeAdj = (baseD < 15) && (sendShareOfAccount > 0) && (sendShareOfAccount < 0.005);
-            const volumeFactor = applyVolumeAdj ? (1 - (sendShareOfAccount / 0.005)) : 0;
-            const adjustedD = applyVolumeAdj ? (baseD + (20 - baseD) * volumeFactor) : baseD;
-            const lowVolumeAdjusted = applyVolumeAdj;
-            const D = Math.max(0, Math.min(20, adjustedD));
+            const deliverabilityResult = getDeliverabilityPoints(spam, bounce, sendShareOfAccount);
+            const spamZone = getRiskZone(spam, bounce); // Combined zone for both metrics
+            const hasRedZone = spamZone === 'red';
+            const hasYellowZone = spamZone === 'yellow';
+            const lowVolumeAdjusted = deliverabilityResult.lowVolumeAdjusted;
+            const D = deliverabilityResult.points;
+
+            // Compute optimal lookback and statistical significance
+            const resolvedDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000*60*60*24)) + 1);
+            const optimalLookbackDays = computeOptimalLookbackDays(s.total.emailsSent || 0, resolvedDays);
+            const hasSigData = hasStatisticalSignificance(s.total.emailsSent || 0, resolvedDays, optimalLookbackDays);
+
             // Statistical Confidence (10): 1pt per 100 sends
             const scPoints = clamp(Math.floor((s.total.emailsSent || 0) / 100), 0, 10);
-            const flowSendShare = totalFlowSendsInWindow > 0 ? (s.total.emailsSent / totalFlowSendsInWindow) : 0;
-            const riskHigh = (spam >= 0.30) || (unsub > 1.00) || (bounce >= 5.00) || (openPct < 20) || (clickPct < 1);
+            
+            // Risk assessment based on zones
+            const riskHigh = hasRedZone;
             const highMoney = (moneyPoints >= 55) || (riClipped >= 1.4);
             const lowMoney = (moneyPoints <= 35);
-            const deliverabilityPoints = D;
-            let score = Math.max(0, Math.min(100, moneyPoints + deliverabilityPoints + scPoints));
+            
+            let score = Math.max(0, Math.min(100, moneyPoints + D + scPoints));
             let action: 'scale'|'keep'|'improve'|'pause' = 'improve';
             if (lowMoney && riskHigh) action = 'pause';
             else if (riskHigh && highMoney) action = 'keep';
+            else if (hasYellowZone && score >= 75) action = 'scale'; // yellow zone allows scaling with caution
             else if (score >= 75) action = 'scale';
             else if (score >= 60) action = 'keep';
             else if (score >= 40) action = 'improve';
             else action = 'pause';
+
+            // Add risk message if in yellow or red zone
+            const riskMessage = getDeliverabilityRiskMessage(spamZone, spam, bounce);
+
             return {
               stepScore: {
                 score,
                 action,
                 notes,
                 pillars: {
-                  money: { points: moneyPoints, riPts, ersPts, ri: riClipped, ers },
-                  deliverability: { points: deliverabilityPoints, base: baseD, lowVolumeAdjusted, riskHigh },
-                  confidence: { points: scPoints },
+                  money: { points: moneyPoints, riPts: moneyResult.riPoints, absoluteRevPts: moneyResult.absoluteRevenuePoints, ri: riClipped, absoluteRevenue },
+                  deliverability: { points: D, zone: spamZone, hasRedZone, hasYellowZone, lowVolumeAdjusted, riskMessage },
+                  confidence: { points: scPoints, optimalLookbackDays, hasStatisticalSignificance: hasSigData },
                 },
-                baselines: { flowRevenueTotal, storeRevenueTotal },
+                baselines: { flowRevenueTotal, storeRevenueTotal, medianRPE },
               }
             } as const;
           });
 
-          // Add-step suggestion gates and estimate
+          // Add-step suggestion gates and estimate using variance-based projection
           let addStepSuggestion: any = undefined;
           try {
             if (indicatorAvailable) {
@@ -1241,22 +1216,49 @@ export async function buildLlmExportJson(params: {
               // Compute days using resolved range so 'all' and presets are accurate
               const resolvedWindow = dm.getResolvedDateRange(dateRange as any, customFrom as any, customTo as any);
               const days = resolvedWindow ? Math.max(1, Math.ceil((resolvedWindow.endDate.getTime() - resolvedWindow.startDate.getTime()) / (1000*60*60*24)) + 1) : 0;
+              const weeksInRange = Math.max(1, days / 7);
               const isRecentWindow = endsAtLast; // allow any range length if it ends at last record
-              const suggested = (lastScoreVal >= 75) && rpeOk && deltaRpeOk && volumeOk && absoluteRevenueOk && isRecentWindow;
-              const rpes = steps.map(s => s.total.revenuePerEmail).filter(v => isFinite(v) && v >= 0).sort((a,b)=>a-b);
-              const idx = rpes.length ? Math.floor(0.25 * (rpes.length - 1)) : 0;
-              let floor = rpes.length ? rpes[idx] : last.total.revenuePerEmail;
-              if (!isFinite(floor)) floor = last.total.revenuePerEmail;
-              const rpeFloor = Math.min(floor, last.total.revenuePerEmail);
-              const projectedReach = Math.round((last.total.emailsSent || 0) * 0.5);
-              const estimatedRevenue = Math.round(projectedReach * rpeFloor * 100) / 100;
-              const reason = suggested ? (steps.length === 1 ? 'Strong RPE and healthy deliverability' : `S${steps.length} performing well; follow-up could add value`) : undefined;
+              
+              // Check deliverability zone of last step
+              const lastDelivZone = getRiskZone(last.total.spamRate, last.total.bounceRate);
+              const deliverabilityOk = lastDelivZone !== 'red';
+              
+              const suggested = (lastScoreVal >= 75) && rpeOk && deltaRpeOk && volumeOk && absoluteRevenueOk && isRecentWindow && deliverabilityOk;
+              
+              // Use variance-based projection with flow-specific decay
+              const flowType = inferFlowType(flowName);
+              const allStepRPEs = steps.map(s => s.total.revenuePerEmail).filter((v: number) => isFinite(v) && v >= 0);
+              const projection = projectNewStepRevenue(
+                flowName,
+                last.total.emailsSent || 0,
+                last.total.revenuePerEmail || 0,
+                allStepRPEs,
+                medianRPE,
+                weeksInRange
+              );
+              
+              const reason = suggested 
+                ? (steps.length === 1 
+                    ? 'Strong RPE and healthy deliverability' 
+                    : `S${steps.length} performing well; follow-up could add value`)
+                : undefined;
+              
               addStepSuggestion = {
                 suggested,
                 reason,
                 horizonDays: isRecentWindow ? days : undefined,
-                estimate: suggested ? { projectedReach, rpeFloor, estimatedRevenue, assumptions: { reachPctOfLastStep: 0.5, rpePercentile: 25, clampedToLastStepRpe: true } } : undefined,
-                gates: { lastStepRevenue, lastStepRevenuePctOfFlow: lastRevenuePct, deliverabilityOk: true, volumeOk, rpeOk, deltaRpeOk, isRecentWindow }
+                estimate: suggested ? {
+                  projectedReachPerWeek: projection.projectedReachPerWeek,
+                  projectedRevenuePerWeek: projection.projectedRevenuePerWeek,
+                  confidenceLevel: projection.confidenceLevel,
+                  flowType,
+                  assumptions: {
+                    decayFactor: projection.decayFactor,
+                    conservativeRPE: projection.conservativeRPE,
+                    intervalMultipliers: projection.intervalMultipliers
+                  }
+                } : undefined,
+                gates: { lastStepRevenue, lastStepRevenuePctOfFlow: lastRevenuePct, deliverabilityOk, volumeOk, rpeOk, deltaRpeOk, isRecentWindow }
               };
             }
           } catch {}

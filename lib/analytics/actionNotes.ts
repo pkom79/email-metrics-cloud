@@ -9,6 +9,27 @@ import { computeCampaignDayPerformance } from "./campaignDayPerformance";
 import { computeDeadWeightSavings } from "./deadWeightSavings";
 import { computeSendVolumeGuidance } from "./sendVolumeGuidance";
 import { DataManager } from "../data/dataManager";
+import {
+  getRiskZone,
+  getDeliverabilityPoints,
+  computeOptimalLookbackDays,
+  hasStatisticalSignificance,
+  getDeliverabilityRiskMessage,
+  getInsufficientDataMessage,
+  RiskZone,
+  SPAM_GREEN_LIMIT,
+  SPAM_RED_LIMIT,
+  BOUNCE_GREEN_LIMIT,
+  BOUNCE_RED_LIMIT
+} from "./deliverabilityZones";
+import {
+  calculateMoneyPillarScore,
+  getCalibratedTiers
+} from "./revenueTiers";
+import {
+  inferFlowType,
+  projectNewStepRevenue
+} from "./flowDecayFactors";
 
 export type ModuleSlug =
   | "sendVolumeImpact"
@@ -465,16 +486,16 @@ type FlowStepScoreResult = {
   volumeInsufficient: boolean;
   notes: string[];
   pillars: {
-    money: { points: number; ri: number; riPts: number; storeSharePts: number; storeShare: number };
-    deliverability: { points: number; base: number; lowVolumeAdjusted: boolean; riskHigh: boolean };
-    confidence: { points: number };
+    money: { points: number; ri: number; riPts: number; absoluteRevPts: number; absoluteRevenue: number };
+    deliverability: { points: number; base: number; lowVolumeAdjusted: boolean; spamZone: RiskZone; bounceZone: RiskZone; hasRedZone: boolean; hasYellowZone: boolean };
+    confidence: { points: number; optimalLookbackDays: number; hasStatisticalSignificance: boolean };
   };
   baselines: { flowRevenueTotal: number; storeRevenueTotal: number };
 };
 
 type FlowStepScoreContext = {
   results: FlowStepScoreResult[];
-  context: { s1Sends: number; storeRevenueTotal: number; accountSendsTotal: number };
+  context: { s1Sends: number; storeRevenueTotal: number; accountSendsTotal: number; flowType: string; medianRPE: number };
 };
 
 function buildFlowStepMetricsForNotes(
@@ -561,13 +582,14 @@ function buildFlowStepMetricsForNotes(
 
 function computeFlowStepScoresForNotes(
   flowStepMetrics: FlowStepMetric[],
+  flowName: string,
   dm: DataManager,
   dateRange: string,
   customFrom?: string,
   customTo?: string
 ): FlowStepScoreContext {
   if (!flowStepMetrics.length) {
-    return { results: [], context: { s1Sends: 0, storeRevenueTotal: 0, accountSendsTotal: 0 } };
+    return { results: [], context: { s1Sends: 0, storeRevenueTotal: 0, accountSendsTotal: 0, flowType: 'default', medianRPE: 0 } };
   }
 
   const s1Sends = flowStepMetrics[0]?.emailsSent || 0;
@@ -580,21 +602,18 @@ function computeFlowStepScoresForNotes(
   const accountAgg = dm.getAggregatedMetricsForPeriod(dm.getCampaigns(), dm.getFlowEmails(), start, end);
   const storeRevenueTotal = accountAgg.totalRevenue || 0;
   const accountSendsTotal = accountAgg.emailsSent || 0;
+  
+  // Infer flow type for projections
+  const flowType = inferFlowType(flowName);
+  
+  // Date range days for lookback calculation
+  const dateRangeDays = resolved
+    ? Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)))
+    : 30;
 
   const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 
-  const storeShareToPoints = (share: number): number => {
-    if (!isFinite(share) || share <= 0) return 5;
-    const pct = share * 100;
-    if (pct >= 5) return 35;
-    if (pct >= 3) return 30;
-    if (pct >= 2) return 25;
-    if (pct >= 1) return 20;
-    if (pct >= 0.5) return 15;
-    if (pct >= 0.25) return 10;
-    return 5;
-  };
-
+  // Compute median RPE
   const rpesForBaseline = flowStepMetrics
     .filter((s) => (s.emailsSent || 0) > 0)
     .map((s) => {
@@ -620,94 +639,92 @@ function computeFlowStepScoresForNotes(
       /* ignore */
     }
   }
+  
+  // Get calibrated revenue tiers
+  const calibratedTiers = getCalibratedTiers(flowRevenueTotal);
+  const excellentRevThreshold = calibratedTiers.length > 0 ? calibratedTiers[0].threshold : 50000;
 
   const results: FlowStepScoreResult[] = [];
 
   flowStepMetrics.forEach((s) => {
     const emailsSent = s.emailsSent || 0;
-    const volumeSufficient = emailsSent >= FLOW_MIN_STEP_EMAILS;
     const notes: string[] = [];
     const clampScore = (val: number, max: number) => clamp(val, 0, max);
 
-    const rpe = emailsSent > 0 ? (s.revenue || 0) / emailsSent : 0;
-    const riRaw = medianRPE > 0 ? rpe / medianRPE : 0;
-    const riClipped = clamp(riRaw, 0, 2.0);
-    const riPts = 35 * (riClipped / 2);
-    const storeShare = storeRevenueTotal > 0 ? (s.revenue / storeRevenueTotal) : 0;
-    const storeSharePts = clamp(storeShareToPoints(storeShare), 0, 35);
-    if (riClipped >= 1.4) notes.push('High Revenue Index');
-    if (storeRevenueTotal <= 0) notes.push('No store revenue in window');
-    const moneyPoints = clampScore(riPts + storeSharePts, 70);
+    // Calculate per-step optimal lookback and statistical significance
+    const sendShareOfAccount = accountSendsTotal > 0 ? emailsSent / accountSendsTotal : 0;
+    const optimalLookbackDays = computeOptimalLookbackDays(emailsSent, dateRangeDays);
+    const volumeSufficient = hasStatisticalSignificance(emailsSent, dateRangeDays, optimalLookbackDays);
 
-    const unsub = s.unsubscribeRate;
+    // Money pillar using shared utility
+    const rpe = emailsSent > 0 ? (s.revenue || 0) / emailsSent : 0;
+    const moneyScore = calculateMoneyPillarScore(rpe, medianRPE, s.revenue, flowRevenueTotal);
+    
+    if (moneyScore.riValue >= 1.4) notes.push('High Revenue Index');
+    if (storeRevenueTotal <= 0) notes.push('No store revenue in window');
+    const moneyPoints = moneyScore.totalPoints;
+
+    // Deliverability using zone-based scoring (spam + bounce only)
     const spam = s.spamRate;
     const bounce = s.bounceRate;
-    const openPct = s.openRate;
-    const clickPct = s.clickRate;
+    
+    const overallZone = getRiskZone(spam, bounce);
+    const spamZone: RiskZone = spam > SPAM_RED_LIMIT ? 'red' : spam >= SPAM_GREEN_LIMIT ? 'yellow' : 'green';
+    const bounceZone: RiskZone = bounce > BOUNCE_RED_LIMIT ? 'red' : bounce >= BOUNCE_GREEN_LIMIT ? 'yellow' : 'green';
+    
+    const deliverabilityResult = getDeliverabilityPoints(spam, bounce, sendShareOfAccount);
+    const deliverabilityPoints = deliverabilityResult.points;
+    const spamPoints = spamZone === 'green' ? 10 : spamZone === 'yellow' ? 6 : 0;
+    const bouncePoints = bounceZone === 'green' ? 10 : bounceZone === 'yellow' ? 6 : 0;
+    const baseD = spamPoints + bouncePoints;
+    const lowVolumeAdjusted = deliverabilityResult.lowVolumeAdjusted;
+    
+    const hasRedZone = spamZone === 'red' || bounceZone === 'red';
+    const hasYellowZone = spamZone === 'yellow' || bounceZone === 'yellow';
 
-    const spamPts = (() => {
-      if (spam < 0.05) return 7;
-      if (spam < 0.10) return 6;
-      if (spam < 0.20) return 3;
-      if (spam < 0.30) return 1;
-      return 0;
-    })();
-    const bouncePts = (() => {
-      if (bounce < 1.0) return 7;
-      if (bounce < 2.0) return 6;
-      if (bounce < 3.0) return 3;
-      if (bounce < 5.0) return 1;
-      return 0;
-    })();
-    const unsubPts = (() => {
-      if (unsub < 0.20) return 3;
-      if (unsub < 0.50) return 2.5;
-      if (unsub < 1.00) return 1;
-      return 0;
-    })();
-    const openPts = (() => {
-      if (openPct >= 30) return 2;
-      if (openPct >= 20) return 1;
-      return 0;
-    })();
-    const clickPts = (() => {
-      if (clickPct > 3) return 1;
-      if (clickPct >= 1) return 0.5;
-      return 0;
-    })();
-
-    const baseD = clamp(spamPts + bouncePts + unsubPts + openPts + clickPts, 0, 20);
-    const sendShareOfAccount = accountSendsTotal > 0 ? (emailsSent / accountSendsTotal) : 0;
-    const applyVolumeAdj = baseD < 15 && sendShareOfAccount > 0 && sendShareOfAccount < 0.005;
-    const volumeFactor = applyVolumeAdj ? (1 - (sendShareOfAccount / 0.005)) : 0;
-    const adjustedD = applyVolumeAdj ? (baseD + (20 - baseD) * volumeFactor) : baseD;
-    const lowVolumeAdjusted = applyVolumeAdj;
-    const deliverabilityPoints = clamp(adjustedD, 0, 20);
-
+    // Confidence pillar
     const scPoints = volumeSufficient ? clamp(Math.floor(emailsSent / 100), 0, 10) : 0;
 
-    const riskHigh = spam >= 0.30 || unsub > 1.0 || bounce >= 5.0 || openPct < 20 || clickPct < 1;
-    const highMoney = moneyPoints >= 55 || riClipped >= 1.4;
+    const highMoney = moneyPoints >= 55 || moneyScore.riValue >= 1.4;
     const lowMoney = moneyPoints <= 35;
 
     let score = clamp(moneyPoints + deliverabilityPoints + scPoints, 0, 100);
     let action: 'scale' | 'keep' | 'improve' | 'pause' | 'insufficient' = 'improve';
-    if (lowMoney && riskHigh) action = 'pause';
-    else if (riskHigh && highMoney) action = 'keep';
-    else if (score >= 75) action = 'scale';
-    else if (score >= 60) action = 'keep';
-    else if (score >= 40) action = 'improve';
-    else action = 'pause';
-
-    const flowShare = flowRevenueTotal > 0 ? (s.revenue / flowRevenueTotal) : 0;
-    if (!riskHigh && action === 'pause' && (s.revenue >= 5000 || flowShare >= 0.10)) {
+    
+    // Action determination based on zones
+    if (!volumeSufficient) {
+      action = hasRedZone ? 'pause' : 'insufficient';
+      if (hasRedZone) {
+        const riskMsg = getDeliverabilityRiskMessage(overallZone, spam, bounce);
+        if (riskMsg) notes.push(riskMsg);
+      } else {
+        notes.push(getInsufficientDataMessage(emailsSent, dateRangeDays, optimalLookbackDays));
+      }
+    } else if (hasRedZone) {
+      action = 'pause';
+      const riskMsg = getDeliverabilityRiskMessage(overallZone, spam, bounce);
+      if (riskMsg) notes.push(riskMsg);
+    } else if (hasYellowZone && highMoney) {
       action = 'keep';
-      notes.push('High revenue guardrail');
+      notes.push('Deliverability risk: proceed with caution');
+    } else if (hasYellowZone && !highMoney) {
+      action = 'improve';
+      notes.push('Address deliverability concerns');
+    } else if (score >= 75) {
+      action = 'scale';
+    } else if (score >= 60) {
+      action = 'keep';
+    } else if (score >= 40) {
+      action = 'improve';
+    } else {
+      action = 'pause';
     }
 
-    if (!volumeSufficient) {
-      action = 'insufficient';
-      notes.push('Needs ≥250 sends for reliable read');
+    // Guardrail for high absolute revenue
+    const flowShare = flowRevenueTotal > 0 ? (s.revenue / flowRevenueTotal) : 0;
+    if (!hasRedZone && action === 'pause' && (s.revenue >= excellentRevThreshold || flowShare >= 0.10)) {
+      action = 'keep';
+      notes.push('High revenue guardrail');
     }
 
     results.push({
@@ -715,9 +732,9 @@ function computeFlowStepScoresForNotes(
       volumeInsufficient: !volumeSufficient,
       notes,
       pillars: {
-        money: { points: moneyPoints, ri: riClipped, riPts, storeSharePts, storeShare },
-        deliverability: { points: deliverabilityPoints, base: baseD, lowVolumeAdjusted, riskHigh },
-        confidence: { points: scPoints },
+        money: { points: moneyPoints, ri: moneyScore.riValue, riPts: moneyScore.riPoints, absoluteRevPts: moneyScore.absoluteRevenuePoints, absoluteRevenue: s.revenue },
+        deliverability: { points: deliverabilityPoints, base: baseD, lowVolumeAdjusted, spamZone, bounceZone, hasRedZone, hasYellowZone },
+        confidence: { points: scPoints, optimalLookbackDays, hasStatisticalSignificance: volumeSufficient },
       },
       baselines: { flowRevenueTotal, storeRevenueTotal },
     });
@@ -725,7 +742,7 @@ function computeFlowStepScoresForNotes(
 
   return {
     results,
-    context: { s1Sends, storeRevenueTotal, accountSendsTotal },
+    context: { s1Sends, storeRevenueTotal, accountSendsTotal, flowType, medianRPE },
   };
 }
 
@@ -844,7 +861,7 @@ export function buildFlowAddStepNotes(params: {
     const totalFlowSends = metrics.reduce((sum, m) => sum + (m.emailsSent || 0), 0);
     if (!metrics.length || totalFlowSends < FLOW_MIN_TOTAL_SENDS) continue;
 
-    const scoreContext = computeFlowStepScoresForNotes(metrics, dm, params.dateRange, params.customFrom, params.customTo);
+    const scoreContext = computeFlowStepScoresForNotes(metrics, flowName, dm, params.dateRange, params.customFrom, params.customTo);
     const suggestion = computeAddStepSuggestionForNotes(metrics, scoreContext, dm, params.dateRange, params.customFrom, params.customTo);
     if (!suggestion || !suggestion.estimate?.estimatedRevenue) continue;
 

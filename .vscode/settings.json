@@ -21,5 +21,6 @@
   "[typescript]": {
     "editor.defaultFormatter": "denoland.vscode-deno"
   },
-  "chatgpt.openOnStartup": true
+  "chatgpt.openOnStartup": true,
+  "chat.agent.maxRequests": 500
 }

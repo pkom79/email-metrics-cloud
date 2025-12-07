@@ -459,39 +459,39 @@ function computeAudienceSizeGuidance(
     // === NEW SIGNIFICANCE LOGIC ===
     // Compare best bucket to OVERALL AVERAGE (not worst bucket or CI overlap)
     // Calculate the actual monthly $ opportunity from switching to best bucket
-    
+
     // Best bucket's average revenue per campaign
-    const bestAvgRevPerCampaign = bestBucket.campaigns.length > 0 
-        ? bestBucket.sumRevenue / bestBucket.campaigns.length 
+    const bestAvgRevPerCampaign = bestBucket.campaigns.length > 0
+        ? bestBucket.sumRevenue / bestBucket.campaigns.length
         : 0;
-    
+
     // Overall average revenue per campaign
-    const overallAvgRevPerCampaign = totalCampaigns > 0 
-        ? totalRevenue / totalCampaigns 
+    const overallAvgRevPerCampaign = totalCampaigns > 0
+        ? totalRevenue / totalCampaigns
         : 0;
-    
+
     // Revenue gain per campaign if user switches to best bucket
     const revenueGainPerCampaign = bestAvgRevPerCampaign - overallAvgRevPerCampaign;
-    
+
     // Calculate campaigns per month based on lookback period
     const weeksInPeriod = Math.max(1, lookbackWeeks);
     const campaignsPerMonth = (totalCampaigns / weeksInPeriod) * 4.33;
-    
+
     // Monthly opportunity = gain per campaign × campaigns per month
     const monthlyOpportunity = revenueGainPerCampaign * campaignsPerMonth;
-    
+
     // Practical significance thresholds:
     // - Monthly opportunity >= $1,000, OR
     // - Monthly opportunity >= 10% of monthly revenue
     const SIGNIFICANCE_ABSOLUTE_THRESHOLD = 1000; // $1,000/month
     const SIGNIFICANCE_PERCENT_THRESHOLD = 10; // 10% of monthly revenue
-    
-    const percentOfMonthlyRevenue = monthlyRevenue > 0 
-        ? (monthlyOpportunity / monthlyRevenue) * 100 
+
+    const percentOfMonthlyRevenue = monthlyRevenue > 0
+        ? (monthlyOpportunity / monthlyRevenue) * 100
         : 0;
-    
-    const isSignificant = monthlyOpportunity >= SIGNIFICANCE_ABSOLUTE_THRESHOLD || 
-                          percentOfMonthlyRevenue >= SIGNIFICANCE_PERCENT_THRESHOLD;
+
+    const isSignificant = monthlyOpportunity >= SIGNIFICANCE_ABSOLUTE_THRESHOLD ||
+        percentOfMonthlyRevenue >= SIGNIFICANCE_PERCENT_THRESHOLD;
 
     // For the Revenue Opportunity Projection, use the monthly opportunity we calculated
     const estimatedMonthlyGain = monthlyOpportunity > 0 ? monthlyOpportunity : null;
@@ -675,8 +675,8 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                 <div className="mt-6 space-y-3">
                     {/* Main recommendation */}
                     <div className={`flex items-start gap-2 ${guidance.riskZone === 'red' ? 'text-red-700 dark:text-red-300' :
-                            guidance.riskZone === 'yellow' ? 'text-amber-700 dark:text-amber-300' :
-                                'text-gray-900 dark:text-gray-100'
+                        guidance.riskZone === 'yellow' ? 'text-amber-700 dark:text-amber-300' :
+                            'text-gray-900 dark:text-gray-100'
                         }`}>
                         {guidance.riskZone && (
                             <span className={`mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 ${getRiskZoneColor(guidance.riskZone)}`} />
