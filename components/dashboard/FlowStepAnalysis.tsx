@@ -436,6 +436,12 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
     const stepSeriesByPosition = useMemo(() => {
         const record: Record<number, { curr: { value: number; date: string }[]; prev: { value: number; date: string }[] }> = {};
         if (!selectedFlow || !flowSequenceInfo) return record;
+        const dateToISO = (d: Date) => d.toISOString().slice(0, 10);
+        const hasDateWindow = Boolean(dateWindows);
+        const currFrom = hasDateWindow ? dateToISO(dateWindows!.startDateOnly) : customFrom;
+        const currTo = hasDateWindow ? dateToISO(dateWindows!.endDateOnly) : customTo;
+        const prevFrom = hasDateWindow ? dateToISO(dateWindows!.prevStartDateOnly) : undefined;
+        const prevTo = hasDateWindow ? dateToISO(dateWindows!.prevEndDateOnly) : undefined;
         for (let position = 1; position <= flowSequenceInfo.sequenceLength; position++) {
             try {
                 const curr = dataManager.getFlowStepTimeSeries(
@@ -443,15 +449,14 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                     selectedFlow,
                     position,
                     selectedMetric,
-                    dateRange,
+                    hasDateWindow ? 'custom' : dateRange,
                     granularity,
-                    customFrom,
-                    customTo
+                    currFrom,
+                    currTo
                 ) as { value: number; date: string }[];
 
                 let prev: { value: number; date: string }[] = [];
                 if (dateWindows && dateRange !== 'all') {
-                    const { prevStartDateOnly, prevEndDateOnly } = dateWindows;
                     try {
                         prev = dataManager.getFlowStepTimeSeries(
                             previousFlowEmails,
@@ -460,8 +465,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                             selectedMetric,
                             'custom',
                             granularity,
-                            prevStartDateOnly.toISOString().slice(0, 10),
-                            prevEndDateOnly.toISOString().slice(0, 10)
+                            prevFrom,
+                            prevTo
                         ) as { value: number; date: string }[];
                     } catch { /* ignore */ }
                 }
