@@ -583,6 +583,9 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
     const getValue = (b: Bucket) => (b as any)[selectedMeta.value] as number;
     const maxVal = Math.max(...buckets.map(getValue), 0) || 1;
     const formatVal = (v: number) => selectedMeta.kind === 'currency' ? formatCurrency(v) : selectedMeta.kind === 'percent' ? formatPercent(v) : formatNumber(v);
+    const optimalDays = guidance?.optimalCapDays ?? 0;
+    const currentDays = guidance?.selectedRangeDays ?? 0;
+    const isOptimalRange = guidance ? (currentDays >= optimalDays * 0.9 && currentDays <= optimalDays * 1.1) : false;
 
     // Dynamic grid based on bucket count
     const getGridClass = (count: number) => {
@@ -688,38 +691,23 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                     </div>
 
                     {/* Optimal Lookback Recommendation */}
-                    {(() => {
-                        const optimalDays = guidance.optimalCapDays ?? 180;
-                        const currentDays = guidance.selectedRangeDays ?? 0;
-                        const isOptimal = currentDays >= optimalDays * 0.9 && currentDays <= optimalDays * 1.1;
-                        const isTooShort = currentDays < optimalDays * 0.9;
-
-                        if (isOptimal) {
-                            return (
-                                <p className="text-xs text-emerald-600 dark:text-emerald-400 italic">
-                                    ✓ You're analyzing the optimal date range ({optimalDays} days) for your account.
-                                </p>
-                            );
-                        } else if (isTooShort) {
-                            return (
-                                <p className="text-xs text-gray-500 dark:text-gray-400 italic">
-                                    For optimal accuracy, we recommend analyzing the last {optimalDays} days based on your account's volume.
-                                </p>
-                            );
-                        } else {
-                            return (
-                                <p className="text-xs text-gray-500 dark:text-gray-400 italic">
-                                    For optimal accuracy, we recommend analyzing the last {optimalDays} days based on your account's volume.
-                                </p>
-                            );
-                        }
-                    })()}
+                    {guidance && (
+                        isOptimalRange ? (
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400 italic">
+                                ✓ You're analyzing the optimal date range ({optimalDays} days) for your account.
+                            </p>
+                        ) : (
+                            <div className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                                For optimal accuracy, we recommend analyzing the last {optimalDays} days based on your account&apos;s volume.
+                            </div>
+                        )
+                    )}
 
                     {/* Revenue Opportunity Projection - only show if significant and meaningful */}
                     {/* Only show when: isSignificant AND (>= $1,000/month OR >= 20% of total monthly revenue) */}
                     {(() => {
                         // Don't show projection if all sizes perform similarly
-                        if (!guidance.isSignificant) return null;
+                        if (!guidance.isSignificant || !isOptimalRange) return null;
 
                         const gain = guidance.estimatedMonthlyGain ?? 0;
                         const totalRevenue = guidance.totalMonthlyRevenue ?? 0;
@@ -734,6 +722,9 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
                                     </div>
                                     <div className="text-sm text-emerald-800 dark:text-emerald-200">
                                         Targeting this audience size could generate an estimated {formatCurrency(gain)} increase in monthly revenue.
+                                    </div>
+                                    <div className="mt-1 text-xs text-emerald-800 dark:text-emerald-200/80">
+                                        Current monthly revenue over the last {optimalDays} days: {formatCurrency(totalRevenue)}
                                     </div>
                                 </div>
                             );

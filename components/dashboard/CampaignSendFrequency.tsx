@@ -83,6 +83,10 @@ export default function CampaignSendFrequency({ campaigns, allCampaigns, onGuida
 
     const bucketLabel = (k: BucketKey) => labelForFrequencyBucket(k);
     const formatVal = (v: number) => selectedMeta.kind === 'currency' ? formatCurrency(v) : selectedMeta.kind === 'percent' ? formatPercent(v) : formatNumber(v);
+    const optimalDays = dataContext.optimalCapDays;
+    const currentDays = dataContext.selectedRangeDays;
+    const hasOptimalWindow = optimalDays > 0;
+    const isOptimalRange = hasOptimalWindow && currentDays >= optimalDays * 0.9 && currentDays <= optimalDays * 1.1;
 
     // Dynamic grid layout based on number of buckets
     const gridClass = buckets.length === 1 ? 'grid-cols-1 max-w-xs mx-auto' :
@@ -172,41 +176,29 @@ export default function CampaignSendFrequency({ campaigns, allCampaigns, onGuida
                     <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{guidance.message}</p>
 
                     {/* Optimal Lookback Recommendation */}
-                    {(() => {
-                        const optimalDays = dataContext.optimalCapDays;
-                        const currentDays = dataContext.selectedRangeDays;
-                        const isOptimal = currentDays >= optimalDays * 0.9 && currentDays <= optimalDays * 1.1;
-                        const isTooShort = currentDays < optimalDays * 0.9;
-
-                        if (isOptimal) {
-                            return (
-                                <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 italic">
-                                    ✓ You're analyzing the optimal date range ({optimalDays} days) for your account.
-                                </p>
-                            );
-                        } else if (isTooShort) {
-                            return (
-                                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
-                                    For optimal accuracy, we recommend analyzing the last {optimalDays} days based on your account's volume.
-                                </p>
-                            );
-                        } else {
-                            return (
-                                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
-                                    For optimal accuracy, we recommend analyzing the last {optimalDays} days based on your account's volume.
-                                </p>
-                            );
-                        }
-                    })()}
+                    {hasOptimalWindow && (
+                        isOptimalRange ? (
+                            <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 italic">
+                                ✓ You're analyzing the optimal date range ({optimalDays} days) for your account.
+                            </p>
+                        ) : (
+                            <div className="mt-2 text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                                For optimal accuracy, we recommend analyzing the last {optimalDays} days based on your account&apos;s volume.
+                            </div>
+                        )
+                    )}
 
                     {/* Revenue Opportunity Projection */}
-                    {guidance.estimatedMonthlyGain != null && guidance.estimatedMonthlyGain > 0 && (
+                    {guidance.estimatedMonthlyGain != null && guidance.estimatedMonthlyGain > 0 && isOptimalRange && (
                         <div className="mt-4 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
                             <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 mb-1">
                                 Revenue Opportunity Projection
                             </div>
                             <div className="text-sm text-emerald-800 dark:text-emerald-200">
                                 Optimizing send frequency could generate an estimated {formatCurrency(guidance.estimatedMonthlyGain)} increase in monthly revenue.
+                            </div>
+                            <div className="mt-1 text-xs text-emerald-800 dark:text-emerald-200/80">
+                                Current monthly revenue over the last {optimalDays} days: {formatCurrency(guidance.totalMonthlyRevenue ?? 0)}
                             </div>
                         </div>
                     )}

@@ -197,3 +197,197 @@ export function getInsufficientDataMessage(
     const daysNeeded = Math.ceil(optimalLookbackDays - daysInRange);
     return `Insufficient data—current date range is ${daysInRange} days, but this step's volume suggests at least ${optimalLookbackDays} days for reliable insights.`;
 }
+
+/**
+ * Available date range presets in the dashboard.
+ * Lookback recommendations should snap to these values.
+ */
+const DATE_RANGE_PRESETS = [30, 60, 90, 180, 365];
+
+/**
+ * Snap a computed optimal lookback to the nearest preset value.
+ * Always snaps UP to ensure sufficient data.
+ */
+export function snapToPreset(days: number): number {
+    const preset = DATE_RANGE_PRESETS.find(p => p >= days);
+    return preset ?? 365;
+}
+
+/**
+ * Compute optimal lookback period snapped to preset values.
+ * This version returns user-friendly values (30, 60, 90, etc.) instead of raw calculations.
+ */
+export function computeOptimalLookbackDaysSnapped(
+    totalSendsInRange: number,
+    daysInRange: number,
+    minSampleSize: number = MIN_SAMPLE_SIZE
+): number {
+    const raw = computeOptimalLookbackDays(totalSendsInRange, daysInRange, minSampleSize);
+    return snapToPreset(raw);
+}
+
+/**
+ * Account-wide deliverability context for contribution-weighted scoring.
+ */
+export interface AccountDeliverabilityContext {
+    accountSends: number;
+    accountSpamComplaints: number;
+    accountBounces: number;
+    accountSpamRate: number;  // percentage
+    accountBounceRate: number;  // percentage
+}
+
+/**
+ * Result from context-aware deliverability zone calculation.
+ */
+export interface ContextAwareZoneResult {
+    /** The effective zone after considering account context */
+    effectiveZone: RiskZone;
+    /** The raw zone based on step rates alone (for display) */
+    rawZone: RiskZone;
+    /** Whether the zone was downgraded due to low impact */
+    wasDowngraded: boolean;
+    /** Reason for the zone classification */
+    reason: string;
+    /** Points for deliverability (0-20) */
+    points: number;
+    /** Step's spam contribution to account total */
+    spamContribution: number;
+    /** Step's bounce contribution to account total */
+    bounceContribution: number;
+    /** Step's share of account sends */
+    sendShare: number;
+}
+
+/**
+ * Minimum sends for a step to be classified as red zone for deliverability.
+ * Below this threshold, the step can only reach yellow at worst (unless account is also at risk).
+ */
+const MIN_SENDS_FOR_RED_ZONE = 500;
+
+/**
+ * Threshold for account spam rate to be considered "at risk".
+ * If account spam is below this, individual step red zones may be downgraded.
+ */
+const ACCOUNT_SPAM_HEALTHY_LIMIT = 0.1; // 0.1% - half of red zone threshold
+
+/**
+ * Threshold for account bounce rate to be considered "at risk".
+ */
+const ACCOUNT_BOUNCE_HEALTHY_LIMIT = 2.5; // 2.5% - between green and red
+
+/**
+ * Calculate deliverability zone with account-wide context.
+ * 
+ * This function considers:
+ * 1. Step's raw spam/bounce rates
+ * 2. Step's contribution to account-wide spam/bounces
+ * 3. Account's overall health
+ * 4. Sample size (small samples can't reliably trigger red zones)
+ * 
+ * Logic:
+ * - RED zone only if:
+ *   a) Step rate exceeds red threshold AND
+ *   b) Step contributes disproportionate spam (>2x its send share) AND
+ *   c) Account deliverability is threatened (account spam >0.1% or bounce >2.5%) OR
+ *   d) Step has 500+ sends (statistically significant sample)
+ * 
+ * - Otherwise, downgrade to YELLOW (investigation, not panic)
+ */
+export function getDeliverabilityZoneWithContext(
+    stepSpamRate: number,
+    stepBounceRate: number,
+    stepSends: number,
+    stepSpamComplaints: number,
+    stepBounces: number,
+    context: AccountDeliverabilityContext
+): ContextAwareZoneResult {
+    // Get raw zone based on step rates alone
+    const rawZone = getRiskZone(stepSpamRate, stepBounceRate);
+    
+    // Calculate contribution metrics
+    const sendShare = context.accountSends > 0 ? stepSends / context.accountSends : 0;
+    const spamContribution = context.accountSpamComplaints > 0 
+        ? stepSpamComplaints / context.accountSpamComplaints 
+        : 0;
+    const bounceContribution = context.accountBounces > 0 
+        ? stepBounces / context.accountBounces 
+        : 0;
+    
+    // Check if account is healthy
+    const accountSpamHealthy = context.accountSpamRate < ACCOUNT_SPAM_HEALTHY_LIMIT;
+    const accountBounceHealthy = context.accountBounceRate < ACCOUNT_BOUNCE_HEALTHY_LIMIT;
+    const accountHealthy = accountSpamHealthy && accountBounceHealthy;
+    
+    // Check if step is disproportionately contributing to problems
+    const spamImpactRatio = sendShare > 0 ? spamContribution / sendShare : 0;
+    const bounceImpactRatio = sendShare > 0 ? bounceContribution / sendShare : 0;
+    const disproportionateSpam = spamImpactRatio > 2.0;
+    const disproportionateBounce = bounceImpactRatio > 2.0;
+    
+    // Check sample size
+    const hasSignificantSample = stepSends >= MIN_SENDS_FOR_RED_ZONE;
+    
+    let effectiveZone = rawZone;
+    let wasDowngraded = false;
+    let reason = '';
+    
+    if (rawZone === 'red') {
+        // Determine if red zone should be downgraded
+        const shouldStayRed = 
+            // Keep red if: significant sample AND (account at risk OR disproportionate contribution)
+            (hasSignificantSample && (!accountHealthy || disproportionateSpam || disproportionateBounce)) ||
+            // Keep red if: extremely bad rates (3x red threshold) regardless of sample
+            (stepSpamRate > SPAM_RED_LIMIT * 3 || stepBounceRate > BOUNCE_RED_LIMIT * 3);
+        
+        if (!shouldStayRed) {
+            effectiveZone = 'yellow';
+            wasDowngraded = true;
+            
+            if (!hasSignificantSample) {
+                reason = `Small sample (${stepSends} sends) - rates may be noisy`;
+            } else if (accountHealthy) {
+                reason = `Account deliverability is healthy (${context.accountSpamRate.toFixed(3)}% spam) - this step's impact is minimal`;
+            } else {
+                reason = 'Step contribution is proportionate to its volume';
+            }
+        } else {
+            if (!accountHealthy && (disproportionateSpam || disproportionateBounce)) {
+                reason = `Step contributes ${(spamContribution * 100).toFixed(0)}% of account spam with only ${(sendShare * 100).toFixed(1)}% of sends`;
+            } else if (stepSpamRate > SPAM_RED_LIMIT * 3 || stepBounceRate > BOUNCE_RED_LIMIT * 3) {
+                reason = 'Rates exceed safe limits by a significant margin';
+            } else {
+                reason = 'Deliverability risk requires attention';
+            }
+        }
+    } else if (rawZone === 'yellow') {
+        reason = 'Approaching warning thresholds - monitor closely';
+    } else {
+        reason = 'Deliverability metrics are healthy';
+    }
+    
+    // Calculate points based on effective zone
+    let points: number;
+    switch (effectiveZone) {
+        case 'green':
+            points = 20;
+            break;
+        case 'yellow':
+            points = 12;
+            break;
+        case 'red':
+            points = 0;
+            break;
+    }
+    
+    return {
+        effectiveZone,
+        rawZone,
+        wasDowngraded,
+        reason,
+        points,
+        spamContribution,
+        bounceContribution,
+        sendShare
+    };
+}

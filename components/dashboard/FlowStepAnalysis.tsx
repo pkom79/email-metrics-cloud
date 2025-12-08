@@ -9,11 +9,14 @@ import TooltipPortal from '../TooltipPortal';
 import {
     getRiskZone,
     getDeliverabilityPoints,
+    getDeliverabilityZoneWithContext,
     computeOptimalLookbackDays,
+    computeOptimalLookbackDaysSnapped,
     hasStatisticalSignificance,
     getDeliverabilityRiskMessage,
     getInsufficientDataMessage,
     RiskZone,
+    AccountDeliverabilityContext,
     SPAM_GREEN_LIMIT,
     SPAM_RED_LIMIT,
     BOUNCE_GREEN_LIMIT,
@@ -137,6 +140,9 @@ interface FlowStepMetrics {
     revenuePerEmail: number;
     totalOrders: number;
     totalClicks: number;
+    // Raw counts for contribution analysis
+    spamComplaintsCount: number;
+    bouncesCount: number;
 }
 
 export default function FlowStepAnalysis({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period' }: FlowStepAnalysisProps) {
@@ -395,7 +401,10 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                     spamRate: 0,
                     revenuePerEmail: 0,
                     totalOrders: 0,
-                    totalClicks: 0
+                    totalClicks: 0,
+                    // Raw counts for contribution analysis
+                    spamComplaintsCount: 0,
+                    bouncesCount: 0
                 });
                 return;
             }
@@ -447,7 +456,10 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 spamRate,
                 revenuePerEmail,
                 totalOrders,
-                totalClicks
+                totalClicks,
+                // Raw counts for contribution analysis
+                spamComplaintsCount: totalSpam,
+                bouncesCount: totalBounces
             });
 
             previousEmailsSent = totalEmailsSent;
@@ -524,6 +536,15 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const storeRevenueTotal = accountAgg.totalRevenue || 0;
         const accountSendsTotal = accountAgg.emailsSent || 0;
 
+        // Build account deliverability context for contribution-weighted scoring
+        const accountContext: AccountDeliverabilityContext = {
+            accountSends: accountAgg.emailsSent || 0,
+            accountSpamComplaints: accountAgg.spamComplaintsCount || 0,
+            accountBounces: accountAgg.bouncesCount || 0,
+            accountSpamRate: accountAgg.spamRate || 0,
+            accountBounceRate: accountAgg.bounceRate || 0
+        };
+
         // Infer flow type for decay factors and projections
         const flowType = inferFlowType(selectedFlow);
 
@@ -553,8 +574,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             } catch { }
         }
 
-        // Compute flow-level optimal lookback for banner display
-        const flowOptimalLookbackDays = computeOptimalLookbackDays(totalFlowSendsInWindow, dateRangeDays);
+        // Compute flow-level optimal lookback for banner display (snapped to presets)
+        const flowOptimalLookbackDays = computeOptimalLookbackDaysSnapped(totalFlowSendsInWindow, dateRangeDays);
 
         const results: Array<any> = [];
 
@@ -566,7 +587,20 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             // Calculate per-step optimal lookback and statistical significance
             const sendShareOfAccount = accountSendsTotal > 0 ? emailsSent / accountSendsTotal : 0;
             const optimalLookbackDays = computeOptimalLookbackDays(emailsSent, dateRangeDays);
-            const volumeSufficient = hasStatisticalSignificance(emailsSent, dateRangeDays, optimalLookbackDays);
+            const optimalLookbackDaysSnapped = computeOptimalLookbackDaysSnapped(emailsSent, dateRangeDays);
+            
+            // Check if current date range meets the step's optimal lookback
+            const dateRangeAdequate = daysInRange >= optimalLookbackDays * 0.8;
+            
+            // Volume is "sufficient" for confident recommendations if:
+            // 1. We have 250+ sends AND adequate date range, OR
+            // 2. We have fewer sends but the date range is adequate (step is just low-volume by nature)
+            const hasMinSampleSize = emailsSent >= MIN_SAMPLE_SIZE;
+            const volumeSufficient = hasMinSampleSize && dateRangeAdequate;
+            
+            // For UI: distinguish between "needs more time" vs "low volume step"
+            const isLowVolumeStep = !hasMinSampleSize;
+            const needsMoreTime = !dateRangeAdequate;
 
             // Money pillar (max 70) using STANDALONE annualized revenue scoring
             const rpe = emailsSent > 0 ? s.revenue / emailsSent : 0;
@@ -574,36 +608,48 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
             if (moneyScore.riValue >= 1.4) notes.push('High Revenue Index');
             if (storeRevenueTotal <= 0) notes.push('No store revenue in window');
-            
+
             // Check if this is a high-value step based on annualized revenue ($50k+/yr)
             const isHighValueStep = moneyScore.annualizedRevenue >= 50000;
 
-            // Deliverability Score D (0–20) using zone-based scoring (spam + bounce only)
+            // Deliverability Score D (0–20) using CONTEXT-AWARE zone-based scoring
             const spam = s.spamRate; // percent
             const bounce = s.bounceRate; // percent
+            const stepSpamComplaints = s.spamComplaintsCount || 0;
+            const stepBounces = s.bouncesCount || 0;
 
-            // Get individual zone for each metric
-            const overallZone = getRiskZone(spam, bounce);
-            // Infer individual zones based on thresholds
-            const spamZone: RiskZone = spam > SPAM_RED_LIMIT ? 'red' : spam >= SPAM_GREEN_LIMIT ? 'yellow' : 'green';
-            const bounceZone: RiskZone = bounce > BOUNCE_RED_LIMIT ? 'red' : bounce >= BOUNCE_GREEN_LIMIT ? 'yellow' : 'green';
+            // Get raw zones for display (before context adjustment)
+            const rawSpamZone: RiskZone = spam > SPAM_RED_LIMIT ? 'red' : spam >= SPAM_GREEN_LIMIT ? 'yellow' : 'green';
+            const rawBounceZone: RiskZone = bounce > BOUNCE_RED_LIMIT ? 'red' : bounce >= BOUNCE_GREEN_LIMIT ? 'yellow' : 'green';
+            const rawOverallZone = getRiskZone(spam, bounce);
 
-            const deliverabilityResult = getDeliverabilityPoints(spam, bounce, sendShareOfAccount);
-            const deliverabilityPoints = deliverabilityResult.points;
-            // Calculate approximate spam/bounce points based on zone (10 points each max)
-            const spamPoints = spamZone === 'green' ? 10 : spamZone === 'yellow' ? 6 : 0;
-            const bouncePoints = bounceZone === 'green' ? 10 : bounceZone === 'yellow' ? 6 : 0;
+            // Get context-aware zone (considers account health and contribution)
+            const contextZoneResult = getDeliverabilityZoneWithContext(
+                spam, bounce, emailsSent, stepSpamComplaints, stepBounces, accountContext
+            );
+
+            // Use effective zone for action decisions (may be downgraded from raw)
+            const effectiveZone = contextZoneResult.effectiveZone;
+            const deliverabilityPoints = contextZoneResult.points;
+            const wasDowngraded = contextZoneResult.wasDowngraded;
+
+            // Calculate approximate spam/bounce points based on effective zone (10 points each max)
+            const spamZone = rawSpamZone; // Keep raw for display
+            const bounceZone = rawBounceZone; // Keep raw for display
+            const spamPoints = rawSpamZone === 'green' ? 10 : rawSpamZone === 'yellow' ? 6 : 0;
+            const bouncePoints = rawBounceZone === 'green' ? 10 : rawBounceZone === 'yellow' ? 6 : 0;
             const baseD = spamPoints + bouncePoints;
-            const lowVolumeAdjusted = deliverabilityResult.lowVolumeAdjusted;
+            const lowVolumeAdjusted = wasDowngraded;
 
-            // Determine if either metric is in red zone (high risk for action decisions)
-            const hasRedZone = spamZone === 'red' || bounceZone === 'red';
-            const hasYellowZone = spamZone === 'yellow' || bounceZone === 'yellow';
+            // Use EFFECTIVE zone for action decisions (not raw zone)
+            const hasRedZone = effectiveZone === 'red';
+            const hasYellowZone = effectiveZone === 'yellow';
+            const hasRawRedZone = rawOverallZone === 'red'; // For display purposes
 
             // Statistical Confidence (max 10): based on statistical significance
             const scPoints = volumeSufficient
                 ? clamp(Math.floor(emailsSent / 100), 0, 10)
-                : 0;
+                : (dateRangeAdequate ? clamp(Math.floor(emailsSent / 50), 0, 5) : 0); // Partial credit if date range is OK
 
             const moneyPoints = moneyScore.totalPoints;
             const highMoney = (moneyPoints >= 55) || (moneyScore.riValue >= 1.4);
@@ -612,29 +658,53 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             let score = clamp(moneyPoints + deliverabilityPoints + scPoints, 0, 100);
             let action: 'scale' | 'keep' | 'improve' | 'pause' | 'insufficient' = 'improve';
 
-            // Action determination based on zones
-            if (!volumeSufficient) {
-                // Insufficient data: show "insufficient" unless red zone → "pause"
+            // Action determination based on EFFECTIVE zones (context-aware)
+            if (!volumeSufficient && needsMoreTime) {
+                // Date range too short for this step's volume
                 action = hasRedZone ? 'pause' : 'insufficient';
                 if (hasRedZone) {
-                    const riskMsg = getDeliverabilityRiskMessage(overallZone, spam, bounce);
+                    const riskMsg = getDeliverabilityRiskMessage(effectiveZone, spam, bounce);
                     if (riskMsg) notes.push(riskMsg);
                 } else {
-                    notes.push(getInsufficientDataMessage(emailsSent, dateRangeDays, optimalLookbackDays));
+                    notes.push(`Extend date range to at least ${optimalLookbackDaysSnapped} days for reliable insights.`);
+                }
+            } else if (!volumeSufficient && isLowVolumeStep && dateRangeAdequate) {
+                // Low volume step but date range is adequate - provide guidance, not alarm
+                // Only show "insufficient" if also has concerning metrics
+                if (hasRedZone) {
+                    action = 'pause';
+                    const riskMsg = getDeliverabilityRiskMessage(effectiveZone, spam, bounce);
+                    if (riskMsg) notes.push(riskMsg);
+                } else if (hasYellowZone && !highMoney) {
+                    action = 'improve';
+                    notes.push(`Limited data (${emailsSent} sends)—results may be noisy but date range is adequate.`);
+                } else {
+                    // Low volume but no concerning signals - give benefit of doubt
+                    action = highMoney ? 'keep' : 'improve';
+                    notes.push(`Limited data (${emailsSent} sends)—results may be noisy.`);
                 }
             } else if (hasRedZone) {
-                // Red zone: pause regardless of revenue (deliverability is critical)
+                // Effective red zone: this means the step is actually hurting account deliverability
                 action = 'pause';
-                const riskMsg = getDeliverabilityRiskMessage(overallZone, spam, bounce);
+                const riskMsg = getDeliverabilityRiskMessage(effectiveZone, spam, bounce);
                 if (riskMsg) notes.push(riskMsg);
             } else if (hasYellowZone && highMoney) {
                 // Yellow zone with good money: keep but warn about risk
                 action = 'keep';
-                notes.push('Deliverability risk: proceed with caution');
+                if (wasDowngraded) {
+                    // Was downgraded from red → note the context
+                    notes.push(contextZoneResult.reason);
+                } else {
+                    notes.push('Deliverability approaching warning thresholds—monitor closely');
+                }
             } else if (hasYellowZone && !highMoney) {
                 // Yellow zone with weak money: improve
                 action = 'improve';
-                notes.push('Address deliverability concerns');
+                if (wasDowngraded) {
+                    notes.push(contextZoneResult.reason);
+                } else {
+                    notes.push('Address deliverability concerns');
+                }
             } else if (score >= 75) {
                 action = 'scale';
             } else if (score >= 60) {
@@ -645,11 +715,12 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 action = 'pause';
             }
 
-            // Guardrail for high annualized revenue cases (only if not in red zone)
-            // A step generating $50k+/yr is valuable regardless of relative scores
+            // Guardrail for high annualized revenue cases
+            // Since we now use context-aware zones, red zone means genuine account threat
+            // But we can still add a note for high-value steps with yellow zone
             const flowShareForGuard = flowRevenueTotal > 0 ? (s.revenue / flowRevenueTotal) : 0;
             const highRevenueShare = flowShareForGuard >= 0.10;
-            if (!hasRedZone && action === 'pause' && (isHighValueStep || highRevenueShare)) {
+            if (action === 'pause' && !hasRedZone && (isHighValueStep || highRevenueShare)) {
                 action = 'keep';
                 notes.push('High revenue guardrail');
             }
@@ -657,7 +728,10 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             const resObj = {
                 score,
                 action,
-                volumeInsufficient: !volumeSufficient,
+                volumeInsufficient: !volumeSufficient && needsMoreTime, // Only show "Low volume" if date range is too short
+                isLowVolumeStep,  // Step has <250 sends
+                dateRangeAdequate,  // Date range meets step's optimal lookback
+                needsMoreTime,  // Date range is too short for this step
                 notes,
                 pillars: {
                     money: {
@@ -674,12 +748,18 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                         points: deliverabilityPoints,
                         base: baseD,
                         lowVolumeAdjusted,
-                        spamZone,
-                        bounceZone,
+                        spamZone,  // Raw zone for display
+                        bounceZone,  // Raw zone for display
+                        effectiveZone,  // Context-aware zone used for decisions
+                        wasDowngraded,
+                        contextReason: contextZoneResult.reason,
                         spamPoints,
                         bouncePoints,
-                        hasRedZone,
-                        hasYellowZone
+                        spamContribution: contextZoneResult.spamContribution,
+                        bounceContribution: contextZoneResult.bounceContribution,
+                        hasRedZone,  // Based on effective zone
+                        hasYellowZone,  // Based on effective zone
+                        hasRawRedZone  // Raw zone before context
                     },
                     confidence: {
                         points: scPoints,
@@ -687,12 +767,12 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                         hasStatisticalSignificance: volumeSufficient
                     }
                 },
-                baselines: { flowRevenueTotal, storeRevenueTotal, medianRPE, dateRangeDays },
+                baselines: { flowRevenueTotal, storeRevenueTotal, medianRPE, dateRangeDays, accountContext },
             };
             results.push(resObj);
         }
 
-        return { results, context: { s1Sends, storeRevenueTotal, accountSendsTotal, flowType, medianRPE, dateRangeDays, flowOptimalLookbackDays } } as const;
+        return { results, context: { s1Sends, storeRevenueTotal, accountSendsTotal, flowType, medianRPE, dateRangeDays, flowOptimalLookbackDays, accountContext } } as const;
     }, [flowStepMetrics, dataManager, dateRange, customFrom, customTo, selectedFlow]);
 
     // Summary and indicator availability
@@ -1204,7 +1284,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 const monthlyRevenue = res.pillars?.money?.monthlyRevenue ?? 0;
                                 const flowColor = riPts >= 25 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300';
                                 const standaloneColor = standaloneRevPts >= 25 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300';
-                                
+
                                 // Format annualized revenue
                                 const fmtAnnual = (v: number) => {
                                     if (v >= 1000000) return `$${(v / 1000000).toFixed(1)}M/yr`;
@@ -1700,13 +1780,13 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                     </div>
                 </div>
             </div>
-            
+
             {/* Optimal Lookback Recommendation Banner */}
             {selectedFlow && flowStepMetrics.length > 0 && (() => {
                 const flowOptimalDays = (stepScores as any).context?.flowOptimalLookbackDays || 365;
                 const isOptimal = daysInRange >= flowOptimalDays * 0.9 && daysInRange <= flowOptimalDays * 1.1;
                 const isTooShort = daysInRange < flowOptimalDays * 0.9;
-                
+
                 if (isOptimal) {
                     return (
                         <div className="mb-3">

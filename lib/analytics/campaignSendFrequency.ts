@@ -340,6 +340,7 @@ export interface SendFrequencyGuidanceResult {
   targetWeeklyRevenue?: number;
   estimatedWeeklyGain: number | null;
   estimatedMonthlyGain: number | null;
+  totalMonthlyRevenue: number;
   metadata?: Record<string, unknown>;
 }
 
@@ -380,6 +381,8 @@ export function computeSendFrequencyGuidance(
   const metricKey = mode === 'week' ? 'weightedAvgWeeklyRevenue' : 'avgCampaignRevenue';
   const getRevenueValue = (b: FrequencyBucketAggregate) => (b as any)[metricKey] as number;
   const totalWeeksAll = buckets.reduce((sum, b) => sum + b.weeksCount, 0);
+  const totalRevenueAll = buckets.reduce((sum, b) => sum + b.sumRevenue, 0);
+  const totalMonthlyRevenue = totalWeeksAll > 0 ? (totalRevenueAll / totalWeeksAll) * 4.33 : 0;
   const formatSample = () => totalWeeksAll ? `Based on ${totalWeeksAll} ${pluralize('week', totalWeeksAll)} of campaign data.` : null;
 
   // 1. Global Data Sufficiency Check
@@ -393,6 +396,7 @@ export function computeSendFrequencyGuidance(
       sample: formatSample(),
       estimatedWeeklyGain: null,
       estimatedMonthlyGain: null,
+      totalMonthlyRevenue,
     };
   }
 
@@ -425,6 +429,7 @@ export function computeSendFrequencyGuidance(
          targetWeeklyRevenue: getRevenueValue(dominant),
          estimatedWeeklyGain: null,
          estimatedMonthlyGain: null,
+         totalMonthlyRevenue,
          metadata: { strategy: 'stabilize-emergency' },
       };
   }
@@ -456,6 +461,7 @@ export function computeSendFrequencyGuidance(
              targetWeeklyRevenue: getRevenueValue(dominant),
              estimatedWeeklyGain: null,
              estimatedMonthlyGain: null,
+             totalMonthlyRevenue,
              metadata: { strategy: 'stabilize-emergency' },
           };
       }
@@ -519,6 +525,7 @@ export function computeSendFrequencyGuidance(
               targetWeeklyRevenue: baselineRevenue, // Unknown
               estimatedWeeklyGain: null,
               estimatedMonthlyGain: null,
+              totalMonthlyRevenue,
               metadata: { strategy: 'growth-experiment', risk: 'green' },
           };
       }
@@ -536,6 +543,7 @@ export function computeSendFrequencyGuidance(
           targetWeeklyRevenue: targetRevenue,
           estimatedWeeklyGain: 0,
           estimatedMonthlyGain: 0,
+          totalMonthlyRevenue,
           metadata: { strategy: 'maintain-revenue-max', risk: isYellow ? 'yellow' : 'green' },
       };
   }
@@ -561,6 +569,7 @@ export function computeSendFrequencyGuidance(
         targetWeeklyRevenue: targetRevenue,
         estimatedWeeklyGain: null, // Deprecated in favor of monthly projection logic
         estimatedMonthlyGain: projectedMonthlyGain,
+        totalMonthlyRevenue,
         metadata: { strategy: 'scale-revenue-max', risk: isYellow ? 'yellow' : 'green' },
       };
   }
@@ -585,6 +594,7 @@ export function computeSendFrequencyGuidance(
         targetWeeklyRevenue: targetRevenue,
         estimatedWeeklyGain: null,
         estimatedMonthlyGain: projectedMonthlyGain,
+        totalMonthlyRevenue,
         metadata: { strategy: 'reduce-revenue-max', risk: isYellow ? 'yellow' : 'green' },
       };
   }

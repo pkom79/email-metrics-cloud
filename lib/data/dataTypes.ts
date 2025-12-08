@@ -242,6 +242,9 @@ export interface AggregatedMetrics {
     revenuePerEmail: number;
     clickToOpenRate: number;
     emailCount: number;
+    // Raw counts for contribution analysis
+    spamComplaintsCount: number;
+    bouncesCount: number;
 }
 
 export interface AudienceInsights {

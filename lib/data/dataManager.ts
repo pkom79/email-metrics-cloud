@@ -1000,7 +1000,7 @@ export class DataManager {
         const filteredCampaigns = campaigns.filter(c => c.sentDate >= startDate && c.sentDate <= endDate);
         const filteredFlows = flows.filter(f => f.sentDate >= startDate && f.sentDate <= endDate);
         const allEmails = [...filteredCampaigns, ...filteredFlows];
-        if (allEmails.length === 0) return { totalRevenue: 0, emailsSent: 0, totalOrders: 0, openRate: 0, clickRate: 0, conversionRate: 0, unsubscribeRate: 0, spamRate: 0, bounceRate: 0, avgOrderValue: 0, revenuePerEmail: 0, clickToOpenRate: 0, emailCount: 0 };
+        if (allEmails.length === 0) return { totalRevenue: 0, emailsSent: 0, totalOrders: 0, openRate: 0, clickRate: 0, conversionRate: 0, unsubscribeRate: 0, spamRate: 0, bounceRate: 0, avgOrderValue: 0, revenuePerEmail: 0, clickToOpenRate: 0, emailCount: 0, spamComplaintsCount: 0, bouncesCount: 0 };
         const totalRevenue = allEmails.reduce((s, e) => s + e.revenue, 0);
         const emailsSent = allEmails.reduce((s, e) => s + e.emailsSent, 0);
         const totalOrders = allEmails.reduce((s, e) => s + e.totalOrders, 0);
@@ -1023,6 +1023,9 @@ export class DataManager {
             revenuePerEmail: emailsSent > 0 ? totalRevenue / emailsSent : 0,
             clickToOpenRate: totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0,
             emailCount: allEmails.length,
+            // Raw counts for contribution analysis
+            spamComplaintsCount: totalSpam,
+            bouncesCount: totalBounces,
         };
     }
 
