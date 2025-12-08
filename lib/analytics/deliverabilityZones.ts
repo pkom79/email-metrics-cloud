@@ -110,7 +110,7 @@ export const MIN_LOOKBACK_DAYS = 30;
 /**
  * Maximum lookback days (cap for very low volume flows)
  */
-export const MAX_LOOKBACK_DAYS = 365;
+export const MAX_LOOKBACK_DAYS = 730;
 
 /**
  * Compute optimal lookback period for a step based on its send rate.
@@ -202,7 +202,7 @@ export function getInsufficientDataMessage(
  * Available date range presets in the dashboard.
  * Lookback recommendations should snap to these values.
  */
-const DATE_RANGE_PRESETS = [30, 60, 90, 180, 365];
+const DATE_RANGE_PRESETS = [30, 60, 90, 180, 365, 730];
 
 /**
  * Snap a computed optimal lookback to the nearest preset value.

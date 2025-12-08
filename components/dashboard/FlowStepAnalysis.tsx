@@ -12,6 +12,7 @@ import {
     getDeliverabilityZoneWithContext,
     computeOptimalLookbackDays,
     computeOptimalLookbackDaysSnapped,
+    snapToPreset,
     hasStatisticalSignificance,
     getDeliverabilityRiskMessage,
     getInsufficientDataMessage,
@@ -47,6 +48,7 @@ const formatUsd = (value: number) => usdFormatter.format(value || 0);
 type ChartType = 'line' | 'bar';
 
 const MIN_STEP_EMAILS = 250;
+const MIN_FLOW_EMAILS_FOR_CONFIDENCE = 2000;
 
 const KEEP_NOTE_VARIANTS = [
     'keeps this flow steady.',
@@ -778,7 +780,41 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
     // Summary and indicator availability
     const indicatorAvailable = useMemo(() => !hasDuplicateNames && isOrderConsistent, [hasDuplicateNames, isOrderConsistent]);
     const totalFlowSends = useMemo(() => flowStepMetrics.reduce((sum, s) => sum + (s.emailsSent || 0), 0), [flowStepMetrics]);
-    const notEnoughDataCard = useMemo(() => totalFlowSends < 2000, [totalFlowSends]);
+    const notEnoughDataCard = useMemo(() => totalFlowSends < MIN_FLOW_EMAILS_FOR_CONFIDENCE, [totalFlowSends]);
+
+    // Account-wide flow coverage to decide if we're already at max history
+    const flowCoverage = useMemo(() => {
+        if (!ALL_FLOW_EMAILS?.length) return { days: 0, totalSends: 0 };
+        const sends = ALL_FLOW_EMAILS.reduce((sum, f) => sum + (f.emailsSent || 0), 0);
+        const dateStamps = ALL_FLOW_EMAILS
+            .map(f => f.sentDate?.getTime())
+            .filter(n => Number.isFinite(n)) as number[];
+        if (!dateStamps.length) return { days: 0, totalSends: sends };
+        const min = Math.min(...dateStamps);
+        const max = Math.max(...dateStamps);
+        const days = Math.max(1, Math.round((max - min) / (1000 * 60 * 60 * 24)) + 1);
+        return { days, totalSends: sends };
+    }, [ALL_FLOW_EMAILS]);
+
+    const isAtMaxAvailableRange = useMemo(() => {
+        if (!flowCoverage.days) return false;
+        return daysInRange >= flowCoverage.days * 0.9; // within 10% of full coverage
+    }, [daysInRange, flowCoverage.days]);
+
+    const hardLowVolumeWindow = useMemo(() => {
+        // If we are looking at a long window (365+ days or max coverage) and still below threshold, treat as account-level low volume.
+        const largeWindow = isAtMaxAvailableRange || daysInRange >= 365;
+        return largeWindow && flowCoverage.totalSends > 0 && flowCoverage.totalSends < MIN_FLOW_EMAILS_FOR_CONFIDENCE;
+    }, [daysInRange, flowCoverage.totalSends, isAtMaxAvailableRange]);
+
+    const accountInsufficient = useMemo(() => {
+        if (!flowCoverage.days) return false;
+        // If we're already at the edge of historical coverage and still under the flow threshold,
+        // or we have low volume even on large windows, treat it as account-level insufficiency.
+        if (isAtMaxAvailableRange && flowCoverage.totalSends < MIN_FLOW_EMAILS_FOR_CONFIDENCE) return true;
+        if (hardLowVolumeWindow) return true;
+        return false;
+    }, [flowCoverage.days, flowCoverage.totalSends, isAtMaxAvailableRange, hardLowVolumeWindow]);
 
     // Add-step suggestion logic with variance-based projections
     const addStepSuggestion = useMemo(() => {
@@ -1783,26 +1819,34 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
             {/* Optimal Lookback Recommendation Banner */}
             {selectedFlow && flowStepMetrics.length > 0 && (() => {
-                const flowOptimalDays = (stepScores as any).context?.flowOptimalLookbackDays || 30;
-                const isOptimal = daysInRange >= flowOptimalDays;
+                const flowOptimalDays = (stepScores as any).context?.flowOptimalLookbackDays || snapToPreset(daysInRange);
+                const displayCurrentRange = snapToPreset(daysInRange);
+                const isOptimalWindow = daysInRange >= flowOptimalDays * 0.9 && daysInRange <= flowOptimalDays * 1.1;
+                const shouldShowOptimal = isOptimalWindow && !accountInsufficient;
+                const shouldShowRecommendation = !isOptimalWindow && !accountInsufficient;
 
-                if (isOptimal) {
-                    return (
-                        <div className="mb-3">
+                return (
+                    <div className="mb-3">
+                        {accountInsufficient ? (
+                            <div className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                                Not enough data in the account yet. Even across the last {flowCoverage.days ? flowCoverage.days.toLocaleString('en-US') : '—'} days, we only have {flowCoverage.totalSends.toLocaleString('en-US')} sends.
+                            </div>
+                        ) : shouldShowOptimal ? (
                             <p className="text-xs text-emerald-600 dark:text-emerald-400 italic">
-                                ✓ You're analyzing the optimal date range ({daysInRange} days) for this flow.
+                                ✓ You're analyzing the optimal date range ({flowOptimalDays} days) for this flow.
                             </p>
-                        </div>
-                    );
-                } else {
-                    return (
-                        <div className="mb-3">
+                        ) : shouldShowRecommendation ? (
                             <p className="text-xs text-gray-500 dark:text-gray-400 italic">
                                 For optimal accuracy, we recommend analyzing the last {flowOptimalDays} days based on this flow's volume.
                             </p>
-                        </div>
-                    );
-                }
+                        ) : null}
+                        {!accountInsufficient && displayCurrentRange !== daysInRange && (
+                            <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                                Current window aligns with the {displayCurrentRange}-day preset.
+                            </p>
+                        )}
+                    </div>
+                );
             })()}
 
             {/* Naming note styled like Data Coverage Notice (purple) */}
@@ -1816,11 +1860,16 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 </div>
             </div>
             {/* Not enough data empty state card (still render charts below) */}
-            {selectedFlow && notEnoughDataCard && (
-                <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900 mb-3">
-                    <div className="text-sm text-gray-700 dark:text-gray-200">Not enough data. This module uses limited data for the selected window; results may be noisy.</div>
-                </div>
-            )}
+            {selectedFlow && notEnoughDataCard && (() => {
+                const flowOptimalDays = (stepScores as any).context?.flowOptimalLookbackDays || snapToPreset(daysInRange);
+                const isOptimalWindow = daysInRange >= flowOptimalDays * 0.9 && daysInRange <= flowOptimalDays * 1.1;
+                if (accountInsufficient || isOptimalWindow) return null;
+                return (
+                    <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900 mb-3">
+                        <div className="text-sm text-gray-700 dark:text-gray-200">Not enough data. This module uses limited data for the selected window; results may be noisy.</div>
+                    </div>
+                );
+            })()}
 
             {selectedFlow && (
                 <div className="grid grid-cols-1 gap-6">
