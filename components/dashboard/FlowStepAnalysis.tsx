@@ -953,6 +953,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
         };
 
+        const totalFlowRevenue = flowStepMetrics.reduce((sum, s) => sum + (s.revenue || 0), 0);
+
         flowStepMetrics.forEach((step, idx) => {
             const res = results[idx];
             if (!res) return;
@@ -972,7 +974,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             }
 
             const ri = res.pillars?.money?.ri ?? 0;
-            const ersPct = (res.pillars?.money?.storeShare ?? 0) * 100;
+            const ersPct = totalFlowRevenue > 0 ? ((step.revenue || 0) / totalFlowRevenue) * 100 : 0;
             const openRate = step.openRate ?? 0;
             const clickRate = step.clickRate ?? 0;
             const unsubRate = step.unsubscribeRate ?? 0;
@@ -1097,10 +1099,10 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         if ((addStepSuggestion as any)?.suggested && (addStepSuggestion as any)?.estimate) {
             const lastStep = flowStepMetrics[flowStepMetrics.length - 1];
             const est = (addStepSuggestion as any).estimate;
-            const perPeriodGain = periodsInRange > 0 ? est.estimatedRevenue / periodsInRange : est.estimatedRevenue;
+            const monthlyGain = est.estimatedRevenue * 4.33;
             stepItems.push(
                 <span className="text-emerald-700 dark:text-emerald-300 font-medium">
-                    Adding one more email after <strong>Email {lastStep.sequencePosition}</strong> could unlock an estimated revenue increase of {formatUsd(perPeriodGain)} per {periodLabel}.
+                    Adding one more email after <strong>Email {lastStep.sequencePosition}</strong> could unlock an estimated revenue increase of {formatUsd(monthlyGain)} per month.
                 </span>
             );
         }
@@ -1816,7 +1818,9 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
             {/* Optimal Lookback Recommendation Banner */}
             {selectedFlow && flowStepMetrics.length > 0 && (() => {
-                const flowOptimalDays = (stepScores as any).context?.flowOptimalLookbackDays || snapToPreset(daysInRange);
+                const flowOptimalDays = (stepScores as any).context?.flowOptimalLookbackDays;
+                if (!flowOptimalDays) return null;
+                
                 const isOptimalWindow = daysInRange >= flowOptimalDays * 0.9 && daysInRange <= flowOptimalDays * 1.1;
                 const shouldShowOptimal = isOptimalWindow && !accountInsufficient;
                 const shouldShowRecommendation = !isOptimalWindow && !accountInsufficient;
@@ -1857,7 +1861,9 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 </div>
             )}
             {selectedFlow && flowActionNote && (() => {
-                const flowOptimalDays = (stepScores as any).context?.flowOptimalLookbackDays || snapToPreset(daysInRange);
+                const flowOptimalDays = (stepScores as any).context?.flowOptimalLookbackDays;
+                if (!flowOptimalDays) return null;
+
                 const isOptimalWindow = daysInRange >= flowOptimalDays * 0.9 && daysInRange <= flowOptimalDays * 1.1;
                 
                 if (!isOptimalWindow || accountInsufficient) return null;
