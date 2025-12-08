@@ -1,4 +1,5 @@
 import { supabaseAdmin, CSV_BUCKETS } from './supabaseAdmin';
+import { twoProportionZTest } from './analytics/stats';
 
 const CANONICAL_FILES = ['campaigns.csv', 'flows.csv', 'subscribers.csv'] as const;
 type CanonicalFile = typeof CANONICAL_FILES[number];
@@ -24,21 +25,21 @@ export interface SnapshotJSON {
   emailPerformance?: {
     totals: BaseTotals;
     derived: DerivedTotals;
-    previous?: { totals: BaseTotals; derived: DerivedTotals; range: { start: string; end: string } };
+    previous?: { totals: BaseTotals; derived: DerivedTotals; range: { start: string; end: string }; significance?: SignificanceResult };
     daily?: DailyPoint[];
   };
   // Campaign-only (broadcast) metrics
   campaignPerformance?: {
     totals: BaseTotals;
     derived: DerivedTotals;
-    previous?: { totals: BaseTotals; derived: DerivedTotals; range: { start: string; end: string } };
+    previous?: { totals: BaseTotals; derived: DerivedTotals; range: { start: string; end: string }; significance?: SignificanceResult };
     daily?: DailyPoint[];
   };
   // Flow-only metrics (all flows combined)
   flowPerformance?: {
     totals: BaseTotals;
     derived: DerivedTotals;
-    previous?: { totals: BaseTotals; derived: DerivedTotals; range: { start: string; end: string } };
+    previous?: { totals: BaseTotals; derived: DerivedTotals; range: { start: string; end: string }; significance?: SignificanceResult };
     daily?: DailyPoint[];
   };
   flows?: { totalFlowEmails: number; flowNames: Array<{ name: string; emails: number; revenue: number }> ; };
@@ -49,6 +50,7 @@ export interface SnapshotJSON {
 
 interface BaseTotals { revenue: number; emailsSent: number; totalOrders: number; uniqueOpens: number; uniqueClicks: number; unsubscribes: number; spamComplaints: number; bounces: number; }
 interface DerivedTotals { openRate: number; clickRate: number; clickToOpenRate: number; conversionRate: number; revenuePerEmail: number; avgOrderValue: number; unsubscribeRate: number; spamRate: number; bounceRate: number; }
+interface SignificanceResult { openRate: boolean; clickRate: boolean; clickToOpenRate: boolean; conversionRate: boolean; unsubscribeRate: boolean; spamRate: boolean; bounceRate: boolean; }
 interface DailyPoint { date: string; revenue: number; emailsSent: number; totalOrders: number; uniqueOpens: number; uniqueClicks: number; unsubscribes: number; spamComplaints: number; bounces: number; }
 
 async function downloadIfExists(accountId: string, uploadId: string, filename: CanonicalFile): Promise<{ bucket: string; text: string } | null> {
@@ -97,8 +99,17 @@ function parseDateFlexible(raw: string): Date | null {
   if (!raw) return null;
   let s = String(raw).trim();
   if (!s) return null;
-  // Remove common timezone / label suffixes
+
+  // Try native parse first if it looks like a full ISO or standard date with timezone
+  const dNative = new Date(s);
+  if (!isNaN(dNative.getTime()) && s.match(/[a-z]{3}|T|Z|[+-]\d/i)) {
+     return dNative;
+  }
+
+  // Fallback: manual parsing. Remove known timezone labels if they are just noise, 
+  // BUT if we identify a specific known TZ offset, we should try to honor it.
   s = s.replace(/\b(UTC|GMT|EST|EDT|CST|CDT|PST|PDT)\b/i, '').trim();
+  
   // If looks like MM/DD/YYYY or MM/DD/YY
   if (/^\d{1,2}\/\d{1,2}\/\d{2,4}(?:\s+\d{1,2}:\d{2}(:\d{2})?)?$/ .test(s)) {
     const [datePart, timePart] = s.split(/\s+/);
@@ -113,15 +124,25 @@ function parseDateFlexible(raw: string): Date | null {
       mins = Number(tParts[1] || 0);
       secs = Number(tParts[2] || 0);
     }
-    // Store using UTC to preserve wall-clock time consistently across all timezones
+    // Store using UTC to preserve wall-clock time consistently
     const d = new Date(Date.UTC(year, month, day, hours, mins, secs));
     if (!isNaN(d.getTime())) return d;
   }
-  // Fallback: native Date parse
+  
+  // Fallback: native Date parse. 
+  // If we reached here, manual strict parsing failed (e.g. text had "PM").
+  // We want to treat this string as "Wall Clock = UTC" if possible, to avoid Server Timezone dependency.
+  // We try appending " UTC" and parsing.
+  const sUTC = s + ' UTC';
+  const d3 = new Date(sUTC);
+  if (!isNaN(d3.getTime())) return d3;
+
+  // Final fallback: just system parse (might use server local time)
   const d2 = new Date(s);
   if (!isNaN(d2.getTime())) return d2;
   return null;
 }
+
 
 function extractFirstDate(record: Record<string,string>, preferred: string[]): Date | null {
   for (const key of preferred) {
@@ -246,6 +267,26 @@ function aggregate(snapshotId: string, accountId: string, uploadId: string, camp
     previousFlowTotals = sum(prevRows.filter(e => e.category === 'flow'));
   }
 
+  const calcSig = (curr: BaseTotals | null, prev: BaseTotals | null): SignificanceResult | undefined => {
+    if (!curr || !prev) return undefined;
+    const isSig = (aS: number, aT: number, bS: number, bT: number) => {
+      // Safety caps
+      const aSuccess = Math.min(aS, aT);
+      const bSuccess = Math.min(bS, bT);
+      const { p } = twoProportionZTest({ success: aSuccess, total: aT }, { success: bSuccess, total: bT });
+      return p < 0.05;
+    };
+    return {
+      openRate: isSig(curr.uniqueOpens, curr.emailsSent, prev.uniqueOpens, prev.emailsSent),
+      clickRate: isSig(curr.uniqueClicks, curr.emailsSent, prev.uniqueClicks, prev.emailsSent),
+      clickToOpenRate: isSig(curr.uniqueClicks, curr.uniqueOpens, prev.uniqueClicks, prev.uniqueOpens),
+      conversionRate: isSig(curr.totalOrders, curr.uniqueClicks, prev.totalOrders, prev.uniqueClicks), // Orders per click
+      unsubscribeRate: isSig(curr.unsubscribes, curr.emailsSent, prev.unsubscribes, prev.emailsSent),
+      spamRate: isSig(curr.spamComplaints, curr.emailsSent, prev.spamComplaints, prev.emailsSent),
+      bounceRate: isSig(curr.bounces, curr.emailsSent, prev.bounces, prev.emailsSent)
+    };
+  };
+
   const subscribed = subscribers.filter(s => /subscribed/i.test(s.consent)).length;
   const audienceOverview = subscribers.length ? { totalSubscribers: subscribers.length, subscribedCount: subscribed, unsubscribedCount: subscribers.length - subscribed, percentSubscribed: subscribers.length ? (subscribed / subscribers.length) * 100 : 0 } : undefined;
 
@@ -270,17 +311,17 @@ function aggregate(snapshotId: string, accountId: string, uploadId: string, camp
     audienceOverview,
     emailPerformance: allEmails.length ? {
       totals, derived,
-      previous: previousTotals ? { totals: previousTotals, derived: mkDerived(previousTotals), range: previousRange! } : undefined,
+      previous: previousTotals ? { totals: previousTotals, derived: mkDerived(previousTotals), range: previousRange!, significance: calcSig(totals, previousTotals) } : undefined,
       daily: dailyAll
     } : undefined,
     campaignPerformance: campaignTotals.emailsSent ? {
       totals: campaignTotals, derived: campaignDerived,
-      previous: previousCampaignTotals ? { totals: previousCampaignTotals, derived: mkDerived(previousCampaignTotals), range: previousRange! } : undefined,
+      previous: previousCampaignTotals ? { totals: previousCampaignTotals, derived: mkDerived(previousCampaignTotals), range: previousRange!, significance: calcSig(campaignTotals, previousCampaignTotals) } : undefined,
       daily: dailyCampaigns
     } : undefined,
     flowPerformance: flowTotals.emailsSent ? {
       totals: flowTotals, derived: flowDerived,
-      previous: previousFlowTotals ? { totals: previousFlowTotals, derived: mkDerived(previousFlowTotals), range: previousRange! } : undefined,
+      previous: previousFlowTotals ? { totals: previousFlowTotals, derived: mkDerived(previousFlowTotals), range: previousRange!, significance: calcSig(flowTotals, previousFlowTotals) } : undefined,
       daily: dailyFlows
     } : undefined,
     flows: flows.length ? { totalFlowEmails: flows.length, flowNames: [...flowsByName.entries()].map(([name, v]) => ({ name, emails: v.emails, revenue: v.revenue })).sort((a, b) => b.revenue - a.revenue) } : undefined,

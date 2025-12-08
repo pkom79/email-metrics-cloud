@@ -590,16 +590,16 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             const sendShareOfAccount = accountSendsTotal > 0 ? emailsSent / accountSendsTotal : 0;
             const optimalLookbackDays = computeOptimalLookbackDays(emailsSent, dateRangeDays);
             const optimalLookbackDaysSnapped = computeOptimalLookbackDaysSnapped(emailsSent, dateRangeDays);
-            
+
             // Check if current date range meets the step's optimal lookback
             const dateRangeAdequate = daysInRange >= optimalLookbackDays * 0.8;
-            
+
             // Volume is "sufficient" for confident recommendations if:
             // 1. We have 250+ sends AND adequate date range, OR
             // 2. We have fewer sends but the date range is adequate (step is just low-volume by nature)
             const hasMinSampleSize = emailsSent >= MIN_SAMPLE_SIZE;
             const volumeSufficient = hasMinSampleSize && dateRangeAdequate;
-            
+
             // For UI: distinguish between "needs more time" vs "low volume step"
             const isLowVolumeStep = !hasMinSampleSize;
             const needsMoreTime = !dateRangeAdequate;
@@ -779,9 +779,6 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
     // Summary and indicator availability
     const indicatorAvailable = useMemo(() => !hasDuplicateNames && isOrderConsistent, [hasDuplicateNames, isOrderConsistent]);
-    const totalFlowSends = useMemo(() => flowStepMetrics.reduce((sum, s) => sum + (s.emailsSent || 0), 0), [flowStepMetrics]);
-    const notEnoughDataCard = useMemo(() => totalFlowSends < MIN_FLOW_EMAILS_FOR_CONFIDENCE, [totalFlowSends]);
-
     // Account-wide flow coverage to decide if we're already at max history
     const flowCoverage = useMemo(() => {
         if (!ALL_FLOW_EMAILS?.length) return { days: 0, totalSends: 0 };
@@ -1859,17 +1856,6 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                     </div>
                 </div>
             </div>
-            {/* Not enough data empty state card (still render charts below) */}
-            {selectedFlow && notEnoughDataCard && (() => {
-                const flowOptimalDays = (stepScores as any).context?.flowOptimalLookbackDays || snapToPreset(daysInRange);
-                const isOptimalWindow = daysInRange >= flowOptimalDays * 0.9 && daysInRange <= flowOptimalDays * 1.1;
-                if (accountInsufficient || isOptimalWindow) return null;
-                return (
-                    <div className="rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900 mb-3">
-                        <div className="text-sm text-gray-700 dark:text-gray-200">Not enough data. This module uses limited data for the selected window; results may be noisy.</div>
-                    </div>
-                );
-            })()}
 
             {selectedFlow && (
                 <div className="grid grid-cols-1 gap-6">
