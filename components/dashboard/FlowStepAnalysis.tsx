@@ -1783,15 +1783,14 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
             {/* Optimal Lookback Recommendation Banner */}
             {selectedFlow && flowStepMetrics.length > 0 && (() => {
-                const flowOptimalDays = (stepScores as any).context?.flowOptimalLookbackDays || 365;
-                const isOptimal = daysInRange >= flowOptimalDays * 0.9 && daysInRange <= flowOptimalDays * 1.1;
-                const isTooShort = daysInRange < flowOptimalDays * 0.9;
+                const flowOptimalDays = (stepScores as any).context?.flowOptimalLookbackDays || 30;
+                const isOptimal = daysInRange >= flowOptimalDays;
 
                 if (isOptimal) {
                     return (
                         <div className="mb-3">
                             <p className="text-xs text-emerald-600 dark:text-emerald-400 italic">
-                                ✓ You're analyzing the optimal date range ({flowOptimalDays} days) for this flow.
+                                ✓ You're analyzing the optimal date range ({daysInRange} days) for this flow.
                             </p>
                         </div>
                     );

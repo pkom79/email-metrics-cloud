@@ -7,6 +7,7 @@ import { ProcessedCampaign } from '../../lib/data/dataTypes';
 
 interface Props {
     campaigns: ProcessedCampaign[];
+    allCampaigns?: ProcessedCampaign[];
 }
 
 type Bucket = {
@@ -91,6 +92,11 @@ interface AudienceGuidanceResult {
     spreadPct?: number;
     isSignificant?: boolean;
     absoluteOpportunity?: number;
+    // Account-wide sufficiency
+    accountHasSufficientData?: boolean;
+    accountCoverageDays?: number;
+    accountTotalCampaigns?: number;
+    accountTotalEmails?: number;
 }
 
 function niceRangeLabel(min: number, max: number) {
@@ -360,7 +366,8 @@ function computeAudienceSizeGuidance(
     lookbackWeeks: number,
     optimalCapDays: number,
     selectedRangeDays: number,
-    isHighVolume: boolean
+    isHighVolume: boolean,
+    accountCampaigns?: ProcessedCampaign[]
 ): AudienceGuidanceResult | null {
     if (!buckets.length) return null;
 
@@ -375,14 +382,49 @@ function computeAudienceSizeGuidance(
 
     const formatSample = () => {
         if (totalCampaigns <= 0) return null;
-        return `Based on ${totalCampaigns} ${pluralize('campaign', totalCampaigns)} in this date range.`;
+        const parts = [`${totalCampaigns} ${pluralize('campaign', totalCampaigns)}`];
+        parts.push(`${formatNumber(totalEmails)} emails sent`);
+        return `Based on ${parts.join(' and ')} in this date range.`;
     };
 
+    // Account-wide availability (capped to dataset, e.g., 2 years)
+    let accountTotalCampaigns = totalCampaigns;
+    let accountTotalEmails = totalEmails;
+    let accountCoverageDays = selectedRangeDays;
+    if (accountCampaigns?.length) {
+        const valid = accountCampaigns.filter(c => typeof c.emailsSent === 'number' && c.emailsSent >= 0);
+        accountTotalCampaigns = valid.length;
+        accountTotalEmails = valid.reduce((sum, c) => sum + c.emailsSent, 0);
+        const accDates = valid
+            .filter(c => c.sentDate instanceof Date && !isNaN(c.sentDate.getTime()))
+            .map(c => c.sentDate.getTime());
+        if (accDates.length) {
+            const min = Math.min(...accDates);
+            const max = Math.max(...accDates);
+            accountCoverageDays = Math.max(1, Math.round((max - min) / (1000 * 60 * 60 * 24)) + 1);
+        }
+    }
+
+    const accountHasMinCampaigns = accountTotalCampaigns >= AUDIENCE_MIN_TOTAL_CAMPAIGNS;
+    const accountHasMinEmails = accountTotalEmails >= AUDIENCE_MIN_TOTAL_EMAILS;
+    const accountHasSufficientData = accountHasMinCampaigns && accountHasMinEmails;
+
     // Insufficient data check
-    if (totalCampaigns < AUDIENCE_MIN_TOTAL_CAMPAIGNS || totalEmails < AUDIENCE_MIN_TOTAL_EMAILS) {
+    const hasMinCampaigns = totalCampaigns >= AUDIENCE_MIN_TOTAL_CAMPAIGNS;
+    const hasMinEmails = totalEmails >= AUDIENCE_MIN_TOTAL_EMAILS;
+    if (!hasMinCampaigns || !hasMinEmails) {
+        const needs: string[] = [];
+        if (!hasMinCampaigns) needs.push(`${totalCampaigns} ${pluralize('campaign', totalCampaigns)} (need ${AUDIENCE_MIN_TOTAL_CAMPAIGNS}+)`);
+        if (!hasMinEmails) needs.push(`${formatNumber(totalEmails)} emails sent (need ${formatNumber(AUDIENCE_MIN_TOTAL_EMAILS)}+)`);
+        const detail = needs.length ? `This date range includes ${needs.join(' and ')}.` : 'This date range is too small.';
+
+        const accountDetail = accountHasSufficientData
+            ? `Expand the range (up to ${formatNumber(accountCoverageDays)} days available) to include more of your data.`
+            : `Not enough data in the account. We only have ${accountTotalCampaigns} ${pluralize('campaign', accountTotalCampaigns)} and ${formatNumber(accountTotalEmails)} emails across the last ${formatNumber(accountCoverageDays)} days (full available range).`;
+
         return {
-            title: 'Not enough data for a recommendation',
-            message: `This date range includes only ${totalCampaigns} ${pluralize('campaign', totalCampaigns)}. Expand the range or keep sending before adjusting targeting.`,
+            title: accountHasSufficientData ? 'Not enough data for a recommendation' : 'Not enough data in the account',
+            message: `${detail} ${accountDetail}`,
             sample: formatSample(),
             estimatedWeeklyGain: null,
             estimatedMonthlyGain: null,
@@ -391,6 +433,10 @@ function computeAudienceSizeGuidance(
             optimalCapDays,
             selectedRangeDays,
             isHighVolume,
+            accountHasSufficientData,
+            accountCoverageDays,
+            accountTotalCampaigns,
+            accountTotalEmails,
         };
     }
 
@@ -538,6 +584,10 @@ function computeAudienceSizeGuidance(
         spreadPct,
         isSignificant,
         absoluteOpportunity: monthlyOpportunity,
+        accountHasSufficientData,
+        accountCoverageDays,
+        accountTotalCampaigns,
+        accountTotalEmails,
     };
 }
 
@@ -562,11 +612,11 @@ function getRiskZoneLabel(zone: 'green' | 'yellow' | 'red') {
 }
 
 
-export default function AudienceSizePerformance({ campaigns }: Props) {
+export default function AudienceSizePerformance({ campaigns, allCampaigns }: Props) {
     const [metric, setMetric] = useState<string>('weightedAvgCampaignRevenue');
 
     const { buckets, limited, lookbackWeeks, optimalCapDays, selectedRangeDays, isHighVolume } = useMemo(() => computeBuckets(campaigns || []), [campaigns]);
-    const guidance = useMemo(() => computeAudienceSizeGuidance(buckets, lookbackWeeks, optimalCapDays, selectedRangeDays, isHighVolume), [buckets, lookbackWeeks, optimalCapDays, selectedRangeDays, isHighVolume]);
+    const guidance = useMemo(() => computeAudienceSizeGuidance(buckets, lookbackWeeks, optimalCapDays, selectedRangeDays, isHighVolume, allCampaigns), [buckets, lookbackWeeks, optimalCapDays, selectedRangeDays, isHighVolume, allCampaigns]);
 
     if (!campaigns?.length) {
         return (
@@ -586,6 +636,7 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
     const optimalDays = guidance?.optimalCapDays ?? 0;
     const currentDays = guidance?.selectedRangeDays ?? 0;
     const isOptimalRange = guidance ? (currentDays >= optimalDays * 0.9 && currentDays <= optimalDays * 1.1) : false;
+    const accountHasSufficientData = guidance?.accountHasSufficientData ?? true;
 
     // Dynamic grid based on bucket count
     const getGridClass = (count: number) => {
@@ -692,13 +743,19 @@ export default function AudienceSizePerformance({ campaigns }: Props) {
 
                     {/* Optimal Lookback Recommendation */}
                     {guidance && (
-                        isOptimalRange ? (
-                            <p className="text-xs text-emerald-600 dark:text-emerald-400 italic">
-                                ✓ You're analyzing the optimal date range ({optimalDays} days) for your account.
-                            </p>
+                        accountHasSufficientData ? (
+                            isOptimalRange ? (
+                                <p className="text-xs text-emerald-600 dark:text-emerald-400 italic">
+                                    ✓ You're analyzing the optimal date range ({optimalDays} days) for your account.
+                                </p>
+                            ) : (
+                                <div className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                                    For optimal accuracy, we recommend analyzing the last {optimalDays} days based on your account&apos;s volume.
+                                </div>
+                            )
                         ) : (
                             <div className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md p-3">
-                                For optimal accuracy, we recommend analyzing the last {optimalDays} days based on your account&apos;s volume.
+                                Not enough data in the account yet. We only have {guidance.accountCoverageDays ? formatNumber(guidance.accountCoverageDays) : 'limited'} days of campaigns available so far.
                             </div>
                         )
                     )}

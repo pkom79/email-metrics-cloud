@@ -2438,6 +2438,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                     {HAS_ACTIVE_ACCOUNT && defCampaigns.length > 0 && (
                         <AudienceSizePerformance
                             campaigns={defCampaigns}
+                            allCampaigns={ALL_CAMPAIGNS}
                         />
                     )}
                     {/* Campaign Gaps and Losses */}
