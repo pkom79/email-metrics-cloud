@@ -1817,7 +1817,6 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             {/* Optimal Lookback Recommendation Banner */}
             {selectedFlow && flowStepMetrics.length > 0 && (() => {
                 const flowOptimalDays = (stepScores as any).context?.flowOptimalLookbackDays || snapToPreset(daysInRange);
-                const displayCurrentRange = snapToPreset(daysInRange);
                 const isOptimalWindow = daysInRange >= flowOptimalDays * 0.9 && daysInRange <= flowOptimalDays * 1.1;
                 const shouldShowOptimal = isOptimalWindow && !accountInsufficient;
                 const shouldShowRecommendation = !isOptimalWindow && !accountInsufficient;
@@ -1833,15 +1832,10 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 ✓ You're analyzing the optimal date range ({flowOptimalDays} days) for this flow.
                             </p>
                         ) : shouldShowRecommendation ? (
-                            <p className="text-xs text-gray-500 dark:text-gray-400 italic">
-                                For optimal accuracy, we recommend analyzing the last {flowOptimalDays} days based on this flow's volume.
-                            </p>
+                            <div className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                                For optimal accuracy, we recommend analyzing the last {flowOptimalDays} days based on your account's volume.
+                            </div>
                         ) : null}
-                        {!accountInsufficient && displayCurrentRange !== daysInRange && (
-                            <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-                                Current window aligns with the {displayCurrentRange}-day preset.
-                            </p>
-                        )}
                     </div>
                 );
             })()}
@@ -1863,6 +1857,11 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 </div>
             )}
             {selectedFlow && flowActionNote && (() => {
+                const flowOptimalDays = (stepScores as any).context?.flowOptimalLookbackDays || snapToPreset(daysInRange);
+                const isOptimalWindow = daysInRange >= flowOptimalDays * 0.9 && daysInRange <= flowOptimalDays * 1.1;
+                
+                if (!isOptimalWindow || accountInsufficient) return null;
+
                 const bodyParts = Array.isArray(flowActionNote.bodyParts) ? flowActionNote.bodyParts : [];
                 const headline = bodyParts.length ? bodyParts[0] : null;
                 const detailBodyParts = headline ? bodyParts.slice(1) : bodyParts;

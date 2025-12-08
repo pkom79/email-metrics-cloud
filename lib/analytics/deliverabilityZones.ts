@@ -202,7 +202,7 @@ export function getInsufficientDataMessage(
  * Available date range presets in the dashboard.
  * Lookback recommendations should snap to these values.
  */
-const DATE_RANGE_PRESETS = [30, 60, 90, 180, 365, 730];
+const DATE_RANGE_PRESETS = [30, 60, 90, 180, 365];
 
 /**
  * Snap a computed optimal lookback to the nearest preset value.

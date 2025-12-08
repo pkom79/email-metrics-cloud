@@ -349,8 +349,28 @@ function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; li
     const avgCampaignsPerWeek = lookbackWeeks > 0 ? sample / lookbackWeeks : 0;
     const avgListSize = sample > 0 ? finalCampaigns.reduce((sum, c) => sum + c.emailsSent, 0) / sample : 0;
 
+    // Determine volume classification using full history if available to ensure stable recommendation
+    let historyAvgWeeklyVolume = avgCampaignsPerWeek;
+    if (allCampaigns?.length) {
+        const hMin = allCampaigns.reduce((min, c) => c.sentDate < min ? c.sentDate : min, new Date());
+        const hMax = allCampaigns.reduce((max, c) => c.sentDate > max ? c.sentDate : max, new Date(0));
+        if (hMin < hMax) {
+            const hDays = (hMax.getTime() - hMin.getTime()) / (1000 * 60 * 60 * 24);
+            const hWeeks = Math.max(1, hDays / 7);
+            // Use last 90 days for recent volume check if possible, otherwise full history
+            const ninetyDaysAgo = new Date(hMax);
+            ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+            const recent = allCampaigns.filter(c => c.sentDate >= ninetyDaysAgo);
+            if (recent.length > 0) {
+                 historyAvgWeeklyVolume = recent.length / 12.85;
+            } else {
+                 historyAvgWeeklyVolume = allCampaigns.length / hWeeks;
+            }
+        }
+    }
+
     // High volume: 3+ campaigns/week OR large list (50k+) with 2+ campaigns/week
-    const isHighVolume = avgCampaignsPerWeek >= 3 || (avgListSize >= 50000 && avgCampaignsPerWeek >= 2);
+    const isHighVolume = historyAvgWeeklyVolume >= 3 || (avgListSize >= 50000 && historyAvgWeeklyVolume >= 2);
     const optimalCapDays = isHighVolume ? 90 : 180;
 
     return { buckets, limited, lookbackWeeks, optimalCapDays, selectedRangeDays, isHighVolume };
@@ -727,69 +747,73 @@ export default function AudienceSizePerformance({ campaigns, allCampaigns }: Pro
             </div>
             {guidance && (
                 <div className="mt-6 space-y-3">
-                    {/* Main recommendation */}
-                    <div className={`flex items-start gap-2 ${guidance.riskZone === 'red' ? 'text-red-700 dark:text-red-300' :
-                        guidance.riskZone === 'yellow' ? 'text-amber-700 dark:text-amber-300' :
-                            'text-gray-900 dark:text-gray-100'
-                        }`}>
-                        {guidance.riskZone && (
-                            <span className={`mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 ${getRiskZoneColor(guidance.riskZone)}`} />
-                        )}
-                        <div>
-                            <p className="text-sm font-semibold">{guidance.title}</p>
-                            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{guidance.message}</p>
+                    {/* Optimal Lookback Recommendation - Banner if not optimal */}
+                    {accountHasSufficientData && !isOptimalRange && (
+                        <div className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                            For optimal accuracy, we recommend analyzing the last {optimalDays} days based on your account&apos;s volume.
                         </div>
-                    </div>
-
-                    {/* Optimal Lookback Recommendation */}
-                    {guidance && (
-                        accountHasSufficientData ? (
-                            isOptimalRange ? (
-                                <p className="text-xs text-emerald-600 dark:text-emerald-400 italic">
-                                    ✓ You're analyzing the optimal date range ({optimalDays} days) for your account.
-                                </p>
-                            ) : (
-                                <div className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md p-3">
-                                    For optimal accuracy, we recommend analyzing the last {optimalDays} days based on your account&apos;s volume.
-                                </div>
-                            )
-                        ) : (
-                            <div className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md p-3">
-                                Not enough data in the account yet. We only have {guidance.accountCoverageDays ? formatNumber(guidance.accountCoverageDays) : 'limited'} days of campaigns available so far.
-                            </div>
-                        )
                     )}
 
-                    {/* Revenue Opportunity Projection - only show if significant and meaningful */}
-                    {/* Only show when: isSignificant AND (>= $1,000/month OR >= 20% of total monthly revenue) */}
-                    {(() => {
-                        // Don't show projection if all sizes perform similarly
-                        if (!guidance.isSignificant || !isOptimalRange) return null;
+                    {/* Insufficient Data Banner */}
+                    {!accountHasSufficientData && (
+                        <div className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                            Not enough data in the account yet. We only have {guidance.accountCoverageDays ? formatNumber(guidance.accountCoverageDays) : 'limited'} days of campaigns available so far.
+                        </div>
+                    )}
 
-                        const gain = guidance.estimatedMonthlyGain ?? 0;
-                        const totalRevenue = guidance.totalMonthlyRevenue ?? 0;
-                        const percentOfRevenue = totalRevenue > 0 ? (gain / totalRevenue) * 100 : 0;
-                        const isMeaningful = gain >= 1000 || percentOfRevenue >= 20;
-
-                        if (gain > 0 && isMeaningful) {
-                            return (
-                                <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
-                                    <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 mb-1">
-                                        Revenue Opportunity Projection
-                                    </div>
-                                    <div className="text-sm text-emerald-800 dark:text-emerald-200">
-                                        Targeting this audience size could generate an estimated {formatCurrency(gain)} increase in monthly revenue.
-                                    </div>
-                                    <div className="mt-1 text-xs text-emerald-800 dark:text-emerald-200/80">
-                                        Current monthly revenue over the last {optimalDays} days: {formatCurrency(totalRevenue)}
-                                    </div>
+                    {/* Action Notes - Only if optimal */}
+                    {accountHasSufficientData && isOptimalRange && (
+                        <>
+                            {/* Main recommendation */}
+                            <div className={`flex items-start gap-2 ${guidance.riskZone === 'red' ? 'text-red-700 dark:text-red-300' :
+                                guidance.riskZone === 'yellow' ? 'text-amber-700 dark:text-amber-300' :
+                                    'text-gray-900 dark:text-gray-100'
+                                }`}>
+                                {guidance.riskZone && (
+                                    <span className={`mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 ${getRiskZoneColor(guidance.riskZone)}`} />
+                                )}
+                                <div>
+                                    <p className="text-sm font-semibold">{guidance.title}</p>
+                                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{guidance.message}</p>
                                 </div>
-                            );
-                        }
-                        return null;
-                    })()}
+                            </div>
 
-                    {guidance.sample && <p className="text-xs text-gray-500 dark:text-gray-400">{guidance.sample}</p>}
+                            {/* Success Message */}
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400 italic">
+                                ✓ You're analyzing the optimal date range ({optimalDays} days) for your account.
+                            </p>
+
+                            {/* Revenue Opportunity Projection */}
+                            {(() => {
+                                // Don't show projection if all sizes perform similarly
+                                if (!guidance.isSignificant) return null;
+
+                                const gain = guidance.estimatedMonthlyGain ?? 0;
+                                const totalRevenue = guidance.totalMonthlyRevenue ?? 0;
+                                const percentOfRevenue = totalRevenue > 0 ? (gain / totalRevenue) * 100 : 0;
+                                const isMeaningful = gain >= 1000 || percentOfRevenue >= 20;
+
+                                if (gain > 0 && isMeaningful) {
+                                    return (
+                                        <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
+                                            <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 mb-1">
+                                                Revenue Opportunity Projection
+                                            </div>
+                                            <div className="text-sm text-emerald-800 dark:text-emerald-200">
+                                                Targeting this audience size could generate an estimated {formatCurrency(gain)} increase in monthly revenue.
+                                            </div>
+                                            <div className="mt-1 text-xs text-emerald-800 dark:text-emerald-200/80">
+                                                Current monthly revenue over the last {optimalDays} days: {formatCurrency(totalRevenue)}
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
+
+                            {guidance.sample && <p className="text-xs text-gray-500 dark:text-gray-400">{guidance.sample}</p>}
+                        </>
+                    )}
                 </div>
             )}
         </div>
