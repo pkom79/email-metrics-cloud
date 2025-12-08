@@ -10,7 +10,7 @@ import { computeDeadWeightSavings } from "../analytics/deadWeightSavings";
 import { computeOpportunitySummary } from "../analytics/actionNotes";
 import type { OpportunitySummary, OpportunitySummaryItem } from "../analytics/actionNotes";
 import { getRiskZone, getDeliverabilityPoints, computeOptimalLookbackDays, hasStatisticalSignificance, getDeliverabilityRiskMessage } from "../analytics/deliverabilityZones";
-import { calculateMoneyPillarScore, getCalibratedTiers, getAbsoluteRevenuePoints } from "../analytics/revenueTiers";
+import { calculateMoneyPillarScoreStandalone, getStandaloneRevenueScore } from "../analytics/revenueTiers";
 import { inferFlowType, projectNewStepRevenue } from "../analytics/flowDecayFactors";
 
 export interface LlmExportJson {
@@ -1129,14 +1129,18 @@ export async function buildLlmExportJson(params: {
           const stepScores = steps.map((s, i) => {
             const notes: string[] = [];
 
-            // Money pillar (max 70) = Revenue Index (35) + Absolute Revenue (35) using shared utility
+            // Compute date range days for annualization
+            const resolvedDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000*60*60*24)) + 1);
+
+            // Money pillar (max 70) = Revenue Index (35) + Standalone Annualized Revenue (35)
             const rpe = (s.total.emailsSent || 0) > 0 ? (s.total.totalRevenue || 0) / (s.total.emailsSent || 1) : 0;
-            const moneyResult = calculateMoneyPillarScore(rpe, medianRPE, s.total.totalRevenue || 0, flowRevenueTotal);
+            const moneyResult = calculateMoneyPillarScoreStandalone(rpe, medianRPE, s.total.totalRevenue || 0, resolvedDays);
             const riClipped = moneyResult.riValue;
             const absoluteRevenue = s.total.totalRevenue || 0;
             if (riClipped >= 1.4) notes.push('High Revenue Index');
             if (storeRevenueTotal <= 0) notes.push('No store revenue in window');
             const moneyPoints = moneyResult.totalPoints;
+            const isHighValueStep = moneyResult.annualizedRevenue >= 50000;
 
             // Deliverability pillar (max 20) - Zone-based scoring for spam & bounce only
             const spam = s.total.spamRate;
@@ -1150,7 +1154,6 @@ export async function buildLlmExportJson(params: {
             const D = deliverabilityResult.points;
 
             // Compute optimal lookback and statistical significance
-            const resolvedDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000*60*60*24)) + 1);
             const optimalLookbackDays = computeOptimalLookbackDays(s.total.emailsSent || 0, resolvedDays);
             const hasSigData = hasStatisticalSignificance(s.total.emailsSent || 0, resolvedDays, optimalLookbackDays);
 
@@ -1172,6 +1175,12 @@ export async function buildLlmExportJson(params: {
             else if (score >= 40) action = 'improve';
             else action = 'pause';
 
+            // Guardrail for high annualized revenue ($50k+/yr)
+            if (!hasRedZone && action === 'pause' && isHighValueStep) {
+                action = 'keep';
+                notes.push('High revenue guardrail');
+            }
+
             // Add risk message if in yellow or red zone
             const riskMessage = getDeliverabilityRiskMessage(spamZone, spam, bounce);
 
@@ -1181,11 +1190,20 @@ export async function buildLlmExportJson(params: {
                 action,
                 notes,
                 pillars: {
-                  money: { points: moneyPoints, riPts: moneyResult.riPoints, absoluteRevPts: moneyResult.absoluteRevenuePoints, ri: riClipped, absoluteRevenue },
+                  money: { 
+                    points: moneyPoints, 
+                    riPts: moneyResult.riPoints, 
+                    standaloneRevPts: moneyResult.standalonePoints,
+                    standaloneTierLabel: moneyResult.standaloneTierLabel,
+                    annualizedRevenue: moneyResult.annualizedRevenue,
+                    monthlyRevenue: moneyResult.monthlyRevenue,
+                    ri: riClipped, 
+                    absoluteRevenue 
+                  },
                   deliverability: { points: D, zone: spamZone, hasRedZone, hasYellowZone, lowVolumeAdjusted, riskMessage },
                   confidence: { points: scPoints, optimalLookbackDays, hasStatisticalSignificance: hasSigData },
                 },
-                baselines: { flowRevenueTotal, storeRevenueTotal, medianRPE },
+                baselines: { flowRevenueTotal, storeRevenueTotal, medianRPE, dateRangeDays: resolvedDays },
               }
             } as const;
           });

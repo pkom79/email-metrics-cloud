@@ -21,8 +21,10 @@ import {
     MIN_SAMPLE_SIZE
 } from '../../lib/analytics/deliverabilityZones';
 import {
-    calculateMoneyPillarScore,
-    getAbsoluteRevenuePoints,
+    calculateMoneyPillarScoreStandalone,
+    getStandaloneRevenueScore,
+    formatAnnualizedRevenue,
+    getStandaloneRevenueDescription,
     getCalibratedTiers
 } from '../../lib/analytics/revenueTiers';
 import {
@@ -551,9 +553,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             } catch { }
         }
 
-        // Get calibrated revenue tiers for the account (first tier is the "excellent" threshold)
-        const calibratedTiers = getCalibratedTiers(flowRevenueTotal);
-        const excellentRevThreshold = calibratedTiers.length > 0 ? calibratedTiers[0].threshold : 50000;
+        // Compute flow-level optimal lookback for banner display
+        const flowOptimalLookbackDays = computeOptimalLookbackDays(totalFlowSendsInWindow, dateRangeDays);
 
         const results: Array<any> = [];
 
@@ -561,29 +562,32 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             const s = arr[i];
             const emailsSent = s.emailsSent || 0;
             const notes: string[] = [];
-            
+
             // Calculate per-step optimal lookback and statistical significance
             const sendShareOfAccount = accountSendsTotal > 0 ? emailsSent / accountSendsTotal : 0;
             const optimalLookbackDays = computeOptimalLookbackDays(emailsSent, dateRangeDays);
             const volumeSufficient = hasStatisticalSignificance(emailsSent, dateRangeDays, optimalLookbackDays);
 
-            // Money pillar (max 70) using new calibrated scoring
+            // Money pillar (max 70) using STANDALONE annualized revenue scoring
             const rpe = emailsSent > 0 ? s.revenue / emailsSent : 0;
-            const moneyScore = calculateMoneyPillarScore(rpe, medianRPE, s.revenue, flowRevenueTotal);
+            const moneyScore = calculateMoneyPillarScoreStandalone(rpe, medianRPE, s.revenue, dateRangeDays);
 
             if (moneyScore.riValue >= 1.4) notes.push('High Revenue Index');
             if (storeRevenueTotal <= 0) notes.push('No store revenue in window');
+            
+            // Check if this is a high-value step based on annualized revenue ($50k+/yr)
+            const isHighValueStep = moneyScore.annualizedRevenue >= 50000;
 
             // Deliverability Score D (0–20) using zone-based scoring (spam + bounce only)
             const spam = s.spamRate; // percent
             const bounce = s.bounceRate; // percent
-            
+
             // Get individual zone for each metric
             const overallZone = getRiskZone(spam, bounce);
             // Infer individual zones based on thresholds
             const spamZone: RiskZone = spam > SPAM_RED_LIMIT ? 'red' : spam >= SPAM_GREEN_LIMIT ? 'yellow' : 'green';
             const bounceZone: RiskZone = bounce > BOUNCE_RED_LIMIT ? 'red' : bounce >= BOUNCE_GREEN_LIMIT ? 'yellow' : 'green';
-            
+
             const deliverabilityResult = getDeliverabilityPoints(spam, bounce, sendShareOfAccount);
             const deliverabilityPoints = deliverabilityResult.points;
             // Calculate approximate spam/bounce points based on zone (10 points each max)
@@ -595,10 +599,10 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             // Determine if either metric is in red zone (high risk for action decisions)
             const hasRedZone = spamZone === 'red' || bounceZone === 'red';
             const hasYellowZone = spamZone === 'yellow' || bounceZone === 'yellow';
-            
+
             // Statistical Confidence (max 10): based on statistical significance
-            const scPoints = volumeSufficient 
-                ? clamp(Math.floor(emailsSent / 100), 0, 10) 
+            const scPoints = volumeSufficient
+                ? clamp(Math.floor(emailsSent / 100), 0, 10)
                 : 0;
 
             const moneyPoints = moneyScore.totalPoints;
@@ -607,7 +611,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
 
             let score = clamp(moneyPoints + deliverabilityPoints + scPoints, 0, 100);
             let action: 'scale' | 'keep' | 'improve' | 'pause' | 'insufficient' = 'improve';
-            
+
             // Action determination based on zones
             if (!volumeSufficient) {
                 // Insufficient data: show "insufficient" unless red zone → "pause"
@@ -641,11 +645,11 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 action = 'pause';
             }
 
-            // Guardrail for high absolute revenue cases (only if not in red zone)
-            const highAbsRevenue = s.revenue >= excellentRevThreshold;
+            // Guardrail for high annualized revenue cases (only if not in red zone)
+            // A step generating $50k+/yr is valuable regardless of relative scores
             const flowShareForGuard = flowRevenueTotal > 0 ? (s.revenue / flowRevenueTotal) : 0;
             const highRevenueShare = flowShareForGuard >= 0.10;
-            if (!hasRedZone && action === 'pause' && (highAbsRevenue || highRevenueShare)) {
+            if (!hasRedZone && action === 'pause' && (isHighValueStep || highRevenueShare)) {
                 action = 'keep';
                 notes.push('High revenue guardrail');
             }
@@ -656,17 +660,20 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 volumeInsufficient: !volumeSufficient,
                 notes,
                 pillars: {
-                    money: { 
-                        points: moneyPoints, 
-                        ri: moneyScore.riValue, 
-                        riPts: moneyScore.riPoints, 
-                        absoluteRevPts: moneyScore.absoluteRevenuePoints,
-                        absoluteRevenue: s.revenue 
+                    money: {
+                        points: moneyPoints,
+                        ri: moneyScore.riValue,
+                        riPts: moneyScore.riPoints,
+                        standaloneRevPts: moneyScore.standalonePoints,
+                        standaloneTierLabel: moneyScore.standaloneTierLabel,
+                        annualizedRevenue: moneyScore.annualizedRevenue,
+                        monthlyRevenue: moneyScore.monthlyRevenue,
+                        absoluteRevenue: s.revenue
                     },
-                    deliverability: { 
-                        points: deliverabilityPoints, 
-                        base: baseD, 
-                        lowVolumeAdjusted, 
+                    deliverability: {
+                        points: deliverabilityPoints,
+                        base: baseD,
+                        lowVolumeAdjusted,
                         spamZone,
                         bounceZone,
                         spamPoints,
@@ -674,18 +681,18 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                         hasRedZone,
                         hasYellowZone
                     },
-                    confidence: { 
+                    confidence: {
                         points: scPoints,
                         optimalLookbackDays,
                         hasStatisticalSignificance: volumeSufficient
                     }
                 },
-                baselines: { flowRevenueTotal, storeRevenueTotal, medianRPE, calibratedTiers },
+                baselines: { flowRevenueTotal, storeRevenueTotal, medianRPE, dateRangeDays },
             };
             results.push(resObj);
         }
 
-        return { results, context: { s1Sends, storeRevenueTotal, accountSendsTotal, flowType, medianRPE, calibratedTiers, excellentRevThreshold } } as const;
+        return { results, context: { s1Sends, storeRevenueTotal, accountSendsTotal, flowType, medianRPE, dateRangeDays, flowOptimalLookbackDays } } as const;
     }, [flowStepMetrics, dataManager, dateRange, customFrom, customTo, selectedFlow]);
 
     // Summary and indicator availability
@@ -703,25 +710,27 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const medianRPE = (stepScores as any).context?.medianRPE || 0;
         const lastRes = (stepScores as any).results?.[lastIdx] as any | undefined;
         const lastScoreVal = Number(lastRes?.score) || 0;
-        
+
         // Check if last step has any red zone issues
         const lastHasRedZone = lastRes?.pillars?.deliverability?.hasRedZone;
-        
+
         const volumeOk = last.emailsSent >= Math.max(MIN_STEP_EMAILS, Math.round(0.05 * s1Sends));
         // Deliverability gate: no red zone on last step
         const deliverabilityOk = !lastHasRedZone;
-        
+
         // RPE checks
         const rpeOk = medianRPE > 0 ? last.revenuePerEmail >= medianRPE : true;
         const prev = lastIdx > 0 ? flowStepMetrics[lastIdx - 1] : null;
         const deltaRpeOk = prev ? (last.revenuePerEmail - prev.revenuePerEmail) >= 0 : true;
-        
+
         const lastStepRevenue = last.revenue || 0;
         const flowRevenue = flowStepMetrics.reduce((sum, s) => sum + (s.revenue || 0), 0);
         const lastRevenuePct = flowRevenue > 0 ? (lastStepRevenue / flowRevenue) * 100 : 0;
-        
-        // Get calibrated tiers for absolute revenue check
-        const excellentRevThreshold = (stepScores as any).context?.excellentRevThreshold || 5000;
+
+        // Get annualized revenue for high-value check
+        const dateRangeDays = (stepScores as any).context?.dateRangeDays || 30;
+        const standaloneResult = getStandaloneRevenueScore(lastStepRevenue, dateRangeDays);
+        const isHighValueStep = standaloneResult.annualizedRevenue >= 50000; // $50k+/yr
         const absoluteRevenueOk = (lastStepRevenue >= 500) || (lastRevenuePct >= 5);
 
         // Date window gating
@@ -735,8 +744,11 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const weeksInRange = Math.max(1, days / 7);
         const isRecentWindow = endsAtLast;
 
-        // Suggest add-step when last step has a strong overall score (>=75), no red zones, and all gates pass
-        const suggested = (lastScoreVal >= 75) && deliverabilityOk && rpeOk && deltaRpeOk && volumeOk && absoluteRevenueOk && isRecentWindow;
+        // Suggest add-step: lower score threshold (65) for high-value steps ($50k+/yr)
+        // High-value steps can bypass RPE comparisons since absolute revenue is compelling
+        const scoreThreshold = isHighValueStep ? 65 : 75;
+        const rpeGatesPass = isHighValueStep ? true : (rpeOk && deltaRpeOk);
+        const suggested = (lastScoreVal >= scoreThreshold) && deliverabilityOk && rpeGatesPass && volumeOk && absoluteRevenueOk && isRecentWindow;
 
         // Generate variance-based projection using the new utility
         let projection = null;
@@ -753,9 +765,11 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         }
 
         const reason = suggested
-            ? (flowStepMetrics.length === 1 
-                ? 'Strong RPE and healthy deliverability' 
-                : `Email ${last.sequencePosition} performing well; follow-up could add value`)
+            ? (isHighValueStep
+                ? `This step generates ${standaloneResult.tierLabel.toLowerCase()} revenue (~$${Math.round(standaloneResult.monthlyRevenue / 1000)}k/mo)—a follow-up could add significant value`
+                : (flowStepMetrics.length === 1
+                    ? 'Strong RPE and healthy deliverability'
+                    : `Email ${last.sequencePosition} performing well; follow-up could add value`))
             : undefined;
 
         return {
@@ -773,15 +787,15 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 flowType: projection.flowType
             } : undefined,
             // Legacy estimate format for backward compatibility
-            estimate: projection ? { 
-                projectedReach: projection.projectedReachPerWeek, 
+            estimate: projection ? {
+                projectedReach: projection.projectedReachPerWeek,
                 rpeFloor: projection.conservativeRPE,
                 estimatedRevenue: projection.projectedRevenuePerWeek.mid,
-                assumptions: { 
-                    reachPctOfLastStep: projection.decayFactor, 
-                    rpePercentile: 25, 
-                    clampedToLastStepRpe: true 
-                } 
+                assumptions: {
+                    reachPctOfLastStep: projection.decayFactor,
+                    rpePercentile: 25,
+                    clampedToLastStepRpe: true
+                }
             } : undefined,
             gates: {
                 lastStepRevenue,
@@ -1179,14 +1193,24 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 const pct2 = (v: number) => `${(v).toFixed(2)}%`;
                                 const pct3 = (v: number) => `${(v).toFixed(3)}%`;
                                 const fmtUsd = (v: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(v);
-                                
+
                                 // Money pillar values
                                 const riVal = res.pillars?.money?.ri ?? 0;
                                 const absoluteRev = res.pillars?.money?.absoluteRevenue ?? step.revenue ?? 0;
                                 const riPts = res.pillars?.money?.riPts ?? 0;
-                                const absRevPts = res.pillars?.money?.absoluteRevPts ?? 0;
+                                const standaloneRevPts = res.pillars?.money?.standaloneRevPts ?? 0;
+                                const standaloneTierLabel = res.pillars?.money?.standaloneTierLabel || '';
+                                const annualizedRevenue = res.pillars?.money?.annualizedRevenue ?? 0;
+                                const monthlyRevenue = res.pillars?.money?.monthlyRevenue ?? 0;
                                 const flowColor = riPts >= 25 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300';
-                                const absRevColor = absRevPts >= 25 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300';
+                                const standaloneColor = standaloneRevPts >= 25 ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300';
+                                
+                                // Format annualized revenue
+                                const fmtAnnual = (v: number) => {
+                                    if (v >= 1000000) return `$${(v / 1000000).toFixed(1)}M/yr`;
+                                    if (v >= 1000) return `$${(v / 1000).toFixed(0)}k/yr`;
+                                    return `$${v.toFixed(0)}/yr`;
+                                };
 
                                 // Deliverability zone values (spam and bounce only)
                                 const spam = step.spamRate;
@@ -1195,7 +1219,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 const bounceZone = res.pillars?.deliverability?.bounceZone || 'green';
                                 const spamPts = res.pillars?.deliverability?.spamPoints ?? 0;
                                 const bouncePts = res.pillars?.deliverability?.bouncePoints ?? 0;
-                                
+
                                 // Zone color mapping
                                 const zoneColor = (zone: string) => {
                                     switch (zone) {
@@ -1205,7 +1229,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         default: return 'text-gray-700 dark:text-gray-300';
                                     }
                                 };
-                                
+
                                 // Zone indicator dot
                                 const zoneDot = (zone: string) => {
                                     const bgColor = zone === 'green' ? 'bg-emerald-500' : zone === 'yellow' ? 'bg-amber-500' : 'bg-rose-500';
@@ -1223,9 +1247,9 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 if (spamZone === 'yellow') reasons.push('spam in yellow zone');
                                 if (bounceZone === 'yellow') reasons.push('bounce in yellow zone');
                                 if (volumeLow) reasons.push('insufficient data');
-                                
+
                                 const deltaAdj = typeof baseD === 'number' ? (d - baseD) : 0;
-                                
+
                                 // Confidence pillar values
                                 const optimalLookback = res.pillars?.confidence?.optimalLookbackDays;
                                 const hasSigificance = res.pillars?.confidence?.hasStatisticalSignificance;
@@ -1236,40 +1260,45 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                         <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{label} · Score {Math.round(res.score)}</div>
                                         {/* Pillar summary */}
                                         <div className="mt-1 text-[11px] text-gray-600 dark:text-gray-400">Money {Math.round(m)} · Deliverability {Math.round(d)} · Confidence {Math.round(c)}</div>
-                                        
+
                                         {/* Money Pillar */}
                                         <div className="mt-2 text-xs text-gray-700 dark:text-gray-300 space-y-1">
                                             <div className="font-medium text-gray-800 dark:text-gray-200">Money</div>
                                             <div className="flex items-center gap-1">
-                                                <span>Revenue Index:</span> 
-                                                <span className={`tabular-nums ${flowColor}`}>{`${(riVal).toFixed(1)}×`}</span> 
-                                                <span className="text-gray-500">→</span> 
+                                                <span>Revenue Index:</span>
+                                                <span className={`tabular-nums ${flowColor}`}>{`${(riVal).toFixed(1)}×`}</span>
+                                                <span className="text-gray-500">→</span>
                                                 <span className="tabular-nums">{Math.round(riPts)}/35</span>
                                             </div>
-                                            <div className="flex items-center gap-1">
-                                                <span>Total Revenue:</span> 
-                                                <span className={`tabular-nums ${absRevColor}`}>{fmtUsd(absoluteRev)}</span> 
-                                                <span className="text-gray-500">→</span> 
-                                                <span className="tabular-nums">{Math.round(absRevPts)}/35</span>
+                                            <div className="flex items-center gap-1 flex-wrap">
+                                                <span>Total Revenue:</span>
+                                                <span className="tabular-nums">{fmtUsd(absoluteRev)}</span>
+                                                <span className="text-gray-500">→</span>
+                                                <span className={`tabular-nums ${standaloneColor}`}>{fmtAnnual(annualizedRevenue)}</span>
+                                                <span className="text-gray-500">→</span>
+                                                <span className="tabular-nums">{Math.round(standaloneRevPts)}/35</span>
                                             </div>
+                                            {standaloneTierLabel && (
+                                                <div className="text-[11px] text-gray-500 italic">{standaloneTierLabel} revenue tier</div>
+                                            )}
                                         </div>
-                                        
+
                                         {/* Deliverability Pillar (Spam + Bounce zones only) */}
                                         <div className="mt-2 text-xs text-gray-700 dark:text-gray-300">
                                             <div className="font-medium text-gray-800 dark:text-gray-200">Deliverability</div>
                                             <div className="mt-1 space-y-0.5">
                                                 <div className={`flex items-center gap-1 ${zoneColor(spamZone)}`}>
                                                     {zoneDot(spamZone)}
-                                                    <span>Spam</span> 
-                                                    <span className="tabular-nums">({pct3(spam)})</span> 
-                                                    <span className="text-gray-500">→</span> 
+                                                    <span>Spam</span>
+                                                    <span className="tabular-nums">({pct3(spam)})</span>
+                                                    <span className="text-gray-500">→</span>
                                                     <span className="tabular-nums">{spamPts}/10</span>
                                                 </div>
                                                 <div className={`flex items-center gap-1 ${zoneColor(bounceZone)}`}>
                                                     {zoneDot(bounceZone)}
-                                                    <span>Bounce</span> 
-                                                    <span className="tabular-nums">({pct2(bounce)})</span> 
-                                                    <span className="text-gray-500">→</span> 
+                                                    <span>Bounce</span>
+                                                    <span className="tabular-nums">({pct2(bounce)})</span>
+                                                    <span className="text-gray-500">→</span>
                                                     <span className="tabular-nums">{bouncePts}/10</span>
                                                 </div>
                                             </div>
@@ -1277,15 +1306,15 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                                 <div className="mt-1 text-[11px] text-gray-600 dark:text-gray-400">Low-volume adj: +{(deltaAdj).toFixed(1)} → {Math.round(d)}</div>
                                             ) : null}
                                         </div>
-                                        
+
                                         {/* Confidence Pillar */}
                                         <div className="mt-2 text-xs text-gray-700 dark:text-gray-300">
                                             <div className="font-medium text-gray-800 dark:text-gray-200">Confidence</div>
                                             <div className="mt-1 space-y-0.5">
                                                 <div>
-                                                    <span>Emails sent:</span> 
-                                                    <span className="tabular-nums ml-1">{(step.emailsSent || 0).toLocaleString('en-US')}</span> 
-                                                    <span className="text-gray-500 mx-1">→</span> 
+                                                    <span>Emails sent:</span>
+                                                    <span className="tabular-nums ml-1">{(step.emailsSent || 0).toLocaleString('en-US')}</span>
+                                                    <span className="text-gray-500 mx-1">→</span>
                                                     <span className="tabular-nums">{Math.round(c)}/10</span>
                                                 </div>
                                                 {optimalLookback && (
@@ -1296,7 +1325,7 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                                 )}
                                             </div>
                                         </div>
-                                        
+
                                         {/* Notes and gating reason */}
                                         {gated && reasons.length > 0 ? (
                                             <div className="pt-2 text-[11px] text-amber-700 dark:text-amber-300">
@@ -1671,6 +1700,32 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                     </div>
                 </div>
             </div>
+            
+            {/* Optimal Lookback Recommendation Banner */}
+            {selectedFlow && flowStepMetrics.length > 0 && (() => {
+                const flowOptimalDays = (stepScores as any).context?.flowOptimalLookbackDays || 365;
+                const isOptimal = daysInRange >= flowOptimalDays * 0.9 && daysInRange <= flowOptimalDays * 1.1;
+                const isTooShort = daysInRange < flowOptimalDays * 0.9;
+                
+                if (isOptimal) {
+                    return (
+                        <div className="mb-3">
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400 italic">
+                                ✓ You're analyzing the optimal date range ({flowOptimalDays} days) for this flow.
+                            </p>
+                        </div>
+                    );
+                } else {
+                    return (
+                        <div className="mb-3">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                                For optimal accuracy, we recommend analyzing the last {flowOptimalDays} days based on this flow's volume.
+                            </p>
+                        </div>
+                    );
+                }
+            })()}
+
             {/* Naming note styled like Data Coverage Notice (purple) */}
             <div className="mb-3">
                 <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-2.5">

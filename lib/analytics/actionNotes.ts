@@ -23,8 +23,8 @@ import {
   BOUNCE_RED_LIMIT
 } from "./deliverabilityZones";
 import {
-  calculateMoneyPillarScore,
-  getCalibratedTiers
+  calculateMoneyPillarScoreStandalone,
+  getStandaloneRevenueScore
 } from "./revenueTiers";
 import {
   inferFlowType,
@@ -486,11 +486,20 @@ type FlowStepScoreResult = {
   volumeInsufficient: boolean;
   notes: string[];
   pillars: {
-    money: { points: number; ri: number; riPts: number; absoluteRevPts: number; absoluteRevenue: number };
+    money: { 
+      points: number; 
+      ri: number; 
+      riPts: number; 
+      standaloneRevPts: number; 
+      standaloneTierLabel: string;
+      annualizedRevenue: number;
+      monthlyRevenue: number;
+      absoluteRevenue: number;
+    };
     deliverability: { points: number; base: number; lowVolumeAdjusted: boolean; spamZone: RiskZone; bounceZone: RiskZone; hasRedZone: boolean; hasYellowZone: boolean };
     confidence: { points: number; optimalLookbackDays: number; hasStatisticalSignificance: boolean };
   };
-  baselines: { flowRevenueTotal: number; storeRevenueTotal: number };
+  baselines: { flowRevenueTotal: number; storeRevenueTotal: number; dateRangeDays: number };
 };
 
 type FlowStepScoreContext = {
@@ -639,10 +648,6 @@ function computeFlowStepScoresForNotes(
       /* ignore */
     }
   }
-  
-  // Get calibrated revenue tiers
-  const calibratedTiers = getCalibratedTiers(flowRevenueTotal);
-  const excellentRevThreshold = calibratedTiers.length > 0 ? calibratedTiers[0].threshold : 50000;
 
   const results: FlowStepScoreResult[] = [];
 
@@ -656,13 +661,14 @@ function computeFlowStepScoresForNotes(
     const optimalLookbackDays = computeOptimalLookbackDays(emailsSent, dateRangeDays);
     const volumeSufficient = hasStatisticalSignificance(emailsSent, dateRangeDays, optimalLookbackDays);
 
-    // Money pillar using shared utility
+    // Money pillar using standalone annualized scoring
     const rpe = emailsSent > 0 ? (s.revenue || 0) / emailsSent : 0;
-    const moneyScore = calculateMoneyPillarScore(rpe, medianRPE, s.revenue, flowRevenueTotal);
+    const moneyScore = calculateMoneyPillarScoreStandalone(rpe, medianRPE, s.revenue, dateRangeDays);
     
     if (moneyScore.riValue >= 1.4) notes.push('High Revenue Index');
     if (storeRevenueTotal <= 0) notes.push('No store revenue in window');
     const moneyPoints = moneyScore.totalPoints;
+    const isHighValueStep = moneyScore.annualizedRevenue >= 50000;
 
     // Deliverability using zone-based scoring (spam + bounce only)
     const spam = s.spamRate;
@@ -720,9 +726,9 @@ function computeFlowStepScoresForNotes(
       action = 'pause';
     }
 
-    // Guardrail for high absolute revenue
+    // Guardrail for high annualized revenue ($50k+/yr)
     const flowShare = flowRevenueTotal > 0 ? (s.revenue / flowRevenueTotal) : 0;
-    if (!hasRedZone && action === 'pause' && (s.revenue >= excellentRevThreshold || flowShare >= 0.10)) {
+    if (!hasRedZone && action === 'pause' && (isHighValueStep || flowShare >= 0.10)) {
       action = 'keep';
       notes.push('High revenue guardrail');
     }
@@ -732,11 +738,20 @@ function computeFlowStepScoresForNotes(
       volumeInsufficient: !volumeSufficient,
       notes,
       pillars: {
-        money: { points: moneyPoints, ri: moneyScore.riValue, riPts: moneyScore.riPoints, absoluteRevPts: moneyScore.absoluteRevenuePoints, absoluteRevenue: s.revenue },
+        money: { 
+          points: moneyPoints, 
+          ri: moneyScore.riValue, 
+          riPts: moneyScore.riPoints, 
+          standaloneRevPts: moneyScore.standalonePoints, 
+          standaloneTierLabel: moneyScore.standaloneTierLabel,
+          annualizedRevenue: moneyScore.annualizedRevenue,
+          monthlyRevenue: moneyScore.monthlyRevenue,
+          absoluteRevenue: s.revenue 
+        },
         deliverability: { points: deliverabilityPoints, base: baseD, lowVolumeAdjusted, spamZone, bounceZone, hasRedZone, hasYellowZone },
         confidence: { points: scPoints, optimalLookbackDays, hasStatisticalSignificance: volumeSufficient },
       },
-      baselines: { flowRevenueTotal, storeRevenueTotal },
+      baselines: { flowRevenueTotal, storeRevenueTotal, dateRangeDays },
     });
   });
 

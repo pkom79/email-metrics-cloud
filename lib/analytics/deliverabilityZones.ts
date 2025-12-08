@@ -105,7 +105,7 @@ export const MIN_SAMPLE_SIZE = 250;
 /**
  * Minimum lookback days (even for high-volume flows)
  */
-export const MIN_LOOKBACK_DAYS = 14;
+export const MIN_LOOKBACK_DAYS = 30;
 
 /**
  * Maximum lookback days (cap for very low volume flows)
