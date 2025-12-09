@@ -712,26 +712,20 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
         const rpeGatesPass = isHighValueStep ? true : (rpeOk && deltaRpeOk);
         const suggested = (lastScoreVal >= scoreThreshold) && deliverabilityOk && rpeGatesPass && volumeOk && absoluteRevenueOk && isRecentWindow;
 
-        // Generate variance-based projection using shared logic (MUST MATCH actionNotes.ts)
-        // To match Summary, we use the SmartWindow weeks for projection
-        // This ensures the monthly projection is stable regardless of user date selection.
+        // Generate variance-based projection using user-selected date range
+        // THIS IS THE SOURCE OF TRUTH - Summary should read from this value
         let projection = null;
         if (suggested || (volumeOk && isRecentWindow)) {
             const stepRPEs = flowStepMetrics.map(s => s.revenuePerEmail).filter(r => r > 0);
 
-            // Use SmartWindow weeks to match Summary calculation exactly
-            const allCampaigns = dm.getCampaigns();
-            const allFlows = dm.getFlowEmails();
-            const smartWindow = computeSmartOpportunityWindow(allCampaigns, allFlows);
-            const smartWeeks = Math.max(1, smartWindow.days / 7);
-
+            // Use user-selected weeksInRange (this is the source of truth)
             projection = projectNewStepRevenue(
                 selectedFlow,
                 last.emailsSent,
                 last.revenuePerEmail,
                 stepRPEs,
                 medianRPE,
-                smartWeeks  // Use SmartWindow weeks to match Summary
+                weeksInRange  // User-selected date range weeks
             );
         }
 

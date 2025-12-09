@@ -1143,14 +1143,15 @@ export function computeOpportunitySummary(params: {
   }
 
   // ------------------------------
-  // Flow Analysis (Enhanced with Smart Range)
+  // Flow Analysis (Uses User-Selected Date Range)
   // ------------------------------
-  // We use the smart range (e.g. 365d) to find add-step opportunities
+  // The Detail module is the source of truth - Summary should match it
+  // by using the same user-selected date range (not SmartWindow)
   collectedNotes.push(
     ...buildFlowAddStepNotes({
-      dateRange: "custom",
-      customFrom: smartFromIso,
-      customTo: smartToIso,
+      dateRange: params.dateRange,
+      customFrom: params.customFrom,
+      customTo: params.customTo,
     })
   );
 
