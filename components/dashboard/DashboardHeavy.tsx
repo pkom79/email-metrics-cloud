@@ -1579,7 +1579,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
     const formatAbbreviated = (value: number, metric: string) => {
         if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric)) {
-             return formatPercent(value);
+            return formatPercent(value);
         }
         // Currency or Number
         const isCurrency = ['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric);
@@ -1593,7 +1593,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
             suffix = 'K';
             div = 1000;
         }
-        
+
         const val = value / div;
         let formatted = '';
         if (div === 1000000) formatted = val.toFixed(2);

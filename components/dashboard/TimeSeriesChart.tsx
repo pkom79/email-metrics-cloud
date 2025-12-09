@@ -65,7 +65,7 @@ function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigV
     const isDual = !!(secondarySeries && secondarySeries.length > 0 && secondaryMetricKey && secondaryMetricKey !== 'none');
 
     const maxVal = useMemo(() => computeAxisMax(primary.map(p => Math.max(0, p.value)), (compareMode !== 'none' && compare) ? (compare || []).map(p => Math.max(0, p.value)) : null, valueType === 'percentage' ? 'percentage' : (valueType as any)), [primary, compare, compareMode, valueType]);
-    
+
     // Secondary axis max
     const maxValSecondary = useMemo(() => {
         if (!isDual || !secondarySeries) return 0;
@@ -252,10 +252,10 @@ function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigV
                             <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 tabular-nums" style={{ color: secondaryColorHue }}>{secondaryBigValue}</div>
                         </div>
                     )}
-                    
+
                     {/* Secondary Dropdown Placeholder for Single Mode (to allow switching to dual) */}
                     {!isDual && secondaryMetricOptions && (
-                         <div className="flex flex-col items-end opacity-50 hover:opacity-100 transition-opacity">
+                        <div className="flex flex-col items-end opacity-50 hover:opacity-100 transition-opacity">
                             <div className="relative mb-1">
                                 <SelectBase value="none" onChange={e => onSecondaryMetricChange?.((e.target as HTMLSelectElement).value as MetricKey)} className="px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-pink-500 focus:border-pink-500">
                                     <option value="none">Add Metric...</option>
@@ -323,7 +323,7 @@ function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigV
 
                     {/* Y tick labels */}
                     {yTickValues.map((v, i) => { const y = yScale(v); const label = yTickLabels[i] ?? ''; return <text key={i} x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{label}</text>; })}
-                    
+
                     {/* X axis baseline */}
                     <line x1={padLeft} x2={width - padRight} y1={innerH} y2={innerH} className="stroke-gray-200 dark:stroke-gray-700" />
                     {/* X ticks */}
@@ -350,10 +350,10 @@ function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigV
                         <div className="font-semibold text-gray-900 dark:text-gray-100">{formatFullDate(primary[hoverIdx]?.iso, labelForPoint(hoverIdx))}</div>
                         {/* Current value only */}
                         <div className="tabular-nums mb-1" style={{ color: color }}>{metricOptions.find(o => o.value === metricKey)?.label}: {formatVal(active.value)}</div>
-                        
+
                         {/* Secondary Value */}
                         {isDual && secondarySeries && secondarySeries[hoverIdx] && (
-                             <div className="tabular-nums mb-1" style={{ color: secondaryColorHue }}>
+                            <div className="tabular-nums mb-1" style={{ color: secondaryColorHue }}>
                                 {secondaryMetricOptions?.find(o => o.value === secondaryMetricKey)?.label}: {
                                     // We need a formatter for secondary. For now use formatVal but it uses primary valueType.
                                     // Ideally we should pass secondaryValueType.
@@ -362,7 +362,7 @@ function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigV
                                     // Let's just use toLocaleString for now.
                                     secondarySeries[hoverIdx].value.toLocaleString('en-US', { maximumFractionDigits: 2 })
                                 }
-                             </div>
+                            </div>
                         )}
 
                         {cmpActive && !isDual && (
