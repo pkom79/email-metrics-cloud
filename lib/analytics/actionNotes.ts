@@ -577,10 +577,26 @@ function processFlowOpportunity(
   const lastStep = stepMetrics[stepMetrics.length - 1];
   const allRPEs = stepMetrics.map(s => s.revenuePerEmail);
 
+  // Calculate Median RPE from valid steps
+  const validRPEs = allRPEs.filter(r => r > 0).sort((a, b) => a - b);
+  let medianRPE = 0;
+  if (validRPEs.length > 0) {
+      const mid = Math.floor(validRPEs.length / 2);
+      medianRPE = validRPEs.length % 2 === 0 
+          ? (validRPEs[mid - 1] + validRPEs[mid]) / 2 
+          : validRPEs[mid];
+  }
+
+  // Update baselines with computed median
+  const baselinesWithMedian = {
+      ...baselines,
+      medianRPE
+  };
+
   const scoreResult = computeFlowStepScore(
     lastStep, 
     accountContext, 
-    baselines, 
+    baselinesWithMedian, 
     flowName
   );
 
@@ -589,7 +605,7 @@ function processFlowOpportunity(
     lastStep,
     null, // It is the last step
     scoreResult,
-    baselines.medianRPE,
+    medianRPE,
     allRPEs,
     weeksInRange
   );
@@ -1240,10 +1256,7 @@ export function computeOpportunitySummary(params: {
       metadata: note.metadata || undefined,
     };
 
-    breakdown.push(item);
-    category.items.push(item);
     // Monthly-First Aggregation Strategy
-    // We sum up monthly potential first, then project annual/daily from that.
     const monthlyVal = note.estimatedImpact?.monthly || 0;
     const annualVal = monthlyVal * 12;
 
