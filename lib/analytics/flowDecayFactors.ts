@@ -6,6 +6,26 @@
  */
 
 /**
+ * Interface for the output of projectNewStepRevenue.
+ */
+export interface FlowDecayProjection {
+  projectedReachPerWeek: number;
+  projectedRevenuePerWeek: {
+    low: number;
+    mid: number;
+    high: number;
+  };
+  conservativeRPE: number;
+  decayFactor: number;
+  flowType: FlowType;
+  confidenceLevel: 'low' | 'medium' | 'high';
+  intervalMultipliers: {
+    low: number;
+    high: number;
+  };
+}
+
+/**
  * Flow type categories with associated decay factors.
  * Decay factor represents expected reach ratio of new step vs previous step.
  */
