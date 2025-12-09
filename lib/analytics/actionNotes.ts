@@ -5,7 +5,7 @@ import type { AudienceSizeBucket } from "./audienceSizeBuckets";
 import { computeCampaignGapsAndLosses } from "./campaignGapsLosses";
 import { computeCampaignDayPerformance } from "./campaignDayPerformance";
 import { computeDeadWeightSavings } from "./deadWeightSavings";
-import { sendVolumeGuidanceV2 } from "./sendVolumeGuidanceV2";
+import { sendVolumeGuidanceV2, computeOptimalVolumeWindow } from "./sendVolumeGuidanceV2";
 import { DataManager } from "../data/dataManager";
 import { computeSmartOpportunityWindow } from "../utils/smartOpportunityWindow";
 import {
@@ -162,14 +162,36 @@ export function buildSendVolumeNote(params: {
   dateRange: string;
   customFrom?: string;
   customTo?: string;
+  // If true, calculation ignores params and forces the optimal window (for Summary)
+  forceOptimal?: boolean; 
 }): ModuleActionNote[] {
-  // Use V2 logic which handles optimal date ranges and revenue projection
-  // Force "all" range to ensure sufficient history for regression analysis
-  // regardless of the user's current view.
+  // If forcing optimal (for Summary), compute it regardless of inputs
+  let rangeToUse = params.dateRange;
+  let fromToUse = params.customFrom;
+  let toToUse = params.customTo;
+
+  if (params.forceOptimal) {    
+    const dm = DataManager.getInstance();
+    const allCampaigns = dm.getCampaigns();
+    const { days } = computeOptimalVolumeWindow(allCampaigns);
+    
+    // Construct optimal custom range
+    const lastCampaignDate = allCampaigns.length > 0 
+        ? Math.max(...allCampaigns.map(c => c.sentDate.getTime())) 
+        : Date.now();
+        
+    const end = new Date(lastCampaignDate);
+    const start = new Date(lastCampaignDate - (days * 24 * 60 * 60 * 1000));
+    
+    rangeToUse = "custom";
+    fromToUse = start.toISOString().split('T')[0];
+    toToUse = end.toISOString().split('T')[0];
+  }
+
   const result = sendVolumeGuidanceV2(
-    params.customFrom && params.customTo ? "custom" : "all",
-    params.customFrom,
-    params.customTo
+    rangeToUse,
+    fromToUse,
+    toToUse
   );
 
   const title = (() => {
@@ -190,26 +212,34 @@ export function buildSendVolumeNote(params: {
 
   // Construct estimate if available
   let estimatedImpact: OpportunityEstimate | null = null;
-  if (result.projectedMonthlyGain && result.projectedMonthlyGain > 0) {
+  // LOCK & KEY: Only show estimate if we projected a gain AND (we are forced optimal OR range is optimal)
+  const isOptimal = params.forceOptimal || (result.dataContext as any).isOptimalRange;
+  
+  if (isOptimal && result.projectedMonthlyGain && result.projectedMonthlyGain > 0) {
     const monthly = result.projectedMonthlyGain;
     estimatedImpact = {
+      // Monthly First Strategy
       monthly,
       annual: monthly * 12,
-      weekly: monthly / 4,
+      weekly: monthly / 4, // Approx
       type: "lift",
       description: "Projected revenue gain from increasing campaign volume",
       basis: `Based on logarithmic regression (Strength: ${result.correlationCoefficient?.toFixed(2)})`
     };
   }
 
+  const message = params.forceOptimal || isOptimal 
+    ? result.message
+    : `For optimal accuracy, we recommend analyzing the last ${(result.dataContext as any).optimalCapDays} days based on your account's volume.`;
+
   return [
     {
       module: "sendVolumeImpact",
-      scope: "campaigns", // V2 focuses on campaigns
+      scope: "campaigns", 
       status: result.status,
       title,
-      message: result.message,
-      sample: null, // V2 handles sample display differently in UI
+      message,
+      sample: null, 
       estimatedImpact,
       metadata: {
         sampleSize: result.sampleSize,
@@ -219,6 +249,7 @@ export function buildSendVolumeNote(params: {
         avgSpamRate: result.avgSpamRate,
         avgBounceRate: result.avgBounceRate,
         dataContext: result.dataContext,
+        isOptimalRange: isOptimal
       },
     } satisfies ModuleActionNote
   ];
@@ -1084,13 +1115,19 @@ export function computeOpportunitySummary(params: {
   const smartFlows = allFlows.filter(f => f.sentDate >= smartRange.start && f.sentDate <= smartRange.end);
 
   if (campaignsInRange.length) {
-    collectedNotes.push(
-      ...buildSendVolumeNote({
-        dateRange: "custom",
-        customFrom: smartFromIso,
-        customTo: smartToIso,
-      })
-    );
+    // 1. Send Volume (Summary Mode: Force Optimal)
+    // We calculate this "Perfect" number for the summary accumulation,
+    // even if it differs from what the user might see in detail view (if they selected wrong date).
+    const bioOptimalVolumeNotes = buildSendVolumeNote({
+        dateRange: "custom", // Dummy
+        forceOptimal: true
+    });
+    collectedNotes.push(...bioOptimalVolumeNotes);
+    
+    // 2. Also run strictly scoped volume note if needed for detailed display matching current UI?
+    // Actually, computeOpportunitySummary is mainly for the top card. 
+    // The individual components call these builders themselves usually.
+    // So sticking to the "Optimal" one here ensures the Summary Card is always "Best Case".
 
     collectedNotes.push(
       buildSendFrequencyNote({
@@ -1246,7 +1283,14 @@ export function computeOpportunitySummary(params: {
 
     breakdown.push(item);
     category.items.push(item);
-    category.totalAnnual += amountAnnual;
+    // Monthly-First Aggregation Strategy
+    // We sum up monthly potential first, then project annual/daily from that.
+    const monthlyVal = note.estimatedImpact?.monthly || 0;
+    const annualVal = monthlyVal * 12;
+
+    breakdown.push(item);
+    category.items.push(item);
+    category.totalAnnual += annualVal;
 
     if (meta.category === "audience" && note.metadata) {
       category.metadata = {
@@ -1320,6 +1364,7 @@ export function computeOpportunitySummary(params: {
     });
 
   const totalAnnual = categories.reduce((sum, cat) => sum + cat.totalAnnual, 0);
+  // Derived totals
   const totalMonthly = totalAnnual / 12;
   const totalWeekly = totalAnnual / 52;
   const percentOfEmailRevenue = baselineEmailRevenue && baselineEmailRevenue > 0 ? (totalAnnual / baselineEmailRevenue) * 100 : null;

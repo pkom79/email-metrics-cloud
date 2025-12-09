@@ -24,6 +24,7 @@ export interface SendVolumeGuidanceResultV2 {
         optimalCapDays: number;
         isHighVolume: boolean;
         capped: boolean;
+        isOptimalRange?: boolean;
     };
 }
 
@@ -65,8 +66,8 @@ export function sendVolumeGuidanceV2(
     const weeksInPeriod = Math.max(1, durationDays / 7);
     const avgFreq = recentCampaigns.length / weeksInPeriod;
     
-    const isHighVolume = avgFreq >= 3;
-    const optimalCapDays = isHighVolume ? 90 : 180;
+    // Use shared logic for optimal window
+    const { days: optimalCapDays, isHighVolume } = computeOptimalVolumeWindow(allCampaigns);
 
     // Step 1: Date Range Parsing
     let { fromDate, toDate } = parseDateRange(dateRange, customFrom, customTo);
@@ -91,8 +92,13 @@ export function sendVolumeGuidanceV2(
 
     // Step 3: Minimum Data Gates
     const MIN_CAMPAIGNS = 12;
-    const MIN_LOOKBACK_DAYS = 90;
+    // CRITICAL: We enforce the optimal lookback for accuracy.
+    // If the user's selected range deviates significantly (>10%) from the optimal,
+    // we should flag it (and potentially hide projections in strict mode).
     const lookbackDays = toDate.diff(fromDate, 'days');
+    const isOptimalRange = Math.abs(lookbackDays - optimalCapDays) < (optimalCapDays * 0.15); // 15% tolerance
+
+    const MIN_LOOKBACK_DAYS = 90;
 
     if (qualifiedCampaigns.length < MIN_CAMPAIGNS || lookbackDays < MIN_LOOKBACK_DAYS) {
         return createInsufficientResponse(
@@ -227,8 +233,41 @@ export function sendVolumeGuidanceV2(
             variancePercent,
             optimalCapDays,
             isHighVolume,
-            capped
+            capped,
+            // Pass the check result so UI can show/hide warning
+            isOptimalRange 
         },
+    };
+}
+
+/**
+ * NEW: Compute optimal volume window based on send frequency.
+ * High frequency (3+/week) -> 90 days
+ * Low/Med frequency -> 180 days
+ */
+export function computeOptimalVolumeWindow(campaigns: ProcessedCampaign[]): { days: number, isHighVolume: boolean } {
+    const lastCampaignDate = campaigns.length > 0 
+        ? Math.max(...campaigns.map(c => c.sentDate.getTime())) 
+        : Date.now();
+    const lastDataDate = dayjs(lastCampaignDate);
+    
+    // Look at last 90 days density
+    const ninetyDaysAgo = lastDataDate.subtract(90, 'days');
+    const recentCampaigns = campaigns.filter(c => dayjs(c.sentDate).isAfter(ninetyDaysAgo));
+    
+    const firstRecent = recentCampaigns.length > 0 
+        ? recentCampaigns.reduce((min, c) => c.sentDate.getTime() < min ? c.sentDate.getTime() : min, lastCampaignDate)
+        : lastCampaignDate;
+        
+    const durationDays = Math.max(1, dayjs(lastCampaignDate).diff(dayjs(firstRecent), 'days'));
+    const weeksInPeriod = Math.max(1, durationDays / 7);
+    const avgFreq = recentCampaigns.length / weeksInPeriod;
+    
+    const isHighVolume = avgFreq >= 3;
+    
+    return {
+        days: isHighVolume ? 90 : 180,
+        isHighVolume
     };
 }
 
