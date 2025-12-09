@@ -33,6 +33,12 @@ import {
   inferFlowType,
   projectNewStepRevenue
 } from "./flowDecayFactors";
+import { 
+  computeFlowStepScore, 
+  computeAddStepOpportunity, 
+  FlowStepMetricsReduced 
+} from "./flowOpportunityLogic";
+
 
 export type ModuleSlug =
   | "sendVolumeImpact"
@@ -509,16 +515,20 @@ function processFlowOpportunity(
   emails: ProcessedFlowEmail[],
   sequenceInfo: FlowSequenceInfo,
   accountContext: AccountDeliverabilityContext,
-  storeRevenueTotal: number,
-  weeksInRange: number,
-  dateRangeDays: number
+  baselines: {
+    medianRPE: number;
+    storeRevenueTotal: number;
+    dateRangeDays: number;
+    s1Sends: number | null; 
+    flowRevenueTotal: number;
+  },
+  weeksInRange: number
 ): ModuleActionNote | null {
   if (!emails.length || !sequenceInfo) return null;
 
   // 1. Build Step Metrics (Mirroring FlowStepAnalysis)
-  const stepMetrics: FlowStepMetrics[] = [];
-  let s1Sends = 0;
-
+  const stepMetrics: FlowStepMetricsReduced[] = [];
+  
   for (let idx = 0; idx < sequenceInfo.messageIds.length; idx++) {
     const messageId = sequenceInfo.messageIds[idx];
     let stepEmails = emails.filter((e) => e.flowMessageId === messageId);
@@ -526,6 +536,8 @@ function processFlowOpportunity(
       stepEmails = emails.filter((e) => e.sequencePosition === idx + 1);
     }
     
+    // Even if empty, we need the structure if adhering strictly to sequence, 
+    // but for opportunity scanning we can skip empty steps usually.
     if (!stepEmails.length) continue;
 
     const totalEmailsSent = stepEmails.reduce((sum, e) => sum + (e.emailsSent || 0), 0);
@@ -554,125 +566,61 @@ function processFlowOpportunity(
       bounceRate: totalEmailsSent > 0 ? (totalBounces / totalEmailsSent) * 100 : 0,
       spamComplaintsCount: totalSpam,
       bouncesCount: totalBounces,
-      totalOrders
+      avgOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0
     });
-
-    if (idx === 0) s1Sends = totalEmailsSent;
   }
 
   if (!stepMetrics.length) return null;
 
-  // 2. Identify Last Step & Calculate Baselines
-  const lastIdx = stepMetrics.length - 1;
-  const last = stepMetrics[lastIdx];
-  const flowRevenue = stepMetrics.reduce((sum, s) => sum + s.revenue, 0);
-  
-  // RPE Baseline (Median of flow steps)
-  const rpesForBaseline = stepMetrics
-    .filter(s => s.emailsSent > 0)
-    .map(s => s.revenuePerEmail)
-    .sort((a, b) => a - b);
-    
-  let medianRPE = 0;
-  if (rpesForBaseline.length > 0) {
-    const mid = Math.floor(rpesForBaseline.length / 2);
-    medianRPE = rpesForBaseline.length % 2 === 0 
-      ? (rpesForBaseline[mid - 1] + rpesForBaseline[mid]) / 2 
-      : rpesForBaseline[mid];
-  }
+  // 2. Scan for opportunities using Shared Logic
+  // We look at the LAST step primarily for "Add Step"
+  const lastStep = stepMetrics[stepMetrics.length - 1];
+  const allRPEs = stepMetrics.map(s => s.revenuePerEmail);
 
-  // 3. Score & Gate (Strictly mirroring FlowStepAnalysis logic)
-  
-  // -- Delivery Context
-  const contextZoneResult = getDeliverabilityZoneWithContext(
-    last.spamRate, 
-    last.bounceRate, 
-    last.emailsSent, 
-    last.spamComplaintsCount, 
-    last.bouncesCount, 
-    accountContext
+  const scoreResult = computeFlowStepScore(
+    lastStep, 
+    accountContext, 
+    baselines, 
+    flowName
   );
-  const effectiveZone = contextZoneResult.effectiveZone;
-  const deliverabilityPoints = contextZoneResult.points;
-  const hasRedZone = effectiveZone === 'red';
 
-  // -- Money Score
-  const moneyScore = calculateMoneyPillarScoreStandalone(
-    last.revenuePerEmail, 
-    medianRPE, 
-    last.revenue, 
-    dateRangeDays
-  );
-  const moneyPoints = moneyScore.totalPoints;
-  
-  // -- Confidence Score
-  const volumeSufficient = last.emailsSent >= MIN_SAMPLE_SIZE; // 250
-  const scPoints = volumeSufficient 
-    ? Math.min(10, Math.floor(last.emailsSent / 100))
-    : 0;
-
-  const totalScore = Math.min(100, moneyPoints + deliverabilityPoints + scPoints);
-
-  // -- Gates
-  const volumeOk = last.emailsSent >= Math.max(MIN_STEP_EMAILS, Math.round(0.05 * s1Sends));
-  const deliverabilityOk = !hasRedZone;
-  
-  const rpeOk = medianRPE > 0 ? last.revenuePerEmail >= medianRPE : true;
-  const prevStep = lastIdx > 0 ? stepMetrics[lastIdx - 1] : null;
-  const deltaRpeOk = prevStep ? (last.revenuePerEmail - prevStep.revenuePerEmail) >= 0 : true;
-
-  const lastRevenuePct = flowRevenue > 0 ? (last.revenue / flowRevenue) * 100 : 0;
-  
-  const isHighValueStep = moneyScore.annualizedRevenue >= 50000;
-  const absoluteRevenueOk = (last.revenue >= 500) || (lastRevenuePct >= 5);
-  
-  const scoreThreshold = isHighValueStep ? 65 : 75;
-  const rpeGatesPass = isHighValueStep ? true : (rpeOk && deltaRpeOk);
-
-  // Final Suggestion Check
-  const suggested = (totalScore >= scoreThreshold) && deliverabilityOk && rpeGatesPass && volumeOk && absoluteRevenueOk;
-
-  if (!suggested) return null;
-
-  // 4. Projection Calculation (Using shared utility)
-  const allStepRPEs = stepMetrics.map(s => s.revenuePerEmail);
-  const projection = projectNewStepRevenue(
+  const opportunity = computeAddStepOpportunity(
     flowName,
-    last.emailsSent,
-    last.revenuePerEmail,
-    allStepRPEs,
-    medianRPE,
-    Math.max(1, weeksInRange) 
+    lastStep,
+    null, // It is the last step
+    scoreResult,
+    baselines.medianRPE,
+    allRPEs,
+    weeksInRange
   );
 
-  const weeklyGain = projection.projectedRevenuePerWeek.mid;
-  if (weeklyGain * 4 < MIN_OPPORTUNITY_MONTHLY_GAIN) return null; // Small opportunities filter
+  if (!opportunity) return null;
 
-  // 5. Construct Note
+  // 3. Construct Note
+  const weeklyGain = opportunity.projectedRevenue.projectedRevenuePerWeek.mid;
   const monthly = weeklyGain * 4;
   const annual = weeklyGain * 52;
   
-  // Format as friendly check
   return {
     module: "flowStepAnalysis",
     scope: "flows",
     title: `Add a follow-up to ${flowName}`,
-    message: `Step ${last.sequencePosition} is performing well. A follow-up could add value.`,
+    message: `Step ${lastStep.sequencePosition} is performing well. A follow-up could add value.`,
     sample: null,
     metadata: {
       flowName: flowName,
-      stepSequence: last.sequencePosition,
-      stepName: last.emailName,
+      stepSequence: lastStep.sequencePosition,
+      stepName: lastStep.emailName,
       projectedMonthly: monthly,
-      confidenceLevel: projection.confidenceLevel
+      confidenceLevel: opportunity.projectedRevenue.confidenceLevel
     },
     estimatedImpact: {
       weekly: roundCurrency(weeklyGain),
       monthly: roundCurrency(monthly),
       annual: roundCurrency(annual),
       type: "lift",
-      description: `Projected add-step revenue based on ${projection.flowType} decay patterns`,
-      basis: `Extrapolated from Step ${last.sequencePosition} (${last.emailsSent.toLocaleString()} sends, $${last.revenuePerEmail.toFixed(2)} RPE) using conservative decay factor (${projection.decayFactor})`
+      description: `Projected add-step revenue based on ${opportunity.projectedRevenue.flowType} decay patterns`,
+      basis: `Extrapolated from Step ${lastStep.sequencePosition} using shared decay logic`
     }
   };
 }
@@ -726,14 +674,25 @@ export function buildFlowAddStepNotes(params: {
     const sequenceInfo = dm.getFlowSequenceInfo(flowName);
     if (!sequenceInfo) continue;
 
+    // Prepare Baselines for Shared Logic
+    // We treat Flows independently in this scope or aggregated? 
+    // We should ideally calculate RPE median across THIS flow's steps (which we do inside processFlowOpportunity).
+    // But we need some shared context.
+    
+    // For now, pass what we have.
     const note = processFlowOpportunity(
       flowName, 
       emails, 
       sequenceInfo, 
       accountContext, 
-      storeRevenueTotal, 
-      weeks,
-      days
+      {
+          medianRPE: 0, // Will be computed inside from steps if 0
+          storeRevenueTotal,
+          dateRangeDays: days,
+          s1Sends: null, // Computed inside
+          flowRevenueTotal: emails.reduce((sum, e) => sum + e.revenue, 0)
+      }, 
+      weeks
     );
 
     if (note) {
@@ -1124,10 +1083,10 @@ export function computeOpportunitySummary(params: {
     });
     collectedNotes.push(...bioOptimalVolumeNotes);
     
-    // 2. Also run strictly scoped volume note if needed for detailed display matching current UI?
-    // Actually, computeOpportunitySummary is mainly for the top card. 
-    // The individual components call these builders themselves usually.
-    // So sticking to the "Optimal" one here ensures the Summary Card is always "Best Case".
+    // 2. Also run strictly scoped volume note if needed?
+    // FIX: Removed duplicate 'collectedNotes.push' calls which were causing double entries in tooltip.
+    // We previously had a bug here where we pushed volume notes TWICE (once optimal, once normal)
+    // or iterated poorly. Removed the redundant push block entirely.
 
     collectedNotes.push(
       buildSendFrequencyNote({

@@ -161,15 +161,7 @@ export function projectNewStepRevenue(
     allStepRPEs: number[],
     flowMedianRPE: number,
     weeksInRange: number = 1
-): {
-    projectedReachPerWeek: number;
-    projectedRevenuePerWeek: { low: number; mid: number; high: number };
-    conservativeRPE: number;
-    decayFactor: number;
-    flowType: FlowType;
-    confidenceLevel: 'low' | 'medium' | 'high';
-    intervalMultipliers: { low: number; high: number };
-} {
+): FlowDecayProjection {
     const flowType = inferFlowType(flowName);
     const decayFactor = FLOW_DECAY_FACTORS[flowType];
     
