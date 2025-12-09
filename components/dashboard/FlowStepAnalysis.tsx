@@ -6,6 +6,7 @@ import { DataManager } from '../../lib/data/dataManager';
 import { thirdTicks, formatTickLabels, computeAxisMax } from '../../lib/utils/chartTicks';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import TooltipPortal from '../TooltipPortal';
+import { buildFlowAddStepNotes } from '../../lib/analytics/actionNotes';
 import {
     getRiskZone,
     getDeliverabilityPoints,
@@ -1769,14 +1770,21 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 );
             })()}
             {/* Revenue Opportunity Projection */}
-            {selectedFlow && (addStepSuggestion as any)?.suggested && (addStepSuggestion as any)?.estimate && (() => {
+            {selectedFlow && (addStepSuggestion as any)?.suggested && (() => {
                 const flowOptimalDays = (stepScores as any).context?.flowOptimalLookbackDays;
                 if (!flowOptimalDays) return null;
                 const isOptimalWindow = daysInRange >= flowOptimalDays * 0.9 && daysInRange <= flowOptimalDays * 1.1;
                 if (!isOptimalWindow || accountInsufficient) return null;
 
-                const est = (addStepSuggestion as any).estimate;
-                const monthlyGain = est.estimatedRevenue * 4.33;
+                // Get the Summary's precomputed value to guarantee identical display
+                const summaryNotes = buildFlowAddStepNotes({
+                    dateRange: 'custom',
+                    customFrom: undefined,
+                    customTo: undefined
+                });
+                const matchingNote = summaryNotes.find(n => n.metadata?.flowName === selectedFlow);
+                const monthlyGain = matchingNote?.estimatedImpact?.monthly ?? 0;
+                if (monthlyGain <= 0) return null;
 
                 return (
                     <div className="mt-4 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
