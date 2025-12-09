@@ -163,10 +163,12 @@ export function buildSendVolumeNote(params: {
   customTo?: string;
 }): ModuleActionNote[] {
   // Use V2 logic which handles optimal date ranges and revenue projection
+  // Force "all" range to ensure sufficient history for regression analysis
+  // regardless of the user's current view.
   const result = sendVolumeGuidanceV2(
-    params.dateRange,
-    params.customFrom,
-    params.customTo
+    "all",
+    undefined,
+    undefined
   );
 
   const title = (() => {
