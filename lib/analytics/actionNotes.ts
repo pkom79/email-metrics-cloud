@@ -1,12 +1,11 @@
 import type { FrequencyBucketAggregate } from "./campaignSendFrequency";
-import type { SendVolumeGuidanceResult } from "./sendVolumeGuidance";
 import { computeCampaignSendFrequency, computeSendFrequencyGuidance } from "./campaignSendFrequency";
 import { computeAudienceSizeBuckets } from "./audienceSizeBuckets";
 import type { AudienceSizeBucket } from "./audienceSizeBuckets";
 import { computeCampaignGapsAndLosses } from "./campaignGapsLosses";
 import { computeCampaignDayPerformance } from "./campaignDayPerformance";
 import { computeDeadWeightSavings } from "./deadWeightSavings";
-import { computeSendVolumeGuidance } from "./sendVolumeGuidance";
+import { sendVolumeGuidanceV2 } from "./sendVolumeGuidanceV2";
 import { DataManager } from "../data/dataManager";
 import {
   getRiskZone,
@@ -158,84 +157,68 @@ function makeEstimate(
 // Send Volume Impact
 // ------------------------------
 
-function buildSendVolumeSample(result: SendVolumeGuidanceResult): string | null {
-  if (!result.sampleSize || !result.periodType) return null;
-  const unit = result.periodType === "weekly" ? "week" : "month";
-  const count = result.sampleSize;
-  const plural = count === 1 ? unit : `${unit}s`;
-  const channelLabel =
-    result.channel === "all"
-      ? "overall email activity"
-      : `${result.channel} activity`;
-  return `Based on ${count} ${plural} of ${channelLabel} in this range.`;
-}
-
-export function buildSendVolumeNotes(params: {
+export function buildSendVolumeNote(params: {
   dateRange: string;
   customFrom?: string;
   customTo?: string;
 }): ModuleActionNote[] {
-  const dm = DataManager.getInstance();
-  const base: Array<{ key: "all" | "campaigns" | "flows"; label: string }> = [
-    { key: "all", label: "All Emails" },
-    { key: "campaigns", label: "Campaigns" },
-    { key: "flows", label: "Flows" },
-  ];
-  return base.map(({ key, label }) => {
-    const result = computeSendVolumeGuidance(key, { ...params }, dm);
-    const title = (() => {
-      if (result.status === "insufficient") {
-        return `Not enough data to evaluate ${label.toLowerCase()} volume`;
-      }
-      switch (result.channel) {
-        case "all":
-          return `${label}: ${
-            result.status === "send-more"
-              ? "Scale total volume"
-              : result.status === "send-less"
-              ? "Trim total volume"
-              : "Hold steady"
-          }`;
-        case "campaigns":
-          return `${label}: ${
-            result.status === "send-more"
-              ? "Increase"
-              : result.status === "send-less"
-              ? "Reduce"
-              : "Keep"
-          } volume`;
-        case "flows":
-        default:
-          return `${label}: ${
-            result.status === "send-more"
-              ? "Scale"
-              : result.status === "send-less"
-              ? "Trim"
-              : "Maintain"
-          } send volume`;
-      }
-    })();
-    return {
+  // Use V2 logic which handles optimal date ranges and revenue projection
+  const result = sendVolumeGuidanceV2(
+    params.dateRange,
+    params.customFrom,
+    params.customTo
+  );
+
+  const title = (() => {
+    if (result.status === "insufficient") {
+      return "Not enough data to evaluate send volume";
+    }
+    switch (result.status) {
+      case "send-more":
+        return "Campaign Send Volume: Scale total volume";
+      case "send-less":
+        return "Campaign Send Volume: Trim total volume";
+      case "optimize":
+        return "Campaign Send Volume: Optimize content";
+      default:
+        return "Campaign Send Volume";
+    }
+  })();
+
+  // Construct estimate if available
+  let estimatedImpact: OpportunityEstimate | null = null;
+  if (result.projectedMonthlyGain && result.projectedMonthlyGain > 0) {
+    const monthly = result.projectedMonthlyGain;
+    estimatedImpact = {
+      monthly,
+      annual: monthly * 12,
+      weekly: monthly / 4,
+      type: "lift",
+      description: "Projected revenue gain from increasing campaign volume",
+      basis: `Based on logarithmic regression (Strength: ${result.correlationCoefficient?.toFixed(2)})`
+    };
+  }
+
+  return [
+    {
       module: "sendVolumeImpact",
-      scope: result.channel,
+      scope: "campaigns", // V2 focuses on campaigns
       status: result.status,
       title,
       message: result.message,
-      sample: buildSendVolumeSample(result),
-      estimatedImpact: null,
+      sample: null, // V2 handles sample display differently in UI
+      estimatedImpact,
       metadata: {
         sampleSize: result.sampleSize,
-        periodType: result.periodType,
-        revenueScore: result.revenueScore,
-        riskScore: result.riskScore,
-        trigger: result.trigger,
-        deliverabilityBreached: result.deliverabilityBreached,
-        maxRates: result.maxRates,
-        thresholds: result.thresholds,
-        correlations: result.correlations,
+        correlationCoefficient: result.correlationCoefficient,
+        projectedMonthlyGain: result.projectedMonthlyGain,
+        highRisk: result.highRisk,
+        avgSpamRate: result.avgSpamRate,
+        avgBounceRate: result.avgBounceRate,
+        dataContext: result.dataContext,
       },
-    } satisfies ModuleActionNote;
-  });
+    } satisfies ModuleActionNote
+  ];
 }
 
 // ------------------------------
@@ -1127,6 +1110,11 @@ export function computeOpportunitySummary(params: {
       label: () => "Send Frequency Optimization",
       type: "lift",
     },
+    sendVolumeImpact: {
+      category: "campaigns",
+      label: () => "Campaign Send Volume Optimization",
+      type: "lift",
+    },
     audienceSizePerformance: {
       category: "campaigns",
       label: () => "Campaign Performance by Audience Size",
@@ -1222,26 +1210,36 @@ export function computeOpportunitySummary(params: {
       if (cat.key === "campaigns" && cat.baselineAnnual) {
         
         // Campaign Optimization Blending Logic
-        // 1. Identify Frequency vs Audience (Overlap) vs Gap (Independent)
+        // 1. Identify Frequency vs Audience (Overlap) vs Gap (Independent) vs Volume (Comprehensive)
         const freqItem = cat.items.find(i => i.module === 'campaignSendFrequency');
         const audItem = cat.items.find(i => i.module === 'audienceSizePerformance');
         const gapItem = cat.items.find(i => i.module === 'campaignGapsLosses');
+        const volItem = cat.items.find(i => i.module === 'sendVolumeImpact');
         
         const freqVal = freqItem ? freqItem.amountAnnual : 0;
         const audVal = audItem ? audItem.amountAnnual : 0;
         const gapVal = gapItem ? gapItem.amountAnnual : 0;
+        const volVal = volItem ? volItem.amountAnnual : 0;
         
-        // Overlap: Take max of Frequency/Audience + 50% of the other
-        // This assumes they are partially independent strategies but share revenue source
-        const maxOpt = Math.max(freqVal, audVal);
-        const minOpt = Math.min(freqVal, audVal);
-        const optimizationTotal = maxOpt + (minOpt * 0.5);
+        // Priority: If Volume Impact (V2) is available, use it as the single source for "Optimization"
+        // and suppress Frequency/Audience items from the total (since Volume covers them).
+        let optimizationTotal = 0;
         
-        // Gap elimination is additive (it recovers lost time periods, effectively "filling holes")
-        // though strictly it competes for wallet share, we treat it as additive recovery.
+        if (volVal > 0) {
+          optimizationTotal = volVal;
+          // Filter out freq/aud items from display array so they don't show up as duplicates
+          cat.items = cat.items.filter(i => i.module !== 'campaignSendFrequency' && i.module !== 'audienceSizePerformance');
+        } else {
+          // Fallback to legacy blending if V2 has no result (e.g. insufficient data)
+          const maxOpt = Math.max(freqVal, audVal);
+          const minOpt = Math.min(freqVal, audVal);
+          optimizationTotal = maxOpt + (minOpt * 0.5);
+        }
+        
+        // Gap elimination is additive (Recovery vs Optimization)
         const totalCampaignImpact = optimizationTotal + gapVal;
         
-        // Update category total to reflect blended value instead of simple sum
+        // Update category total
         cat.totalAnnual = totalCampaignImpact;
         
         percentOfBaseline = cat.baselineAnnual > 0 ? (cat.totalAnnual / cat.baselineAnnual) * 100 : null;
