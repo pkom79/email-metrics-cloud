@@ -394,7 +394,7 @@ function TimeSeriesChart({
                     {/* Secondary points for hover visibility (line mode) */}
                     {hasSecondary && chartType === 'line' && secondaryPts.map((p, i) => (
                         <circle key={`secondary-dot-${i}`} cx={p.x} cy={p.y} r={3} fill={secondaryColor} />
-                    )}
+                    ))}
 
                     {/* Y tick labels */}
                     {yTickValues.map((v, i) => { const y = yScalePrimary(v); const label = yTickLabels[i] ?? ''; return <text key={i} x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{label}</text>; })}
