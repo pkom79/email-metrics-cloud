@@ -553,9 +553,16 @@ export function computeSendFrequencyGuidance(
       const isConfident = bestBucket.weeksCount >= TEST_WEEKS_THRESHOLD;
       const recKind = isConfident ? 'scale' : 'test';
       
-      // Only show revenue projection for Full recommendations (isConfident)
-      const projectedMonthlyGain = isConfident ? calculateProjectedGain(bestBucket) : null;
-      
+      // Calculate projection (LCB if confident, simple average diff discounted if testing)
+      let projectedMonthlyGain = null;
+      if (isConfident) {
+          projectedMonthlyGain = calculateProjectedGain(bestBucket);
+      } else {
+          // For tests, use simple difference vs baseline, heavily discounted (50%) for uncertainty
+           const rawLift = (getRevenueValue(bestBucket) - getRevenueValue(dominant)) * 4;
+           projectedMonthlyGain = rawLift > 0 ? rawLift * 0.5 : null;
+      }
+
       return {
         status: 'send-more',
         recommendationKind: recKind,

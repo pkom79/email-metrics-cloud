@@ -395,7 +395,7 @@ function pickAudienceSizeNote(
     };
   }
 
-  const best = [...qualified].sort((a, b) => b.totalRevenue - a.totalRevenue)[0];
+  const best = [...qualified].sort((a, b) => b.avgCampaignRevenue - a.avgCampaignRevenue)[0];
   const safe = qualified.filter((b) => b !== best);
 
   const buildMessage = (bucket: AudienceSizeBucket, safeChoice = false) => {
@@ -1004,7 +1004,8 @@ export function computeOpportunitySummary(params: {
     const recommendationKind = typeof meta["recommendationKind"] === "string" ? String(meta["recommendationKind"]) : null;
     const weeklyDeltaValue = meta["weeklyDelta"];
     const weeklyDelta = typeof weeklyDeltaValue === "number" ? weeklyDeltaValue : null;
-    if (recommendationKind !== 'scale' || weeklyDelta == null || weeklyDelta <= 0) {
+    // Allow 'scale' or 'test' (if we have a delta) to show impact
+    if ((recommendationKind !== 'scale' && recommendationKind !== 'test') || weeklyDelta == null || weeklyDelta <= 0) {
       frequencyNote.estimatedImpact = null;
       return;
     }
