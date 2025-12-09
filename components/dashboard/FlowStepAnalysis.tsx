@@ -1777,10 +1777,18 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 if (!isOptimalWindow || accountInsufficient) return null;
 
                 // Get the Summary's precomputed value to guarantee identical display
+                // Must pass SmartWindow dates like actionNotes.ts does
+                const dm = dataManager;
+                const allCampaigns = dm.getCampaigns();
+                const allFlows = dm.getFlowEmails();
+                const smartWindow = computeSmartOpportunityWindow(allCampaigns, allFlows);
+                const smartFromIso = smartWindow.start.toISOString().slice(0, 10);
+                const smartToIso = smartWindow.end.toISOString().slice(0, 10);
+
                 const summaryNotes = buildFlowAddStepNotes({
                     dateRange: 'custom',
-                    customFrom: undefined,
-                    customTo: undefined
+                    customFrom: smartFromIso,
+                    customTo: smartToIso
                 });
                 const matchingNote = summaryNotes.find(n => n.metadata?.flowName === selectedFlow);
                 const monthlyGain = matchingNote?.estimatedImpact?.monthly ?? 0;
