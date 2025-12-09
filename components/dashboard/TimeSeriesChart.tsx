@@ -83,8 +83,8 @@ function TimeSeriesChart({
     secondarySeries = null,
     secondaryValueType,
     secondaryBigValue,
-    secondaryColorHue = '#f59e0b', // amber/gold for secondary metric
-    secondaryDarkColorHue,
+    secondaryColorHue = '#ec4899', // pink for secondary metric
+    secondaryDarkColorHue = '#db2777',
     onSecondaryMetricChange
 }: TimeSeriesChartProps) {
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -212,17 +212,33 @@ function TimeSeriesChart({
         const t = secondaryValueType || valueType;
         return t === 'currency' ? fmt.currency(v) : t === 'percentage' ? fmt.percentageDynamic(v) : fmt.number(v);
     };
+    const formatDisplay = (v: number, t: ValueType, compact: boolean) => {
+        if (t === 'currency') {
+            const abs = Math.abs(v);
+            if (compact && abs >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`;
+            if (compact && abs >= 1_000) return `$${(v / 1_000).toFixed(1)}k`;
+            return fmt.currency(v);
+        }
+        if (t === 'percentage') return fmt.percentageDynamic(v);
+        if (compact && Math.abs(v) >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
+        if (compact && Math.abs(v) >= 1_000) return `${(v / 1_000).toFixed(1)}k`;
+        return fmt.number(v);
+    };
+    const lastPrimaryVal = primary.length ? primary[primary.length - 1].value : 0;
+    const lastSecondaryVal = secondarySeries && secondarySeries.length ? secondarySeries[secondarySeries.length - 1].value : 0;
+    const displayPrimary = hasSecondary ? formatDisplay(lastPrimaryVal, valueType as ValueType, true) : bigValue;
+    const displaySecondary = hasSecondary ? formatDisplay(lastSecondaryVal, (secondaryValueType || valueType) as ValueType, true) : secondaryBigValue;
     const color = darkColorHue || colorHue;
     const secondaryColor = secondaryDarkColorHue || secondaryColorHue;
     const cmpAreaId = `tsc-cmp-area-${idSuffix}`;
     const secondaryLabel = hasSecondary ? (metricOptions.find(m => m.value === secondaryMetricKey)?.label || secondaryMetricKey) : null;
+    const primaryLabel = metricOptions.find(m => m.value === metricKey)?.label || metricKey;
 
     return (
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 mb-8">
-            {/* Top controls: dropdown on right (no internal title) */}
-            <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+            {/* Chart type toggle */}
+            <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="flex items-center gap-2">
-                    {/* Title removed per request */}
                     <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5 border border-gray-200 dark:border-gray-700">
                         <button
                             onClick={() => onChartTypeChange?.('line')}
@@ -240,29 +256,36 @@ function TimeSeriesChart({
                         </button>
                     </div>
                 </div>
-                <div className="flex flex-col sm:flex-row items-end gap-2 w-full sm:w-auto">
-                    <div className="relative">
-                        <SelectBase
-                            value={metricKey}
-                            onChange={e => onMetricChange?.((e.target as HTMLSelectElement).value as MetricKey)}
-                            className="px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 min-w-[190px]"
-                        >
-                            {metricOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                        </SelectBase>
+            </div>
+
+            {/* Controls + value display in aligned columns */}
+            <div className={`grid gap-3 mb-4 ${hasSecondary ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
+                <div className="flex flex-col gap-1">
+                    <SelectBase
+                        value={metricKey}
+                        onChange={e => onMetricChange?.((e.target as HTMLSelectElement).value as MetricKey)}
+                        className="px-3 h-10 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 min-w-[200px]"
+                    >
+                        {metricOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </SelectBase>
+                    <div className="flex flex-col items-start gap-0.5">
+                        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">{primaryLabel}</div>
+                        <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{displayPrimary}</div>
                     </div>
-                    <div className="relative">
+                </div>
+                {hasSecondary && (
+                    <div className="flex flex-col gap-1">
                         <SelectBase
                             value={secondaryMetricKey || ''}
                             onChange={e => {
                                 const val = (e.target as HTMLSelectElement).value;
                                 if (!val) return onSecondaryMetricChange?.(null);
                                 if (val === metricKey) {
-                                    // Avoid duplicate selection; treat as removal
                                     return onSecondaryMetricChange?.(null);
                                 }
                                 onSecondaryMetricChange?.(val as MetricKey);
                             }}
-                            className="px-3 h-9 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 min-w-[190px]"
+                            className="px-3 h-10 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 min-w-[200px]"
                         >
                             <option value="">Single metric only</option>
                             {metricOptions.map(opt => (
@@ -271,55 +294,57 @@ function TimeSeriesChart({
                                 </option>
                             ))}
                         </SelectBase>
+                        <div className="flex flex-col items-start gap-0.5">
+                            <div className="text-xs font-semibold text-pink-600 dark:text-pink-400">{secondaryLabel || 'Secondary metric'}</div>
+                            <div className="text-xl sm:text-2xl font-semibold text-pink-600 dark:text-pink-400 tabular-nums">{displaySecondary}</div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Header change (suppressed when dual metrics) */}
+            {!hasSecondary && (
+                <div className="flex items-start justify-end mb-4">
+                    <div className="text-right">
+                        <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{bigValue}</div>
+                        {(() => {
+                            const isAllTime = false;
+                            const change = headerChange ?? 0;
+                            const isPositive = headerIsPositive ?? true;
+                            const prevVal = headerPreviousValue;
+                            const prevPeriod = headerPreviousPeriod;
+                            const DISPLAY_EPS = 0.05;
+                            const tiny = Math.abs(change) < DISPLAY_EPS;
+                            const zeroDisplay = tiny || Math.abs(change) < 1e-9;
+                            const fmtPrev = (v?: number) => {
+                                if (v == null) return '';
+                                switch (valueType) {
+                                    case 'currency': return fmt.currency(v);
+                                    case 'percentage': return `${v.toFixed(1)}%`;
+                                    default: return Math.round(v).toLocaleString('en-US');
+                                }
+                            };
+                            const formatDate = (d: Date) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+                            const tooltipNode = prevPeriod && prevVal != null ? (
+                                <div className="text-gray-900 dark:text-gray-100">
+                                    <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">{formatDate(prevPeriod.startDate)} – {formatDate(prevPeriod.endDate)}</div>
+                                    <div className="text-sm font-semibold tabular-nums mt-0.5">{fmtPrev(prevVal)}</div>
+                                </div>
+                            ) : null;
+                            return (prevPeriod && prevVal != null) ? (
+                                <div className="mt-1 flex justify-end">
+                                    <TooltipPortal content={tooltipNode as any}>
+                                        <div className={`flex items-center text-[13px] font-medium ${zeroDisplay ? 'text-gray-600 dark:text-gray-400' : (isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}`} role="button" tabIndex={0}>
+                                            {zeroDisplay ? (<ArrowRight className="w-4 h-4 mr-1" />) : (change > 0 ? (<ArrowUp className="w-4 h-4 mr-1" />) : (<ArrowDown className="w-4 h-4 mr-1" />))}
+                                            {zeroDisplay ? '0.0' : (() => { const formatted = Math.abs(change).toFixed(1); const num = parseFloat(formatted); return num >= 1000 ? num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatted; })()}%
+                                        </div>
+                                    </TooltipPortal>
+                                </div>
+                            ) : null;
+                        })()}
                     </div>
                 </div>
-            </div>
-            <div className="flex items-start justify-between mb-4">
-                <div />
-                <div className="text-right">
-                    <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{bigValue}</div>
-                    {hasSecondary && secondaryBigValue && (
-                        <div className="text-sm font-semibold text-amber-600 dark:text-amber-400 tabular-nums mt-1">
-                            {secondaryLabel ? `${secondaryLabel}: ${secondaryBigValue}` : secondaryBigValue}
-                        </div>
-                    )}
-                    {(() => {
-                        const isAllTime = false; // charts aren't shown for 'all' compare anyway here
-                        const change = headerChange ?? 0;
-                        const isPositive = headerIsPositive ?? true;
-                        const prevVal = headerPreviousValue;
-                        const prevPeriod = headerPreviousPeriod;
-                        const DISPLAY_EPS = 0.05;
-                        const tiny = Math.abs(change) < DISPLAY_EPS;
-                        const zeroDisplay = tiny || Math.abs(change) < 1e-9;
-                        const fmtPrev = (v?: number) => {
-                            if (v == null) return '';
-                            switch (valueType) {
-                                case 'currency': return fmt.currency(v);
-                                case 'percentage': return `${v.toFixed(1)}%`;
-                                default: return Math.round(v).toLocaleString('en-US');
-                            }
-                        };
-                        const formatDate = (d: Date) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-                        const tooltipNode = prevPeriod && prevVal != null ? (
-                            <div className="text-gray-900 dark:text-gray-100">
-                                <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">{formatDate(prevPeriod.startDate)} – {formatDate(prevPeriod.endDate)}</div>
-                                <div className="text-sm font-semibold tabular-nums mt-0.5">{fmtPrev(prevVal)}</div>
-                            </div>
-                        ) : null;
-                        return (prevPeriod && prevVal != null) ? (
-                            <div className="mt-1 flex justify-end">
-                                <TooltipPortal content={tooltipNode as any}>
-                                    <div className={`flex items-center text-[13px] font-medium ${zeroDisplay ? 'text-gray-600 dark:text-gray-400' : (isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}`} role="button" tabIndex={0}>
-                                        {zeroDisplay ? (<ArrowRight className="w-4 h-4 mr-1" />) : (change > 0 ? (<ArrowUp className="w-4 h-4 mr-1" />) : (<ArrowDown className="w-4 h-4 mr-1" />))}
-                                        {zeroDisplay ? '0.0' : (() => { const formatted = Math.abs(change).toFixed(1); const num = parseFloat(formatted); return num >= 1000 ? num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatted; })()}%
-                                    </div>
-                                </TooltipPortal>
-                            </div>
-                        ) : null;
-                    })()}
-                </div>
-            </div>
+            )}
             <div className="relative" style={{ width: '100%' }}>
                 <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="block select-none">
                     <defs>
@@ -392,9 +417,7 @@ function TimeSeriesChart({
                     })}
 
                     {/* Secondary points for hover visibility (line mode) */}
-                    {hasSecondary && chartType === 'line' && secondaryPts.map((p, i) => (
-                        <circle key={`secondary-dot-${i}`} cx={p.x} cy={p.y} r={3} fill={secondaryColor} />
-                    ))}
+                    {/* (Removed dots for secondary series per request) */}
 
                     {/* Y tick labels */}
                     {yTickValues.map((v, i) => { const y = yScalePrimary(v); const label = yTickLabels[i] ?? ''; return <text key={i} x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{label}</text>; })}
