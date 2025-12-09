@@ -210,7 +210,10 @@ function computeQuantileBucketBoundaries(sortedEmails: number[], targetBuckets: 
     return boundaries;
 }
 
-function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; limited: boolean; lookbackWeeks: number; optimalCapDays: number; selectedRangeDays: number; isHighVolume: boolean } {
+function computeBuckets(
+    campaigns: ProcessedCampaign[],
+    accountCampaigns?: ProcessedCampaign[]
+): { buckets: Bucket[]; limited: boolean; lookbackWeeks: number; optimalCapDays: number; selectedRangeDays: number; isHighVolume: boolean } {
     if (!campaigns.length) return { buckets: [], limited: true, lookbackWeeks: 0, optimalCapDays: 180, selectedRangeDays: 0, isHighVolume: false };
 
     const valid = campaigns.filter(c => typeof c.emailsSent === 'number' && c.emailsSent >= 0);
@@ -350,21 +353,22 @@ function computeBuckets(campaigns: ProcessedCampaign[]): { buckets: Bucket[]; li
     const avgListSize = sample > 0 ? finalCampaigns.reduce((sum, c) => sum + c.emailsSent, 0) / sample : 0;
 
     // Determine volume classification using full history if available to ensure stable recommendation
+    const historySource = accountCampaigns?.length ? accountCampaigns : filtered;
     let historyAvgWeeklyVolume = avgCampaignsPerWeek;
-    if (allCampaigns?.length) {
-        const hMin = allCampaigns.reduce((min, c) => c.sentDate < min ? c.sentDate : min, new Date());
-        const hMax = allCampaigns.reduce((max, c) => c.sentDate > max ? c.sentDate : max, new Date(0));
+    if (historySource.length) {
+        const hMin = historySource.reduce((min, c) => c.sentDate < min ? c.sentDate : min, new Date());
+        const hMax = historySource.reduce((max, c) => c.sentDate > max ? c.sentDate : max, new Date(0));
         if (hMin < hMax) {
             const hDays = (hMax.getTime() - hMin.getTime()) / (1000 * 60 * 60 * 24);
             const hWeeks = Math.max(1, hDays / 7);
             // Use last 90 days for recent volume check if possible, otherwise full history
             const ninetyDaysAgo = new Date(hMax);
             ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-            const recent = allCampaigns.filter(c => c.sentDate >= ninetyDaysAgo);
+            const recent = historySource.filter(c => c.sentDate >= ninetyDaysAgo);
             if (recent.length > 0) {
                  historyAvgWeeklyVolume = recent.length / 12.85;
             } else {
-                 historyAvgWeeklyVolume = allCampaigns.length / hWeeks;
+                 historyAvgWeeklyVolume = historySource.length / hWeeks;
             }
         }
     }
@@ -635,7 +639,7 @@ function getRiskZoneLabel(zone: 'green' | 'yellow' | 'red') {
 export default function AudienceSizePerformance({ campaigns, allCampaigns }: Props) {
     const [metric, setMetric] = useState<string>('weightedAvgCampaignRevenue');
 
-    const { buckets, limited, lookbackWeeks, optimalCapDays, selectedRangeDays, isHighVolume } = useMemo(() => computeBuckets(campaigns || []), [campaigns]);
+    const { buckets, limited, lookbackWeeks, optimalCapDays, selectedRangeDays, isHighVolume } = useMemo(() => computeBuckets(campaigns || [], allCampaigns), [campaigns, allCampaigns]);
     const guidance = useMemo(() => computeAudienceSizeGuidance(buckets, lookbackWeeks, optimalCapDays, selectedRangeDays, isHighVolume, allCampaigns), [buckets, lookbackWeeks, optimalCapDays, selectedRangeDays, isHighVolume, allCampaigns]);
 
     if (!campaigns?.length) {
