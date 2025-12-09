@@ -44,8 +44,6 @@ import ModalPlans, { PlanId } from '../billing/ModalPlans';
 
 type ImpactTimeframe = 'annual' | 'monthly' | 'weekly';
 
-type ChartMetricKey = 'revenue' | 'avgOrderValue' | 'revenuePerEmail' | 'openRate' | 'clickRate' | 'clickToOpenRate' | 'emailsSent' | 'totalOrders' | 'conversionRate' | 'unsubscribeRate' | 'spamRate' | 'bounceRate';
-
 const IMPACT_TIMEFRAME_OPTIONS: Array<{ key: ImpactTimeframe; label: string }> = [
     { key: 'annual', label: 'Yearly' },
     { key: 'monthly', label: 'Monthly' },
@@ -206,17 +204,14 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [granularity, setGranularity] = useState<'daily' | 'weekly' | 'monthly'>('daily');
     const [compareMode, setCompareMode] = useState<'none' | 'prev-period' | 'prev-year'>('prev-period');
     const [selectedFlow, setSelectedFlow] = useState('all');
-    const [selectedCampaignMetric, setSelectedCampaignMetric] = useState<ChartMetricKey>('revenue');
+    const [selectedCampaignMetric, setSelectedCampaignMetric] = useState('revenue');
     // Shared guidance outputs
     const [frequencyGuidance, setFrequencyGuidance] = useState<any | null>(null);
     // JSON export temporarily disabled during redesign
     // Chart metric selections (defaults: Total Revenue)
-    const [overviewChartMetric, setOverviewChartMetric] = useState<ChartMetricKey>('revenue');
-    const [campaignChartMetric, setCampaignChartMetric] = useState<ChartMetricKey>('revenue');
-    const [flowChartMetric, setFlowChartMetric] = useState<ChartMetricKey>('revenue');
-    const [overviewSecondaryMetric, setOverviewSecondaryMetric] = useState<ChartMetricKey | null>(null);
-    const [campaignSecondaryMetric, setCampaignSecondaryMetric] = useState<ChartMetricKey | null>(null);
-    const [flowSecondaryMetric, setFlowSecondaryMetric] = useState<ChartMetricKey | null>(null);
+    const [overviewChartMetric, setOverviewChartMetric] = useState<'revenue' | 'avgOrderValue' | 'revenuePerEmail' | 'openRate' | 'clickRate' | 'clickToOpenRate' | 'emailsSent' | 'totalOrders' | 'conversionRate' | 'unsubscribeRate' | 'spamRate' | 'bounceRate'>('revenue');
+    const [campaignChartMetric, setCampaignChartMetric] = useState<typeof overviewChartMetric>('revenue');
+    const [flowChartMetric, setFlowChartMetric] = useState<typeof overviewChartMetric>('revenue');
     const [emailChartType, setEmailChartType] = useState<'line' | 'bar'>('line');
     const [campaignChartType, setCampaignChartType] = useState<'line' | 'bar'>('line');
     const [flowChartType, setFlowChartType] = useState<'line' | 'bar'>('line');
@@ -235,11 +230,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const [mfGranularity, setMfGranularity] = useState<typeof granularity>(granularity);
     const [mfCompareMode, setMfCompareMode] = useState<typeof compareMode>(compareMode);
     const [mfSelectedFlow, setMfSelectedFlow] = useState<string>(selectedFlow);
-
-    // Keep secondary selections distinct from primaries
-    useEffect(() => { if (overviewSecondaryMetric && overviewSecondaryMetric === overviewChartMetric) setOverviewSecondaryMetric(null); }, [overviewChartMetric, overviewSecondaryMetric]);
-    useEffect(() => { if (campaignSecondaryMetric && campaignSecondaryMetric === campaignChartMetric) setCampaignSecondaryMetric(null); }, [campaignChartMetric, campaignSecondaryMetric]);
-    useEffect(() => { if (flowSecondaryMetric && flowSecondaryMetric === flowChartMetric) setFlowSecondaryMetric(null); }, [flowChartMetric, flowSecondaryMetric]);
 
     // Granularity validation logic
     const totalDays = useMemo(() => {
@@ -1521,12 +1511,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         { value: 'spamRate', label: 'Spam Rate' },
         { value: 'bounceRate', label: 'Bounce Rate' },
     ];
-    const metricValueType = (metric: ChartMetricKey): 'currency' | 'number' | 'percentage' => {
+    const metricValueType = (metric: string): 'currency' | 'number' | 'percentage' => {
         if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric)) return 'currency';
         if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric)) return 'percentage';
         return 'number';
     };
-    const bigValueForOverview = (metric: ChartMetricKey) => {
+    const bigValueForOverview = (metric: string) => {
         if (!overviewMetrics) return '';
         const map: Record<string, number> = {
             revenue: overviewMetrics.totalRevenue.value,
@@ -1545,7 +1535,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         const v = map[metric];
         return ['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric) ? formatCurrency(v) : ['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric) ? formatPercent(v) : formatNumber(v);
     };
-    const bigValueForCampaigns = (metric: ChartMetricKey) => {
+    const bigValueForCampaigns = (metric: string) => {
         if (!campaignMetrics) return '';
         const map: Record<string, number> = {
             revenue: campaignMetrics.totalRevenue.value,
@@ -1564,7 +1554,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         const v = map[metric];
         return ['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric) ? formatCurrency(v) : ['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric) ? formatPercent(v) : formatNumber(v);
     };
-    const bigValueForFlows = (metric: ChartMetricKey) => {
+    const bigValueForFlows = (metric: string) => {
         if (!flowMetrics) return '';
         const map: Record<string, number> = {
             revenue: flowMetrics.totalRevenue.value,
@@ -1601,18 +1591,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const flowChartSeries = useMemo(
         () => dm.getMetricTimeSeriesWithCompare([], flowsAllForChart as any, flowChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo),
         [dm, flowsAllForChart, flowChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo]
-    );
-    const overviewSecondarySeries = useMemo(
-        () => overviewSecondaryMetric ? dm.getMetricTimeSeries(ALL_CAMPAIGNS as any, ALL_FLOWS as any, overviewSecondaryMetric, effectiveSeriesRange, granularity, customFrom, customTo) : null,
-        [dm, ALL_CAMPAIGNS, ALL_FLOWS, overviewSecondaryMetric, effectiveSeriesRange, granularity, customFrom, customTo]
-    );
-    const campaignSecondarySeries = useMemo(
-        () => campaignSecondaryMetric ? dm.getMetricTimeSeries(ALL_CAMPAIGNS as any, [], campaignSecondaryMetric, effectiveSeriesRange, granularity, customFrom, customTo) : null,
-        [dm, ALL_CAMPAIGNS, campaignSecondaryMetric, effectiveSeriesRange, granularity, customFrom, customTo]
-    );
-    const flowSecondarySeries = useMemo(
-        () => flowSecondaryMetric ? dm.getMetricTimeSeries([], flowsAllForChart as any, flowSecondaryMetric, effectiveSeriesRange, granularity, customFrom, customTo) : null,
-        [dm, flowsAllForChart, flowSecondaryMetric, effectiveSeriesRange, granularity, customFrom, customTo]
     );
     const formatMetricValue = (v: number, metric: string) => {
         if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric)) {
@@ -2337,10 +2315,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 onMetricChange={m => setOverviewChartMetric(m)}
                                 bigValue={bigValueForOverview(overviewChartMetric)}
                                 primary={overviewChartSeries.primary}
-                                compare={overviewSecondaryMetric ? null : overviewChartSeries.compare}
+                                compare={overviewChartSeries.compare}
                                 valueType={metricValueType(overviewChartMetric)}
                                 granularity={granularity}
-                                compareMode={overviewSecondaryMetric ? 'none' : compareMode}
+                                compareMode={compareMode}
                                 headerChange={overviewMetrics[(overviewChartMetric === 'revenue' ? 'totalRevenue' : overviewChartMetric === 'avgOrderValue' ? 'averageOrderValue' : overviewChartMetric) as keyof typeof overviewMetrics]?.change as any}
                                 headerIsPositive={overviewMetrics[(overviewChartMetric === 'revenue' ? 'totalRevenue' : overviewChartMetric === 'avgOrderValue' ? 'averageOrderValue' : overviewChartMetric) as keyof typeof overviewMetrics]?.isPositive as any}
                                 headerPreviousValue={overviewMetrics[(overviewChartMetric === 'revenue' ? 'totalRevenue' : overviewChartMetric === 'avgOrderValue' ? 'averageOrderValue' : overviewChartMetric) as keyof typeof overviewMetrics]?.previousValue as any}
@@ -2349,13 +2327,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 idSuffix="overview"
                                 chartType={emailChartType}
                                 onChartTypeChange={setEmailChartType}
-                                secondaryMetricKey={overviewSecondaryMetric}
-                                secondarySeries={overviewSecondarySeries}
-                                secondaryValueType={overviewSecondaryMetric ? metricValueType(overviewSecondaryMetric) : undefined}
-                                secondaryBigValue={overviewSecondaryMetric ? bigValueForOverview(overviewSecondaryMetric) : undefined}
-                                secondaryColorHue="#f59e0b"
-                                secondaryDarkColorHue="#d97706"
-                                onSecondaryMetricChange={setOverviewSecondaryMetric}
                             />
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                 {/* Row 1 */}
@@ -2413,10 +2384,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 onMetricChange={m => setCampaignChartMetric(m)}
                                 bigValue={bigValueForCampaigns(campaignChartMetric)}
                                 primary={campaignChartSeries.primary}
-                                compare={campaignSecondaryMetric ? null : campaignChartSeries.compare}
+                                compare={campaignChartSeries.compare}
                                 valueType={metricValueType(campaignChartMetric)}
                                 granularity={granularity}
-                                compareMode={campaignSecondaryMetric ? 'none' : compareMode}
+                                compareMode={compareMode}
                                 headerChange={campaignMetrics[(campaignChartMetric === 'revenue' ? 'totalRevenue' : campaignChartMetric === 'avgOrderValue' ? 'averageOrderValue' : campaignChartMetric) as keyof typeof campaignMetrics]?.change as any}
                                 headerIsPositive={campaignMetrics[(campaignChartMetric === 'revenue' ? 'totalRevenue' : campaignChartMetric === 'avgOrderValue' ? 'averageOrderValue' : campaignChartMetric) as keyof typeof campaignMetrics]?.isPositive as any}
                                 headerPreviousValue={campaignMetrics[(campaignChartMetric === 'revenue' ? 'totalRevenue' : campaignChartMetric === 'avgOrderValue' ? 'averageOrderValue' : campaignChartMetric) as keyof typeof campaignMetrics]?.previousValue as any}
@@ -2425,13 +2396,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 idSuffix="campaigns"
                                 chartType={campaignChartType}
                                 onChartTypeChange={setCampaignChartType}
-                                secondaryMetricKey={campaignSecondaryMetric}
-                                secondarySeries={campaignSecondarySeries}
-                                secondaryValueType={campaignSecondaryMetric ? metricValueType(campaignSecondaryMetric) : undefined}
-                                secondaryBigValue={campaignSecondaryMetric ? bigValueForCampaigns(campaignSecondaryMetric) : undefined}
-                                secondaryColorHue="#f59e0b"
-                                secondaryDarkColorHue="#d97706"
-                                onSecondaryMetricChange={setCampaignSecondaryMetric}
                             />
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                 {/* Row 1 */}
@@ -2530,7 +2494,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                             </div>
                                         </div>
                                         <div className="relative min-w-0 w-full sm:w-auto">
-                                            <SelectBase value={selectedCampaignMetric} onChange={e => setSelectedCampaignMetric((e.target as HTMLSelectElement).value as ChartMetricKey)} className="w-full sm:w-auto px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">
+                                            <SelectBase value={selectedCampaignMetric} onChange={e => setSelectedCampaignMetric((e.target as HTMLSelectElement).value)} className="w-full sm:w-auto px-3 py-1.5 pr-8 rounded-md border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 text-sm">
                                                 {campaignMetricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                                             </SelectBase>
                                         </div>
@@ -2626,7 +2590,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 onMetricChange={m => setFlowChartMetric(m)}
                                 bigValue={bigValueForFlows(flowChartMetric)}
                                 primary={flowChartSeries.primary}
-                                compare={flowSecondaryMetric ? null : flowChartSeries.compare}
+                                compare={flowChartSeries.compare}
                                 valueType={metricValueType(flowChartMetric)}
                                 granularity={granularity}
                                 compareMode={compareMode}
@@ -2638,13 +2602,6 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 idSuffix="flows"
                                 chartType={flowChartType}
                                 onChartTypeChange={setFlowChartType}
-                                secondaryMetricKey={flowSecondaryMetric}
-                                secondarySeries={flowSecondarySeries}
-                                secondaryValueType={flowSecondaryMetric ? metricValueType(flowSecondaryMetric) : undefined}
-                                secondaryBigValue={flowSecondaryMetric ? bigValueForFlows(flowSecondaryMetric) : undefined}
-                                secondaryColorHue="#f59e0b"
-                                secondaryDarkColorHue="#d97706"
-                                onSecondaryMetricChange={setFlowSecondaryMetric}
                             />
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                 {/* Row 1 */}
