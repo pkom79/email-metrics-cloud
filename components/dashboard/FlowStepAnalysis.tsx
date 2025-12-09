@@ -1096,16 +1096,8 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
             bodyParts = parts.length ? [parts.join(' ')] : [];
         }
 
-        if ((addStepSuggestion as any)?.suggested && (addStepSuggestion as any)?.estimate) {
-            const lastStep = flowStepMetrics[flowStepMetrics.length - 1];
-            const est = (addStepSuggestion as any).estimate;
-            const monthlyGain = est.estimatedRevenue * 4.33;
-            stepItems.push(
-                <span className="text-emerald-700 dark:text-emerald-300 font-medium">
-                    Adding one more email after <strong>Email {lastStep.sequencePosition}</strong> could unlock an estimated revenue increase of {formatUsd(monthlyGain)} per month.
-                </span>
-            );
-        }
+        // Suggestion moved to separate block below
+
 
         const totalSends = flowStepMetrics.reduce((sum, step) => sum + (step.emailsSent || 0), 0);
         const sample = `Based on ${totalSends.toLocaleString('en-US')} emails in this flow during the selected range. Review this flow across other date ranges and make sure it supports any objectives beyond revenue before acting.`;
@@ -1917,6 +1909,27 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                                 )}
                             </div>
                         )}
+                    </div>
+                );
+            })()}
+            {/* Revenue Opportunity Projection */}
+            {selectedFlow && (addStepSuggestion as any)?.suggested && (addStepSuggestion as any)?.estimate && (() => {
+                const flowOptimalDays = (stepScores as any).context?.flowOptimalLookbackDays;
+                if (!flowOptimalDays) return null;
+                const isOptimalWindow = daysInRange >= flowOptimalDays * 0.9 && daysInRange <= flowOptimalDays * 1.1;
+                if (!isOptimalWindow || accountInsufficient) return null;
+
+                const est = (addStepSuggestion as any).estimate;
+                const monthlyGain = est.estimatedRevenue * 4.33;
+                
+                return (
+                    <div className="mt-4 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50">
+                        <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-100 mb-1">
+                            Revenue Opportunity Projection
+                        </div>
+                        <div className="text-sm text-emerald-800 dark:text-emerald-200">
+                            Adding a step to <strong>{selectedFlow}</strong> is projected to add {formatUsd(monthlyGain)} in monthly revenue.
+                        </div>
                     </div>
                 );
             })()}

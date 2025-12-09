@@ -210,8 +210,11 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     // JSON export temporarily disabled during redesign
     // Chart metric selections (defaults: Total Revenue)
     const [overviewChartMetric, setOverviewChartMetric] = useState<'revenue' | 'avgOrderValue' | 'revenuePerEmail' | 'openRate' | 'clickRate' | 'clickToOpenRate' | 'emailsSent' | 'totalOrders' | 'conversionRate' | 'unsubscribeRate' | 'spamRate' | 'bounceRate'>('revenue');
+    const [overviewSecondaryMetric, setOverviewSecondaryMetric] = useState<typeof overviewChartMetric | 'none'>('none');
     const [campaignChartMetric, setCampaignChartMetric] = useState<typeof overviewChartMetric>('revenue');
+    const [campaignSecondaryMetric, setCampaignSecondaryMetric] = useState<typeof overviewChartMetric | 'none'>('none');
     const [flowChartMetric, setFlowChartMetric] = useState<typeof overviewChartMetric>('revenue');
+    const [flowSecondaryMetric, setFlowSecondaryMetric] = useState<typeof overviewChartMetric | 'none'>('none');
     const [emailChartType, setEmailChartType] = useState<'line' | 'bar'>('line');
     const [campaignChartType, setCampaignChartType] = useState<'line' | 'bar'>('line');
     const [flowChartType, setFlowChartType] = useState<'line' | 'bar'>('line');
@@ -1574,16 +1577,110 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
         return ['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric) ? formatCurrency(v) : ['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric) ? formatPercent(v) : formatNumber(v);
     };
 
+    const formatAbbreviated = (value: number, metric: string) => {
+        if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(metric)) {
+             return formatPercent(value);
+        }
+        // Currency or Number
+        const isCurrency = ['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric);
+        const abs = Math.abs(value);
+        let suffix = '';
+        let div = 1;
+        if (abs >= 1000000) {
+            suffix = 'M';
+            div = 1000000;
+        } else if (abs >= 1000) {
+            suffix = 'K';
+            div = 1000;
+        }
+        
+        const val = value / div;
+        let formatted = '';
+        if (div === 1000000) formatted = val.toFixed(2);
+        else if (div === 1000) formatted = val.toFixed(0);
+        else formatted = val.toLocaleString('en-US', { maximumFractionDigits: 0 });
+
+        if (isCurrency) return '$' + formatted + suffix;
+        return formatted + suffix;
+    };
+
+    const abbreviatedBigValueForOverview = (metric: string) => {
+        if (metric === 'none' || !overviewMetrics) return '';
+        const map: Record<string, number> = {
+            revenue: overviewMetrics.totalRevenue.value,
+            avgOrderValue: overviewMetrics.averageOrderValue.value,
+            revenuePerEmail: overviewMetrics.revenuePerEmail.value,
+            openRate: overviewMetrics.openRate.value,
+            clickRate: overviewMetrics.clickRate.value,
+            clickToOpenRate: overviewMetrics.clickToOpenRate.value,
+            emailsSent: overviewMetrics.emailsSent.value,
+            totalOrders: overviewMetrics.totalOrders.value,
+            conversionRate: overviewMetrics.conversionRate.value,
+            unsubscribeRate: overviewMetrics.unsubscribeRate.value,
+            spamRate: overviewMetrics.spamRate.value,
+            bounceRate: overviewMetrics.bounceRate.value,
+        };
+        return formatAbbreviated(map[metric], metric);
+    };
+
+    const abbreviatedBigValueForCampaigns = (metric: string) => {
+        if (metric === 'none' || !campaignMetrics) return '';
+        const map: Record<string, number> = {
+            revenue: campaignMetrics.totalRevenue.value,
+            avgOrderValue: campaignMetrics.averageOrderValue.value,
+            revenuePerEmail: campaignMetrics.revenuePerEmail.value,
+            openRate: campaignMetrics.openRate.value,
+            clickRate: campaignMetrics.clickRate.value,
+            clickToOpenRate: campaignMetrics.clickToOpenRate.value,
+            emailsSent: campaignMetrics.emailsSent.value,
+            totalOrders: campaignMetrics.totalOrders.value,
+            conversionRate: campaignMetrics.conversionRate.value,
+            unsubscribeRate: campaignMetrics.unsubscribeRate.value,
+            spamRate: campaignMetrics.spamRate.value,
+            bounceRate: campaignMetrics.bounceRate.value,
+        };
+        return formatAbbreviated(map[metric], metric);
+    };
+
+    const abbreviatedBigValueForFlows = (metric: string) => {
+        if (metric === 'none' || !flowMetrics) return '';
+        const map: Record<string, number> = {
+            revenue: flowMetrics.totalRevenue.value,
+            avgOrderValue: flowMetrics.averageOrderValue.value,
+            revenuePerEmail: flowMetrics.revenuePerEmail.value,
+            openRate: flowMetrics.openRate.value,
+            clickRate: flowMetrics.clickRate.value,
+            clickToOpenRate: flowMetrics.clickToOpenRate.value,
+            emailsSent: flowMetrics.emailsSent.value,
+            totalOrders: flowMetrics.totalOrders.value,
+            conversionRate: flowMetrics.conversionRate.value,
+            unsubscribeRate: flowMetrics.unsubscribeRate.value,
+            spamRate: flowMetrics.spamRate.value,
+            bounceRate: flowMetrics.bounceRate.value,
+        };
+        return formatAbbreviated(map[metric], metric);
+    };
+
     // Build chart series (primary + compare) per segment
     // IMPORTANT: Use full arrays (no date filtering) so previous-window data exists for compare.
     const overviewChartSeries = useMemo(
         () => dm.getMetricTimeSeriesWithCompare(ALL_CAMPAIGNS as any, ALL_FLOWS as any, overviewChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo),
         [dm, ALL_CAMPAIGNS, ALL_FLOWS, overviewChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo]
     );
+    const overviewSecondaryChartSeries = useMemo(
+        () => overviewSecondaryMetric !== 'none' ? dm.getMetricTimeSeriesWithCompare(ALL_CAMPAIGNS as any, ALL_FLOWS as any, overviewSecondaryMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo) : null,
+        [dm, ALL_CAMPAIGNS, ALL_FLOWS, overviewSecondaryMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo]
+    );
+
     const campaignChartSeries = useMemo(
         () => dm.getMetricTimeSeriesWithCompare(ALL_CAMPAIGNS as any, [], campaignChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo),
         [dm, ALL_CAMPAIGNS, campaignChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo]
     );
+    const campaignSecondaryChartSeries = useMemo(
+        () => campaignSecondaryMetric !== 'none' ? dm.getMetricTimeSeriesWithCompare(ALL_CAMPAIGNS as any, [], campaignSecondaryMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo) : null,
+        [dm, ALL_CAMPAIGNS, campaignSecondaryMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo]
+    );
+
     const flowsAllForChart = useMemo(
         () => (selectedFlow === 'all' ? ALL_FLOWS : ALL_FLOWS.filter(f => f.flowName === selectedFlow)),
         [ALL_FLOWS, selectedFlow]
@@ -1591,6 +1688,10 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
     const flowChartSeries = useMemo(
         () => dm.getMetricTimeSeriesWithCompare([], flowsAllForChart as any, flowChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo),
         [dm, flowsAllForChart, flowChartMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo]
+    );
+    const flowSecondaryChartSeries = useMemo(
+        () => flowSecondaryMetric !== 'none' ? dm.getMetricTimeSeriesWithCompare([], flowsAllForChart as any, flowSecondaryMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo) : null,
+        [dm, flowsAllForChart, flowSecondaryMetric, effectiveSeriesRange, granularity, compareMode, customFrom, customTo]
     );
     const formatMetricValue = (v: number, metric: string) => {
         if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(metric)) {
@@ -2327,6 +2428,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 idSuffix="overview"
                                 chartType={emailChartType}
                                 onChartTypeChange={setEmailChartType}
+                                secondaryMetricKey={overviewSecondaryMetric}
+                                secondaryMetricOptions={campaignMetricOptions as any}
+                                onSecondaryMetricChange={m => setOverviewSecondaryMetric(m as any)}
+                                secondaryBigValue={abbreviatedBigValueForOverview(overviewSecondaryMetric)}
+                                secondarySeries={overviewSecondaryChartSeries?.primary || null}
+                                secondaryColorHue="#ec4899"
                             />
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                 {/* Row 1 */}
@@ -2396,6 +2503,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 idSuffix="campaigns"
                                 chartType={campaignChartType}
                                 onChartTypeChange={setCampaignChartType}
+                                secondaryMetricKey={campaignSecondaryMetric}
+                                secondaryMetricOptions={campaignMetricOptions as any}
+                                onSecondaryMetricChange={m => setCampaignSecondaryMetric(m as any)}
+                                secondaryBigValue={abbreviatedBigValueForCampaigns(campaignSecondaryMetric)}
+                                secondarySeries={campaignSecondaryChartSeries?.primary || null}
+                                secondaryColorHue="#ec4899"
                             />
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                 {/* Row 1 */}
@@ -2602,6 +2715,12 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 idSuffix="flows"
                                 chartType={flowChartType}
                                 onChartTypeChange={setFlowChartType}
+                                secondaryMetricKey={flowSecondaryMetric}
+                                secondaryMetricOptions={campaignMetricOptions as any}
+                                onSecondaryMetricChange={m => setFlowSecondaryMetric(m as any)}
+                                secondaryBigValue={abbreviatedBigValueForFlows(flowSecondaryMetric)}
+                                secondarySeries={flowSecondaryChartSeries?.primary || null}
+                                secondaryColorHue="#ec4899"
                             />
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                 {/* Row 1 */}
