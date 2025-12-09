@@ -2414,7 +2414,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 metricKey={overviewChartMetric}
                                 metricOptions={campaignMetricOptions as any}
                                 onMetricChange={m => setOverviewChartMetric(m)}
-                                bigValue={bigValueForOverview(overviewChartMetric)}
+                                bigValue={abbreviatedBigValueForOverview(overviewChartMetric)}
                                 primary={overviewChartSeries.primary}
                                 compare={overviewChartSeries.compare}
                                 valueType={metricValueType(overviewChartMetric)}
@@ -2489,7 +2489,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 metricKey={campaignChartMetric}
                                 metricOptions={campaignMetricOptions as any}
                                 onMetricChange={m => setCampaignChartMetric(m)}
-                                bigValue={bigValueForCampaigns(campaignChartMetric)}
+                                bigValue={abbreviatedBigValueForCampaigns(campaignChartMetric)}
                                 primary={campaignChartSeries.primary}
                                 compare={campaignChartSeries.compare}
                                 valueType={metricValueType(campaignChartMetric)}
@@ -2701,7 +2701,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                                 metricKey={flowChartMetric}
                                 metricOptions={campaignMetricOptions as any}
                                 onMetricChange={m => setFlowChartMetric(m)}
-                                bigValue={bigValueForFlows(flowChartMetric)}
+                                bigValue={abbreviatedBigValueForFlows(flowChartMetric)}
                                 primary={flowChartSeries.primary}
                                 compare={flowChartSeries.compare}
                                 valueType={metricValueType(flowChartMetric)}

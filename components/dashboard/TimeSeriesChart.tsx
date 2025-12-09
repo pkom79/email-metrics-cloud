@@ -60,7 +60,7 @@ const fmt = {
 function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigValue, primary, compare = null, colorHue = '#8b5cf6', darkColorHue, valueType, granularity, compareMode = 'prev-period', idSuffix = 'tsc', headerChange, headerIsPositive, headerPreviousValue, headerPreviousPeriod, chartType = 'line', onChartTypeChange, secondaryMetricKey, secondaryMetricOptions, onSecondaryMetricChange, secondaryBigValue, secondarySeries, secondaryColorHue = '#ec4899' }: TimeSeriesChartProps) {
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
     // const [chartType, setChartType] = useState<ChartType>('line'); // Lifted to parent
-    const width = 850; const height = 200; const innerH = 140; const padLeft = 72; const padRight = 20; const innerW = width - padLeft - padRight;
+    const width = 850; const height = 200; const innerH = 140; const padLeft = 72; const padRight = 50; const innerW = width - padLeft - padRight;
 
     const isDual = !!(secondarySeries && secondarySeries.length > 0 && secondaryMetricKey && secondaryMetricKey !== 'none');
 
@@ -134,6 +134,20 @@ function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigV
     // Y ticks: thirds using raw max or percentage domain
     const yTickValues = useMemo(() => thirdTicks(maxVal, valueType as any), [maxVal, valueType]);
     const yTickLabels = useMemo(() => formatTickLabels(yTickValues, valueType as any, maxVal), [yTickValues, valueType, maxVal]);
+
+    // Secondary Y ticks
+    // We need to infer value type for secondary. 
+    // If secondaryMetricKey contains 'Rate', it's percentage. Else number/currency.
+    // This is a heuristic since we don't pass secondaryValueType.
+    const secondaryValueType = useMemo(() => {
+        if (!secondaryMetricKey || secondaryMetricKey === 'none') return 'number';
+        if (['openRate', 'clickRate', 'clickToOpenRate', 'conversionRate', 'unsubscribeRate', 'spamRate', 'bounceRate'].includes(secondaryMetricKey)) return 'percentage';
+        if (['revenue', 'avgOrderValue', 'revenuePerEmail'].includes(secondaryMetricKey)) return 'currency';
+        return 'number';
+    }, [secondaryMetricKey]);
+
+    const yTickValuesSecondary = useMemo(() => isDual ? thirdTicks(maxValSecondary, secondaryValueType as any) : [], [isDual, maxValSecondary, secondaryValueType]);
+    const yTickLabelsSecondary = useMemo(() => isDual ? formatTickLabels(yTickValuesSecondary, secondaryValueType as any, maxValSecondary) : [], [isDual, yTickValuesSecondary, secondaryValueType, maxValSecondary]);
 
     const active = hoverIdx != null ? primary[hoverIdx] : null;
     const cmpActive = hoverIdx != null && (compare || undefined) ? (compare || [])[hoverIdx] : undefined;
@@ -249,7 +263,7 @@ function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigV
                                     {secondaryMetricOptions?.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                                 </SelectBase>
                             </div>
-                            <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 tabular-nums" style={{ color: secondaryColorHue }}>{secondaryBigValue}</div>
+                            <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{secondaryBigValue}</div>
                         </div>
                     )}
 
@@ -324,6 +338,13 @@ function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigV
                     {/* Y tick labels */}
                     {yTickValues.map((v, i) => { const y = yScale(v); const label = yTickLabels[i] ?? ''; return <text key={i} x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{label}</text>; })}
 
+                    {/* Secondary Y tick labels */}
+                    {isDual && yTickValuesSecondary.map((v, i) => { 
+                        const y = yScaleSecondary(v); 
+                        const label = yTickLabelsSecondary[i] ?? ''; 
+                        return <text key={`sec-${i}`} x={width - padRight + 6} y={y + 3} fontSize={10} textAnchor="start" className="tabular-nums fill-gray-500 dark:fill-gray-400">{label}</text>; 
+                    })}
+                    
                     {/* X axis baseline */}
                     <line x1={padLeft} x2={width - padRight} y1={innerH} y2={innerH} className="stroke-gray-200 dark:stroke-gray-700" />
                     {/* X ticks */}
