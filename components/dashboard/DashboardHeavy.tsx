@@ -1596,7 +1596,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
 
         const val = value / div;
         let formatted = '';
-        
+
         if (div === 1) {
             if (isCurrency) {
                 formatted = val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

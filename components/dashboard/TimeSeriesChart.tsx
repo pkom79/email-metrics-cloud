@@ -339,12 +339,12 @@ function TimeSeriesChart({ title, metricKey, metricOptions, onMetricChange, bigV
                     {yTickValues.map((v, i) => { const y = yScale(v); const label = yTickLabels[i] ?? ''; return <text key={i} x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{label}</text>; })}
 
                     {/* Secondary Y tick labels */}
-                    {isDual && yTickValuesSecondary.map((v, i) => { 
-                        const y = yScaleSecondary(v); 
-                        const label = yTickLabelsSecondary[i] ?? ''; 
-                        return <text key={`sec-${i}`} x={width - padRight + 6} y={y + 3} fontSize={10} textAnchor="start" className="tabular-nums fill-gray-500 dark:fill-gray-400">{label}</text>; 
+                    {isDual && yTickValuesSecondary.map((v, i) => {
+                        const y = yScaleSecondary(v);
+                        const label = yTickLabelsSecondary[i] ?? '';
+                        return <text key={`sec-${i}`} x={width - padRight + 6} y={y + 3} fontSize={10} textAnchor="start" className="tabular-nums fill-gray-500 dark:fill-gray-400">{label}</text>;
                     })}
-                    
+
                     {/* X axis baseline */}
                     <line x1={padLeft} x2={width - padRight} y1={innerH} y2={innerH} className="stroke-gray-200 dark:stroke-gray-700" />
                     {/* X ticks */}
