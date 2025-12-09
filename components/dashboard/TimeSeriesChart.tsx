@@ -83,8 +83,8 @@ function TimeSeriesChart({
     secondarySeries = null,
     secondaryValueType,
     secondaryBigValue,
-    secondaryColorHue = '#ec4899', // pink for secondary metric
-    secondaryDarkColorHue = '#db2777',
+    secondaryColorHue = '#f59e0b', // amber/gold for secondary metric
+    secondaryDarkColorHue,
     onSecondaryMetricChange
 }: TimeSeriesChartProps) {
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -231,14 +231,15 @@ function TimeSeriesChart({
     const color = darkColorHue || colorHue;
     const secondaryColor = secondaryDarkColorHue || secondaryColorHue;
     const cmpAreaId = `tsc-cmp-area-${idSuffix}`;
-    const secondaryLabel = hasSecondary ? (metricOptions.find(m => m.value === secondaryMetricKey)?.label || secondaryMetricKey) : null;
     const primaryLabel = metricOptions.find(m => m.value === metricKey)?.label || metricKey;
+    const secondaryLabel = hasSecondary ? (metricOptions.find(m => m.value === secondaryMetricKey)?.label || secondaryMetricKey) : null;
 
     return (
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 mb-8">
-            {/* Chart type toggle */}
-            <div className="flex items-start justify-between gap-3 mb-3">
+            {/* Top controls: dropdown on right (no internal title) */}
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
                 <div className="flex items-center gap-2">
+                    {/* Title removed per request */}
                     <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5 border border-gray-200 dark:border-gray-700">
                         <button
                             onClick={() => onChartTypeChange?.('line')}
@@ -256,95 +257,57 @@ function TimeSeriesChart({
                         </button>
                     </div>
                 </div>
-            </div>
-
-            {/* Controls + value display in aligned columns */}
-            <div className={`grid gap-3 mb-4 ${hasSecondary ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
-                <div className="flex flex-col gap-1">
-                    <SelectBase
-                        value={metricKey}
-                        onChange={e => onMetricChange?.((e.target as HTMLSelectElement).value as MetricKey)}
-                        className="px-3 h-10 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 min-w-[200px]"
-                    >
-                        {metricOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                    </SelectBase>
-                    <div className="flex flex-col items-start gap-0.5">
-                        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">{primaryLabel}</div>
-                        <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{displayPrimary}</div>
-                    </div>
-                </div>
-                {hasSecondary && (
+                <div className={`grid gap-3 mb-4 ${hasSecondary ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
                     <div className="flex flex-col gap-1">
                         <SelectBase
-                            value={secondaryMetricKey || ''}
-                            onChange={e => {
-                                const val = (e.target as HTMLSelectElement).value;
-                                if (!val) return onSecondaryMetricChange?.(null);
-                                if (val === metricKey) {
-                                    return onSecondaryMetricChange?.(null);
-                                }
-                                onSecondaryMetricChange?.(val as MetricKey);
-                            }}
-                            className="px-3 h-10 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 min-w-[200px]"
+                            value={metricKey}
+                            onChange={e => onMetricChange?.((e.target as HTMLSelectElement).value as MetricKey)}
+                            className="px-3 h-10 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 min-w-[200px]"
                         >
-                            <option value="">Single metric only</option>
-                            {metricOptions.map(opt => (
-                                <option key={opt.value} value={opt.value} disabled={opt.value === metricKey}>
-                                    {opt.label}
-                                </option>
-                            ))}
+                            {metricOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                         </SelectBase>
                         <div className="flex flex-col items-start gap-0.5">
-                            <div className="text-xs font-semibold text-pink-600 dark:text-pink-400">{secondaryLabel || 'Secondary metric'}</div>
-                            <div className="text-xl sm:text-2xl font-semibold text-pink-600 dark:text-pink-400 tabular-nums">{displaySecondary}</div>
+                            <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">{primaryLabel}</div>
+                            <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{displayPrimary}</div>
+                            {!hasSecondary && compareMode !== 'none' && compare && (compare as any).length ? (
+                                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                    <span className="font-medium">Change:</span>
+                                    <span className={`${headerIsPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                        {headerChange != null ? `${headerChange >= 0 ? '+' : ''}${headerChange.toFixed(1)}%` : ''}
+                                    </span>
+                                </div>
+                            ) : null}
                         </div>
                     </div>
-                )}
-            </div>
-
-            {/* Header change (suppressed when dual metrics) */}
-            {!hasSecondary && (
-                <div className="flex items-start justify-end mb-4">
-                    <div className="text-right">
-                        <div className="text-4xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{bigValue}</div>
-                        {(() => {
-                            const isAllTime = false;
-                            const change = headerChange ?? 0;
-                            const isPositive = headerIsPositive ?? true;
-                            const prevVal = headerPreviousValue;
-                            const prevPeriod = headerPreviousPeriod;
-                            const DISPLAY_EPS = 0.05;
-                            const tiny = Math.abs(change) < DISPLAY_EPS;
-                            const zeroDisplay = tiny || Math.abs(change) < 1e-9;
-                            const fmtPrev = (v?: number) => {
-                                if (v == null) return '';
-                                switch (valueType) {
-                                    case 'currency': return fmt.currency(v);
-                                    case 'percentage': return `${v.toFixed(1)}%`;
-                                    default: return Math.round(v).toLocaleString('en-US');
-                                }
-                            };
-                            const formatDate = (d: Date) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-                            const tooltipNode = prevPeriod && prevVal != null ? (
-                                <div className="text-gray-900 dark:text-gray-100">
-                                    <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">{formatDate(prevPeriod.startDate)} – {formatDate(prevPeriod.endDate)}</div>
-                                    <div className="text-sm font-semibold tabular-nums mt-0.5">{fmtPrev(prevVal)}</div>
-                                </div>
-                            ) : null;
-                            return (prevPeriod && prevVal != null) ? (
-                                <div className="mt-1 flex justify-end">
-                                    <TooltipPortal content={tooltipNode as any}>
-                                        <div className={`flex items-center text-[13px] font-medium ${zeroDisplay ? 'text-gray-600 dark:text-gray-400' : (isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}`} role="button" tabIndex={0}>
-                                            {zeroDisplay ? (<ArrowRight className="w-4 h-4 mr-1" />) : (change > 0 ? (<ArrowUp className="w-4 h-4 mr-1" />) : (<ArrowDown className="w-4 h-4 mr-1" />))}
-                                            {zeroDisplay ? '0.0' : (() => { const formatted = Math.abs(change).toFixed(1); const num = parseFloat(formatted); return num >= 1000 ? num.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatted; })()}%
-                                        </div>
-                                    </TooltipPortal>
-                                </div>
-                            ) : null;
-                        })()}
-                    </div>
+                    {hasSecondary && (
+                        <div className="flex flex-col gap-1">
+                            <SelectBase
+                                value={secondaryMetricKey || ''}
+                                onChange={e => {
+                                    const val = (e.target as HTMLSelectElement).value;
+                                    if (!val) return onSecondaryMetricChange?.(null);
+                                    if (val === metricKey) {
+                                        return onSecondaryMetricChange?.(null);
+                                    }
+                                    onSecondaryMetricChange?.(val as MetricKey);
+                                }}
+                                className="px-3 h-10 pr-8 rounded-lg border bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 min-w-[200px]"
+                            >
+                                <option value="">Single metric only</option>
+                                {metricOptions.map(opt => (
+                                    <option key={opt.value} value={opt.value} disabled={opt.value === metricKey}>
+                                        {opt.label}
+                                    </option>
+                                ))}
+                            </SelectBase>
+                            <div className="flex flex-col items-start gap-0.5">
+                                <div className="text-xs font-semibold text-pink-600 dark:text-pink-400">{secondaryLabel || 'Secondary metric'}</div>
+                                <div className="text-xl sm:text-2xl font-semibold text-pink-600 dark:text-pink-400 tabular-nums">{displaySecondary}</div>
+                            </div>
+                        </div>
+                    )}
                 </div>
-            )}
+            </div>
             <div className="relative" style={{ width: '100%' }}>
                 <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="block select-none">
                     <defs>
@@ -417,7 +380,9 @@ function TimeSeriesChart({
                     })}
 
                     {/* Secondary points for hover visibility (line mode) */}
-                    {/* (Removed dots for secondary series per request) */}
+                    {hasSecondary && chartType === 'line' && secondaryPts.map((p, i) => (
+                        <circle key={`secondary-dot-${i}`} cx={p.x} cy={p.y} r={3} fill={secondaryColor} />
+                    ))}
 
                     {/* Y tick labels */}
                     {yTickValues.map((v, i) => { const y = yScalePrimary(v); const label = yTickLabels[i] ?? ''; return <text key={i} x={padLeft - 6} y={y + 3} fontSize={10} textAnchor="end" className="tabular-nums fill-gray-500 dark:fill-gray-400">{label}</text>; })}
