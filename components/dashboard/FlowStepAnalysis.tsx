@@ -6,7 +6,7 @@ import { DataManager } from '../../lib/data/dataManager';
 import { thirdTicks, formatTickLabels, computeAxisMax } from '../../lib/utils/chartTicks';
 import InfoTooltipIcon from '../InfoTooltipIcon';
 import TooltipPortal from '../TooltipPortal';
-import { buildFlowAddStepNotes } from '../../lib/analytics/actionNotes';
+import { buildFlowAddStepNotes, OpportunitySummary } from '../../lib/analytics/actionNotes';
 import {
     getRiskZone,
     getDeliverabilityPoints,
@@ -129,6 +129,7 @@ interface FlowStepAnalysisProps {
     customFrom?: string;
     customTo?: string;
     compareMode?: 'none' | 'prev-period' | 'prev-year';
+    opportunitySummary?: OpportunitySummary | null;
 }
 
 interface FlowStepMetrics {
@@ -153,7 +154,7 @@ interface FlowStepMetrics {
     bouncesCount: number;
 }
 
-export default function FlowStepAnalysis({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period' }: FlowStepAnalysisProps) {
+export default function FlowStepAnalysis({ dateRange, granularity, customFrom, customTo, compareMode = 'prev-period', opportunitySummary }: FlowStepAnalysisProps) {
     const DIAG_DASHBOARD = (process.env.NEXT_PUBLIC_DIAG_DASHBOARD === '1');
     // Re-render when dataset hydrates/persists so date windows and flow lists refresh
     const [dataTick, setDataTick] = useState(0);
@@ -1776,22 +1777,16 @@ export default function FlowStepAnalysis({ dateRange, granularity, customFrom, c
                 const isOptimalWindow = daysInRange >= flowOptimalDays * 0.9 && daysInRange <= flowOptimalDays * 1.1;
                 if (!isOptimalWindow || accountInsufficient) return null;
 
-                // Get the Summary's precomputed value to guarantee identical display
-                // Must pass SmartWindow dates like actionNotes.ts does
-                const dm = dataManager;
-                const allCampaigns = dm.getCampaigns();
-                const allFlows = dm.getFlowEmails();
-                const smartWindow = computeSmartOpportunityWindow(allCampaigns, allFlows);
-                const smartFromIso = smartWindow.start.toISOString().slice(0, 10);
-                const smartToIso = smartWindow.end.toISOString().slice(0, 10);
-
-                const summaryNotes = buildFlowAddStepNotes({
-                    dateRange: 'custom',
-                    customFrom: smartFromIso,
-                    customTo: smartToIso
+                // Read directly from the opportunitySummary prop to guarantee identical values
+                // Find the flow item in the categories breakdown
+                const flowCategory = opportunitySummary?.categories?.find(c => c.key === 'flows');
+                const matchingItem = flowCategory?.items?.find(item => {
+                    const itemLabel = item.label || '';
+                    return itemLabel.includes(selectedFlow);
                 });
-                const matchingNote = summaryNotes.find(n => n.metadata?.flowName === selectedFlow);
-                const monthlyGain = matchingNote?.estimatedImpact?.monthly ?? 0;
+
+                // Convert annual to monthly for display
+                const monthlyGain = matchingItem ? matchingItem.amountAnnual / 12 : 0;
                 if (monthlyGain <= 0) return null;
 
                 return (

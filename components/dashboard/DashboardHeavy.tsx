@@ -2753,7 +2753,7 @@ export default function DashboardHeavy({ businessName, userId }: { businessName?
                 {HAS_ACTIVE_ACCOUNT && (
                     <section>
                         {showFlowAnalysis ? (
-                            <FlowStepAnalysis dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} />
+                            <FlowStepAnalysis dateRange={dateRange} granularity={granularity} customFrom={customFrom} customTo={customTo} compareMode={compareMode} opportunitySummary={opportunitySummary} />
                         ) : (
                             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
                                 <div className="flex items-center justify-center h-32">
