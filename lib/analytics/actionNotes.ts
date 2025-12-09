@@ -7,6 +7,7 @@ import { computeCampaignDayPerformance } from "./campaignDayPerformance";
 import { computeDeadWeightSavings } from "./deadWeightSavings";
 import { sendVolumeGuidanceV2 } from "./sendVolumeGuidanceV2";
 import { DataManager } from "../data/dataManager";
+import { computeSmartOpportunityWindow } from "../utils/smartOpportunityWindow";
 import {
   getRiskZone,
   getDeliverabilityPoints,
@@ -166,9 +167,9 @@ export function buildSendVolumeNote(params: {
   // Force "all" range to ensure sufficient history for regression analysis
   // regardless of the user's current view.
   const result = sendVolumeGuidanceV2(
-    "all",
-    undefined,
-    undefined
+    params.customFrom && params.customTo ? "custom" : "all",
+    params.customFrom,
+    params.customTo
   );
 
   const title = (() => {
@@ -266,8 +267,14 @@ export function buildSendFrequencyNote(params: {
   dateRange: string;
   customFrom?: string;
   customTo?: string;
+  // If provided, ignores dateRange/customFrom/customTo for calculation context
+  forcedContext?: {
+      weeksInRange: number;
+  }
 }): ModuleActionNote {
-  const { campaigns, weeksInRange } = deriveSendFrequencyContext(
+  const { campaigns, weeksInRange } = params.forcedContext 
+  ? { campaigns: params.campaigns, weeksInRange: params.forcedContext.weeksInRange }
+  : deriveSendFrequencyContext(
     params.campaigns,
     params.dateRange,
     params.customFrom,
@@ -995,11 +1002,26 @@ export function computeOpportunitySummary(params: {
       return;
     }
 
+    // CRITICAL: Ensure we rely on metadata for "annual weeks" calculation 
+    // rather than inferring from the potentially small GAP window.
+    // The frequency module already calculated optimal weeks based on the smart window.
+    
+    // If metadata has "weeksAnalysed", we can trust the frequency module's perspective.
+    const weeksAnalysed = typeof meta["weeksAnalysed"] === "number" ? meta["weeksAnalysed"] : 52;
+    
+    // Gap elimination is about filling ZERO weeks. 
+    // Frequency optimization is about improving the sending cadence on ACTIVE weeks.
+    
     const zeroWeeksRaw = gapMetadata && typeof gapMetadata["zeroCampaignSendWeeks"] === "number"
       ? (gapMetadata["zeroCampaignSendWeeks"] as number)
       : 0;
+      
     const zeroWeeks = Math.min(52, Math.max(0, Math.round(zeroWeeksRaw)));
+    
+    // Active weeks = Total Potential Weeks - Zero Weeks
+    // We use the smart window's "weeks" as the Total Potential (usually 52 for annual view).
     const annualWeeks = Math.max(0, 52 - zeroWeeks);
+
     if (annualWeeks <= 0) {
       frequencyNote.estimatedImpact = null;
       frequencyNote.metadata = {
@@ -1050,27 +1072,52 @@ export function computeOpportunitySummary(params: {
     };
   };
 
+  // 1. Calculate Smart Opportunity Window
+  // This is the "Best Available Data" range for this account (e.g. last 365 days or last 5k sends)
+  // It is INDEPENDENT of the UI date picker.
+  const smartRange = computeSmartOpportunityWindow(allCampaigns, allFlows);
+  const smartFromIso = smartRange.start.toISOString().slice(0, 10);
+  const smartToIso = smartRange.end.toISOString().slice(0, 10);
+  
+  // Filter campaigns/flows to this smart range for analysis
+  const smartCampaigns = allCampaigns.filter(c => c.sentDate >= smartRange.start && c.sentDate <= smartRange.end);
+  const smartFlows = allFlows.filter(f => f.sentDate >= smartRange.start && f.sentDate <= smartRange.end);
+
   if (campaignsInRange.length) {
     collectedNotes.push(
+      ...buildSendVolumeNote({
+        dateRange: "custom",
+        customFrom: smartFromIso,
+        customTo: smartToIso,
+      })
+    );
+
+    collectedNotes.push(
       buildSendFrequencyNote({
-        campaigns: campaignsInRange,
-        dateRange: params.dateRange,
-        customFrom: params.customFrom,
-        customTo: params.customTo,
+        campaigns: smartCampaigns,
+        dateRange: "custom",
+        customFrom: smartFromIso,
+        customTo: smartToIso,
+        forcedContext: { weeksInRange: Math.max(1, Math.round(smartRange.days / 7)) }
       })
     );
 
     collectedNotes.push(
       buildAudienceSizeNote({
-        campaigns: campaignsInRange,
-        dateRange: params.dateRange,
-        customFrom: params.customFrom,
-        customTo: params.customTo,
+        campaigns: smartCampaigns,
+        dateRange: "custom",
+        customFrom: smartFromIso,
+        customTo: smartToIso,
       })
     );
 
     const baselineFromIso = baselineStart.toISOString().slice(0, 10);
     const baselineToIso = baselineEnd.toISOString().slice(0, 10);
+    
+    // Gap Analysis: 
+    // For "Lost Revenue", we still want to look at the Past Year (Baseline) to show 
+    // "You lost $X last year". This is distinct from "Future Opportunity".
+    // Kept as baseline (365d) for now as requested.
     const gapNote = buildCampaignGapsNote({
         campaigns: campaignsBaseline,
         dateRange: 'custom',
@@ -1083,11 +1130,15 @@ export function computeOpportunitySummary(params: {
     applySendFrequencyAdjustment();
   }
 
+  // ------------------------------
+  // Flow Analysis (Enhanced with Smart Range)
+  // ------------------------------
+  // We use the smart range (e.g. 365d) to find add-step opportunities
   collectedNotes.push(
     ...buildFlowAddStepNotes({
-      dateRange: params.dateRange,
-      customFrom: params.customFrom,
-      customTo: params.customTo,
+      dateRange: "custom",
+      customFrom: smartFromIso,
+      customTo: smartToIso,
     })
   );
 
